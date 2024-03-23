@@ -2,10 +2,9 @@ package shared
 
 import (
 	"benetnasch/app/infrastructure/config"
-	"benetnasch/app/infrastructure/exception"
+	"benetnasch/app/infrastructure/zlog"
 	"context"
 	"github.com/redis/go-redis/v9"
-	"log"
 	"sync"
 	"time"
 )
@@ -48,9 +47,7 @@ func HIncrBy(key, hashkey string, delta int64) int64 {
 	ctx := context.Background()
 	result, err := rdb.HIncrBy(ctx, key, hashkey, delta).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 	return result
 }
@@ -58,9 +55,7 @@ func IncrBy(key string, delta int64) int64 {
 	ctx := context.Background()
 	result, err := rdb.IncrBy(ctx, key, delta).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 	return result
 }
@@ -68,9 +63,7 @@ func SAdd(key string, values ...interface{}) int64 {
 	ctx := context.Background()
 	result, err := rdb.SAdd(ctx, key, values).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 	return result
 }
@@ -85,9 +78,7 @@ func Set(key string, value interface{}) {
 	ctx := context.Background()
 	_, err := rdb.Set(ctx, key, value, -1).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 }
 
@@ -95,9 +86,7 @@ func ZIncr(key string, score float64, value string) float64 {
 	ctx := context.Background()
 	result, err := rdb.ZIncrBy(ctx, key, score, value).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 	return result
 }
@@ -106,9 +95,7 @@ func ZScore(key string, value string) float64 {
 	ctx := context.Background()
 	result, err := rdb.ZScore(ctx, key, value).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 	return result
 }
@@ -122,9 +109,7 @@ func HSet(key, hashKey string, value interface{}, time time.Duration) bool {
 	ctx := context.Background()
 	_, err := rdb.HSetNX(ctx, key, hashKey, value).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 	return Expire(key, time)
 }
@@ -133,9 +118,7 @@ func Expire(key string, time time.Duration) bool {
 	ctx := context.Background()
 	result, err := rdb.Expire(ctx, key, time).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 	}
 	return result
 }
@@ -144,9 +127,7 @@ func HGet(key, hashKey string) string {
 	ctx := context.Background()
 	result, err := rdb.HGet(ctx, key, hashKey).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 		return ""
 	}
 	return result
@@ -161,9 +142,7 @@ func ZReverseRangeWithScore(key string, start, end int64) map[interface{}]float6
 	ctx := context.Background()
 	result, err := rdb.ZRevRangeWithScores(ctx, key, start, end).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 		return nil
 	}
 	hm := make(map[interface{}]float64)
@@ -177,9 +156,7 @@ func HGetAll(key string) map[string]string {
 	ctx := context.Background()
 	result, err := rdb.HGetAll(ctx, key).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 		return nil
 	}
 	return result
@@ -189,9 +166,7 @@ func ZAllScore(key string) map[interface{}]float64 {
 	ctx := context.Background()
 	result, err := rdb.ZRangeWithScores(ctx, key, 0, -1).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 		return nil
 	}
 	hm := make(map[interface{}]float64)
@@ -210,9 +185,7 @@ func IncrExpire(key string, time time.Duration) int64 {
 	ctx := context.Background()
 	count, err := rdb.IncrBy(ctx, key, 1).Result()
 	if err != nil {
-		exception.Logger.Println(err)
-		exception.PrintStack()
-		log.Println(err)
+		zlog.Error(err.Error())
 		return -1
 	}
 	if count == 1 {
