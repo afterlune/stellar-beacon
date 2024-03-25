@@ -5,8 +5,10 @@ import (
 	"benetnasch/app/infrastructure/task"
 	"benetnasch/app/infrastructure/zlog"
 	"benetnasch/route"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"io"
 	"log"
 	"os"
@@ -51,7 +53,7 @@ func runServ() error {
 	// 启动消息监听项
 	listener()
 	// 启动
-	return router.Run("0.0.0.0:7777")
+	return router.Run(fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")))
 }
 
 func banner() {

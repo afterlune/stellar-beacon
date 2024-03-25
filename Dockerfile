@@ -10,7 +10,7 @@ WORKDIR /build
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build ldflags "-w -s" -trimpath -a -o benetnasch
+RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags "-w -s" -trimpath -a -o benetnasch
 
 #FROM alpine:latest AS final
 

@@ -60,15 +60,3 @@ services:
       - MEILI_MASTER_KEY=yourApikey
       - MEILI_ENV=production
     restart: always
-  rabbitmq:
-    image: rabbitmq:3.11.13-management-alpine
-    container_name: rabbit
-    ports:
-      - '5672:5672'
-      - '15672:15672'
-    volumes:
-      - /usr/data/rabbit:/var/lib/rabbitmq
-    environment:
-      - TZ=Asia/Shanghai
-      - RABBITMQ_DEFAULT_USER=yourUsername
-      - RABBITMQ_DEFAULT_PASS=yourPass
