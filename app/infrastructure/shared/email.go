@@ -10,8 +10,10 @@ import (
 )
 
 func SendHtmlEmail(dto model.EmailDTO) {
+	cfg := new(config.Email).Email()
+
 	m := mail.NewMsg()
-	err := m.From(config.SmtpEmail)
+	err := m.From(cfg.EmailAccount)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -29,8 +31,8 @@ func SendHtmlEmail(dto model.EmailDTO) {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	client, err := mail.NewClient(config.SmtpName, mail.WithPort(config.SmtpPort), mail.WithSMTPAuth(mail.SMTPAuthPlain),
-		mail.WithUsername(config.SmtpEmail), mail.WithPassword(config.SmtpPassword), mail.WithSSL())
+	client, err := mail.NewClient(cfg.SmtpName, mail.WithPort(cfg.SmtpPort), mail.WithSMTPAuth(mail.SMTPAuthPlain),
+		mail.WithUsername(cfg.EmailAccount), mail.WithPassword(cfg.Password), mail.WithSSL())
 	mail.WithDebugLog()
 	if err != nil {
 		zlog.Error(err.Error())

@@ -36,12 +36,13 @@ func Upload(file *multipart.FileHeader, path string) string {
 }
 
 func getOssClient() *oss.Bucket {
-	client, err := oss.New(config.OssEndPoint, config.OssAccessKeyID, config.OssAccessKeySecret)
+	cfg := new(config.Oss).Oss()
+	client, err := oss.New(cfg.EndPoint, cfg.AccessKeyID, cfg.AccessKeySecret)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
 
-	bucket, err := client.Bucket(config.OssBucketName)
+	bucket, err := client.Bucket(cfg.BucketName)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
