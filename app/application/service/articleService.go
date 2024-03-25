@@ -95,7 +95,9 @@ func GetArticleById(c *gin.Context) model.ResultVO {
 	}
 	if article.Status == 2 {
 		var isAccess bool
-		isAccess = shared.SIsMember(shared.ARTICLE_ACCESS+strconv.Itoa(shared.GetUserDetailsDTO().Id), articleId)
+		value, _ := c.Get("userInfo")
+		dto := value.(model.UserDetailsDTO)
+		isAccess = shared.SIsMember(shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), articleId)
 		if isAccess == false {
 			status := model.ResultInfo(model.ARTICLE_ACCESS_FAIL)
 			return model.ResultFailWithCodeAndMessage(52003, status["message"])
@@ -169,7 +171,9 @@ func AccessArticle(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("文章不存在")
 	}
 	if article.Password == vo.ArticlePassword {
-		shared.SAdd(shared.ARTICLE_ACCESS+strconv.Itoa(shared.GetUserDetailsDTO().Id), vo.ArticleId)
+		value, _ := c.Get("userInfo")
+		dto := value.(model.UserDetailsDTO)
+		shared.SAdd(shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), vo.ArticleId)
 	} else {
 		return model.ResultFailWithMessage("密码错误")
 	}
@@ -327,7 +331,11 @@ func SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 	if category.Id != 0 {
 		article.CategoryId = category.Id
 	}
-	article.UserId = shared.GetUserDetailsDTO().UserInfoId
+
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
+	article.UserId = dto.UserInfoId
 	if article.Id != 0 {
 		_, err = session.Prepare().ID(article.Id).Update(&article)
 	} else {

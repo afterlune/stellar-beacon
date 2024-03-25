@@ -91,8 +91,11 @@ func SaveComment(c *gin.Context) model.ResultVO {
 	}
 	topicId, err := strconv.Atoi(commentVO.TopicId)
 
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
 	comment := entity.TComment{
-		UserId:         shared.GetUserDetailsDTO().UserInfoId,
+		UserId:         dto.UserInfoId,
 		ReplyUserId:    commentVO.ReplyUserId,
 		TopicId:        topicId,
 		CommentContent: commentVO.CommentContent,

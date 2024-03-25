@@ -2,6 +2,7 @@ package api
 
 import (
 	"benetnasch/app/application/service"
+	"benetnasch/app/facade/model"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -72,7 +73,10 @@ func UpdateAdminPassword(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/logout [POST]
 func Logout(c *gin.Context) {
-	res := service.Logout()
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
+	res := service.Logout(dto.Id)
 	c.JSON(http.StatusOK, res)
 }
 

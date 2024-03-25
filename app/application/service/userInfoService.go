@@ -22,8 +22,11 @@ func UpdateUserInfo(c *gin.Context) model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
 	userinfo := entity.TUserInfo{
-		Id:       shared.GetUserDetailsDTO().UserInfoId,
+		Id:       dto.UserInfoId,
 		Nickname: userInfoVO.Nickname,
 		Intro:    userInfoVO.Intro,
 		Website:  userInfoVO.Website,
@@ -66,8 +69,11 @@ func UpdateUserAvatar(c *gin.Context) model.ResultVO {
 
 	}
 	fileUri := oss.Upload(file, "avatar/")
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
 	userinfo := entity.TUserInfo{
-		Id:     shared.GetUserDetailsDTO().UserInfoId,
+		Id:     dto.UserInfoId,
 		Avatar: shared.FILEURL + fileUri,
 	}
 
@@ -112,8 +118,11 @@ func SaveUserEmail(c *gin.Context) model.ResultVO {
 	if shared.Get(shared.USER_CODE_KEY+vo.Email) == "" || shared.Get(shared.USER_CODE_KEY+vo.Email) != vo.Code {
 		return model.ResultFailWithMessage("验证码错误")
 	}
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
 	userInfo := entity.TUserInfo{
-		Id:    shared.GetUserDetailsDTO().UserInfoId,
+		Id:    dto.UserInfoId,
 		Email: vo.Email,
 	}
 	session := ormInit.GetEngine().NewSession()

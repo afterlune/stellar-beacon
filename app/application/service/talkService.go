@@ -99,13 +99,17 @@ func SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
+
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
 	talk := entity.TTalk{
 		Id:      vo.Id,
 		Content: vo.Content,
 		Images:  vo.Images,
 		IsTop:   vo.IsTop,
 		Status:  vo.Status,
-		UserId:  shared.GetUserDetailsDTO().UserInfoId,
+		UserId:  dto.UserInfoId,
 	}
 	session := ormInit.GetEngine().NewSession()
 	session.Begin()

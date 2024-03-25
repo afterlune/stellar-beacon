@@ -248,6 +248,9 @@ func UpdatePassword(c *gin.Context) model.ResultVO {
 }
 
 func UpdateAdminPassword(c *gin.Context) model.ResultVO {
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
 	var passwordVO model.PasswordVO
 	err := c.ShouldBind(&passwordVO)
 	if err != nil && passwordVO.NewPassword == "" || passwordVO.OldPassword == "" {
@@ -256,7 +259,7 @@ func UpdateAdminPassword(c *gin.Context) model.ResultVO {
 	}
 	engine := ormInit.GetEngine()
 	var user entity.TUserAuth
-	_, err = engine.ID(shared.GetUserDetailsDTO().Id).Get(&user)
+	_, err = engine.ID(dto.Id).Get(&user)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -274,7 +277,7 @@ func UpdateAdminPassword(c *gin.Context) model.ResultVO {
 	}
 	if user.Username != "" && err == nil {
 		userAuth := entity.TUserAuth{
-			Id:       shared.GetUserDetailsDTO().Id,
+			Id:       dto.Id,
 			Password: string(password),
 		}
 		session := engine.NewSession()
@@ -305,8 +308,8 @@ func UpdateAdminPassword(c *gin.Context) model.ResultVO {
 	return model.ResultFailWithMessage("旧密码不正确")
 }
 
-func Logout() model.ResultVO {
-	shared.HDel(shared.LOGIN_USER, strconv.Itoa(shared.GetUserDetailsDTO().Id))
+func Logout(id int) model.ResultVO {
+	shared.HDel(shared.LOGIN_USER, strconv.Itoa(id))
 	return model.ResultOkWithData(model.UserLogoutStatusDTO{
 		Message: "注销成功",
 	})

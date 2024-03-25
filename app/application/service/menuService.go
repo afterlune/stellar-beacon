@@ -183,8 +183,9 @@ func ListMenuOptions() model.ResultVO {
 	return model.ResultOkWithData(labelOptionDTOs)
 }
 
-func ListUserMenus() model.ResultVO {
-	menus := repository.ListMenusByUserInfoId(shared.GetUserDetailsDTO().UserInfoId)
+func ListUserMenus(userInfoId int) model.ResultVO {
+
+	menus := repository.ListMenusByUserInfoId(userInfoId)
 	catalogs := listCatalogs(menus)
 	childrenMap := getMenuMap(menus)
 	return model.ResultOkWithData(convertUserMenuList(catalogs, childrenMap))

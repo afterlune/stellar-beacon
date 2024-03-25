@@ -2,6 +2,7 @@ package api
 
 import (
 	"benetnasch/app/application/service"
+	"benetnasch/app/facade/model"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -62,6 +63,9 @@ func ListMenuOptions(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/user/menus [GET]
 func ListUserMenus(c *gin.Context) {
-	res := service.ListUserMenus()
+	value, _ := c.Get("userInfo")
+	dto := value.(model.UserDetailsDTO)
+
+	res := service.ListUserMenus(dto.UserInfoId)
 	c.JSON(http.StatusOK, res)
 }

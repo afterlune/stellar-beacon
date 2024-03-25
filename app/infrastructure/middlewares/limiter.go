@@ -21,8 +21,9 @@ var (
 
 func AccessLimiter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userId := shared.GetUserDetailsDTO().UserInfoId
-		roles := repository.ListRolesByUserInfoId(userId)
+		value, _ := c.Get("userInfo")
+		dto := value.(model.UserDetailsDTO)
+		roles := repository.ListRolesByUserInfoId(dto.UserInfoId)
 		hm := make(map[string]struct{}, len(roles))
 		for _, v := range roles {
 			hm[v] = struct{}{}

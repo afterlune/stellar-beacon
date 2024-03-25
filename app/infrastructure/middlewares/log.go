@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"benetnasch/app/domain/entity"
+	"benetnasch/app/facade/model"
 	"benetnasch/app/infrastructure/persistence/repository"
 	"benetnasch/app/infrastructure/shared"
 	"benetnasch/app/infrastructure/zlog"
@@ -49,8 +50,12 @@ func Log() gin.HandlerFunc {
 			reqMethod := c.Request.Method
 			ip := shared.GetIpAddress(c.Request)
 			ipSource := shared.GetIpSource(ip)
-			nickname := shared.GetUserDetailsDTO().Nickname
-			userId := shared.GetUserDetailsDTO().UserInfoId
+
+			value, _ := c.Get("userInfo")
+			dto := value.(model.UserDetailsDTO)
+			nickname := dto.Nickname
+			userId := dto.UserInfoId
+
 			optFunc := c.HandlerName()
 			open, err := os.Open("docs/swagger.json")
 			defer open.Close()

@@ -56,7 +56,8 @@ func AuthorizationFilter() gin.HandlerFunc {
 						c.JSON(http.StatusInternalServerError, model.ResultFailWithMessage("server error"))
 						return
 					}
-					shared.SetUserDetails(userDetailsDTO)
+					userDetailsDTO.LastLoginTime = time.Now()
+					c.Set("userInfo", userDetailsDTO)
 					c.Next()
 				}
 			}
@@ -72,8 +73,9 @@ func AuthorizationFilter() gin.HandlerFunc {
 func AdminResourceFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.Request.RequestURI, "/admin") {
-			userId := shared.GetUserDetailsDTO().UserInfoId
-			roles := repository.ListRolesByUserInfoId(userId)
+			value, _ := c.Get("userInfo")
+			dto := value.(model.UserDetailsDTO)
+			roles := repository.ListRolesByUserInfoId(dto.UserInfoId)
 			hm := make(map[string]struct{}, len(roles))
 			for _, v := range roles {
 				hm[v] = struct{}{}
