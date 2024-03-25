@@ -6,9 +6,17 @@ import (
 	"benetnasch/app/infrastructure/persistence/repository"
 	"benetnasch/app/infrastructure/shared"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/time/rate"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
+)
+
+var (
+	globalLimiter = rate.NewLimiter(rate.Every(time.Second/20), 1200)
+	ipLimiter     = make(map[string]*rate.Limiter)
+	mutex         sync.Mutex
 )
 
 func AccessLimiter() gin.HandlerFunc {
@@ -24,10 +32,17 @@ func AccessLimiter() gin.HandlerFunc {
 			c.Next()
 		} else {
 			ip := shared.GetIpAddress(c.Request)
-			count := shared.IncrExpire(ip, time.Second*60)
-			if count > shared.ACCESS_LIMIT {
+			mutex.Lock()
+			limiter, ok := ipLimiter[ip]
+			if !ok {
+				limiter = rate.NewLimiter(rate.Every(time.Minute/60), 60)
+				ipLimiter[ip] = limiter
+			}
+			mutex.Unlock()
+
+			if !limiter.Allow() || !globalLimiter.Allow() {
 				c.Abort()
-				c.JSON(http.StatusOK, model.ResultFailWithMessage("请求过于频繁"))
+				c.JSON(http.StatusTooManyRequests, model.ResultFailWithMessage("请求过于频繁"))
 				return
 			}
 			c.Next()
