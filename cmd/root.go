@@ -49,7 +49,7 @@ func runServ() error {
 	router.Use(middlewares.AdminResourceFilter())
 	router.Use(middlewares.AccessLimiter())
 	// 路由网关
-	route.WebAdapter(router)
+	route.Router(router)
 	// 启动消息监听项
 	listener()
 	// 启动

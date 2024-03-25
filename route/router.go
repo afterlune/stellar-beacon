@@ -5,7 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func WebAdapter(router *gin.Engine) {
+func Router(router *gin.Engine) {
 	article := router.Group("/articles")
 	{
 		// article
