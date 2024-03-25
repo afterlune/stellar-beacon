@@ -11,12 +11,6 @@ redis:
   password: "yourPass"
   port: 6379
   db: 1
-# rabbitmq
-rabbitmq:
-  host: "0.0.0.0"
-  username: "yourUsername"
-  password: "yourPass"
-  port: 5672
 # email smtp 163
 emailSmtp:
   smtp: "smtp.163.com"

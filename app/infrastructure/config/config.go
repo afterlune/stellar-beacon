@@ -7,22 +7,22 @@ import (
 	"os"
 )
 
-// referer host
-var Verification string
+var (
+	// referer host
+	Verification string
+	// email
+	SmtpName     string
+	SmtpEmail    string
+	SmtpPassword string
+	SmtpPort     int
+	// oss
+	OssEndPoint        string
+	OssAccessKeyID     string
+	OssAccessKeySecret string
+	OssBucketName      string
 
-// email
-var SmtpName string
-var SmtpEmail string
-var SmtpPassword string
-var SmtpPort int
-
-// oss
-var OssEndPoint string
-var OssAccessKeyID string
-var OssAccessKeySecret string
-var OssBucketName string
-
-var ConfDict map[string]interface{}
+	ConfDict map[string]interface{}
+)
 
 func init() {
 	env, err := os.Open("resource/config.yaml")
@@ -86,16 +86,6 @@ func (redis *Redis) Redis() *Redis {
 	redis.Password = redisData["password"].(string)
 	redis.DB = redisData["db"].(int)
 	return redis
-}
-
-type RabbitMQ struct {
-	URL string
-}
-
-func (rabbit *RabbitMQ) RabbitMQ() *RabbitMQ {
-	rabbitData := ConfDict["rabbitmq"].(map[string]interface{})
-	rabbit.URL = fmt.Sprintf("amqp://%s:%s@%s:%d/", rabbitData["username"], rabbitData["password"], rabbitData["host"], rabbitData["port"])
-	return rabbit
 }
 
 func smtp() {
