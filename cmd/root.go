@@ -46,7 +46,7 @@ func runServ() error {
 	router.Use(middlewares.Cors())
 	router.Use(middlewares.LoginFilter())
 	router.Use(middlewares.AuthorizationFilter())
-	router.Use(middlewares.AdminResourceFilter())
+	router.Use(middlewares.CasbinResourceFilter())
 	router.Use(middlewares.AccessLimiter())
 	// 路由网关
 	route.Router(router)

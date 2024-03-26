@@ -4,6 +4,7 @@ import (
 	"benetnasch/app/application/service"
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
+	"benetnasch/app/infrastructure/config"
 	"benetnasch/app/infrastructure/persistence/repository"
 	"benetnasch/app/infrastructure/shared"
 	"benetnasch/app/infrastructure/zlog"
@@ -37,8 +38,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 				} else {
 					hm := shared.TokenParse(token)
 					if hm == nil {
-						c.Abort()
-						c.JSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
+						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
 						return
 					}
 					userAuthId := hm["sub"].(string)
@@ -63,27 +63,21 @@ func AuthorizationFilter() gin.HandlerFunc {
 			}
 		}
 		if !strings.Contains(authorization, shared.TOKEN_PREFIX) {
-			c.Abort()
-			c.JSON(http.StatusOK, model.ResultFailWithMessage("非法操作"))
+			c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("非法操作"))
 			return
 		}
 	}
 }
 
-func AdminResourceFilter() gin.HandlerFunc {
+func CasbinResourceFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.Request.RequestURI, "/admin") {
 			value, _ := c.Get("userInfo")
 			dto := value.(model.UserDetailsDTO)
 			roles := repository.ListRolesByUserInfoId(dto.UserInfoId)
-			hm := make(map[string]struct{}, len(roles))
-			for _, v := range roles {
-				hm[v] = struct{}{}
-			}
-			_, ok := hm["admin"]
-			if !ok {
-				c.Abort()
-				c.JSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
+
+			if ok, err := config.CasbinEnforcer().Enforce(roles, c.Request.RequestURI, c.Request.Method); !ok || err != nil {
+				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
 				return
 			}
 		}
