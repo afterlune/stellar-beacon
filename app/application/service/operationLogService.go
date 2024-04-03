@@ -3,15 +3,22 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"github.com/gin-gonic/gin"
 	"xorm.io/builder"
 )
 
-func ListOperationLogs(c *gin.Context) model.ResultVO {
+type OperationLogService interface {
+	ListOperationLogs(c *gin.Context) model.ResultVO
+	DeleteOperationLogs(c *gin.Context) model.ResultVO
+}
+
+type MyOperationLogService struct{}
+
+func (o *MyOperationLogService) ListOperationLogs(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -43,7 +50,7 @@ func ListOperationLogs(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: operationLogDTOs, Count: int(count)})
 }
 
-func DeleteOperationLogs(c *gin.Context) model.ResultVO {
+func (o *MyOperationLogService) DeleteOperationLogs(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {

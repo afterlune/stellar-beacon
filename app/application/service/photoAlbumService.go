@@ -3,22 +3,33 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/oss"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/oss"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"github.com/gin-gonic/gin"
 	"strconv"
 	"xorm.io/builder"
 )
 
-func ListPhotoAlbums() model.ResultVO {
-	data := repository.PhotoAlbums()
+type PhotoAlbumService interface {
+	ListPhotoAlbums() model.ResultVO
+	SavePhotoAlbumCover(c *gin.Context) model.ResultVO
+	SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO
+	ListPhotoAlbumBacks(c *gin.Context) model.ResultVO
+	ListPhotoAlbumBackInfos() model.ResultVO
+	GetPhotoAlbumBackById(c *gin.Context) model.ResultVO
+	DeletePhotoAlbumById(c *gin.Context) model.ResultVO
+}
+
+type MyPhotoAlbumService struct{}
+
+func (p *MyPhotoAlbumService) ListPhotoAlbums() model.ResultVO {
+	data := photoAlbumRepo.PhotoAlbums()
 	return model.ResultOkWithData(data)
 }
 
-func SavePhotoAlbumCover(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) SavePhotoAlbumCover(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		zlog.Error(err.Error())
@@ -28,7 +39,7 @@ func SavePhotoAlbumCover(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(shared.FILEURL + fileUri)
 }
 
-func SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO {
 	var vo model.PhotoAlbumVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -64,7 +75,7 @@ func SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListPhotoAlbumBacks(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) ListPhotoAlbumBacks(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -86,11 +97,11 @@ func ListPhotoAlbumBacks(c *gin.Context) model.ResultVO {
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{})
 	}
-	data := repository.ListPhotoAlbumsAdmin(vo.Current, vo.Size, &vo)
+	data := photoAlbumRepo.ListPhotoAlbumsAdmin(vo.Current, vo.Size, &vo)
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func ListPhotoAlbumBackInfos() model.ResultVO {
+func (p *MyPhotoAlbumService) ListPhotoAlbumBackInfos() model.ResultVO {
 	var photoAlbums []entity.TPhotoAlbum
 	err := ormInit.GetEngine().Prepare().Where(builder.Eq{"is_delete": shared.FALSE}).Find(&photoAlbums)
 	if err != nil {
@@ -102,7 +113,7 @@ func ListPhotoAlbumBackInfos() model.ResultVO {
 	return model.ResultOkWithData(dtos)
 }
 
-func GetPhotoAlbumBackById(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) GetPhotoAlbumBackById(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("albumId"))
 	engine := ormInit.GetEngine()
 	var pm entity.TPhotoAlbum
@@ -122,7 +133,7 @@ func GetPhotoAlbumBackById(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(album)
 }
 
-func DeletePhotoAlbumById(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) DeletePhotoAlbumById(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("albumId"))
 	_, err := ormInit.GetEngine().Prepare().ID(id).Delete(&entity.TPhotoAlbum{})
 	if err != nil {

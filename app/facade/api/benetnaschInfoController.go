@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /report [POST]
 func Report(c *gin.Context) {
-	res := service.Report(c.Request)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.Report(c.Request))
 }
 
 // GetBlogHomeInfo
@@ -22,8 +20,7 @@ func Report(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       / [GET]
 func GetBlogHomeInfo(c *gin.Context) {
-	res := service.GetBlogHomeInfo()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.GetBlogHomeInfo())
 }
 
 // GetBlogBackInfo
@@ -32,8 +29,7 @@ func GetBlogHomeInfo(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin [GET]
 func GetBlogBackInfo(c *gin.Context) {
-	res := service.GetBlogBackInfo()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.GetBlogBackInfo())
 }
 
 // UpdateWebsiteConfig
@@ -42,8 +38,7 @@ func GetBlogBackInfo(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/website/config [PUT]
 func UpdateWebsiteConfig(c *gin.Context) {
-	res := service.UpdateWebsiteConfig(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.UpdateWebsiteConfig(c))
 }
 
 // GetWebsiteConfig
@@ -52,8 +47,7 @@ func UpdateWebsiteConfig(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/website/config [GET]
 func GetWebsiteConfig(c *gin.Context) {
-	res := service.GetWebsiteConfig()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.GetWebsiteConfig())
 }
 
 // GetAbout
@@ -62,8 +56,7 @@ func GetWebsiteConfig(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /about [GET]
 func GetAbout(c *gin.Context) {
-	res := service.GetAbout()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.GetAbout())
 }
 
 // UpdateAbout
@@ -72,8 +65,7 @@ func GetAbout(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/about [PUT]
 func UpdateAbout(c *gin.Context) {
-	res := service.UpdateAbout(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.UpdateAbout(c))
 }
 
 // SaveBlogPhotoAlbumCover
@@ -82,6 +74,5 @@ func UpdateAbout(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/config/images [POST]
 func SaveBlogPhotoAlbumCover(c *gin.Context) {
-	res := service.SaveBlogPhotoAlbumCover(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, benetnaschService.SaveBlogPhotoAlbumCover(c))
 }

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /comments/save [POST]
 func SaveComment(c *gin.Context) {
-	res := service.SaveComment(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, commentService.SaveComment(c))
 }
 
 // GetComments
@@ -22,8 +20,7 @@ func SaveComment(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /comments [GET]
 func GetComments(c *gin.Context) {
-	res := service.ListComments(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, commentService.ListComments(c))
 }
 
 // ListRepliesByCommentId
@@ -32,8 +29,7 @@ func GetComments(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /comments/:commentId/replies [GET]
 func ListRepliesByCommentId(c *gin.Context) {
-	res := service.ListRepliesByCommentId(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, commentService.ListRepliesByCommentId(c))
 }
 
 // ListTopSixComments
@@ -42,8 +38,7 @@ func ListRepliesByCommentId(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /comments/topSix [GET]
 func ListTopSixComments(c *gin.Context) {
-	res := service.ListTopSixComments()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, commentService.ListTopSixComments())
 }
 
 // ListCommentBackDTO
@@ -52,8 +47,7 @@ func ListTopSixComments(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/comments [GET]
 func ListCommentBackDTO(c *gin.Context) {
-	res := service.ListCommentBackDTO(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, commentService.ListCommentBackDTO(c))
 }
 
 // UpdateCommentsReview
@@ -62,8 +56,7 @@ func ListCommentBackDTO(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/comments/review [PUT]
 func UpdateCommentsReview(c *gin.Context) {
-	res := service.UpdateCommentsReview(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, commentService.UpdateCommentsReview(c))
 }
 
 // DeleteComments
@@ -72,6 +65,5 @@ func UpdateCommentsReview(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/comments [DELETE]
 func DeleteComments(c *gin.Context) {
-	res := service.DeleteComments(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, commentService.DeleteComments(c))
 }

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"benetnasch/app/facade/model"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -13,8 +12,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/code [GET]
 func SendCode(c *gin.Context) {
-	res := service.SendCode(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.SendCode(c))
 }
 
 // ListUserAreas
@@ -23,8 +21,7 @@ func SendCode(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users/area [GET]
 func ListUserAreas(c *gin.Context) {
-	res := service.ListUserAreas(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.ListUserAreas(c))
 }
 
 // ListUsers
@@ -33,8 +30,7 @@ func ListUserAreas(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users [GET]
 func ListUsers(c *gin.Context) {
-	res := service.ListUsers(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.ListUsers(c))
 }
 
 // Register
@@ -43,8 +39,7 @@ func ListUsers(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/register [POST]
 func Register(c *gin.Context) {
-	res := service.Register(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.Register(c))
 }
 
 // UpdatePassword
@@ -53,8 +48,7 @@ func Register(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/password [PUT]
 func UpdatePassword(c *gin.Context) {
-	res := service.UpdatePassword(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.UpdatePassword(c))
 }
 
 // UpdateAdminPassword
@@ -63,8 +57,7 @@ func UpdatePassword(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users/password [PUT]
 func UpdateAdminPassword(c *gin.Context) {
-	res := service.UpdateAdminPassword(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.UpdateAdminPassword(c))
 }
 
 // Logout
@@ -75,9 +68,7 @@ func UpdateAdminPassword(c *gin.Context) {
 func Logout(c *gin.Context) {
 	value, _ := c.Get("userInfo")
 	dto := value.(model.UserDetailsDTO)
-
-	res := service.Logout(dto.Id)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.Logout(dto.Id))
 }
 
 // QQLogin
@@ -86,6 +77,5 @@ func Logout(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/oauth/qq [POST]
 func QQLogin(c *gin.Context) {
-	res := service.QQLogin(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userAuthService.QQLogin(c))
 }

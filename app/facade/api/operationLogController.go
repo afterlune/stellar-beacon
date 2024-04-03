@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/operation/logs [GET]
 func ListOperationLogs(c *gin.Context) {
-	res := service.ListOperationLogs(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, operationLogService.ListOperationLogs(c))
 }
 
 // DeleteOperationLogs
@@ -22,6 +20,5 @@ func ListOperationLogs(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/operation/logs [DELETE]
 func DeleteOperationLogs(c *gin.Context) {
-	res := service.DeleteOperationLogs(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, operationLogService.DeleteOperationLogs(c))
 }

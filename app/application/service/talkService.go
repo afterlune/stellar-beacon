@@ -3,11 +3,10 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/oss"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/oss"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -15,7 +14,19 @@ import (
 	"strconv"
 )
 
-func ListTalks(c *gin.Context) model.ResultVO {
+type TalkService interface {
+	ListTalks(c *gin.Context) model.ResultVO
+	GetTalkById(c *gin.Context) model.ResultVO
+	SaveTalkImages(c *gin.Context) model.ResultVO
+	SaveOrUpdateTalk(c *gin.Context) model.ResultVO
+	DeleteTalks(c *gin.Context) model.ResultVO
+	ListBackTalks(c *gin.Context) model.ResultVO
+	GetBackTalkById(c *gin.Context) model.ResultVO
+}
+
+type MyTalkService struct{}
+
+func (t *MyTalkService) ListTalks(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
 		zlog.Error(err.Error())
@@ -34,12 +45,12 @@ func ListTalks(c *gin.Context) model.ResultVO {
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	talks := repository.ListTalks(current, size)
+	talks := talkRepo.ListTalks(current, size)
 	var talkIds []int
 	for _, v := range talks {
 		talkIds = append(talkIds, v.Id)
 	}
-	comments := repository.ListCommentCountByTypeAndTopicIds(5, talkIds)
+	comments := commentRepo.ListCommentCountByTypeAndTopicIds(5, talkIds)
 	commentCounthm := make(map[int]int)
 	for _, v := range comments {
 		commentCounthm[v.Id] = v.CommentCount
@@ -58,14 +69,14 @@ func ListTalks(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: talks, Count: int(count)})
 }
 
-func GetTalkById(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) GetTalkById(c *gin.Context) model.ResultVO {
 	talkId := c.Param("talkId")
 	id, err := strconv.Atoi(talkId)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
 
-	talkDTO := repository.GetTalkById(id)
+	talkDTO := talkRepo.GetTalkById(id)
 	if talkDTO.Content == "" {
 		return model.ResultFailWithMessage("说说不存在")
 	}
@@ -77,14 +88,14 @@ func GetTalkById(c *gin.Context) model.ResultVO {
 		}
 		talkDTO.Imgs = s
 	}
-	commentCountDTO := repository.ListCommentCountByTypeAndTopicId(5, id)
+	commentCountDTO := commentRepo.ListCommentCountByTypeAndTopicId(5, id)
 	if &commentCountDTO != nil {
 		talkDTO.CommentCount = commentCountDTO.CommentCount
 	}
 	return model.ResultOkWithData(talkDTO)
 }
 
-func SaveTalkImages(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) SaveTalkImages(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		zlog.Error(err.Error())
@@ -93,7 +104,7 @@ func SaveTalkImages(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(shared.FILEURL + fileUrl)
 }
 
-func SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	var vo model.TalkVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -128,7 +139,7 @@ func SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeleteTalks(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) DeleteTalks(c *gin.Context) model.ResultVO {
 	var iDs []string
 	err := c.ShouldBind(&iDs)
 	if err != nil {
@@ -147,7 +158,7 @@ func DeleteTalks(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListBackTalks(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) ListBackTalks(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -166,7 +177,7 @@ func ListBackTalks(c *gin.Context) model.ResultVO {
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	talkDTOs := repository.ListTalksAdmin(vo.Current, vo.Size, &vo)
+	talkDTOs := talkRepo.ListTalksAdmin(vo.Current, vo.Size, &vo)
 	for _, v := range talkDTOs {
 		if v.Images != "" {
 			var imgs []string
@@ -181,13 +192,13 @@ func ListBackTalks(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: talkDTOs, Count: int(count)})
 }
 
-func GetBackTalkById(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) GetBackTalkById(c *gin.Context) model.ResultVO {
 	talkId := c.Param("talkId")
 	id, err := strconv.Atoi(talkId)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	talkDTO := repository.GetTalkByIdAdmin(id)
+	talkDTO := talkRepo.GetTalkByIdAdmin(id)
 	if talkDTO.Images != "" {
 		var s []string
 		err := json.Unmarshal([]byte(talkDTO.Images), &s)

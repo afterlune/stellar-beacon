@@ -3,23 +3,31 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"xorm.io/builder"
 )
 
-func ListCategories() model.ResultVO {
-	data := repository.ListCategories()
-	return model.ResultOkWithData(data)
+type CategoryService interface {
+	ListCategories() model.ResultVO
+	ListCategoriesAdmin(c *gin.Context) model.ResultVO
+	ListCategoriesAdminBySearch(c *gin.Context) model.ResultVO
+	DeleteCategories(c *gin.Context) model.ResultVO
+	SaveOrUpdateCategory(c *gin.Context) model.ResultVO
 }
 
-func ListCategoriesAdmin(c *gin.Context) model.ResultVO {
+type MyCategoryService struct{}
+
+func (c *MyCategoryService) ListCategories() model.ResultVO {
+	return model.ResultOkWithData(categoryRepo.ListCategories())
+}
+
+func (c *MyCategoryService) ListCategoriesAdmin(ctx *gin.Context) model.ResultVO {
 	var conditionVO model.ConditionVO
-	err := c.ShouldBind(&conditionVO)
+	err := ctx.ShouldBind(&conditionVO)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -37,13 +45,13 @@ func ListCategoriesAdmin(c *gin.Context) model.ResultVO {
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	data := repository.ListCategoriesAdmin(conditionVO.Current, conditionVO.Size, &conditionVO)
+	data := categoryRepo.ListCategoriesAdmin(conditionVO.Current, conditionVO.Size, &conditionVO)
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func ListCategoriesAdminBySearch(c *gin.Context) model.ResultVO {
+func (c *MyCategoryService) ListCategoriesAdminBySearch(ctx *gin.Context) model.ResultVO {
 	var conditionVO model.ConditionVO
-	err := c.ShouldBind(&conditionVO)
+	err := ctx.ShouldBind(&conditionVO)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -64,9 +72,9 @@ func ListCategoriesAdminBySearch(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(categoryOptionDTOs)
 }
 
-func DeleteCategories(c *gin.Context) model.ResultVO {
+func (c *MyCategoryService) DeleteCategories(ctx *gin.Context) model.ResultVO {
 	var iDs []int
-	err := c.ShouldBind(&iDs)
+	err := ctx.ShouldBind(&iDs)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -86,9 +94,9 @@ func DeleteCategories(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func SaveOrUpdateCategory(c *gin.Context) model.ResultVO {
+func (c *MyCategoryService) SaveOrUpdateCategory(ctx *gin.Context) model.ResultVO {
 	var categoryVO model.CategoryVO
-	err := c.ShouldBind(&categoryVO)
+	err := ctx.ShouldBind(&categoryVO)
 	if err != nil {
 		zlog.Error(err.Error())
 	}

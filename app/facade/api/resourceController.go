@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/resources [GET]
 func ListResources(c *gin.Context) {
-	res := service.ListResources(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, resourceService.ListResources(c))
 }
 
 // DeleteResource
@@ -22,8 +20,7 @@ func ListResources(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/resources/:resourceId [DELETE]
 func DeleteResource(c *gin.Context) {
-	res := service.DeleteResource(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, resourceService.DeleteResource(c))
 }
 
 // SaveOrUpdateResource
@@ -32,8 +29,7 @@ func DeleteResource(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/resources [POST]
 func SaveOrUpdateResource(c *gin.Context) {
-	res := service.SaveOrUpdateResource(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, resourceService.SaveOrUpdateResource(c))
 }
 
 // ListResourceOption
@@ -42,6 +38,5 @@ func SaveOrUpdateResource(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/role/resources [GET]
 func ListResourceOption(c *gin.Context) {
-	res := service.ListResourceOption()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, resourceService.ListResourceOption())
 }

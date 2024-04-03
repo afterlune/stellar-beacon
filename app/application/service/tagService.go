@@ -3,26 +3,34 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"xorm.io/builder"
 )
 
-func ListTags() model.ResultVO {
-	data := repository.ListTags()
-	return model.ResultOkWithData(data)
+type TagService interface {
+	ListTags() model.ResultVO
+	ListTopTenTags() model.ResultVO
+	ListTagsAdmin(c *gin.Context) model.ResultVO
+	ListTagsAdminBySearch(c *gin.Context) model.ResultVO
+	SaveOrUpdateTag(c *gin.Context) model.ResultVO
+	DeleteTag(c *gin.Context) model.ResultVO
 }
 
-func ListTopTenTags() model.ResultVO {
-	data := repository.ListTopTenTags()
-	return model.ResultOkWithData(data)
+type MyTagService struct{}
+
+func (t *MyTagService) ListTags() model.ResultVO {
+	return model.ResultOkWithData(tagRepo.ListTags())
 }
 
-func ListTagsAdmin(c *gin.Context) model.ResultVO {
+func (t *MyTagService) ListTopTenTags() model.ResultVO {
+	return model.ResultOkWithData(tagRepo.ListTopTenTags())
+}
+
+func (t *MyTagService) ListTagsAdmin(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -40,10 +48,10 @@ func ListTagsAdmin(c *gin.Context) model.ResultVO {
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: repository.ListTagsAdmin(vo.Current, vo.Size, &vo), Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: tagRepo.ListTagsAdmin(vo.Current, vo.Size, &vo), Count: int(count)})
 }
 
-func ListTagsAdminBySearch(c *gin.Context) model.ResultVO {
+func (t *MyTagService) ListTagsAdminBySearch(c *gin.Context) model.ResultVO {
 	var conditionVO model.ConditionVO
 	err := c.ShouldBind(&conditionVO)
 	if err != nil {
@@ -66,7 +74,7 @@ func ListTagsAdminBySearch(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(tagAdminDTOs)
 }
 
-func SaveOrUpdateTag(c *gin.Context) model.ResultVO {
+func (t *MyTagService) SaveOrUpdateTag(c *gin.Context) model.ResultVO {
 	var vo model.TagVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -99,7 +107,7 @@ func SaveOrUpdateTag(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeleteTag(c *gin.Context) model.ResultVO {
+func (t *MyTagService) DeleteTag(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {

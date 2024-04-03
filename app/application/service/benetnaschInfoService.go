@@ -3,10 +3,9 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"net/http"
@@ -14,12 +13,26 @@ import (
 	"strconv"
 )
 
-func GetAuroraHomeInfo() model.ResultVO {
+type BenetnaschInfoService interface {
+	GetBenetnaschHomeInfo() model.ResultVO
+	Report(req *http.Request) model.ResultVO
+	GetBlogHomeInfo() model.ResultVO
+	GetWebsiteConfig() model.ResultVO
+	GetBlogBackInfo() model.ResultVO
+	UpdateWebsiteConfig(c *gin.Context) model.ResultVO
+	GetAbout() model.ResultVO
+	UpdateAbout(c *gin.Context) model.ResultVO
+	SaveBlogPhotoAlbumCover(c *gin.Context) model.ResultVO
+	listArticleRank(hm map[interface{}]float64) []model.ArticleRankDTO
+}
 
+type MyBenetnaschInfoService struct{}
+
+func (b *MyBenetnaschInfoService) GetBenetnaschHomeInfo() model.ResultVO {
 	return model.ResultVO{}
 }
 
-func Report(req *http.Request) model.ResultVO {
+func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 	// 根据req的header得到md5
 	md5 := shared.GetMD5(shared.GetRedisId(req))
 	if !shared.SIsMember(shared.UNIQUE_VISITOR, md5) {
@@ -35,7 +48,7 @@ func Report(req *http.Request) model.ResultVO {
 	return model.ResultOk()
 }
 
-func GetBlogHomeInfo() model.ResultVO {
+func (b *MyBenetnaschInfoService) GetBlogHomeInfo() model.ResultVO {
 	var articleCount, categoryCount, tagCount, talkCount int64
 	engine := ormInit.GetEngine()
 	_, err := engine.SQL("select count(0) from t_article where is_delete = 0").Get(&articleCount)
@@ -65,7 +78,7 @@ func GetBlogHomeInfo() model.ResultVO {
 	} else {
 		viewCount = 0
 	}
-	websiteConfig := GetWebsiteConfig().Data.(model.WebsiteConfigDTO)
+	websiteConfig := b.GetWebsiteConfig().Data.(model.WebsiteConfigDTO)
 	return model.ResultOkWithData(model.BenetnaschHomeInfoDTO{
 		ArticleCount:    articleCount,
 		CategoryCount:   categoryCount,
@@ -76,7 +89,7 @@ func GetBlogHomeInfo() model.ResultVO {
 	})
 }
 
-func GetWebsiteConfig() model.ResultVO {
+func (b *MyBenetnaschInfoService) GetWebsiteConfig() model.ResultVO {
 	var webConfig model.WebsiteConfigDTO
 	var config string
 	websiteConfig := shared.Get(shared.WEBSITE_CONFIG).(string)
@@ -95,7 +108,7 @@ func GetWebsiteConfig() model.ResultVO {
 	return model.ResultOkWithData(webConfig)
 }
 
-func GetBlogBackInfo() model.ResultVO {
+func (b *MyBenetnaschInfoService) GetBlogBackInfo() model.ResultVO {
 	count, err := strconv.Atoi(shared.Get(shared.BLOG_VIEWS_COUNT).(string))
 	if err != nil {
 		zlog.Error(err.Error())
@@ -114,8 +127,8 @@ func GetBlogBackInfo() model.ResultVO {
 		zlog.Error(err.Error())
 	}
 	uniqueViews := listUniqueViews()
-	articleStatisticsDTOs := repository.ListArticleStatistics()
-	categoryDTOs := repository.ListCategories()
+	articleStatisticsDTOs := articleRepo.ListArticleStatistics()
+	categoryDTOs := categoryRepo.ListCategories()
 	var tags []entity.TTag
 	err = engine.Find(&tags)
 	if err != nil {
@@ -142,17 +155,17 @@ func GetBlogBackInfo() model.ResultVO {
 		UniqueViewDTOs:        uniqueViews,
 	}
 	if len(articleMap) != 0 {
-		articleRankDTOs := listArticleRank(articleMap)
+		articleRankDTOs := b.listArticleRank(articleMap)
 		auroraAdminInfoDTO.ArticleRankDTOs = articleRankDTOs
 	}
 	return model.ResultOkWithData(auroraAdminInfoDTO)
 }
 
-func UpdateWebsiteConfig(c *gin.Context) model.ResultVO {
+func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func GetAbout() model.ResultVO {
+func (b *MyBenetnaschInfoService) GetAbout() model.ResultVO {
 	var aboutDTO model.AboutDTO
 	about := shared.Get(shared.ABOUT).(string)
 	if about != "" {
@@ -177,15 +190,15 @@ func GetAbout() model.ResultVO {
 	return model.ResultOkWithData(aboutDTO)
 }
 
-func UpdateAbout(c *gin.Context) model.ResultVO {
+func (b *MyBenetnaschInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func SaveBlogPhotoAlbumCover(c *gin.Context) model.ResultVO {
+func (b *MyBenetnaschInfoService) SaveBlogPhotoAlbumCover(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func listArticleRank(hm map[interface{}]float64) []model.ArticleRankDTO {
+func (b *MyBenetnaschInfoService) listArticleRank(hm map[interface{}]float64) []model.ArticleRankDTO {
 	var articleIds []int
 	for k, _ := range hm {
 		id, err := strconv.Atoi(k.(string))

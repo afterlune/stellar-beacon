@@ -3,12 +3,11 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/SearchEngines"
-	"benetnasch/app/infrastructure/oss"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/SearchEngines"
+	"benetnasch/app/infra/oss"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"bytes"
 	"container/list"
 	"fmt"
@@ -23,8 +22,33 @@ import (
 	"xorm.io/xorm"
 )
 
-func ListTopAndFeaturedArticles() model.ResultVO {
-	data := repository.ListTopAndFeaturedArticles()
+type ArticleService interface {
+	ListTopAndFeaturedArticles() model.ResultVO
+	ListArticles(c *gin.Context) model.ResultVO
+	ListArticlesByCategoryId(c *gin.Context) model.ResultVO
+	GetArticleById(c *gin.Context) model.ResultVO
+	updateArticleViewsCount(articleId string)
+	ListArticlesByTagId(c *gin.Context) model.ResultVO
+	AccessArticle(c *gin.Context) model.ResultVO
+	ListArchives(c *gin.Context) model.ResultVO
+	ListArticlesAdmin(c *gin.Context) model.ResultVO
+	SaveOrUpdateArticle(c *gin.Context) model.ResultVO
+	UpdateArticleTopAndFeatured(c *gin.Context) model.ResultVO
+	UpdateArticleDelete(c *gin.Context) model.ResultVO
+	DeleteArticles(c *gin.Context) model.ResultVO
+	SaveArticleImages(c *gin.Context) model.ResultVO
+	GetArticleBackById(c *gin.Context) model.ResultVO
+	ImportArticles(c *gin.Context) model.ResultVO
+	ExportArticles(c *gin.Context) model.ResultVO
+	ListArticlesBySearch(c *gin.Context) model.ResultVO
+	saveArticleCategory(vo model.ArticleVO, session *xorm.Session) entity.TCategory
+	saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session)
+}
+
+type MyArticleService struct{}
+
+func (a *MyArticleService) ListTopAndFeaturedArticles() model.ResultVO {
+	data := articleRepo.ListTopAndFeaturedArticles()
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.TopAndFeaturedArticlesDTO{})
 	} else if len(data) > 3 {
@@ -35,7 +59,7 @@ func ListTopAndFeaturedArticles() model.ResultVO {
 	}
 }
 
-func ListArticles(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ListArticles(c *gin.Context) model.ResultVO {
 	current, _ := strconv.Atoi(c.Query("current"))
 	size, _ := strconv.Atoi(c.Query("size"))
 	var count int
@@ -43,14 +67,14 @@ func ListArticles(c *gin.Context) model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	data := repository.ListArticles(current, size)
+	data := articleRepo.ListArticles(current, size)
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: count})
 }
 
-func ListArticlesByCategoryId(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ListArticlesByCategoryId(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
 		zlog.Error(err.Error())
@@ -68,14 +92,14 @@ func ListArticlesByCategoryId(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 	}
 
-	data := repository.GetArticlesByCategoryId(current, size, categoryId)
+	data := articleRepo.GetArticlesByCategoryId(current, size, categoryId)
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: count})
 }
 
-func GetArticleById(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	articleId := c.Param("articleId")
 	get := shared.Get(articleId)
 	if get != "" {
@@ -103,20 +127,20 @@ func GetArticleById(c *gin.Context) model.ResultVO {
 			return model.ResultFailWithCodeAndMessage(52003, status["message"])
 		}
 	}
-	updateArticleViewsCount(articleId)
+	a.updateArticleViewsCount(articleId)
 	id, err := strconv.Atoi(articleId)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
 
-	data := repository.GetArticleById(id)
-	preData := repository.GetPreArticleById(id)
+	data := articleRepo.GetArticleById(id)
+	preData := articleRepo.GetPreArticleById(id)
 	if preData.Id == 0 {
-		preData = repository.GetLastArticle()
+		preData = articleRepo.GetLastArticle()
 	}
-	nextData := repository.GetNextArticleById(id)
+	nextData := articleRepo.GetNextArticleById(id)
 	if nextData.Id == 0 {
-		nextData = repository.GetFirstArticle()
+		nextData = articleRepo.GetFirstArticle()
 	}
 	if data.Id == 0 {
 		return model.ResultOk()
@@ -132,11 +156,11 @@ func GetArticleById(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(data)
 }
 
-func updateArticleViewsCount(articleId string) {
+func (a *MyArticleService) updateArticleViewsCount(articleId string) {
 	shared.ZIncr(shared.ARTICLE_VIEWS_COUNT, 1, articleId)
 }
 
-func ListArticlesByTagId(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ListArticlesByTagId(c *gin.Context) model.ResultVO {
 	current, _ := strconv.Atoi(c.Query("current"))
 	size, _ := strconv.Atoi(c.Query("size"))
 	tagId := c.Query("tagId")
@@ -147,14 +171,14 @@ func ListArticlesByTagId(c *gin.Context) model.ResultVO {
 	}
 
 	id, _ := strconv.Atoi(tagId)
-	data := repository.ListArticlesByTagId(current, size, id)
+	data := articleRepo.ListArticlesByTagId(current, size, id)
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func AccessArticle(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) AccessArticle(c *gin.Context) model.ResultVO {
 	var vo model.ArticlePasswordVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -180,7 +204,7 @@ func AccessArticle(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListArchives(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ListArchives(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
 		zlog.Error(err.Error())
@@ -196,7 +220,7 @@ func ListArchives(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 	}
 
-	articles := repository.ListArchives(current, size)
+	articles := articleRepo.ListArchives(current, size)
 	hm := make(map[string][]model.ArticleCardDTO)
 	for _, v := range articles {
 		year, month, day := v.CreateTime.Date()
@@ -271,14 +295,14 @@ func ListArchives(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: archiveDTOs, Count: int(count)})
 }
 
-func ListArticlesAdmin(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 	var conditionVO model.ConditionVO
 	err := c.ShouldBindQuery(&conditionVO)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	count := repository.CountArticleAdmins(&conditionVO)
-	articleAdminDTOs := repository.ListArticlesAdmin(conditionVO.Current, conditionVO.Size, &conditionVO)
+	count := articleRepo.CountArticleAdmins(&conditionVO)
+	articleAdminDTOs := articleRepo.ListArticlesAdmin(conditionVO.Current, conditionVO.Size, &conditionVO)
 	viewsCountMap := shared.ZAllScore(shared.ARTICLE_VIEWS_COUNT)
 	for _, v := range articleAdminDTOs {
 		index := strconv.Itoa(v.Id)
@@ -293,7 +317,7 @@ func ListArticlesAdmin(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: articleAdminDTOs, Count: count})
 }
 
-func SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 	var articleVO model.ArticleVO
 	err := c.ShouldBind(&articleVO)
 	if err != nil {
@@ -316,7 +340,7 @@ func SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	category := saveArticleCategory(articleVO, session)
+	category := a.saveArticleCategory(articleVO, session)
 	var article entity.TArticle
 	marshal, err := json.Marshal(articleVO)
 	if err != nil {
@@ -349,7 +373,7 @@ func SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 		}
 		return model.ResultFail()
 	}
-	saveArticleTag(articleVO, article.Id, session)
+	a.saveArticleTag(articleVO, article.Id, session)
 	if article.Status == 1 {
 		// TODO subscribe article; args: article.Id
 	}
@@ -382,7 +406,7 @@ func SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateArticleTopAndFeatured(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.ResultVO {
 	var articleTopFeaturedVO model.ArticleTopFeaturedVO
 	err := c.ShouldBind(&articleTopFeaturedVO)
 	if err != nil {
@@ -440,7 +464,7 @@ func UpdateArticleTopAndFeatured(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateArticleDelete(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) UpdateArticleDelete(c *gin.Context) model.ResultVO {
 	var deleteVO model.DeleteVO
 	err := c.ShouldBind(&deleteVO)
 	if err != nil {
@@ -472,7 +496,7 @@ func UpdateArticleDelete(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeleteArticles(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) DeleteArticles(c *gin.Context) model.ResultVO {
 	var ids []int
 	err := c.ShouldBind(&ids)
 	if err != nil {
@@ -502,7 +526,7 @@ func DeleteArticles(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func SaveArticleImages(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) SaveArticleImages(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		zlog.Error(err.Error())
@@ -512,7 +536,7 @@ func SaveArticleImages(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(shared.FILEURL + fileUri)
 }
 
-func GetArticleBackById(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) GetArticleBackById(c *gin.Context) model.ResultVO {
 	id, err := strconv.Atoi(c.Param("articleId"))
 	if err != nil {
 		zlog.Error(err.Error())
@@ -535,7 +559,7 @@ func GetArticleBackById(c *gin.Context) model.ResultVO {
 	if category.Id != 0 {
 		categoryName = category.CategoryName
 	}
-	tagNames := repository.ListTagNamesByArticleId(id)
+	tagNames := tagRepo.ListTagNamesByArticleId(id)
 	var articleAdminViewDTO model.ArticleAdminViewDTO
 	marshal, err := json.Marshal(article)
 	if err != nil {
@@ -556,7 +580,7 @@ func GetArticleBackById(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(articleAdminViewDTO)
 }
 
-func ImportArticles(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ImportArticles(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		zlog.Error(err.Error())
@@ -581,11 +605,11 @@ func ImportArticles(c *gin.Context) model.ResultVO {
 		Status:         3,
 	}
 	c.Set("articleVO", articleVO)
-	SaveOrUpdateArticle(c)
+	a.SaveOrUpdateArticle(c)
 	return model.ResultOk()
 }
 
-func ExportArticles(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ExportArticles(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {
@@ -611,7 +635,7 @@ func ExportArticles(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(urls)
 }
 
-func ListArticlesBySearch(c *gin.Context) model.ResultVO {
+func (a *MyArticleService) ListArticlesBySearch(c *gin.Context) model.ResultVO {
 	keywords := c.Query("keywords")
 	if keywords == "" {
 		return model.ResultOk()
@@ -638,7 +662,7 @@ func ListArticlesBySearch(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(articleSearchDTOs)
 }
 
-func saveArticleCategory(vo model.ArticleVO, session *xorm.Session) entity.TCategory {
+func (a *MyArticleService) saveArticleCategory(vo model.ArticleVO, session *xorm.Session) entity.TCategory {
 	var category entity.TCategory
 	_, err := session.Prepare().SQL("select * from t_category where category_name = '" + vo.CategoryName + "'").Get(&category)
 	if err != nil {
@@ -657,7 +681,7 @@ func saveArticleCategory(vo model.ArticleVO, session *xorm.Session) entity.TCate
 	return category
 }
 
-func saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session) {
+func (a *MyArticleService) saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session) {
 	var atag entity.TArticleTag
 	if vo.Id != 0 {
 		_, err := session.Prepare().Where("article_id = " + strconv.Itoa(vo.Id)).Delete(&atag)

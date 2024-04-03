@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /tags/all [GET]
 func GetAllTags(c *gin.Context) {
-	res := service.ListTags()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, tagService.ListTags())
 }
 
 // GetTopTenTags
@@ -22,8 +20,7 @@ func GetAllTags(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /tags/topTen [GET]
 func GetTopTenTags(c *gin.Context) {
-	res := service.ListTopTenTags()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, tagService.ListTopTenTags())
 }
 
 // ListTagsAdmin
@@ -32,8 +29,7 @@ func GetTopTenTags(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/tags [GET]
 func ListTagsAdmin(c *gin.Context) {
-	res := service.ListTagsAdmin(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, tagService.ListTagsAdmin(c))
 }
 
 // ListTagsAdminBySearch
@@ -42,8 +38,7 @@ func ListTagsAdmin(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/tags/search [GET]
 func ListTagsAdminBySearch(c *gin.Context) {
-	res := service.ListTagsAdminBySearch(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, tagService.ListTagsAdminBySearch(c))
 }
 
 // SaveOrUpdateTag
@@ -52,8 +47,7 @@ func ListTagsAdminBySearch(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/tags [POST]
 func SaveOrUpdateTag(c *gin.Context) {
-	res := service.SaveOrUpdateTag(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, tagService.SaveOrUpdateTag(c))
 }
 
 // DeleteTag
@@ -62,6 +56,5 @@ func SaveOrUpdateTag(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/tags [DELETE]
 func DeleteTag(c *gin.Context) {
-	res := service.DeleteTag(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, tagService.DeleteTag(c))
 }

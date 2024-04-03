@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /categories/all [GET]
 func ListCategories(c *gin.Context) {
-	res := service.ListCategories()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, categoryService.ListCategories())
 }
 
 // ListCategoriesAdmin
@@ -22,8 +20,7 @@ func ListCategories(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/categories [GET]
 func ListCategoriesAdmin(c *gin.Context) {
-	res := service.ListCategoriesAdmin(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, categoryService.ListCategoriesAdmin(c))
 }
 
 // ListCategoriesAdminBySearch
@@ -32,8 +29,7 @@ func ListCategoriesAdmin(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/categories/search [GET]
 func ListCategoriesAdminBySearch(c *gin.Context) {
-	res := service.ListCategoriesAdminBySearch(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, categoryService.ListCategoriesAdminBySearch(c))
 }
 
 // DeleteCategories
@@ -42,8 +38,7 @@ func ListCategoriesAdminBySearch(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/categories [DELETE]
 func DeleteCategories(c *gin.Context) {
-	res := service.DeleteCategories(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, categoryService.DeleteCategories(c))
 }
 
 // SaveOrUpdateCategory
@@ -52,6 +47,5 @@ func DeleteCategories(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/categories [POST]
 func SaveOrUpdateCategory(c *gin.Context) {
-	res := service.SaveOrUpdateCategory(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, categoryService.SaveOrUpdateCategory(c))
 }

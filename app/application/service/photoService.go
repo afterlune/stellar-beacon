@@ -3,17 +3,30 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/oss"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/oss"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"strconv"
 )
 
-func SavePhotosAlbumCover(c *gin.Context) model.ResultVO {
+type PhotoService interface {
+	SavePhotosAlbumCover(c *gin.Context) model.ResultVO
+	ListPhotos(c *gin.Context) model.ResultVO
+	UpdatePhoto(c *gin.Context) model.ResultVO
+	SavePhotos(c *gin.Context) model.ResultVO
+	UpdatePhotosAlbum(c *gin.Context) model.ResultVO
+	UpdatePhotoDelete(c *gin.Context) model.ResultVO
+	DeletePhotos(c *gin.Context) model.ResultVO
+	ListPhotosByAlbumId(c *gin.Context) model.ResultVO
+}
+
+type MyPhotoService struct{}
+
+func (p *MyPhotoService) SavePhotosAlbumCover(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		if err != nil {
@@ -24,7 +37,7 @@ func SavePhotosAlbumCover(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(shared.FILEURL + fileUri)
 }
 
-func ListPhotos(c *gin.Context) model.ResultVO {
+func (p *MyPhotoService) ListPhotos(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -56,7 +69,7 @@ func ListPhotos(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
-func UpdatePhoto(c *gin.Context) model.ResultVO {
+func (p *MyPhotoService) UpdatePhoto(c *gin.Context) model.ResultVO {
 	var vo model.PhotoInfoVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -77,7 +90,7 @@ func UpdatePhoto(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func SavePhotos(c *gin.Context) model.ResultVO {
+func (p *MyPhotoService) SavePhotos(c *gin.Context) model.ResultVO {
 	var vo model.PhotoVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -107,7 +120,7 @@ func SavePhotos(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdatePhotosAlbum(c *gin.Context) model.ResultVO {
+func (p *MyPhotoService) UpdatePhotosAlbum(c *gin.Context) model.ResultVO {
 	var vo model.PhotoVO1
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -136,7 +149,7 @@ func UpdatePhotosAlbum(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdatePhotoDelete(c *gin.Context) model.ResultVO {
+func (p *MyPhotoService) UpdatePhotoDelete(c *gin.Context) model.ResultVO {
 	var vo model.DeleteVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -189,7 +202,7 @@ func UpdatePhotoDelete(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeletePhotos(c *gin.Context) model.ResultVO {
+func (p *MyPhotoService) DeletePhotos(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {
@@ -204,7 +217,7 @@ func DeletePhotos(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListPhotosByAlbumId(c *gin.Context) model.ResultVO {
+func (p *MyPhotoService) ListPhotosByAlbumId(c *gin.Context) model.ResultVO {
 	current := c.Query("current")
 	size := c.Query("size")
 	albumId := c.Param("albumId")

@@ -47,8 +47,8 @@ func Router(router *gin.Engine) {
 		admin.PUT("/comments/review", api.UpdateCommentsReview)
 		admin.DELETE("/comments", api.DeleteComments)
 		// exceptionLog
-		admin.GET("/exception/logs", api.ListExceptionLogs)
-		admin.DELETE("/exception/logs", api.DeleteExceptionLogs)
+		admin.GET("/exception/logs", api.ListErrorLogs)
+		admin.DELETE("/exception/logs", api.DeleteErrorLogs)
 		// FriendLink
 		admin.GET("/links", api.ListFriendLinkDTO)
 		admin.POST("/links", api.SaveOrUpdateFriendLink)

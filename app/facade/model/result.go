@@ -1,7 +1,7 @@
 package model
 
 import (
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/zlog"
 	"strconv"
 )
 

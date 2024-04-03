@@ -3,15 +3,24 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 )
 
-func ListFriendLinks() model.ResultVO {
+type FriendLinkService interface {
+	ListFriendLinks() model.ResultVO
+	ListFriendLinkDTO(c *gin.Context) model.ResultVO
+	SaveOrUpdateFriendLink(c *gin.Context) model.ResultVO
+	DeleteFriendLink(c *gin.Context) model.ResultVO
+}
+
+type MyFriendLinkService struct{}
+
+func (f *MyFriendLinkService) ListFriendLinks() model.ResultVO {
 	var frilinks []entity.TFriendLink
 	err := ormInit.GetEngine().Find(&frilinks)
 	if err != nil {
@@ -33,7 +42,7 @@ func ListFriendLinks() model.ResultVO {
 	return model.ResultOkWithData(frilinkDTOs)
 }
 
-func ListFriendLinkDTO(c *gin.Context) model.ResultVO {
+func (f *MyFriendLinkService) ListFriendLinkDTO(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -64,7 +73,7 @@ func ListFriendLinkDTO(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
-func SaveOrUpdateFriendLink(c *gin.Context) model.ResultVO {
+func (f *MyFriendLinkService) SaveOrUpdateFriendLink(c *gin.Context) model.ResultVO {
 	var vo model.FriendLinkVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -90,7 +99,7 @@ func SaveOrUpdateFriendLink(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeleteFriendLink(c *gin.Context) model.ResultVO {
+func (f *MyFriendLinkService) DeleteFriendLink(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {

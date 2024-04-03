@@ -3,10 +3,10 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/oss"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/oss"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -16,7 +16,21 @@ import (
 	"xorm.io/xorm"
 )
 
-func UpdateUserInfo(c *gin.Context) model.ResultVO {
+type UserInfoService interface {
+	UpdateUserInfo(c *gin.Context) model.ResultVO
+	UpdateUserAvatar(c *gin.Context) model.ResultVO
+	SaveUserEmail(c *gin.Context) model.ResultVO
+	UpdateUserSubscribe(c *gin.Context) model.ResultVO
+	UpdateUserRole(c *gin.Context) model.ResultVO
+	UpdateUserDisable(c *gin.Context) model.ResultVO
+	ListOnlineUsers(c *gin.Context) model.ResultVO
+	RemoveOnlineUser(c *gin.Context) model.ResultVO
+	GetUserInfoById(c *gin.Context) model.ResultVO
+}
+
+type MyUserInfoService struct{}
+
+func (u *MyUserInfoService) UpdateUserInfo(c *gin.Context) model.ResultVO {
 	var userInfoVO model.UserInfoVO
 	err := c.ShouldBind(&userInfoVO)
 	if err != nil {
@@ -62,7 +76,7 @@ func UpdateUserInfo(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateUserAvatar(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) UpdateUserAvatar(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		zlog.Error(err.Error())
@@ -108,7 +122,7 @@ func UpdateUserAvatar(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(shared.FILEURL + fileUri)
 }
 
-func SaveUserEmail(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) SaveUserEmail(c *gin.Context) model.ResultVO {
 	var vo model.EmailVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -138,7 +152,7 @@ func SaveUserEmail(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateUserSubscribe(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) UpdateUserSubscribe(c *gin.Context) model.ResultVO {
 	var subVO model.SubscribeVO
 	err := c.ShouldBind(&subVO)
 	if err != nil {
@@ -191,7 +205,7 @@ func UpdateUserSubscribe(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateUserRole(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) UpdateUserRole(c *gin.Context) model.ResultVO {
 	var vo model.UserRoleVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -234,7 +248,7 @@ func UpdateUserRole(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateUserDisable(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) UpdateUserDisable(c *gin.Context) model.ResultVO {
 	var vo model.UserDetailsDTO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -258,7 +272,7 @@ func UpdateUserDisable(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListOnlineUsers(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) ListOnlineUsers(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -298,7 +312,7 @@ func ListOnlineUsers(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: onlineUsers, Count: n})
 }
 
-func RemoveOnlineUser(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) RemoveOnlineUser(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("userInfoId"))
 	var userAuth entity.TUserAuth
 	_, err := ormInit.GetEngine().Prepare().Where(fmt.Sprintf("user_info_id = %d", id)).Get(&userAuth)
@@ -310,7 +324,7 @@ func RemoveOnlineUser(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func GetUserInfoById(c *gin.Context) model.ResultVO {
+func (u *MyUserInfoService) GetUserInfoById(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("userInfoId"))
 	var userInfo entity.TUserInfo
 	_, err := ormInit.GetEngine().Prepare().ID(id).Get(&userInfo)

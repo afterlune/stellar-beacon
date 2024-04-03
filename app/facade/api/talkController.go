@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /talks [GET]
 func ListTalks(c *gin.Context) {
-	res := service.ListTalks(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, talkService.ListTalks(c))
 }
 
 // GetTalkById
@@ -22,8 +20,7 @@ func ListTalks(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /talks/:talkId [GET]
 func GetTalkById(c *gin.Context) {
-	res := service.GetTalkById(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, talkService.GetTalkById(c))
 }
 
 // SaveTalkImages
@@ -32,8 +29,7 @@ func GetTalkById(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/talks/images [POST]
 func SaveTalkImages(c *gin.Context) {
-	res := service.SaveTalkImages(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, talkService.SaveTalkImages(c))
 }
 
 // SaveOrUpdateTalk
@@ -42,8 +38,7 @@ func SaveTalkImages(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/talks [POST]
 func SaveOrUpdateTalk(c *gin.Context) {
-	res := service.SaveOrUpdateTalk(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, talkService.SaveOrUpdateTalk(c))
 }
 
 // DeleteTalks
@@ -52,8 +47,7 @@ func SaveOrUpdateTalk(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/talks [DELETE]
 func DeleteTalks(c *gin.Context) {
-	res := service.DeleteTalks(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, talkService.DeleteTalks(c))
 }
 
 // ListBackTalks
@@ -62,8 +56,7 @@ func DeleteTalks(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/talks [GET]
 func ListBackTalks(c *gin.Context) {
-	res := service.ListBackTalks(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, talkService.ListBackTalks(c))
 }
 
 // GetBackTalkById
@@ -72,6 +65,5 @@ func ListBackTalks(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/talks/:talkId [GET]
 func GetBackTalkById(c *gin.Context) {
-	res := service.GetBackTalkById(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, talkService.GetBackTalkById(c))
 }

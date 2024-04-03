@@ -2,7 +2,7 @@ package service
 
 import (
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/repository"
+	"benetnasch/app/infra/persistence/repository"
 	"time"
 )
 

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/info [PUT]
 func UpdateUserInfo(c *gin.Context) {
-	res := service.UpdateUserInfo(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.UpdateUserInfo(c))
 }
 
 // UpdateUserAvatar
@@ -22,8 +20,7 @@ func UpdateUserInfo(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/avatar [POST]
 func UpdateUserAvatar(c *gin.Context) {
-	res := service.UpdateUserAvatar(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.UpdateUserAvatar(c))
 }
 
 // SaveUserEmail
@@ -32,8 +29,7 @@ func UpdateUserAvatar(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/email [PUT]
 func SaveUserEmail(c *gin.Context) {
-	res := service.SaveUserEmail(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.SaveUserEmail(c))
 }
 
 // UpdateUserSubscribe 修改用户的订阅状态
@@ -42,8 +38,7 @@ func SaveUserEmail(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/subscribe [PUT]
 func UpdateUserSubscribe(c *gin.Context) {
-	res := service.UpdateUserSubscribe(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.UpdateUserSubscribe(c))
 }
 
 // UpdateUserRole
@@ -52,8 +47,7 @@ func UpdateUserSubscribe(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users/role [PUT]
 func UpdateUserRole(c *gin.Context) {
-	res := service.UpdateUserRole(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.UpdateUserRole(c))
 }
 
 // UpdateUserDisable
@@ -62,8 +56,7 @@ func UpdateUserRole(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users/disable [PUT]
 func UpdateUserDisable(c *gin.Context) {
-	res := service.UpdateUserDisable(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.UpdateUserRole(c))
 }
 
 // ListOnlineUsers
@@ -72,8 +65,7 @@ func UpdateUserDisable(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users/online [GET]
 func ListOnlineUsers(c *gin.Context) {
-	res := service.ListOnlineUsers(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.ListOnlineUsers(c))
 }
 
 // RemoveOnlineUser
@@ -82,8 +74,7 @@ func ListOnlineUsers(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users/:userInfoId/online [DELETE]
 func RemoveOnlineUser(c *gin.Context) {
-	res := service.RemoveOnlineUser(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.RemoveOnlineUser(c))
 }
 
 // GetUserInfoById
@@ -92,6 +83,5 @@ func RemoveOnlineUser(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /users/info/:userInfoId [GET]
 func GetUserInfoById(c *gin.Context) {
-	res := service.GetUserInfoById(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, userInfoService.GetUserInfoById(c))
 }

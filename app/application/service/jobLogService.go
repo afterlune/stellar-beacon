@@ -3,17 +3,26 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/persistence/repository"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"strconv"
 )
 
-func ListJobLogs(c *gin.Context) model.ResultVO {
+type JobLogService interface {
+	ListJobLogs(c *gin.Context) model.ResultVO
+	DeleteJobLogs(c *gin.Context) model.ResultVO
+	CleanJobLogs() model.ResultVO
+	ListJobLogGroups() model.ResultVO
+}
+
+type MyJobLogService struct{}
+
+func (j *MyJobLogService) ListJobLogs(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
 		zlog.Error(err.Error())
@@ -73,7 +82,7 @@ func ListJobLogs(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
-func DeleteJobLogs(c *gin.Context) model.ResultVO {
+func (j *MyJobLogService) DeleteJobLogs(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {
@@ -88,7 +97,7 @@ func DeleteJobLogs(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func CleanJobLogs() model.ResultVO {
+func (j *MyJobLogService) CleanJobLogs() model.ResultVO {
 	_, err := ormInit.GetEngine().Prepare().Delete(&entity.TJobLog{})
 	if err != nil {
 		zlog.Error(err.Error())
@@ -97,7 +106,7 @@ func CleanJobLogs() model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListJobLogGroups() model.ResultVO {
+func (j *MyJobLogService) ListJobLogGroups() model.ResultVO {
 	data := repository.ListJobLogGroups()
 	return model.ResultOkWithData(data)
 }

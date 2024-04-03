@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/photos/upload [POST]
 func SavePhotosAlbumCover(c *gin.Context) {
-	res := service.SavePhotosAlbumCover(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.SavePhotosAlbumCover(c))
 }
 
 // ListPhotos
@@ -22,8 +20,7 @@ func SavePhotosAlbumCover(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/photos [GET]
 func ListPhotos(c *gin.Context) {
-	res := service.ListPhotos(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.ListPhotos(c))
 }
 
 // UpdatePhoto
@@ -32,8 +29,7 @@ func ListPhotos(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/photos [PUT]
 func UpdatePhoto(c *gin.Context) {
-	res := service.UpdatePhoto(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.UpdatePhoto(c))
 }
 
 // SavePhotos
@@ -42,8 +38,7 @@ func UpdatePhoto(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/photos [POST]
 func SavePhotos(c *gin.Context) {
-	res := service.SavePhotos(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.SavePhotos(c))
 }
 
 // UpdatePhotosAlbum
@@ -52,8 +47,7 @@ func SavePhotos(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/photos/album [PUT]
 func UpdatePhotosAlbum(c *gin.Context) {
-	res := service.UpdatePhotosAlbum(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.UpdatePhotosAlbum(c))
 }
 
 // UpdatePhotoDelete
@@ -62,8 +56,7 @@ func UpdatePhotosAlbum(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/photos/delete [PUT]
 func UpdatePhotoDelete(c *gin.Context) {
-	res := service.UpdatePhotoDelete(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.UpdatePhotoDelete(c))
 }
 
 // DeletePhotos
@@ -72,8 +65,7 @@ func UpdatePhotoDelete(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/photos [DELETE]
 func DeletePhotos(c *gin.Context) {
-	res := service.DeletePhotos(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.DeletePhotos(c))
 }
 
 // ListPhotosByAlbumId
@@ -82,6 +74,5 @@ func DeletePhotos(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /albums/:albumId/photos [GET]
 func ListPhotosByAlbumId(c *gin.Context) {
-	res := service.ListPhotosByAlbumId(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, photoService.ListPhotosByAlbumId(c))
 }

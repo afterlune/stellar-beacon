@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"benetnasch/app/infrastructure/middlewares"
-	"benetnasch/app/infrastructure/task"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/middlewares"
+	"benetnasch/app/infra/task"
+	"benetnasch/app/infra/zlog"
 	"benetnasch/route"
 	"fmt"
 	"github.com/gin-gonic/gin"

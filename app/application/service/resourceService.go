@@ -3,16 +3,27 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"strconv"
 	"xorm.io/builder"
 )
 
-func ListResources(c *gin.Context) model.ResultVO {
+type ResourceService interface {
+	ListResources(c *gin.Context) model.ResultVO
+	DeleteResource(c *gin.Context) model.ResultVO
+	SaveOrUpdateResource(c *gin.Context) model.ResultVO
+	ListResourceOption() model.ResultVO
+	listResourceModule(resources []entity.TResource) (res []entity.TResource)
+	listResourceChildren(resources []entity.TResource) map[int][]entity.TResource
+}
+
+type MyResourceService struct{}
+
+func (r *MyResourceService) ListResources(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -29,8 +40,8 @@ func ListResources(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	parents := listResourceModule(resources)
-	childrenMap := listResourceChildren(resources)
+	parents := r.listResourceModule(resources)
+	childrenMap := r.listResourceChildren(resources)
 	var resourceDTOs []model.ResourceDTO
 	for _, v := range parents {
 		var resourceDTO model.ResourceDTO
@@ -57,7 +68,7 @@ func ListResources(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(resourceDTOs)
 }
 
-func DeleteResource(c *gin.Context) model.ResultVO {
+func (r *MyResourceService) DeleteResource(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("resourceId"))
 	engine := ormInit.GetEngine()
 	count, err := engine.Prepare().Where(fmt.Sprintf("resource_id = %d", id)).Count(&entity.TRoleResource{})
@@ -83,7 +94,7 @@ func DeleteResource(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func SaveOrUpdateResource(c *gin.Context) model.ResultVO {
+func (r *MyResourceService) SaveOrUpdateResource(c *gin.Context) model.ResultVO {
 	var vo model.ResourceVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -109,7 +120,7 @@ func SaveOrUpdateResource(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListResourceOption() model.ResultVO {
+func (r *MyResourceService) ListResourceOption() model.ResultVO {
 	engine := ormInit.GetEngine()
 	var resources []entity.TResource
 	err := engine.Select("id, resource_name, parent_id").Where(fmt.Sprintf("is_anonymous = %d", shared.FALSE)).Find(&resources)
@@ -117,8 +128,8 @@ func ListResourceOption() model.ResultVO {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	parents := listResourceModule(resources)
-	childrenMap := listResourceChildren(resources)
+	parents := r.listResourceModule(resources)
+	childrenMap := r.listResourceChildren(resources)
 	var labelOptionDTOs []model.LabelOptionDTO
 	for _, v := range parents {
 		var dtos []model.LabelOptionDTO
@@ -140,7 +151,7 @@ func ListResourceOption() model.ResultVO {
 	return model.ResultOkWithData(labelOptionDTOs)
 }
 
-func listResourceModule(resources []entity.TResource) (res []entity.TResource) {
+func (r *MyResourceService) listResourceModule(resources []entity.TResource) (res []entity.TResource) {
 	for _, v := range resources {
 		if v.ParentId == 0 {
 			res = append(res, v)
@@ -149,7 +160,7 @@ func listResourceModule(resources []entity.TResource) (res []entity.TResource) {
 	return res
 }
 
-func listResourceChildren(resources []entity.TResource) map[int][]entity.TResource {
+func (r *MyResourceService) listResourceChildren(resources []entity.TResource) map[int][]entity.TResource {
 	cm := make(map[int][]entity.TResource)
 	for _, v := range resources {
 		if v.ParentId != 0 {

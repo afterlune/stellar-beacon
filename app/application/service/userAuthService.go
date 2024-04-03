@@ -3,10 +3,9 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
@@ -16,7 +15,23 @@ import (
 	"xorm.io/xorm"
 )
 
-func SendCode(c *gin.Context) model.ResultVO {
+type UserAuthService interface {
+	SendCode(c *gin.Context) model.ResultVO
+	ListUserAreas(c *gin.Context) model.ResultVO
+	ListUsers(c *gin.Context) model.ResultVO
+	Register(c *gin.Context) model.ResultVO
+	UpdatePassword(c *gin.Context) model.ResultVO
+	UpdateAdminPassword(c *gin.Context) model.ResultVO
+	Logout(id int) model.ResultVO
+	QQLogin(c *gin.Context) model.ResultVO
+	CheckUser(vo model.UserVO) bool
+	CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO
+	UpdateUserIp(user entity.TUserAuth)
+}
+
+type MyUserAuthService struct{}
+
+func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 	Username := c.Query("username")
 	if !shared.CheckEmail(Username) {
 		return model.ResultFailWithMessage("请输入正确邮箱")
@@ -35,7 +50,7 @@ func SendCode(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListUserAreas(c *gin.Context) model.ResultVO {
+func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 	typeId := c.Query("type")
 	var userAreaDTOs []model.UserAreaDTO
 	switch typeId {
@@ -74,22 +89,22 @@ func ListUserAreas(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(userAreaDTOs)
 }
 
-func ListUsers(c *gin.Context) model.ResultVO {
+func (u *MyUserAuthService) ListUsers(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	count := repository.CountUser(&vo)
+	count := userAuthRepo.CountUser(&vo)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	data := repository.ListUsers(vo.Current, vo.Size, &vo)
+	data := userAuthRepo.ListUsers(vo.Current, vo.Size, &vo)
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func Register(c *gin.Context) model.ResultVO {
+func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 	var userVo model.UserVO
 	err := c.ShouldBind(&userVo)
 	if err != nil {
@@ -104,13 +119,13 @@ func Register(c *gin.Context) model.ResultVO {
 	if !shared.CheckEmail(userVo.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
-	if CheckUser(userVo) {
+	if u.CheckUser(userVo) {
 		return model.ResultFailWithMessage("邮箱已被注册！")
 	}
 	userInfo := entity.TUserInfo{
 		Email:    userVo.Username,
 		Nickname: shared.DEFAULT_NICKNAME,
-		Avatar:   GetWebsiteConfig().Data.(model.WebsiteConfigDTO).UserAvatar,
+		Avatar:   benetnaschService.GetWebsiteConfig().Data.(model.WebsiteConfigDTO).UserAvatar,
 	}
 
 	engine := ormInit.GetEngine()
@@ -192,7 +207,7 @@ func Register(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdatePassword(c *gin.Context) model.ResultVO {
+func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	var userVO model.UserVO
 	err := c.ShouldBind(&userVO)
 	if err != nil {
@@ -204,7 +219,7 @@ func UpdatePassword(c *gin.Context) model.ResultVO {
 	if !shared.CheckEmail(userVO.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
-	if !CheckUser(userVO) {
+	if !u.CheckUser(userVO) {
 		return model.ResultFailWithMessage("邮箱未注册！")
 	}
 
@@ -247,7 +262,7 @@ func UpdatePassword(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateAdminPassword(c *gin.Context) model.ResultVO {
+func (u *MyUserAuthService) UpdateAdminPassword(c *gin.Context) model.ResultVO {
 	value, _ := c.Get("userInfo")
 	dto := value.(model.UserDetailsDTO)
 
@@ -308,18 +323,18 @@ func UpdateAdminPassword(c *gin.Context) model.ResultVO {
 	return model.ResultFailWithMessage("旧密码不正确")
 }
 
-func Logout(id int) model.ResultVO {
+func (u *MyUserAuthService) Logout(id int) model.ResultVO {
 	shared.HDel(shared.LOGIN_USER, strconv.Itoa(id))
 	return model.ResultOkWithData(model.UserLogoutStatusDTO{
 		Message: "注销成功",
 	})
 }
 
-func QQLogin(c *gin.Context) model.ResultVO {
+func (u *MyUserAuthService) QQLogin(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func CheckUser(vo model.UserVO) bool {
+func (u *MyUserAuthService) CheckUser(vo model.UserVO) bool {
 	var userAuth entity.TUserAuth
 	b, err := ormInit.GetEngine().SQL("select Username from t_user_auth where Username = '" + vo.Username + "'").Get(&userAuth)
 	if err != nil {
@@ -329,7 +344,7 @@ func CheckUser(vo model.UserVO) bool {
 	return b
 }
 
-func CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO {
+func (u *MyUserAuthService) CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO {
 	var userAuth entity.TUserAuth
 	engine := ormInit.GetEngine()
 	_, err := engine.SQL("select * from t_user_auth where Username = '" + vo.Username + "'").Get(&userAuth)
@@ -371,7 +386,7 @@ func CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO {
 	return userDetailsDTO
 }
 
-func UpdateUserIp(user entity.TUserAuth) {
+func (u *MyUserAuthService) UpdateUserIp(user entity.TUserAuth) {
 	if user.IpSource == "0" || user.IpSource == "" {
 		user.IpSource = shared.UNKNOWN
 	}

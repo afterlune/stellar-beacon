@@ -3,10 +3,10 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/persistence/repository"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
@@ -15,7 +15,21 @@ import (
 	"xorm.io/builder"
 )
 
-func ListMenus(c *gin.Context) model.ResultVO {
+type MenuService interface {
+	ListMenus(c *gin.Context) model.ResultVO
+	SaveOrUpdateMenu(c *gin.Context) model.ResultVO
+	UpdateMenuIsHidden(c *gin.Context) model.ResultVO
+	DeleteMenu(c *gin.Context) model.ResultVO
+	ListMenuOptions() model.ResultVO
+	ListUserMenus(userInfoId int) model.ResultVO
+	listCatalogs(menus []*entity.TMenu) []*entity.TMenu
+	getMenuMap(menus []*entity.TMenu) map[int][]*entity.TMenu
+	convertUserMenuList(catalogs []*entity.TMenu, hm map[int][]*entity.TMenu) []model.UserMenuDTO
+}
+
+type MyMenuSService struct{}
+
+func (m *MyMenuSService) ListMenus(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -32,8 +46,8 @@ func ListMenus(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	catalogs := listCatalogs(menus)
-	childrenMap := getMenuMap(menus)
+	catalogs := m.listCatalogs(menus)
+	childrenMap := m.getMenuMap(menus)
 
 	var dtos []model.MenuDTO
 	for _, v := range catalogs {
@@ -85,7 +99,7 @@ func ListMenus(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(dtos)
 }
 
-func SaveOrUpdateMenu(c *gin.Context) model.ResultVO {
+func (m *MyMenuSService) SaveOrUpdateMenu(c *gin.Context) model.ResultVO {
 	var vo model.MenuVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -110,7 +124,7 @@ func SaveOrUpdateMenu(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func UpdateMenuIsHidden(c *gin.Context) model.ResultVO {
+func (m *MyMenuSService) UpdateMenuIsHidden(c *gin.Context) model.ResultVO {
 	var vo model.IsHiddenVO
 	zlog.Unwrap(c.ShouldBind(&vo))
 
@@ -124,7 +138,7 @@ func UpdateMenuIsHidden(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeleteMenu(c *gin.Context) model.ResultVO {
+func (m *MyMenuSService) DeleteMenu(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("menuId"))
 	engine := ormInit.GetEngine()
 	count, err := engine.Prepare().Where(fmt.Sprintf("menu_id = %d", id)).Count(&entity.TRoleMenu{})
@@ -150,15 +164,15 @@ func DeleteMenu(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListMenuOptions() model.ResultVO {
+func (m *MyMenuSService) ListMenuOptions() model.ResultVO {
 	engine := ormInit.GetEngine()
 	var menus []*entity.TMenu
 	err := engine.Select("id, name, parent_id, order_num").Find(&menus)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	catalogs := listCatalogs(menus)
-	childrenMap := getMenuMap(menus)
+	catalogs := m.listCatalogs(menus)
+	childrenMap := m.getMenuMap(menus)
 	var labelOptionDTOs []model.LabelOptionDTO
 	for _, v := range catalogs {
 		var dtos []model.LabelOptionDTO
@@ -183,15 +197,15 @@ func ListMenuOptions() model.ResultVO {
 	return model.ResultOkWithData(labelOptionDTOs)
 }
 
-func ListUserMenus(userInfoId int) model.ResultVO {
+func (m *MyMenuSService) ListUserMenus(userInfoId int) model.ResultVO {
 
 	menus := repository.ListMenusByUserInfoId(userInfoId)
-	catalogs := listCatalogs(menus)
-	childrenMap := getMenuMap(menus)
-	return model.ResultOkWithData(convertUserMenuList(catalogs, childrenMap))
+	catalogs := m.listCatalogs(menus)
+	childrenMap := m.getMenuMap(menus)
+	return model.ResultOkWithData(m.convertUserMenuList(catalogs, childrenMap))
 }
 
-func listCatalogs(menus []*entity.TMenu) []*entity.TMenu {
+func (m *MyMenuSService) listCatalogs(menus []*entity.TMenu) []*entity.TMenu {
 	var mens []*entity.TMenu
 	for _, item := range menus {
 		if item.ParentId == 0 {
@@ -204,7 +218,7 @@ func listCatalogs(menus []*entity.TMenu) []*entity.TMenu {
 	return mens
 }
 
-func getMenuMap(menus []*entity.TMenu) map[int][]*entity.TMenu {
+func (m *MyMenuSService) getMenuMap(menus []*entity.TMenu) map[int][]*entity.TMenu {
 	hm := make(map[int][]*entity.TMenu)
 	for _, item := range menus {
 		if item.ParentId != 0 {
@@ -214,7 +228,7 @@ func getMenuMap(menus []*entity.TMenu) map[int][]*entity.TMenu {
 	return hm
 }
 
-func convertUserMenuList(catalogs []*entity.TMenu, hm map[int][]*entity.TMenu) []model.UserMenuDTO {
+func (m *MyMenuSService) convertUserMenuList(catalogs []*entity.TMenu, hm map[int][]*entity.TMenu) []model.UserMenuDTO {
 	var dtos []model.UserMenuDTO
 	for i := 0; i < len(catalogs); i++ {
 		var userMenuDTO model.UserMenuDTO

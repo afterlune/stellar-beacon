@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -14,8 +13,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs [POST]
 func SaveJob(c *gin.Context) {
-	res := service.SaveJob(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.SaveJob(c))
 }
 
 // UpdateJob
@@ -24,8 +22,7 @@ func SaveJob(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs [PUT]
 func UpdateJob(c *gin.Context) {
-	res := service.UpdateJob(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.UpdateJob(c))
 }
 
 // DeleteJobById
@@ -34,8 +31,7 @@ func UpdateJob(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs [DELETE]
 func DeleteJobById(c *gin.Context) {
-	res := service.DeleteJobById(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.DeleteJobById(c))
 }
 
 // GetJobById
@@ -44,8 +40,7 @@ func DeleteJobById(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs/:id [GET]
 func GetJobById(c *gin.Context) {
-	res := service.GetJobById(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.GetJobById(c))
 }
 
 // ListJobs
@@ -54,8 +49,7 @@ func GetJobById(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs [GET]
 func ListJobs(c *gin.Context) {
-	res := service.ListJobs(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.ListJobs(c))
 }
 
 // UpdateJobStatus
@@ -64,8 +58,7 @@ func ListJobs(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs/status [PUT]
 func UpdateJobStatus(c *gin.Context) {
-	res := service.UpdateJobStatus(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.UpdateJobStatus(c))
 }
 
 // RunJob
@@ -74,8 +67,7 @@ func UpdateJobStatus(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs/run [PUT]
 func RunJob(c *gin.Context) {
-	res := service.RunJob(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.RunJob(c))
 }
 
 // ListJobGroup
@@ -84,6 +76,5 @@ func RunJob(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobs/jobGroups [GET]
 func ListJobGroup(c *gin.Context) {
-	res := service.ListJobGroup()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobService.ListJobGroup())
 }

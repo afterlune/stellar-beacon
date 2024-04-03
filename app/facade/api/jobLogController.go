@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobLogs [GET]
 func ListJobLogs(c *gin.Context) {
-	res := service.ListJobLogs(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobLogService.ListJobLogs(c))
 }
 
 // DeleteJobLogs
@@ -22,8 +20,7 @@ func ListJobLogs(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobLogs [DELETE]
 func DeleteJobLogs(c *gin.Context) {
-	res := service.DeleteJobLogs(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobLogService.DeleteJobLogs(c))
 }
 
 // CleanJobLogs
@@ -32,8 +29,7 @@ func DeleteJobLogs(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobLogs/clean [DELETE]
 func CleanJobLogs(c *gin.Context) {
-	res := service.CleanJobLogs()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobLogService.CleanJobLogs())
 }
 
 // ListJobLogGroups
@@ -42,6 +38,5 @@ func CleanJobLogs(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/jobLogs/jobGroups [GET]
 func ListJobLogGroups(c *gin.Context) {
-	res := service.ListJobLogGroups()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, jobLogService.CleanJobLogs())
 }

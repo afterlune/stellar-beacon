@@ -3,10 +3,9 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -14,7 +13,16 @@ import (
 	"xorm.io/builder"
 )
 
-func ListUserRoles() model.ResultVO {
+type RoleService interface {
+	ListUserRoles() model.ResultVO
+	ListRoles(c *gin.Context) model.ResultVO
+	SaveOrUpdateRole(c *gin.Context) model.ResultVO
+	DeleteRoles(c *gin.Context) model.ResultVO
+}
+
+type MyRoleService struct{}
+
+func (r *MyRoleService) ListUserRoles() model.ResultVO {
 	engine := ormInit.GetEngine()
 	var roles []entity.TRole
 	err := engine.Select("id, role_name").Find(&roles)
@@ -31,7 +39,7 @@ func ListUserRoles() model.ResultVO {
 	return model.ResultOkWithData(userRoleDTOs)
 }
 
-func ListRoles(c *gin.Context) model.ResultVO {
+func (r *MyRoleService) ListRoles(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -48,14 +56,14 @@ func ListRoles(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	data := repository.ListRoles(vo.Current, vo.Size, &vo)
+	data := roleRepo.ListRoles(vo.Current, vo.Size, &vo)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func SaveOrUpdateRole(c *gin.Context) model.ResultVO {
+func (r *MyRoleService) SaveOrUpdateRole(c *gin.Context) model.ResultVO {
 	var vo model.RoleVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
@@ -140,7 +148,7 @@ func SaveOrUpdateRole(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeleteRoles(c *gin.Context) model.ResultVO {
+func (r *MyRoleService) DeleteRoles(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {

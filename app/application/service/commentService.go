@@ -3,10 +3,9 @@ package service
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infrastructure/persistence/ormInit"
-	"benetnasch/app/infrastructure/persistence/repository"
-	"benetnasch/app/infrastructure/shared"
-	"benetnasch/app/infrastructure/zlog"
+	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/shared"
+	"benetnasch/app/infra/zlog"
 	"container/list"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -14,22 +13,34 @@ import (
 	"xorm.io/xorm"
 )
 
-func ListTopSixComments() model.ResultVO {
-	data := repository.ListTopSixComments()
-	return model.ResultOkWithData(data)
+type CommentService interface {
+	ListTopSixComments() model.ResultVO
+	ListComments(c *gin.Context) model.ResultVO
+	SaveComment(c *gin.Context) model.ResultVO
+	ListRepliesByCommentId(c *gin.Context) model.ResultVO
+	ListCommentBackDTO(c *gin.Context) model.ResultVO
+	UpdateCommentsReview(c *gin.Context) model.ResultVO
+	DeleteComments(c *gin.Context) model.ResultVO
+	checkComment(vo model.CommentVO) string
 }
 
-func ListComments(c *gin.Context) model.ResultVO {
-	current, err := strconv.Atoi(c.Query("current"))
+type MyCommentService struct{}
+
+func (c *MyCommentService) ListTopSixComments() model.ResultVO {
+	return model.ResultOkWithData(commentRepo.ListTopSixComments())
+}
+
+func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
+	current, err := strconv.Atoi(ctx.Query("current"))
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	size, err := strconv.Atoi(c.Query("size"))
+	size, err := strconv.Atoi(ctx.Query("size"))
 	if err != nil {
 		zlog.Error(err.Error())
 	}
 	var commentVO model.CommentVO
-	err = c.ShouldBind(&commentVO)
+	err = ctx.ShouldBind(&commentVO)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -48,7 +59,7 @@ func ListComments(c *gin.Context) model.ResultVO {
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{})
 	}
-	commentData := repository.ListComments(current, size, &commentVO)
+	commentData := commentRepo.ListComments(current, size, &commentVO)
 	if len(commentData) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{})
 	}
@@ -57,7 +68,7 @@ func ListComments(c *gin.Context) model.ResultVO {
 	for _, v := range commentData {
 		commentIds = append(commentIds, v.Id)
 	}
-	replyData := repository.ListReplies(commentIds)
+	replyData := commentRepo.ListReplies(commentIds)
 	replyMap := make(map[int][]model.ReplyDTO)
 	for _, v := range replyData {
 		replyMap[v.ParentId] = append(replyMap[v.ParentId], *v)
@@ -71,15 +82,15 @@ func ListComments(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(model.PageResultDTO{Records: commentData, Count: count})
 }
 
-func SaveComment(c *gin.Context) model.ResultVO {
+func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 	var commentVO model.CommentVO
-	zlog.Unwrap(c.ShouldBind(&commentVO))
+	zlog.Unwrap(ctx.ShouldBind(&commentVO))
 
-	s := checkComment(commentVO)
+	s := c.checkComment(commentVO)
 	if s != "" {
 		return model.ResultFailWithMessage(s)
 	}
-	websiteConfig := GetWebsiteConfig().Data.(model.WebsiteConfigDTO)
+	websiteConfig := benetnaschService.GetWebsiteConfig().Data.(model.WebsiteConfigDTO)
 	// TODO过滤敏感词汇
 	isCommentReview, _ := strconv.Atoi(strconv.Itoa(websiteConfig.IsCommentReview))
 	isReview := 0
@@ -91,7 +102,7 @@ func SaveComment(c *gin.Context) model.ResultVO {
 	}
 	topicId, err := strconv.Atoi(commentVO.TopicId)
 
-	value, _ := c.Get("userInfo")
+	value, _ := ctx.Get("userInfo")
 	dto := value.(model.UserDetailsDTO)
 
 	comment := entity.TComment{
@@ -123,34 +134,34 @@ func SaveComment(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func ListRepliesByCommentId(c *gin.Context) model.ResultVO {
-	commentId, err := strconv.Atoi(c.Param("commentId"))
+func (c *MyCommentService) ListRepliesByCommentId(ctx *gin.Context) model.ResultVO {
+	commentId, err := strconv.Atoi(ctx.Param("commentId"))
 	if err != nil {
 		zlog.Error(err.Error())
 	}
 	var iDs []int
 	iDs = append(iDs, commentId)
-	data := repository.ListReplies(iDs)
+	data := commentRepo.ListReplies(iDs)
 	return model.ResultOkWithData(data)
 }
 
-func ListCommentBackDTO(c *gin.Context) model.ResultVO {
+func (c *MyCommentService) ListCommentBackDTO(ctx *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
+	err := ctx.ShouldBind(&vo)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	count := repository.CountComments(&vo)
-	data := repository.ListCommentsAdmin(vo.Current, vo.Size, &vo)
+	count := commentRepo.CountComments(&vo)
+	data := commentRepo.ListCommentsAdmin(vo.Current, vo.Size, &vo)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func UpdateCommentsReview(c *gin.Context) model.ResultVO {
+func (c *MyCommentService) UpdateCommentsReview(ctx *gin.Context) model.ResultVO {
 	var vo model.ReviewVO
-	err := c.ShouldBind(&vo)
+	err := ctx.ShouldBind(&vo)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -177,9 +188,9 @@ func UpdateCommentsReview(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func DeleteComments(c *gin.Context) model.ResultVO {
+func (c *MyCommentService) DeleteComments(ctx *gin.Context) model.ResultVO {
 	var iDs []int
-	err := c.ShouldBind(&iDs)
+	err := ctx.ShouldBind(&iDs)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -191,7 +202,7 @@ func DeleteComments(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func checkComment(vo model.CommentVO) string {
+func (c *MyCommentService) checkComment(vo model.CommentVO) string {
 	engine := ormInit.GetEngine()
 	if len(shared.TypeHM[vo.Type]) == 0 {
 		return "参数校验异常"

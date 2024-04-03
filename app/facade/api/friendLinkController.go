@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /links [GET]
 func ListFriendLinks(c *gin.Context) {
-	res := service.ListFriendLinks()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, friendLinkService.ListFriendLinks())
 }
 
 // ListFriendLinkDTO
@@ -22,8 +20,7 @@ func ListFriendLinks(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/links [GET]
 func ListFriendLinkDTO(c *gin.Context) {
-	res := service.ListFriendLinkDTO(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, friendLinkService.ListFriendLinkDTO(c))
 }
 
 // SaveOrUpdateFriendLink
@@ -32,8 +29,7 @@ func ListFriendLinkDTO(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/links [POST]
 func SaveOrUpdateFriendLink(c *gin.Context) {
-	res := service.SaveOrUpdateFriendLink(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, friendLinkService.SaveOrUpdateFriendLink(c))
 }
 
 // DeleteFriendLink
@@ -42,6 +38,5 @@ func SaveOrUpdateFriendLink(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/links [DELETE]
 func DeleteFriendLink(c *gin.Context) {
-	res := service.DeleteFriendLink(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, friendLinkService.DeleteFriendLink(c))
 }

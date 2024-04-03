@@ -1,7 +1,6 @@
 package api
 
 import (
-	"benetnasch/app/application/service"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,8 +11,7 @@ import (
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/users/role [GET]
 func ListUserRoles(c *gin.Context) {
-	res := service.ListUserRoles()
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, roleService.ListUserRoles())
 }
 
 // ListRoles
@@ -22,8 +20,7 @@ func ListUserRoles(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/roles [GET]
 func ListRoles(c *gin.Context) {
-	res := service.ListRoles(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, roleService.ListRoles(c))
 }
 
 // SaveOrUpdateRole
@@ -32,8 +29,7 @@ func ListRoles(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/role [POST]
 func SaveOrUpdateRole(c *gin.Context) {
-	res := service.SaveOrUpdateRole(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, roleService.SaveOrUpdateRole(c))
 }
 
 // DeleteRoles
@@ -42,6 +38,5 @@ func SaveOrUpdateRole(c *gin.Context) {
 // @Success		 200	{object}	model.ResultVO
 // @Router       /admin/roles [DELETE]
 func DeleteRoles(c *gin.Context) {
-	res := service.DeleteRoles(c)
-	c.JSON(http.StatusOK, res)
+	c.JSON(http.StatusOK, roleService.DeleteRoles(c))
 }
