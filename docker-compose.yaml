@@ -6,7 +6,7 @@ services:
     ports:
       - '7777:7777'
     volumes:
-      - /usr/data/app/resource/:/app/resource
+      - D:\Git\benetnasch\resource\:/app/resource
     environment:
       - TZ=Asia/Shanghai
     restart: always
@@ -16,13 +16,13 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - /usr/data/pgsql/data:/var/lib/postgresql/data
+      - D:\containerData\pasql\data:/var/lib/postgresql/data
     environment:
       - TZ=Asia/Shanghai
       - PGDATA=/var/lib/postgresql/data
       - LANG=C.UTF-8
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=yourPass
+      - POSTGRES_PASSWORD=[REDACTED_SECRET]
     restart: always
   nginx:
     image: nginx:stable
@@ -31,19 +31,19 @@ services:
       - '80:80'
       - '10001:8008'
     volumes:
-      - /usr/data/nginx/conf/nginx.conf:/etc/nginx/nginx.conf
-      - /usr/data/nginx/vue:/usr/local/vue
+      - D:\containerData\nginx\conf\nginx.conf:/etc/nginx/nginx.conf
+      - D:\containerData\nginx\vue:/usr/local/vue
     environment:
       - TZ=Asia/Shanghai
     restart: always
   redis:
     image: redis:latest
     container_name: redis
-    command: redis-server --requirepass yourPass && sysctl vm.overcommit_memory=1
+    command: redis-server --requirepass [REDACTED_SECRET] && sysctl vm.overcommit_memory=1
     ports:
       - '6379:6379'
     volumes:
-      - /usr/data/redis/data:/data
+      - D:\containerData\redis\data:/data
     environment:
       - TZ=Asia/Shanghai
     restart: always
@@ -53,10 +53,10 @@ services:
     ports:
       - '7700:7700'
     volumes:
-      - /usr/data/meilisearch/data:/meili_data
+      - D:\containerData\meilisearch\data:/meili_data
     environment:
       - MEILI_NO_ANALYTICS=true
       - TZ=Asia/Shanghai
-      - MEILI_MASTER_KEY=yourApikey
+      - MEILI_MASTER_KEY=[REDACTED_SECRET]
       - MEILI_ENV=production
     restart: always

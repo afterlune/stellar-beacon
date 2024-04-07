@@ -41,8 +41,7 @@ func Search(keywords string) []interface{} {
 }
 
 func docSyncTask() {
-	ticker := time.NewTicker(time.Minute * 10)
-	for range ticker.C {
+	for {
 		client := GetClient()
 		var articleSearchDTOs []model.ArticleSearchDTO
 		err := ormInit.GetEngine().SQL("select id, article_title, SUBSTR(article_content, 1, 500) AS " +
@@ -64,6 +63,7 @@ func docSyncTask() {
 			continue
 		}
 		zlog.Info("-----docs completed with synchronization-----")
+		time.Sleep(time.Minute * 10)
 	}
 }
 

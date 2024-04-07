@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.22.2-alpine AS builder
 
 ENV GO111MODULE=on \
     CGO_ENABLED=0 \
@@ -10,11 +10,11 @@ WORKDIR /build
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags "-w -s" -trimpath -a -o benetnasch
+RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags '-w -s' -trimpath -a -o benetnasch
 
-#FROM alpine:latest AS final
+FROM alpine:latest AS final
 
-FROM scratch
+#FROM scratch
 
 ENV TZ="Asia/Shanghai"
 

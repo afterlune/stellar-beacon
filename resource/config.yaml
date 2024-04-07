@@ -2,35 +2,35 @@ listen:
   host: "0.0.0.0"
   port: 7777
 # referer host
-verification: "your domain name"
+verification: "127.0.0.1"
 # MeiliSearch 密码至少16字节
 meiliSearch:
-  host: "172.17.0.1"
-  apiKey: "yourApikey"
+  host: "host.docker.internal"
+  apiKey: "[REDACTED_SECRET]"
   port: 7700
 # redis
 redis:
-  host: "172.17.0.1"
-  password: "yourPass"
+  host: "host.docker.internal"
+  password: "[REDACTED_SECRET]"
   port: 6379
   db: 1
 # email smtp
 email:
   smtp: "smtp.163.com"
-  email: "yourEmail"
-  password: "your SMTP key"
+  email: "dev@example.test"
+  password: "[REDACTED_SECRET]"
   port: 465
 # database postgres
 database:
   driverName: "postgres"
-  host: "172.17.0.1"
+  host: "host.docker.internal"
   username: "postgres"
-  password: "yourPass"
+  password: "[REDACTED_SECRET]"
   port: 5432
   baseName: "stellar_beacon"
 # oss
 oss:
-  endPoint: "yourOss"
-  accessKeyID: ""
-  accessKeySecret: ""
-  bucketName: ""
+  endPoint: "https://oss-cn-shanghai.aliyuncs.com"
+  accessKeyID: "[REDACTED_SECRET]"
+  accessKeySecret: "[REDACTED_SECRET]"
+  bucketName: "example-bucket"
