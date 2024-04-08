@@ -184,7 +184,7 @@ func LoginFilter() gin.HandlerFunc {
 		uri := req.RequestURI
 		if uri == "/users/login" && req.Method == http.MethodPost {
 			resultVO := Users(c)
-			c.AbortWithStatusJSON(resultVO.Code, resultVO)
+			c.AbortWithStatusJSON(http.StatusOK, resultVO)
 			return
 		}
 		c.Next()
@@ -196,14 +196,14 @@ func Users(c *gin.Context) model.ResultVO {
 	err := c.ShouldBind(&userVO)
 	if err != nil {
 		zlog.Error(err.Error())
-		return model.ResultFailWithCodeAndMessage(http.StatusBadGateway, "登录失败，请联系管理员")
+		return model.ResultFailWithMessage("登录失败，请联系管理员")
 	}
 	if !shared.CheckEmail(userVO.Username) {
-		return model.ResultFailWithCodeAndMessage(http.StatusOK, "邮箱格式不正确！")
+		return model.ResultFailWithMessage("邮箱格式不正确！")
 	}
 	userDetailsDTO := userAuthService.CheckUserAuth(userVO)
 	if userDetailsDTO == nil {
-		return model.ResultFailWithCodeAndMessage(http.StatusOK, "账号或密码不正确！")
+		return model.ResultFailWithMessage("账号或密码不正确！")
 	}
 	ipAddress := shared.GetIpAddress(c.Request)
 	region := shared.GetIpSource(ipAddress)

@@ -41,8 +41,8 @@ func runServ() error {
 	router := gin.Default()
 	// 配置中间件
 	router.Use(gin.Recovery())
-	router.Use(middlewares.SpiderReject())
 	router.Use(middlewares.Cors())
+	router.Use(middlewares.SpiderReject())
 	router.Use(middlewares.LoginFilter())
 	router.Use(middlewares.AuthorizationFilter())
 	router.Use(middlewares.CasbinResourceFilter())

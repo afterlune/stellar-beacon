@@ -126,7 +126,7 @@ func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	session.Begin()
 	defer session.Close()
 	if talk.Id != 0 {
-		_, err = session.Prepare().ID(talk.Id).Update(&talk)
+		_, err = session.Prepare().ID(talk.Id).MustCols("is_top", "status").Update(&talk)
 	} else {
 		_, err = session.Prepare().Insert(&talk)
 	}

@@ -46,7 +46,7 @@ type MeiliSearch struct {
 
 func (meili *MeiliSearch) MeiliSearch() *MeiliSearch {
 	meiliSearch := viper.GetStringMap("meiliSearch")
-	meili.ApiKey = meiliSearch["apiKey"].(string)
+	meili.ApiKey = meiliSearch["apikey"].(string)
 	meili.URL = fmt.Sprintf("http://%s:%d", meiliSearch["host"], meiliSearch["port"])
 	return meili
 }
