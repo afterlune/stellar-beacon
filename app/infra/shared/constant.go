@@ -1,5 +1,11 @@
 package shared
 
+import "time"
+
+const (
+	FILEURL = "http://i.example.invalid/"
+)
+
 const (
 	ONE               = 1
 	ZERO              = 0
@@ -22,3 +28,37 @@ const (
 	COMMENT_REMIND    = "评论提醒"
 	MENTION_REMIND    = "@提醒"
 )
+
+const (
+	TWENTY_MINUTES = 20 * time.Minute
+
+	EXPIRE_TIME = 7 * 24 * time.Hour
+
+	TOKEN_HEADER = "Authorization"
+
+	TOKEN_PREFIX = "Bearer "
+
+	SECRET = "红白"
+
+	ACCESS_LIMIT = 60
+)
+
+const (
+	ARTICLE = iota + 1
+
+	MESSAGE
+
+	ABOUTS
+
+	LINK
+
+	TALK
+)
+
+var TypeHM = map[int]map[string]string{
+	1: {"desc": "文章", "path": "/articles/"},
+	2: {"desc": "留言", "path": "/message/"},
+	3: {"desc": "关于我", "path": "/about/"},
+	4: {"desc": "友链", "path": "/friends/"},
+	5: {"desc": "说说", "path": "/talks/"},
+}
