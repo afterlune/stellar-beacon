@@ -33,9 +33,9 @@ type Database struct {
 
 func (base *Database) DataBase() *Database {
 	database := viper.GetStringMap("database")
-	base.URL = fmt.Sprintf("%s://%s:%s@%s:%d/%s?sslmode=disable", database["driverName"], database["username"],
-		database["password"], database["host"], database["port"], database["baseName"])
-	base.DriverName = database["driverName"].(string)
+	base.URL = fmt.Sprintf("%s://%s:%s@%s:%d/%s?sslmode=disable", database["drivername"], database["username"],
+		database["password"], database["host"], database["port"], database["basename"])
+	base.DriverName = database["drivername"].(string)
 	return base
 }
 
@@ -90,9 +90,9 @@ type Oss struct {
 
 func (o *Oss) Oss() *Oss {
 	ossConf := viper.GetStringMap("oss")
-	o.BucketName = ossConf["bucketName"].(string)
-	o.EndPoint = ossConf["endPoint"].(string)
-	o.AccessKeyID = ossConf["accessKeyID"].(string)
-	o.AccessKeySecret = ossConf["accessKeySecret"].(string)
+	o.BucketName = ossConf["bucketname"].(string)
+	o.EndPoint = ossConf["endpoint"].(string)
+	o.AccessKeyID = ossConf["accesskeyid"].(string)
+	o.AccessKeySecret = ossConf["accesskeysecret"].(string)
 	return o
 }
