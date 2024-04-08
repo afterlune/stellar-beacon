@@ -41,13 +41,13 @@ func runServ() error {
 	router := gin.Default()
 	// 配置中间件
 	router.Use(gin.Recovery())
-	router.Use(middlewares.Log())
 	router.Use(middlewares.SpiderReject())
 	router.Use(middlewares.Cors())
 	router.Use(middlewares.LoginFilter())
 	router.Use(middlewares.AuthorizationFilter())
 	router.Use(middlewares.CasbinResourceFilter())
 	router.Use(middlewares.AccessLimiter())
+	router.Use(middlewares.Log())
 	// 路由网关
 	route.Router(router)
 	// 启动消息监听项

@@ -5,12 +5,17 @@ import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/config"
+	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/repository"
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"bytes"
 	"encoding/json"
+	"github.com/casbin/casbin/v2"
+	model2 "github.com/casbin/casbin/v2/model"
+	xormadapter "github.com/casbin/xorm-adapter/v2"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 	"io"
 	"net/http"
@@ -56,8 +61,16 @@ func Log() gin.HandlerFunc {
 			ip := shared.GetIpAddress(c.Request)
 			ipSource := shared.GetIpSource(ip)
 
-			value, _ := c.Get("userInfo")
-			dto := value.(model.UserDetailsDTO)
+			value, ok := c.Get("userInfo")
+			var dto model.UserDetailsDTO
+			if !ok {
+				dto = model.UserDetailsDTO{
+					Nickname:   "访客",
+					UserInfoId: -1,
+				}
+			} else {
+				dto = value.(model.UserDetailsDTO)
+			}
 			nickname := dto.Nickname
 			userId := dto.UserInfoId
 
@@ -170,28 +183,27 @@ func LoginFilter() gin.HandlerFunc {
 		req := c.Request
 		uri := req.RequestURI
 		if uri == "/users/login" && req.Method == http.MethodPost {
-			Users(c)
+			resultVO := Users(c)
+			c.AbortWithStatusJSON(resultVO.Code, resultVO)
+			return
 		}
 		c.Next()
 	}
 }
 
-func Users(c *gin.Context) {
+func Users(c *gin.Context) model.ResultVO {
 	var userVO model.UserVO
 	err := c.ShouldBind(&userVO)
 	if err != nil {
 		zlog.Error(err.Error())
-		c.JSON(http.StatusBadGateway, model.ResultFailWithMessage("登录失败，请联系管理员"))
-		return
+		return model.ResultFailWithCodeAndMessage(http.StatusBadGateway, "登录失败，请联系管理员")
 	}
 	if !shared.CheckEmail(userVO.Username) {
-		c.JSON(http.StatusOK, model.ResultFailWithMessage("邮箱格式不正确！"))
-		return
+		return model.ResultFailWithCodeAndMessage(http.StatusOK, "邮箱格式不正确！")
 	}
 	userDetailsDTO := userAuthService.CheckUserAuth(userVO)
 	if userDetailsDTO == nil {
-		c.JSON(http.StatusOK, model.ResultFailWithMessage("账号或密码不正确！"))
-		return
+		return model.ResultFailWithCodeAndMessage(http.StatusOK, "账号或密码不正确！")
 	}
 	ipAddress := shared.GetIpAddress(c.Request)
 	region := shared.GetIpSource(ipAddress)
@@ -223,9 +235,9 @@ func Users(c *gin.Context) {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-
 	userInfoDTO.Token = token
-	c.JSON(http.StatusOK, model.ResultOkWithData(userInfoDTO))
+
+	return model.ResultOkWithData(userInfoDTO)
 }
 
 func AuthorizationFilter() gin.HandlerFunc {
@@ -245,6 +257,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 					}
 					userAuthId := hm["sub"].(string)
 					var userDetailsDTO model.UserDetailsDTO
+
 					dto := shared.HGet(shared.LOGIN_USER, userAuthId)
 					if dto == "" {
 						c.Abort()
@@ -274,11 +287,22 @@ func AuthorizationFilter() gin.HandlerFunc {
 func CasbinResourceFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.Request.RequestURI, "/admin") {
-			value, _ := c.Get("userInfo")
+			value, ok := c.Get("userInfo")
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
+				return
+			}
 			dto := value.(model.UserDetailsDTO)
 			roles := roleRepo.ListRolesByUserInfoId(dto.UserInfoId)
-
-			if ok, err := config.CasbinEnforcer().Enforce(roles, c.Request.RequestURI, c.Request.Method); !ok || err != nil {
+			var flag bool
+			for _, role := range roles {
+				ok, _ := casbinEnforcer().Enforce(role, c.Request.RequestURI, c.Request.Method)
+				if ok {
+					flag = true
+					break
+				}
+			}
+			if !flag {
 				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
 				return
 			}
@@ -297,12 +321,17 @@ var (
 
 func AccessLimiter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		value, _ := c.Get("userInfo")
-		dto := value.(model.UserDetailsDTO)
-		roles := roleRepo.ListRolesByUserInfoId(dto.UserInfoId)
-		if ok, err := config.CasbinEnforcer().Enforce(roles, c.Request.RequestURI, c.Request.Method); ok && err == nil {
-			c.Next()
-			return
+		value, ok := c.Get("userInfo")
+		if ok {
+			dto := value.(model.UserDetailsDTO)
+			roles := roleRepo.ListRolesByUserInfoId(dto.UserInfoId)
+			for _, role := range roles {
+				ok, _ := casbinEnforcer().Enforce(role, c.Request.RequestURI, c.Request.Method)
+				if ok {
+					c.Next()
+					return
+				}
+			}
 		}
 
 		ip := shared.GetIpAddress(c.Request)
@@ -320,4 +349,64 @@ func AccessLimiter() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+var (
+	adapterOnce  sync.Once
+	enforcerOnce sync.Once
+	xormAdapter  *xormadapter.Adapter
+	enforcer     *casbin.Enforcer
+)
+
+const (
+	text = `
+[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[role_definition]
+g = _, _
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && r.act == p.act
+`
+)
+
+// casbinAdapter 外部存储，如果需要的话
+func casbinAdapter() *xormadapter.Adapter {
+	adapterOnce.Do(func() {
+		a, err := xormadapter.NewAdapterByEngine(ormInit.GetEngine())
+		if err != nil {
+			zlog.Fatal(err.Error())
+		}
+		xormAdapter = a
+	})
+	return xormAdapter
+}
+
+func casbinEnforcer() *casbin.Enforcer {
+	enforcerOnce.Do(func() {
+		m, err := model2.NewModelFromString(text)
+		if err != nil {
+			zlog.Fatal(err.Error())
+		}
+
+		e, err := casbin.NewEnforcer(m, casbinAdapter())
+		if err != nil {
+			zlog.Fatal(err.Error())
+		}
+
+		err = e.LoadPolicy()
+		if err != nil {
+			zlog.Fatal("策略未成功加载", zap.Error(err))
+		}
+		enforcer = e
+	})
+
+	return enforcer
 }
