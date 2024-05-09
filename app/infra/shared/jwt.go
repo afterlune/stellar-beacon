@@ -26,12 +26,19 @@ func CreateToken(dto *model.UserDetailsDTO) string {
 		IssuedAt:  jwt2.NewNumericDate(time.Now()),
 		ExpiresAt: jwt2.NewNumericDate(time.Now().Add(time.Hour * 24 * 7)),
 	}
-	token := jwt2.NewWithClaims(jwt2.SigningMethodHS256, mapCla)
+	token := jwt2.NewWithClaims(jwt2.SigningMethodEdDSA, mapCla)
 	tokenString, err := token.SignedString([]byte(generalKey()))
 	if err != nil {
 		zlog.Error(err.Error())
 	}
 	return tokenString
+}
+
+func generalKey() string {
+	encodedKey := base64.StdEncoding.EncodeToString([]byte(SECRET))
+	h := hmac.New(sha256.New, []byte(SECRET))
+	h.Write([]byte(encodedKey))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func refreshToken(dto *model.UserDetailsDTO) {
@@ -45,13 +52,6 @@ func refreshToken(dto *model.UserDetailsDTO) {
 	HSet(LOGIN_USER, strconv.Itoa(dto.Id), marshal, EXPIRE_TIME)
 }
 
-func generalKey() string {
-	encodedKey := base64.StdEncoding.EncodeToString([]byte(SECRET))
-	h := hmac.New(sha256.New, []byte(SECRET))
-	h.Write([]byte(encodedKey))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func GetUUID() string {
 	newUUID, err := uuid.NewUUID()
 	if err != nil {
@@ -62,7 +62,7 @@ func GetUUID() string {
 
 func TokenParse(tokenStr string) jwt2.MapClaims {
 	token, err := jwt2.Parse(tokenStr, func(token *jwt2.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt2.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt2.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(generalKey()), nil

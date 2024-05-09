@@ -1,6 +1,10 @@
 package shared
 
-import "time"
+import (
+	"benetnasch/app/infra/zlog"
+	"github.com/bwmarrin/snowflake"
+	"time"
+)
 
 const (
 	FILEURL = "http://i.example.invalid/"
@@ -38,8 +42,6 @@ const (
 
 	TOKEN_PREFIX = "Bearer "
 
-	SECRET = "红白"
-
 	ACCESS_LIMIT = 60
 )
 
@@ -55,10 +57,22 @@ const (
 	TALK
 )
 
-var TypeHM = map[int]map[string]string{
-	1: {"desc": "文章", "path": "/articles/"},
-	2: {"desc": "留言", "path": "/message/"},
-	3: {"desc": "关于我", "path": "/about/"},
-	4: {"desc": "友链", "path": "/friends/"},
-	5: {"desc": "说说", "path": "/talks/"},
+var (
+	TypeHM = map[int]map[string]string{
+		1: {"desc": "文章", "path": "/articles/"},
+		2: {"desc": "留言", "path": "/message/"},
+		3: {"desc": "关于我", "path": "/about/"},
+		4: {"desc": "友链", "path": "/friends/"},
+		5: {"desc": "说说", "path": "/talks/"},
+	}
+	SECRET = ""
+)
+
+func init() {
+	nod, err := snowflake.NewNode(time.Now().UnixMilli()) // 传入节点ID
+	if err != nil {
+		zlog.Error(err.Error())
+		return
+	}
+	SECRET = nod.Generate().String()
 }
