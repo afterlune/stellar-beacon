@@ -3,6 +3,7 @@ package shared
 import (
 	"benetnasch/app/infra/zlog"
 	"github.com/bwmarrin/snowflake"
+	"math/rand"
 	"time"
 )
 
@@ -69,7 +70,7 @@ var (
 )
 
 func init() {
-	nod, err := snowflake.NewNode(time.Now().UnixMilli()) // 传入节点ID
+	nod, err := snowflake.NewNode(rand.Int63n(1023)) // 传入节点ID
 	if err != nil {
 		zlog.Error(err.Error())
 		return
