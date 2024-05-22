@@ -1,17 +1,21 @@
 package cmd
 
 import (
-	"benetnasch/app/infra/middlewares"
 	"benetnasch/app/infra/task"
+	"benetnasch/app/infra/tls"
 	"benetnasch/app/infra/zlog"
 	"benetnasch/route"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"time"
 )
 
 var rootCmd = &cobra.Command{
@@ -37,23 +41,24 @@ func runServ() error {
 	// 设置项
 	settings()
 	// 创建服务
-	gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.DebugMode)
 	router := gin.Default()
+
 	// 配置中间件
-	router.Use(gin.Recovery())
-	router.Use(middlewares.Cors())
-	router.Use(middlewares.SpiderReject())
-	router.Use(middlewares.LoginFilter())
-	router.Use(middlewares.AuthorizationFilter())
-	router.Use(middlewares.CasbinResourceFilter())
-	router.Use(middlewares.AccessLimiter())
-	router.Use(middlewares.Log())
+	//router.Use(gin.Recovery())
+	//router.Use(middlewares.Cors())
+	//router.Use(middlewares.SpiderReject())
+	//router.Use(middlewares.LoginFilter())
+	//router.Use(middlewares.AuthorizationFilter())
+	//router.Use(middlewares.CasbinResourceFilter())
+	//router.Use(middlewares.AccessLimiter())
+	//router.Use(middlewares.Log())
 	// 路由网关
 	route.Router(router)
 	// 启动消息监听项
 	listener()
 	// 启动
-	return router.Run(fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")))
+	return runH3(router)
 }
 
 func banner() {
@@ -78,7 +83,7 @@ func banner() {
 
 func settings() {
 	// 禁用控制台日志颜色
-	gin.DisableConsoleColor()
+	//gin.DisableConsoleColor()
 	// 记录到文件
 	file, _ := os.Create("resource/log/server.log")
 	// 同时将日志写入文件和控制台
@@ -87,4 +92,44 @@ func settings() {
 
 func listener() {
 	go task.StatisticsUserArea()
+}
+
+func runH3(router *gin.Engine) error {
+	cfg := tls.GenerateTLSConfig(0, "")
+	h3 := http3.Server{
+		Addr:      fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")),
+		TLSConfig: cfg,
+		QUICConfig: &quic.Config{
+			KeepAlivePeriod:    time.Second * 10,
+			MaxIdleTimeout:     time.Minute * 30,
+			MaxIncomingStreams: 100,
+			Allow0RTT:          true,
+			EnableDatagrams:    true,
+		},
+		Handler: router.Handler(),
+	}
+	router.Run()
+
+	h := http.Server{
+		Addr:      fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")),
+		TLSConfig: cfg,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			err := h3.SetQUICHeaders(w.Header())
+			if err != nil {
+				zlog.Error(err.Error())
+				return
+			}
+			router.ServeHTTP(w, r)
+		}),
+	}
+	go func() {
+		zlog.Unwrap(h.ListenAndServeTLS("", ""))
+	}()
+	return h3.ListenAndServe()
+}
+
+type H2Handler func(http.ResponseWriter, *http.Request)
+
+func (f H2Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f(w, r)
 }
