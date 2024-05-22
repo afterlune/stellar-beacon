@@ -1,0 +1,102 @@
+{
+    log {
+        level DEBUG
+        #output file /var/log/caddy.log {
+            #roll_size 10MB
+            #roll_keep 10
+            #roll_keep_for 720h
+        #}
+    }
+}
+
+# Configuration for HTTPS server on port 443
+https://localhost {
+    tls internal
+
+    @options_preflight {
+        method OPTIONS
+    }
+    handle @options_preflight {
+        respond * 204 {
+            close
+        }
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "*"
+        header Access-Control-Expose-Headers "*"
+        header Access-Control-Allow-Credentials "true"
+    }
+	
+	handle {
+		root * C:\Users\Code\Desktop\caddy\static\vue\blog
+		file_server
+		try_files {path} {path}/ /index.html
+		encode gzip zstd
+	}
+	
+	handle_path /api/* {
+		reverse_proxy https://localhost:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "*"
+        Access-Control-Expose-Headers "*"
+        Access-Control-Allow-Credentials "true"
+    }
+}
+
+# Configuration for HTTP server on port 8008
+https://localhost:8008 {
+    tls internal
+
+    @options_preflight {
+        method OPTIONS
+    }
+    handle @options_preflight {
+        respond * 204 {
+            close
+        }
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "*"
+        header Access-Control-Expose-Headers "*"
+        header Access-Control-Allow-Credentials "true"
+    }
+
+	handle {
+		root * C:\Users\Code\Desktop\caddy\static\vue\admin
+		file_server
+		try_files {path} {path}/ /index.html
+		encode gzip zstd
+	}
+	
+	handle_path /api/* {
+		reverse_proxy https://localhost:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "*"
+        Access-Control-Expose-Headers "*"
+        Access-Control-Allow-Credentials "true"
+    }
+}
