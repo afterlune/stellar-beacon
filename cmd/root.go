@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	_ "benetnasch/app/infra/config"
+	"benetnasch/app/infra/middlewares"
 	"benetnasch/app/infra/task"
 	"benetnasch/app/infra/tls"
 	"benetnasch/app/infra/zlog"
@@ -41,18 +43,18 @@ func runServ() error {
 	// 设置项
 	settings()
 	// 创建服务
-	gin.SetMode(gin.DebugMode)
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
 	// 配置中间件
-	//router.Use(gin.Recovery())
-	//router.Use(middlewares.Cors())
-	//router.Use(middlewares.SpiderReject())
-	//router.Use(middlewares.LoginFilter())
-	//router.Use(middlewares.AuthorizationFilter())
-	//router.Use(middlewares.CasbinResourceFilter())
-	//router.Use(middlewares.AccessLimiter())
-	//router.Use(middlewares.Log())
+	router.Use(gin.Recovery())
+	router.Use(middlewares.Cors())
+	router.Use(middlewares.SpiderReject())
+	router.Use(middlewares.LoginFilter())
+	router.Use(middlewares.AuthorizationFilter())
+	router.Use(middlewares.CasbinResourceFilter())
+	router.Use(middlewares.AccessLimiter())
+	router.Use(middlewares.Log())
 	// 路由网关
 	route.Router(router)
 	// 启动消息监听项
@@ -108,7 +110,6 @@ func runH3(router *gin.Engine) error {
 		},
 		Handler: router.Handler(),
 	}
-	router.Run()
 
 	h := http.Server{
 		Addr:      fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")),

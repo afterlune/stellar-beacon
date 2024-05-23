@@ -1,18 +1,16 @@
 {
     log {
         level DEBUG
-        #output file /var/log/caddy.log {
-            #roll_size 10MB
-            #roll_keep 10
-            #roll_keep_for 720h
-        #}
+        output file /var/log/caddy.log {
+            roll_size 10MB
+            roll_keep 10
+            roll_keep_for 720h
+        }
     }
 }
 
 # Configuration for HTTPS server on port 443
-https://localhost {
-    tls internal
-
+https://www.example.invalid, https://example.invalid {
     @options_preflight {
         method OPTIONS
     }
@@ -28,14 +26,14 @@ https://localhost {
     }
 	
 	handle {
-		root * C:\Users\Code\Desktop\caddy\static\vue\blog
+		root * /srv/vue/blog
 		file_server
 		try_files {path} {path}/ /index.html
 		encode gzip zstd
 	}
 	
 	handle_path /api/* {
-		reverse_proxy https://localhost:7777 {
+		reverse_proxy https://172.17.0.1:7777, {
 			transport http {
 				tls
 				tls_insecure_skip_verify
@@ -56,9 +54,7 @@ https://localhost {
 }
 
 # Configuration for HTTP server on port 8008
-https://localhost:8008 {
-    tls internal
-
+https://www.example.invalid:8008, https://example.invalid:8008 {
     @options_preflight {
         method OPTIONS
     }
@@ -74,14 +70,14 @@ https://localhost:8008 {
     }
 
 	handle {
-		root * C:\Users\Code\Desktop\caddy\static\vue\admin
+		root * /srv/vue/admin
 		file_server
 		try_files {path} {path}/ /index.html
 		encode gzip zstd
 	}
 	
 	handle_path /api/* {
-		reverse_proxy https://localhost:7777 {
+		reverse_proxy https://172.17.0.1:7777 {
 			transport http {
 				tls
 				tls_insecure_skip_verify

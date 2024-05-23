@@ -16,7 +16,7 @@ import (
 func GenerateTLSConfig(prefix int, host string) *tls.Config {
 	switch prefix {
 	case 0:
-		return newServerTLSConfig("localhost.crt", "localhost.key", "")
+		return newServerTLSConfig("", "", "")
 	case 1:
 		return newClientTLSConfig("", "", "", host)
 	}

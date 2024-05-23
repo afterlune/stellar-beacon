@@ -1,8 +1,8 @@
 listen:
-  host: "localhost"
+  host: ""
   port: 7777
 # referer host
-verification: "127.0.0.1"
+verification: "localhost"
 # MeiliSearch 密码至少16字节
 meiliSearch:
   host: "127.0.0.1"
