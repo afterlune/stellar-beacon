@@ -1,12 +1,16 @@
 {
     log {
-        level DEBUG
+        level WARN
         output file /var/log/caddy.log {
             roll_size 10MB
             roll_keep 10
             roll_keep_for 720h
         }
     }
+}
+
+https://i.example.invalid {
+    reverse_proxy example-bucket.oss-cn-shanghai.aliyuncs.com
 }
 
 # Configuration for HTTPS server on port 443
@@ -31,9 +35,21 @@ https://www.example.invalid, https://example.invalid {
 		try_files {path} {path}/ /index.html
 		encode gzip zstd
 	}
+
+    handle_path /api {
+        reverse_proxy https://172.17.0.1:7777 {
+            transport http {
+                tls
+                tls_insecure_skip_verify
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
 	
 	handle_path /api/* {
-		reverse_proxy https://172.17.0.1:7777, {
+		reverse_proxy https://172.17.0.1:7777 {
 			transport http {
 				tls
 				tls_insecure_skip_verify

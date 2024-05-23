@@ -60,6 +60,7 @@ func runServ() error {
 	// 启动消息监听项
 	listener()
 	// 启动
+	//return router.Run(fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")))
 	return runH3(router)
 }
 
