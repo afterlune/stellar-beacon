@@ -38,15 +38,13 @@ func Execute() {
 }
 
 func runServ() error {
-	// 打印logo
 	banner()
-	// 设置项
+
 	settings()
-	// 创建服务
+
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	// 配置中间件
 	router.Use(gin.Recovery())
 	router.Use(middlewares.Cors())
 	router.Use(middlewares.SpiderReject())
@@ -55,11 +53,11 @@ func runServ() error {
 	router.Use(middlewares.CasbinResourceFilter())
 	router.Use(middlewares.AccessLimiter())
 	router.Use(middlewares.Log())
-	// 路由网关
+
 	route.Router(router)
-	// 启动消息监听项
+
 	listener()
-	// 启动
+
 	//return router.Run(fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")))
 	return runH3(router)
 }
@@ -85,11 +83,10 @@ func banner() {
 }
 
 func settings() {
-	// 禁用控制台日志颜色
 	//gin.DisableConsoleColor()
-	// 记录到文件
+
 	file, _ := os.Create("resource/log/server.log")
-	// 同时将日志写入文件和控制台
+
 	gin.DefaultWriter = io.MultiWriter(file, os.Stdout)
 }
 

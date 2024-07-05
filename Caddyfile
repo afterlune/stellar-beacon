@@ -8,13 +8,13 @@
         }
     }
 }
-
-https://i.example.invalid {
-    reverse_proxy example-bucket.oss-cn-shanghai.aliyuncs.com
+# oss反向代理地址
+https://example.com {
+    reverse_proxy example-oss.com
 }
 
 # Configuration for HTTPS server on port 443
-https://www.example.invalid, https://example.invalid {
+https://example.com {
     @options_preflight {
         method OPTIONS
     }
@@ -70,7 +70,7 @@ https://www.example.invalid, https://example.invalid {
 }
 
 # Configuration for HTTP server on port 8008
-https://www.example.invalid:8008, https://example.invalid:8008 {
+https://example.com:8008 {
     @options_preflight {
         method OPTIONS
     }

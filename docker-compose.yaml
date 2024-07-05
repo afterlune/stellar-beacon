@@ -1,13 +1,13 @@
 version: '3'
 services:
   benetnasch:
-    image: whitezzz/benetnasch:latest
+    image: benetnasch:latest
     container_name: benetnasch
     ports:
       - '7777:7777'
     volumes:
-      - /usr/data/app/resource:/app/resource
-      - /usr/data/app/docs:/app/docs
+      - /app/resource:/app/resource
+      - /app/docs:/app/docs
     environment:
       - TZ=Asia/Shanghai
     restart: always
@@ -17,23 +17,23 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - /usr/data/pasql/data:/var/lib/postgresql/data
+      - /pasql/data:/var/lib/postgresql/data
     environment:
       - TZ=Asia/Shanghai
       - PGDATA=/var/lib/postgresql/data
       - LANG=C.UTF-8
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=[REDACTED_SECRET]
+      - POSTGRES_PASSWORD=postgres
     restart: always
   #  nginx:
   #    image: nginx:stable
   #    container_name: nginx
   #    ports:
   #      - '80:80'
-  #      - '10001:8008'
+  #      - '8008:8008'
   #    volumes:
-  #      - D:\containerData\nginx\conf\nginx.conf:/etc/nginx/nginx.conf
-  #      - D:\containerData\nginx\vue:/usr/local/vue
+  #      - /nginx/conf/nginx.conf:/etc/nginx/nginx.conf
+  #      - /nginx/vue:/usr/local/vue
   #    environment:
   #      - TZ=Asia/Shanghai
   #    restart: always
@@ -46,8 +46,8 @@ services:
       - '80:80'
       - '443:443'
       - '443:443/udp'
-      - '10001:8008/udp'
-      - '10001:8008'
+      - '8008:8008/udp'
+      - '8008:8008'
     volumes:
       - /usr/data/caddy/Caddyfile:/etc/caddy/Caddyfile
       - /usr/data/caddy/static:/srv
@@ -60,11 +60,11 @@ services:
   redis:
     image: redis:latest
     container_name: redis
-    command: redis-server --requirepass [REDACTED_SECRET] && sysctl vm.overcommit_memory=1
+    command: redis-server --requirepass password && sysctl vm.overcommit_memory=1
     ports:
       - '6379:6379'
     volumes:
-      - /usr/data/redis/data:/data
+      - /redis/data:/data
     environment:
       - TZ=Asia/Shanghai
     restart: always
@@ -74,10 +74,10 @@ services:
     ports:
       - '7700:7700'
     volumes:
-      - /usr/data/meilisearch/data:/meili_data
+      - /meilisearch/data:/meili_data
     environment:
       - MEILI_NO_ANALYTICS=true
       - TZ=Asia/Shanghai
-      - MEILI_MASTER_KEY=[REDACTED_SECRET]
+      - MEILI_MASTER_KEY=password
       - MEILI_ENV=production
     restart: always
