@@ -65,7 +65,7 @@ func runServ() error {
 func banner() {
 	open, err := os.Open("resource/banner.txt")
 	if err != nil {
-		zlog.Error(err.Error())
+		zlog.Fatal(err.Error())
 	}
 	var data []byte
 	buf := make([]byte, 1024)
@@ -83,7 +83,7 @@ func banner() {
 }
 
 func settings() {
-	//gin.DisableConsoleColor()
+	gin.DisableConsoleColor()
 
 	file, _ := os.Create("resource/log/server.log")
 

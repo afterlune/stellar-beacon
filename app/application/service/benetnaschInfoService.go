@@ -33,7 +33,6 @@ func (b *MyBenetnaschInfoService) GetBenetnaschHomeInfo() model.ResultVO {
 }
 
 func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
-	// 根据req的header得到md5
 	md5 := shared.GetMD5(shared.GetRedisId(req))
 	if !shared.SIsMember(shared.UNIQUE_VISITOR, md5) {
 		ipSource := shared.GetIpSource(shared.GetIpAddress(req))
@@ -162,6 +161,31 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo() model.ResultVO {
 }
 
 func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.ResultVO {
+	var webCfg model.WebsiteConfigVO
+	if err := c.ShouldBind(&webCfg); err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+
+	m, err := json.Marshal(&webCfg)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+
+	engine := ormInit.GetEngine()
+	session := engine.NewSession()
+	defer session.Close()
+	session.Begin()
+	_, err = session.Exec("update t_website_config set config = ? where id = 1", string(m))
+	if err != nil {
+		zlog.Error(err.Error())
+		session.Rollback()
+		return model.ResultFailWithMessage(err.Error())
+	}
+	session.Commit()
+	shared.Set(shared.WEBSITE_CONFIG, string(m))
+
 	return model.ResultOk()
 }
 
@@ -191,6 +215,25 @@ func (b *MyBenetnaschInfoService) GetAbout() model.ResultVO {
 }
 
 func (b *MyBenetnaschInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
+	var abt model.AboutVO
+	if err := c.ShouldBind(&abt); err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+
+	engine := ormInit.GetEngine()
+	session := engine.NewSession()
+	defer session.Close()
+	session.Begin()
+	_, err := session.Exec("update t_about set config = ? where id = 1", abt.Content)
+	if err != nil {
+		zlog.Error(err.Error())
+		session.Rollback()
+		return model.ResultFailWithMessage(err.Error())
+	}
+	session.Commit()
+	shared.Set(shared.ABOUT, abt.Content)
+
 	return model.ResultOk()
 }
 
