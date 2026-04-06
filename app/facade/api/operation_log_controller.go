@@ -8,7 +8,7 @@ import (
 // ListOperationLogs
 // @Summary		 操作日志模块
 // @Description  查看操作日志
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/operation/logs [GET]
 func ListOperationLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, operationLogService.ListOperationLogs(c))
@@ -17,7 +17,7 @@ func ListOperationLogs(c *gin.Context) {
 // DeleteOperationLogs
 // @Summary		 操作日志模块
 // @Description  删除操作日志
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/operation/logs [DELETE]
 func DeleteOperationLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, operationLogService.DeleteOperationLogs(c))

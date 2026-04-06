@@ -8,7 +8,7 @@ import (
 // GetAllTags
 // @Summary		 标签模块
 // @Description  获取所有标签
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /tags/all [GET]
 func GetAllTags(c *gin.Context) {
 	c.JSON(http.StatusOK, tagService.ListTags())
@@ -17,7 +17,7 @@ func GetAllTags(c *gin.Context) {
 // GetTopTenTags
 // @Summary		 标签模块
 // @Description  获取前十个标签
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /tags/topTen [GET]
 func GetTopTenTags(c *gin.Context) {
 	c.JSON(http.StatusOK, tagService.ListTopTenTags())
@@ -26,7 +26,7 @@ func GetTopTenTags(c *gin.Context) {
 // ListTagsAdmin
 // @Summary		 标签模块
 // @Description  查询后台标签列表
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags [GET]
 func ListTagsAdmin(c *gin.Context) {
 	c.JSON(http.StatusOK, tagService.ListTagsAdmin(c))
@@ -35,7 +35,7 @@ func ListTagsAdmin(c *gin.Context) {
 // ListTagsAdminBySearch
 // @Summary		 标签模块
 // @Description  搜索文章标签
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags/search [GET]
 func ListTagsAdminBySearch(c *gin.Context) {
 	c.JSON(http.StatusOK, tagService.ListTagsAdminBySearch(c))
@@ -44,7 +44,7 @@ func ListTagsAdminBySearch(c *gin.Context) {
 // SaveOrUpdateTag
 // @Summary		 标签模块
 // @Description  添加或修改标签
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags [POST]
 func SaveOrUpdateTag(c *gin.Context) {
 	c.JSON(http.StatusOK, tagService.SaveOrUpdateTag(c))
@@ -53,7 +53,7 @@ func SaveOrUpdateTag(c *gin.Context) {
 // DeleteTag
 // @Summary		 标签模块
 // @Description  删除标签
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags [DELETE]
 func DeleteTag(c *gin.Context) {
 	c.JSON(http.StatusOK, tagService.DeleteTag(c))

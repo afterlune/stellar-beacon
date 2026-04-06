@@ -11,18 +11,20 @@ import (
 	"benetnasch/app/infra/zlog"
 	"bytes"
 	"encoding/json"
-	"github.com/casbin/casbin/v2"
-	model2 "github.com/casbin/casbin/v2/model"
-	xormadapter "github.com/casbin/xorm-adapter/v2"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"golang.org/x/time/rate"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/casbin/casbin/v2"
+	model2 "github.com/casbin/casbin/v2/model"
+	xormadapter "github.com/casbin/xorm-adapter/v2"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 type bodyLog struct {
@@ -33,6 +35,78 @@ type bodyLog struct {
 func (w bodyLog) Write(b []byte) (int, error) {
 	w.body.Write(b)
 	return w.ResponseWriter.Write(b)
+}
+
+// 缓存 swagger.json 内容
+var swaggerCache map[string]interface{}
+
+// 配置项
+const (
+	SwaggerFilePath = "docs/swagger.json"
+)
+
+func init() {
+	// 初始化 swagger 缓存
+	swaggerCache = make(map[string]interface{})
+	open, err := os.Open(SwaggerFilePath)
+	if err != nil {
+		zlog.Error("Failed to open swagger.json: " + err.Error())
+		return
+	}
+	defer open.Close()
+
+	bys, err := io.ReadAll(open)
+	if err != nil {
+		zlog.Error("Failed to read swagger.json: " + err.Error())
+		return
+	}
+
+	err = json.Unmarshal(bys, &swaggerCache)
+	if err != nil {
+		zlog.Error("Failed to unmarshal swagger.json: " + err.Error())
+		return
+	}
+	zlog.Info("Swagger cache initialized successfully")
+}
+
+// getSwaggerInfo 从缓存中获取 swagger 信息
+func getSwaggerInfo(reqURI, reqMethod string) (module, desc string) {
+	// 使用缓存的 swagger 内容
+	hm := swaggerCache
+	if hm == nil {
+		zlog.Error("Swagger cache not initialized")
+		return "Unknown", "Unknown"
+	}
+
+	apis, ok := hm["paths"].(map[string]interface{})
+	if !ok {
+		zlog.Error("Invalid swagger format: paths not found")
+		return "Unknown", "Unknown"
+	}
+
+	pathData, ok := apis[reqURI].(map[string]interface{})
+	if !ok {
+		zlog.Error("Invalid swagger format: path not found")
+		return "Unknown", "Unknown"
+	}
+
+	reqMethodData, ok := pathData[strings.ToLower(reqMethod)].(map[string]interface{})
+	if !ok {
+		zlog.Error("Invalid swagger format: method not found")
+		return "Unknown", "Unknown"
+	}
+
+	module, ok = reqMethodData["summary"].(string)
+	if !ok {
+		module = "Unknown"
+	}
+
+	desc, ok = reqMethodData["description"].(string)
+	if !ok {
+		desc = "Unknown"
+	}
+
+	return module, desc
 }
 
 func Log() gin.HandlerFunc {
@@ -75,21 +149,8 @@ func Log() gin.HandlerFunc {
 			userId := dto.UserInfoId
 
 			optFunc := c.HandlerName()
-			open, err := os.Open("docs/swagger.json")
-			defer open.Close()
-			if err != nil {
-				zlog.Error(err.Error())
-			}
-			bys, _ := io.ReadAll(open)
-			hm := make(map[string]interface{})
-			err = json.Unmarshal(bys, &hm)
-			if err != nil {
-				zlog.Error(err.Error())
-			}
-			apis := hm["paths"].(map[string]interface{})
-			data := apis[reqURI].(map[string]interface{})[strings.ToLower(reqMethod)].(map[string]interface{})
-			module := data["summary"].(string)
-			desc := data["description"].(string)
+			// 获取 swagger 信息
+			module, desc := getSwaggerInfo(reqURI, reqMethod)
 			optType := ""
 			if strings.Contains(desc, "上传") {
 				optType = "上传"
@@ -126,16 +187,8 @@ func Log() gin.HandlerFunc {
 			ipSource := shared.GetIpSource(ip)
 			optFunc := c.HandlerName()
 
-			open, _ := os.Open("docs/swagger.json")
-			defer open.Close()
-
-			bys, _ := io.ReadAll(open)
-			hm := make(map[string]interface{})
-			json.Unmarshal(bys, &hm)
-
-			apis := hm["paths"].(map[string]interface{})
-			data := apis[reqURI].(map[string]interface{})[strings.ToLower(reqMethod)].(map[string]interface{})
-			desc := data["description"].(string)
+			// 获取 swagger 信息
+			_, desc := getSwaggerInfo(reqURI, reqMethod)
 
 			exLog := entity.TExceptionLog{
 				OptUri:        reqURI,
@@ -143,7 +196,7 @@ func Log() gin.HandlerFunc {
 				RequestMethod: reqMethod,
 				RequestParam:  string(reqData),
 				OptDesc:       desc,
-				ExceptionInfo: zlog.ErrorInfo,
+				ExceptionInfo: "",
 				IpAddress:     ip,
 				IpSource:      ipSource,
 			}
@@ -166,9 +219,10 @@ func SpiderReject() gin.HandlerFunc {
 func Cors() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		method := c.Request.Method
-		c.Header("Access-Control-Allow-Origin", "*") // 可将将 * 替换为指定的域名
-		c.Header("Access-Control-Allow-Methods", "*")
-		c.Header("Access-Control-Allow-Headers", "*")
+		// 限制 CORS 来源，使用配置中的 verification 值
+		c.Header("Access-Control-Allow-Origin", "http://"+config.Verification)
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Cache-Control, Content-Language, Content-Type")
 		c.Header("Access-Control-Allow-Credentials", "true")
 		if method == "OPTIONS" {
@@ -216,7 +270,10 @@ func Users(c *gin.Context) model.ResultVO {
 	userAuthService.UpdateUserIp(userAuth)
 
 	regionlist := strings.Split(region, "|")
-	ipSource := regionlist[2] + "|" + regionlist[3]
+	ipSource := "Unknown"
+	if len(regionlist) >= 4 {
+		ipSource = regionlist[2] + "|" + regionlist[3]
+	}
 	userDetailsDTO.IpAddress = ipAddress
 	userDetailsDTO.IpSource = ipSource
 	name, version := shared.GetBrowser(c.Request)
@@ -242,20 +299,27 @@ func Users(c *gin.Context) model.ResultVO {
 
 func AuthorizationFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authorization := c.Request.Header.Get(shared.TOKEN_HEADER)
-		if strings.Contains(authorization, shared.TOKEN_PREFIX) {
-			strs := strings.Split(authorization, shared.TOKEN_PREFIX)
-			if len(strs) == 2 {
-				token := strs[1]
-				if token == "null" {
-					c.Next()
-				} else {
+		// 只对后台接口进行认证检查
+		if strings.Contains(c.Request.RequestURI, "/admin") {
+			authorization := c.Request.Header.Get(shared.TOKEN_HEADER)
+			if strings.Contains(authorization, shared.TOKEN_PREFIX) {
+				strs := strings.Split(authorization, shared.TOKEN_PREFIX)
+				if len(strs) == 2 {
+					token := strs[1]
+					if token == "" || token == "null" {
+						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
+						return
+					}
 					hm := shared.TokenParse(token)
 					if hm == nil {
 						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
 						return
 					}
-					userAuthId := hm["sub"].(string)
+					userAuthId, ok := hm["sub"].(string)
+					if !ok || userAuthId == "" {
+						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
+						return
+					}
 					var userDetailsDTO model.UserDetailsDTO
 
 					dto := shared.HGet(shared.LOGIN_USER, userAuthId)
@@ -276,10 +340,13 @@ func AuthorizationFilter() gin.HandlerFunc {
 					c.Next()
 				}
 			}
-		}
-		if !strings.Contains(authorization, shared.TOKEN_PREFIX) {
-			c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("非法操作"))
-			return
+			if !strings.Contains(authorization, shared.TOKEN_PREFIX) {
+				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("非法操作"))
+				return
+			}
+		} else {
+			// 前台接口不限制，直接放行
+			c.Next()
 		}
 	}
 }
@@ -311,6 +378,11 @@ func CasbinResourceFilter() gin.HandlerFunc {
 	}
 }
 
+// 配置项
+const (
+	IpLimiterMaxSize = 10000 // ipLimiter map 的最大容量
+)
+
 var (
 	globalLimiter   = rate.NewLimiter(rate.Every(time.Second/20), 1200)
 	ipLimiter       = make(map[string]*rate.Limiter)
@@ -338,6 +410,20 @@ func AccessLimiter() gin.HandlerFunc {
 		mutex.Lock()
 		limiter, ok := ipLimiter[ip]
 		if !ok {
+			// 检查 ipLimiter map 的大小是否超过了最大容量
+			if len(ipLimiter) >= IpLimiterMaxSize {
+				// 清理一部分旧的条目，保留 80% 的容量
+				cleanupSize := len(ipLimiter) - (IpLimiterMaxSize * 80 / 100)
+				count := 0
+				for key := range ipLimiter {
+					delete(ipLimiter, key)
+					count++
+					if count >= cleanupSize {
+						break
+					}
+				}
+				zlog.Info(fmt.Sprintf("Cleaned up %d old IP limiters", count))
+			}
 			limiter = rate.NewLimiter(rate.Every(time.Minute/60), 60)
 			ipLimiter[ip] = limiter
 		}

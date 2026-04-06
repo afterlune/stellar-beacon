@@ -8,7 +8,7 @@ import (
 // SavePhotosAlbumCover
 // @Summary		 照片模块
 // @Description  上传照片
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/upload [POST]
 func SavePhotosAlbumCover(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.SavePhotosAlbumCover(c))
@@ -17,7 +17,7 @@ func SavePhotosAlbumCover(c *gin.Context) {
 // ListPhotos
 // @Summary		 照片模块
 // @Description  根据相册id获取照片列表
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos [GET]
 func ListPhotos(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.ListPhotos(c))
@@ -26,7 +26,7 @@ func ListPhotos(c *gin.Context) {
 // UpdatePhoto
 // @Summary		 照片模块
 // @Description  更新照片信息
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos [PUT]
 func UpdatePhoto(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.UpdatePhoto(c))
@@ -35,7 +35,7 @@ func UpdatePhoto(c *gin.Context) {
 // SavePhotos
 // @Summary		 照片模块
 // @Description  保存照片
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos [POST]
 func SavePhotos(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.SavePhotos(c))
@@ -44,7 +44,7 @@ func SavePhotos(c *gin.Context) {
 // UpdatePhotosAlbum
 // @Summary		 照片模块
 // @Description  移动照片相册
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/album [PUT]
 func UpdatePhotosAlbum(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.UpdatePhotosAlbum(c))
@@ -53,7 +53,7 @@ func UpdatePhotosAlbum(c *gin.Context) {
 // UpdatePhotoDelete
 // @Summary		 照片模块
 // @Description  更新照片删除状态
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/delete [PUT]
 func UpdatePhotoDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.UpdatePhotoDelete(c))
@@ -62,7 +62,7 @@ func UpdatePhotoDelete(c *gin.Context) {
 // DeletePhotos
 // @Summary		 照片模块
 // @Description  删除照片
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos [DELETE]
 func DeletePhotos(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.DeletePhotos(c))
@@ -71,7 +71,7 @@ func DeletePhotos(c *gin.Context) {
 // ListPhotosByAlbumId
 // @Summary		 照片模块
 // @Description  根据相册id查看照片列表
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /albums/:albumId/photos [GET]
 func ListPhotosByAlbumId(c *gin.Context) {
 	c.JSON(http.StatusOK, photoService.ListPhotosByAlbumId(c))

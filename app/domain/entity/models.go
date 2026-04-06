@@ -121,7 +121,7 @@ type TMenu struct {
 }
 
 type TOperationLog struct {
-	Id            int       `xorm:"autoincr not null pk comment('主键id') unique INTEGER"`
+	// Id            *int      `xorm:"pk autoincr comment('主键id')"`
 	OptModule     string    `xorm:"not null comment('操作模块') VARCHAR(20)"`
 	OptType       string    `xorm:"not null comment('操作类型') VARCHAR(20)"`
 	OptUri        string    `xorm:"not null comment('操作url') VARCHAR(255)"`
@@ -134,8 +134,8 @@ type TOperationLog struct {
 	Nickname      string    `xorm:"not null comment('用户昵称') VARCHAR(50)"`
 	IpAddress     string    `xorm:"not null comment('操作ip') VARCHAR(255)"`
 	IpSource      string    `xorm:"not null comment('操作地址') VARCHAR(255)"`
-	CreateTime    time.Time `xorm:"created not null comment('创建时间') DATETIME"`
-	UpdateTime    time.Time `xorm:"updated comment('更新时间') DATETIME"`
+	CreateTime    time.Time `xorm:"created not null comment('创建时间')"`
+	UpdateTime    time.Time `xorm:"updated comment('更新时间')"`
 }
 
 type TPhoto struct {

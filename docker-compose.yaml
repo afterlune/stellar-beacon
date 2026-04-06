@@ -2,22 +2,21 @@ version: '3'
 services:
   benetnasch:
     image: benetnasch:latest
-    container_name: benetnasch
+    container_name: demo-user
     ports:
       - '7777:7777'
     volumes:
-      - /app/resource:/app/resource
-      - /app/docs:/app/docs
+      - ./stellar-beacon/resource:/app/resource
     environment:
       - TZ=Asia/Shanghai
     restart: always
   postgresql:
     image: postgres:latest
-    container_name: PG
+    container_name: pg
     ports:
       - '5432:5432'
     volumes:
-      - /pasql/data:/var/lib/postgresql/data
+      - D:/containerData/pasql/data:/var/lib/postgresql/data
     environment:
       - TZ=Asia/Shanghai
       - PGDATA=/var/lib/postgresql/data
@@ -49,22 +48,22 @@ services:
       - '8008:8008/udp'
       - '8008:8008'
     volumes:
-      - /usr/data/caddy/Caddyfile:/etc/caddy/Caddyfile
-      - /usr/data/caddy/static:/srv
-      - /usr/data/caddy/caddy.log:/var/log/caddy.log
-      - /usr/data/caddy/config:/config
-      - /usr/data/caddy/data:/data
+      - D:/containerData/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - D:/containerData/caddy/static:/srv
+      - D:/containerData/caddy/caddy.log:/var/log/caddy.log
+      - D:/containerData/caddy/config:/config
+      - D:/containerData/caddy/data:/data
     environment:
       - TZ=Asia/Shanghai
     restart: always
   redis:
     image: redis:latest
     container_name: redis
-    command: redis-server --requirepass redispassword && sysctl vm.overcommit_memory=1
+    command: redis-server --requirepass [REDACTED_SECRET] && sysctl vm.overcommit_memory=1
     ports:
       - '6379:6379'
     volumes:
-      - /redis/data:/data
+      - D:/containerData/redis/data:/data
     environment:
       - TZ=Asia/Shanghai
     restart: always
@@ -74,10 +73,10 @@ services:
     ports:
       - '7700:7700'
     volumes:
-      - /meilisearch/data:/meili_data
+      - D:/containerData/meilisearch/data:/meili_data
     environment:
       - MEILI_NO_ANALYTICS=true
       - TZ=Asia/Shanghai
-      - MEILI_MASTER_KEY=meilipassword
+      - MEILI_MASTER_KEY=[REDACTED_SECRET]
       - MEILI_ENV=production
     restart: always

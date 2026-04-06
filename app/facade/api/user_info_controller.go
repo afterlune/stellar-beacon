@@ -8,7 +8,7 @@ import (
 // UpdateUserInfo
 // @Summary		 用户信息模块
 // @Description  更新用户信息
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /users/info [PUT]
 func UpdateUserInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.UpdateUserInfo(c))
@@ -17,7 +17,7 @@ func UpdateUserInfo(c *gin.Context) {
 // UpdateUserAvatar
 // @Summary		 用户信息模块
 // @Description  更新用户头像
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /users/avatar [POST]
 func UpdateUserAvatar(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.UpdateUserAvatar(c))
@@ -26,7 +26,7 @@ func UpdateUserAvatar(c *gin.Context) {
 // SaveUserEmail
 // @Summary		 用户信息模块
 // @Description  绑定用户邮箱
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /users/email [PUT]
 func SaveUserEmail(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.SaveUserEmail(c))
@@ -35,7 +35,7 @@ func SaveUserEmail(c *gin.Context) {
 // UpdateUserSubscribe 修改用户的订阅状态
 // @Summary		 用户信息模块
 // @Description  绑定用户邮箱
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /users/subscribe [PUT]
 func UpdateUserSubscribe(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.UpdateUserSubscribe(c))
@@ -44,7 +44,7 @@ func UpdateUserSubscribe(c *gin.Context) {
 // UpdateUserRole
 // @Summary		 用户信息模块
 // @Description  修改用户角色
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/role [PUT]
 func UpdateUserRole(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.UpdateUserRole(c))
@@ -53,7 +53,7 @@ func UpdateUserRole(c *gin.Context) {
 // UpdateUserDisable
 // @Summary		 用户信息模块
 // @Description  修改用户禁用状态
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/disable [PUT]
 func UpdateUserDisable(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.UpdateUserRole(c))
@@ -62,7 +62,7 @@ func UpdateUserDisable(c *gin.Context) {
 // ListOnlineUsers
 // @Summary		 用户信息模块
 // @Description  查看在线用户
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/online [GET]
 func ListOnlineUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.ListOnlineUsers(c))
@@ -71,7 +71,7 @@ func ListOnlineUsers(c *gin.Context) {
 // RemoveOnlineUser
 // @Summary		 用户信息模块
 // @Description  下线用户
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/:userInfoId/online [DELETE]
 func RemoveOnlineUser(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.RemoveOnlineUser(c))
@@ -80,7 +80,7 @@ func RemoveOnlineUser(c *gin.Context) {
 // GetUserInfoById
 // @Summary		 用户信息模块
 // @Description  根据id获取用户信息
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /users/info/:userInfoId [GET]
 func GetUserInfoById(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.GetUserInfoById(c))

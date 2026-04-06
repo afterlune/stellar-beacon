@@ -8,7 +8,7 @@ import (
 // ListCategories
 // @Summary		 分类模块
 // @Description 获取所有分类
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /categories/all [GET]
 func ListCategories(c *gin.Context) {
 	c.JSON(http.StatusOK, categoryService.ListCategories())
@@ -17,7 +17,7 @@ func ListCategories(c *gin.Context) {
 // ListCategoriesAdmin
 // @Summary		 分类模块
 // @Description 查看后台分类列表
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories [GET]
 func ListCategoriesAdmin(c *gin.Context) {
 	c.JSON(http.StatusOK, categoryService.ListCategoriesAdmin(c))
@@ -26,7 +26,7 @@ func ListCategoriesAdmin(c *gin.Context) {
 // ListCategoriesAdminBySearch
 // @Summary		 分类模块
 // @Description 搜索文章分类
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories/search [GET]
 func ListCategoriesAdminBySearch(c *gin.Context) {
 	c.JSON(http.StatusOK, categoryService.ListCategoriesAdminBySearch(c))
@@ -35,7 +35,7 @@ func ListCategoriesAdminBySearch(c *gin.Context) {
 // DeleteCategories
 // @Summary		 分类模块
 // @Description 删除分类
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories [DELETE]
 func DeleteCategories(c *gin.Context) {
 	c.JSON(http.StatusOK, categoryService.DeleteCategories(c))
@@ -44,7 +44,7 @@ func DeleteCategories(c *gin.Context) {
 // SaveOrUpdateCategory
 // @Summary		 分类模块
 // @Description 添加或修改分类
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories [POST]
 func SaveOrUpdateCategory(c *gin.Context) {
 	c.JSON(http.StatusOK, categoryService.SaveOrUpdateCategory(c))

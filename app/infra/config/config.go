@@ -2,10 +2,11 @@ package config
 
 import (
 	"fmt"
-	_ "github.com/lib/pq"
-	"github.com/spf13/viper"
 	"log"
 	"os"
+
+	_ "github.com/lib/pq"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -17,10 +18,20 @@ var (
 )
 
 func init() {
+	// 读取基础配置文件
 	viper.SetConfigFile(workDir + configPath)
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalln("读取配置文件失败：", err)
+	}
+
+	// 根据环境变量加载对应环境的配置文件
+	env := viper.GetString("env")
+	envConfigPath := fmt.Sprintf("%s/resource/config-%s.yaml", workDir, env)
+	viper.SetConfigFile(envConfigPath)
+
+	if err := viper.MergeInConfig(); err != nil {
+		log.Printf("合并环境配置文件失败：%v，将使用默认配置", err)
 	}
 
 	Verification = viper.GetString("verification")
@@ -73,7 +84,7 @@ type Email struct {
 }
 
 func (e *Email) Email() *Email {
-	smtpConf := viper.GetStringMap("email")
+	smtpConf := viper.GetStringMap("emailSmtp")
 	e.EmailAccount = smtpConf["email"].(string)
 	e.Password = smtpConf["password"].(string)
 	e.SmtpPort = smtpConf["port"].(int)

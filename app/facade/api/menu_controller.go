@@ -9,7 +9,7 @@ import (
 // ListMenus
 // @Summary		 菜单模块
 // @Description  查看菜单列表
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus [GET]
 func ListMenus(c *gin.Context) {
 	c.JSON(http.StatusOK, menuService.ListMenus(c))
@@ -18,7 +18,7 @@ func ListMenus(c *gin.Context) {
 // SaveOrUpdateMenu
 // @Summary		 菜单模块
 // @Description  新增或修改菜单
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus [POST]
 func SaveOrUpdateMenu(c *gin.Context) {
 	c.JSON(http.StatusOK, menuService.SaveOrUpdateMenu(c))
@@ -27,7 +27,7 @@ func SaveOrUpdateMenu(c *gin.Context) {
 // UpdateMenuIsHidden
 // @Summary		 菜单模块
 // @Description  修改目录是否隐藏
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus/isHidden [PUT]
 func UpdateMenuIsHidden(c *gin.Context) {
 	c.JSON(http.StatusOK, menuService.UpdateMenuIsHidden(c))
@@ -36,7 +36,7 @@ func UpdateMenuIsHidden(c *gin.Context) {
 // DeleteMenu
 // @Summary		 菜单模块
 // @Description  删除菜单
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus/:menuId [DELETE]
 func DeleteMenu(c *gin.Context) {
 	c.JSON(http.StatusOK, menuService.DeleteMenu(c))
@@ -45,7 +45,7 @@ func DeleteMenu(c *gin.Context) {
 // ListMenuOptions
 // @Summary		 菜单模块
 // @Description  查看角色菜单选项
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/role/menus [GET]
 func ListMenuOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, menuService.ListMenuOptions())
@@ -54,7 +54,7 @@ func ListMenuOptions(c *gin.Context) {
 // ListUserMenus
 // @Summary		 菜单模块
 // @Description  查看当前用户菜单
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/user/menus [GET]
 func ListUserMenus(c *gin.Context) {
 	value, _ := c.Get("userInfo")

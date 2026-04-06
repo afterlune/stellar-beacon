@@ -7,10 +7,11 @@ import (
 
 //
 
+
 // SaveJob
 // @Summary		 定时任务模块
 // @Description  添加定时任务
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs [POST]
 func SaveJob(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.SaveJob(c))
@@ -19,7 +20,7 @@ func SaveJob(c *gin.Context) {
 // UpdateJob
 // @Summary		 定时任务模块
 // @Description  修改定时任务
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs [PUT]
 func UpdateJob(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.UpdateJob(c))
@@ -28,7 +29,7 @@ func UpdateJob(c *gin.Context) {
 // DeleteJobById
 // @Summary		 定时任务模块
 // @Description  删除定时任务
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs [DELETE]
 func DeleteJobById(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.DeleteJobById(c))
@@ -37,7 +38,7 @@ func DeleteJobById(c *gin.Context) {
 // GetJobById
 // @Summary		 定时任务模块
 // @Description  根据id获取任务
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs/:id [GET]
 func GetJobById(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.GetJobById(c))
@@ -46,7 +47,7 @@ func GetJobById(c *gin.Context) {
 // ListJobs
 // @Summary		 定时任务模块
 // @Description  获取任务列表
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs [GET]
 func ListJobs(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.ListJobs(c))
@@ -55,7 +56,7 @@ func ListJobs(c *gin.Context) {
 // UpdateJobStatus
 // @Summary		 定时任务模块
 // @Description  更改任务的状态
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs/status [PUT]
 func UpdateJobStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.UpdateJobStatus(c))
@@ -64,7 +65,7 @@ func UpdateJobStatus(c *gin.Context) {
 // RunJob
 // @Summary		 定时任务模块
 // @Description  执行某个任务
-// @Success		 200	{object}	model.ResultVO
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs/run [PUT]
 func RunJob(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.RunJob(c))
@@ -72,8 +73,8 @@ func RunJob(c *gin.Context) {
 
 // ListJobGroup
 // @Summary		 定时任务模块
-// @Description  获取所有job分组
-// @Success		 200	{object}	model.ResultVO
+// @Description 获取所有job分组
+// @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobs/jobGroups [GET]
 func ListJobGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.ListJobGroup())

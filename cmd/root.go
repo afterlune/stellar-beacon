@@ -8,23 +8,24 @@ import (
 	"benetnasch/app/infra/zlog"
 	"benetnasch/route"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/http3"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "benetnasch",
 	Short: "",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := runServ(); err != nil {
+		if err := runServer(); err != nil {
 			return err
 		}
 		return nil
@@ -37,7 +38,7 @@ func Execute() {
 	}
 }
 
-func runServ() error {
+func runServer() error {
 	banner()
 
 	settings()
@@ -54,7 +55,7 @@ func runServ() error {
 	router.Use(middlewares.AccessLimiter())
 	router.Use(middlewares.Log())
 
-	route.Router(router)
+	route.RouterSetup(router)
 
 	listener()
 

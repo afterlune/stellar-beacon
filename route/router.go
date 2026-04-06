@@ -2,10 +2,11 @@ package route
 
 import (
 	"benetnasch/app/facade/api"
+
 	"github.com/gin-gonic/gin"
 )
 
-func Router(router *gin.Engine) {
+func RouterSetup(router *gin.Engine) {
 	article := router.Group("/articles")
 	{
 		// article

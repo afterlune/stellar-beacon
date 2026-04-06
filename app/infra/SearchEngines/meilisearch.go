@@ -6,9 +6,10 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
+	"time"
+
 	"github.com/goccy/go-json"
 	"github.com/meilisearch/meilisearch-go"
-	"time"
 )
 
 func GetClient() *meilisearch.Client {
