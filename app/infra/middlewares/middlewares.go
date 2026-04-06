@@ -356,6 +356,39 @@ func AuthorizationFilter() gin.HandlerFunc {
 	}
 }
 
+// getRolesByUserInfoId 获取用户角色，优先从缓存中获取
+func getRolesByUserInfoId(userInfoId int) []string {
+	cacheKey := fmt.Sprintf("roles:%d", userInfoId)
+	cachedRoles := shared.HGet("user_roles", cacheKey)
+	if cachedRoles != "" {
+		var roles []string
+		if err := json.Unmarshal([]byte(cachedRoles), &roles); err == nil {
+			return roles
+		}
+	}
+
+	roles := roleRepo.ListRolesByUserInfoId(userInfoId)
+	rolesJson, _ := json.Marshal(roles)
+	shared.HSet("user_roles", cacheKey, rolesJson, 1*time.Hour)
+	return roles
+}
+
+// checkPermission 检查用户是否有权限访问资源
+func checkPermission(roles []string, uri, method string) (bool, string) {
+	for _, role := range roles {
+		ok, err := casbinEnforcer().Enforce(role, uri, method)
+		if err != nil {
+			errorMsg := "Permission check failed: " + err.Error()
+			zlog.Error(errorMsg)
+			return false, errorMsg
+		}
+		if ok {
+			return true, ""
+		}
+	}
+	return false, fmt.Sprintf("用户角色 %v 没有权限访问 %s %s", roles, method, uri)
+}
+
 func CasbinResourceFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.Request.RequestURI, "/admin") {
@@ -365,16 +398,17 @@ func CasbinResourceFilter() gin.HandlerFunc {
 				return
 			}
 			dto := value.(model.UserDetailsDTO)
-			roles := roleRepo.ListRolesByUserInfoId(dto.UserInfoId)
-			var flag bool
-			for _, role := range roles {
-				ok, _ := casbinEnforcer().Enforce(role, c.Request.RequestURI, c.Request.Method)
-				if ok {
-					flag = true
-					break
+			roles := getRolesByUserInfoId(dto.UserInfoId)
+			ok, errorMsg := checkPermission(roles, c.Request.RequestURI, c.Request.Method)
+			if errorMsg != "" {
+				if strings.Contains(errorMsg, "Permission check failed") {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("权限检查失败"))
+				} else {
+					c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage(errorMsg))
 				}
+				return
 			}
-			if !flag {
+			if !ok {
 				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
 				return
 			}
@@ -401,13 +435,16 @@ func AccessLimiter() gin.HandlerFunc {
 		value, ok := c.Get("userInfo")
 		if ok {
 			dto := value.(model.UserDetailsDTO)
-			roles := roleRepo.ListRolesByUserInfoId(dto.UserInfoId)
-			for _, role := range roles {
-				ok, _ := casbinEnforcer().Enforce(role, c.Request.RequestURI, c.Request.Method)
-				if ok {
-					c.Next()
-					return
+			roles := getRolesByUserInfoId(dto.UserInfoId)
+			ok, errorMsg := checkPermission(roles, c.Request.RequestURI, c.Request.Method)
+			if errorMsg != "" {
+				if strings.Contains(errorMsg, "Permission check failed") {
+					zlog.Error("Permission check failed in AccessLimiter: " + errorMsg)
 				}
+				// 权限检查失败，继续进行速率限制
+			} else if ok {
+				c.Next()
+				return
 			}
 		}
 
