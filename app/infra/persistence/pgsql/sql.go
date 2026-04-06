@@ -43,8 +43,8 @@ const (
 	ResourceRoles         = "select role_name from t_resource re left join t_role_resource rr on re.id = rr.resource_id left join t_role ro on rr.role_id = ro.id where re.parent_id is not null and is_anonymous = 0 and re.id = %d"
 	ListRolesByUserInfoId = "SELECT role_name FROM t_role r LEFT JOIN t_user_role ur ON r.id = ur.role_id WHERE ur.user_id = %d"
 	ListRoles             = "select r.id, role_name, r.create_time, r.is_disable from (select id, role_name, create_time, is_disable from t_role %s limit %d offset %d) r ORDER BY r.id"
-	ResourceIds           = "select rr.resource_id from (select id, role_name, create_time, is_disable from t_role %s limit %d offset %d) r LEFT JOIN t_role_resource rr ON r.id = rr.role_id where r.id = %d"
-	MenuIds               = "select rm.menu_id from (select id, role_name, create_time, is_disable from t_role %s limit %d offset %d) r LEFT JOIN t_role_menu rm on r.id = rm.role_id where r.id = %d"
+	ResourceIds           = "select rr.resource_id from (select id, role_name, create_time, is_disable from t_role %s limit %d offset %d) r LEFT JOIN t_role_resource rr ON r.id = rr.role_id where r.id = %d and rr.resource_id is not null"
+	MenuIds               = "select rm.menu_id from (select id, role_name, create_time, is_disable from t_role %s limit %d offset %d) r LEFT JOIN t_role_menu rm on r.id = rm.role_id where r.id = %d and rm.menu_id is not null"
 	// tag
 	ListTags                = "SELECT t.id, tag_name, COUNT(aat.article_id) AS count FROM t_tag t LEFT JOIN (SELECT a.id AS article_id, at.tag_id AS tag_id FROM t_article_tag at LEFT JOIN t_article a ON at.article_id = a.id WHERE a.is_delete = 0 AND a.STATUS in (1, 2)) aat ON t.id = aat.tag_id GROUP BY t.id"
 	ListTopTenTags          = "SELECT t.id, tag_name, COUNT(aat.article_id) AS count FROM t_tag t LEFT JOIN (SELECT a.id AS article_id, at.tag_id AS tag_id FROM t_article_tag at LEFT JOIN t_article a ON at.article_id = a.id WHERE a.is_delete = 0 AND a.STATUS in (1, 2)) aat ON t.id = aat.tag_id GROUP BY t.id limit 10 offset 0"

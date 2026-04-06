@@ -7,11 +7,12 @@ import (
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
+	"strconv"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"golang.org/x/crypto/bcrypt"
-	"strconv"
-	"strings"
 	"xorm.io/xorm"
 )
 
@@ -336,7 +337,7 @@ func (u *MyUserAuthService) QQLogin(c *gin.Context) model.ResultVO {
 
 func (u *MyUserAuthService) CheckUser(vo model.UserVO) bool {
 	var userAuth entity.TUserAuth
-	b, err := ormInit.GetEngine().SQL("select Username from t_user_auth where Username = '" + vo.Username + "'").Get(&userAuth)
+	b, err := ormInit.GetEngine().Where("Username = ?", vo.Username).Get(&userAuth)
 	if err != nil {
 		zlog.Error(err.Error())
 		return false
@@ -347,7 +348,7 @@ func (u *MyUserAuthService) CheckUser(vo model.UserVO) bool {
 func (u *MyUserAuthService) CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO {
 	var userAuth entity.TUserAuth
 	engine := ormInit.GetEngine()
-	_, err := engine.SQL("select * from t_user_auth where Username = '" + vo.Username + "'").Get(&userAuth)
+	_, err := engine.Where("Username = ?", vo.Username).Get(&userAuth)
 	if err != nil {
 		zlog.Error(err.Error())
 		return nil
@@ -357,13 +358,13 @@ func (u *MyUserAuthService) CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO
 		return nil
 	}
 	var userInfo entity.TUserInfo
-	_, err = engine.SQL("select * from t_user_info where id = " + strconv.Itoa(userAuth.UserInfoId)).Get(&userInfo)
+	_, err = engine.Where("id = ?", userAuth.UserInfoId).Get(&userInfo)
 	if err != nil {
 		zlog.Error(err.Error())
 		return nil
 	}
 	var roles []string
-	err = engine.SQL("select role_name from t_role where id in (select role_id from t_user_role where user_id = " + strconv.Itoa(userInfo.Id) + ")").Find(&roles)
+	err = engine.SQL("select role_name from t_role where id in (select role_id from t_user_role where user_id = ?)", userInfo.Id).Find(&roles)
 	if err != nil {
 		zlog.Error(err.Error())
 		return nil
