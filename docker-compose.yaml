@@ -23,7 +23,7 @@ services:
       - PGDATA=/var/lib/postgresql/data
       - LANG=C.UTF-8
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=[REDACTED_SECRET]
     restart: always
   #  nginx:
   #    image: nginx:stable
@@ -60,7 +60,7 @@ services:
   redis:
     image: redis:latest
     container_name: redis
-    command: redis-server --requirepass password && sysctl vm.overcommit_memory=1
+    command: redis-server --requirepass redispassword && sysctl vm.overcommit_memory=1
     ports:
       - '6379:6379'
     volumes:
@@ -78,6 +78,6 @@ services:
     environment:
       - MEILI_NO_ANALYTICS=true
       - TZ=Asia/Shanghai
-      - MEILI_MASTER_KEY=password
+      - MEILI_MASTER_KEY=meilipassword
       - MEILI_ENV=production
     restart: always

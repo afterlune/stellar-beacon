@@ -1,0 +1,42 @@
+# referer host
+verification: "127.0.0.1"
+# MeiliSearch 密码至少16字节
+meiliSearch:
+  host: "0.0.0.0"
+  apiKey: "[REDACTED_SECRET]"
+  port: 7700
+# redis
+redis:
+  host: "0.0.0.0"
+  password: "[REDACTED_SECRET]"
+  port: 6379
+  db: 1
+# rabbitmq
+rabbitmq:
+  host: "0.0.0.0"
+  username: "admin"
+  password: "[REDACTED_SECRET]"
+  port: 5672
+# email smtp 163
+emailSmtp:
+  smtp: "smtp.163.com"
+  email: "dev@example.test"
+  password: "[REDACTED_SECRET]"
+  port: 465
+# database postgres
+database:
+  driverName: "postgres"
+  host: "0.0.0.0"
+  username: "postgres"
+  password: "[REDACTED_SECRET]"
+  port: 5432
+  baseName: "stellar_beacon"
+# oss
+oss:
+  endPoint: "https://oss-cn-shanghai.aliyuncs.com"
+  accessKeyID: "[REDACTED_SECRET]"
+  accessKeySecret: "[REDACTED_SECRET]"
+  bucketName: "example-bucket"
+
+logger:
+  env: dev
