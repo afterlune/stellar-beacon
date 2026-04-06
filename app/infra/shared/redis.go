@@ -127,7 +127,10 @@ func HGet(key, hashKey string) string {
 	ctx := context.Background()
 	result, err := rdb.HGet(ctx, key, hashKey).Result()
 	if err != nil {
-		zlog.Error(err.Error())
+		// 只在真正的Redis错误时记录错误，key不存在是正常情况
+		if err != redis.Nil {
+			zlog.Error(err.Error())
+		}
 		return ""
 	}
 	return result

@@ -2,9 +2,10 @@ package shared
 
 import (
 	"benetnasch/app/infra/zlog"
-	"github.com/bwmarrin/snowflake"
 	"math/rand"
 	"time"
+
+	"github.com/bwmarrin/snowflake"
 )
 
 const (
@@ -37,13 +38,20 @@ const (
 const (
 	TWENTY_MINUTES = 20 * time.Minute
 
-	EXPIRE_TIME = 7 * 24 * time.Hour
+	EXPIRE_TIME         = 7 * 24 * time.Hour
+	REFRESH_EXPIRE_TIME = 30 * 24 * time.Hour
 
-	TOKEN_HEADER = "Authorization"
+	TOKEN_HEADER         = "Authorization"
+	REFRESH_TOKEN_HEADER = "X-Refresh-Token"
 
 	TOKEN_PREFIX = "Bearer "
 
 	ACCESS_LIMIT = 60
+)
+
+const (
+	TOKEN_BLACKLIST      = "token_blacklist"
+	REFRESH_TOKEN_PREFIX = "refresh_token_"
 )
 
 const (

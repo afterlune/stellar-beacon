@@ -281,7 +281,11 @@ func Users(c *gin.Context) model.ResultVO {
 	userDetailsDTO.Browser = name + version
 	userDetailsDTO.Os = osName
 
-	token := shared.CreateToken(userDetailsDTO)
+	accessToken, _, err := shared.CreateToken(userDetailsDTO)
+	if err != nil {
+		zlog.Error("Failed to create token: " + err.Error())
+		return model.ResultFailWithMessage("登录失败")
+	}
 	var userInfoDTO model.UserInfoDTO
 	marshal, err := json.Marshal(userDetailsDTO)
 	if err != nil {
@@ -292,7 +296,7 @@ func Users(c *gin.Context) model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	userInfoDTO.Token = token
+	userInfoDTO.Token = accessToken
 
 	return model.ResultOkWithData(userInfoDTO)
 }
@@ -310,8 +314,9 @@ func AuthorizationFilter() gin.HandlerFunc {
 						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
 						return
 					}
-					hm := shared.TokenParse(token)
-					if hm == nil {
+					hm, err := shared.TokenParse(token)
+					if err != nil || hm == nil {
+						zlog.Error("Token validation failed: " + err.Error())
 						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
 						return
 					}
@@ -328,7 +333,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 						c.JSON(http.StatusOK, model.ResultFailWithCode(41000))
 						return
 					}
-					err := json.Unmarshal([]byte(dto), &userDetailsDTO)
+					err = json.Unmarshal([]byte(dto), &userDetailsDTO)
 					if err != nil {
 						zlog.Error(err.Error())
 						c.Abort()
