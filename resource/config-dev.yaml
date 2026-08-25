@@ -30,9 +30,11 @@ database:
   baseName: "stellar_beacon"
 # oss
 oss:
+  provider: "aliyun"
   endPoint: "https://oss-cn-shanghai.aliyuncs.com"
   region: "cn-shanghai"
   publicUrl: "http://i.example.invalid/"
+  publicRead: false
   accessKeyID: "${ALIYUN_OSS_ACCESS_KEY_ID}"
   accessKeySecret: "${ALIYUN_OSS_ACCESS_KEY_SECRET}"
   bucketName: "example-bucket"

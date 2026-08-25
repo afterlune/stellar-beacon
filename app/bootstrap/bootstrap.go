@@ -25,7 +25,10 @@ func Initialize() error {
 	}
 	redisConfig := new(config.Redis).Redis()
 	redisCache := cache.NewRedisCache(redisConfig)
-	ossStorage := oss.NewAliyunStorage(new(config.Oss).Oss())
+	ossStorage, err := oss.NewObjectStorage(new(config.Oss).Oss())
+	if err != nil {
+		return errors.Unavailable("bootstrap.storage", err)
+	}
 	searcher := search.NewMeiliSearcher(new(config.MeiliSearch).MeiliSearch())
 	smtpMailer := mailer.NewSMTPMailer(new(config.Email).Email())
 	visitorResolver := visitor.NewResolver()

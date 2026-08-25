@@ -26,10 +26,6 @@ var (
 )
 
 var requiredEnvVars = []string{
-	"ALIYUN_OSS_ACCESS_KEY_ID",
-	"ALIYUN_OSS_ACCESS_KEY_SECRET",
-	"JWT_PRIVATE_KEY",
-	"JWT_PUBLIC_KEY",
 	"MEILI_MASTER_KEY",
 	"POSTGRES_PASSWORD",
 	"REDIS_PASSWORD",
@@ -50,7 +46,7 @@ func init() {
 	}
 
 	// 根据环境变量加载对应环境的配置文件
-	env := viper.GetString("env")
+	env := configuredEnvironment()
 	envConfigPath, _ := findConfigFile(fmt.Sprintf("config-%s.yaml", env))
 	if envConfigPath == "" {
 		configLoadErr = fmt.Errorf("environment config file not found: config-%s.yaml", env)
@@ -109,11 +105,12 @@ func Validate() error {
 		return configLoadErr
 	}
 
-	missing := make(map[string]struct{}, len(missingEnvVars)+len(requiredEnvVars))
+	required := requiredEnvironmentVars()
+	missing := make(map[string]struct{}, len(missingEnvVars)+len(required))
 	for name := range missingEnvVars {
 		missing[name] = struct{}{}
 	}
-	for _, name := range requiredEnvVars {
+	for _, name := range required {
 		if strings.TrimSpace(os.Getenv(name)) == "" {
 			missing[name] = struct{}{}
 		}
@@ -128,6 +125,25 @@ func Validate() error {
 	}
 	sort.Strings(names)
 	return fmt.Errorf("missing required configuration environment variables: %s", strings.Join(names, ", "))
+}
+
+func configuredEnvironment() string {
+	if env := strings.TrimSpace(os.Getenv("BENETNASCH_ENV")); env != "" {
+		return env
+	}
+	return viper.GetString("env")
+}
+
+func requiredEnvironmentVars() []string {
+	required := append([]string(nil), requiredEnvVars...)
+	provider := strings.ToLower(strings.TrimSpace(viper.GetString("oss.provider")))
+	if provider != "minio" {
+		required = append(required, "ALIYUN_OSS_ACCESS_KEY_ID", "ALIYUN_OSS_ACCESS_KEY_SECRET")
+	}
+	if !strings.EqualFold(strings.TrimSpace(os.Getenv("JWT_ALLOW_EPHEMERAL")), "true") {
+		required = append(required, "JWT_PRIVATE_KEY", "JWT_PUBLIC_KEY")
+	}
+	return required
 }
 
 // findConfigFile locates resource files independent of the process working
@@ -250,19 +266,23 @@ func (e *Email) Email() *Email {
 }
 
 type Oss struct {
+	Provider        string
 	BucketName      string
 	EndPoint        string
 	Region          string
 	PublicURL       string
+	PublicRead      bool
 	AccessKeyID     string
 	AccessKeySecret string
 }
 
 func (o *Oss) Oss() *Oss {
+	o.Provider = viper.GetString("oss.provider")
 	o.BucketName = viper.GetString("oss.bucketName")
 	o.EndPoint = viper.GetString("oss.endPoint")
 	o.Region = viper.GetString("oss.region")
 	o.PublicURL = viper.GetString("oss.publicUrl")
+	o.PublicRead = viper.GetBool("oss.publicRead")
 	o.AccessKeyID = viper.GetString("oss.accessKeyID")
 	o.AccessKeySecret = viper.GetString("oss.accessKeySecret")
 	return o
