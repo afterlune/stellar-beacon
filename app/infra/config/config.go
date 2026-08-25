@@ -252,6 +252,8 @@ func (e *Email) Email() *Email {
 type Oss struct {
 	BucketName      string
 	EndPoint        string
+	Region          string
+	PublicURL       string
 	AccessKeyID     string
 	AccessKeySecret string
 }
@@ -259,6 +261,8 @@ type Oss struct {
 func (o *Oss) Oss() *Oss {
 	o.BucketName = viper.GetString("oss.bucketName")
 	o.EndPoint = viper.GetString("oss.endPoint")
+	o.Region = viper.GetString("oss.region")
+	o.PublicURL = viper.GetString("oss.publicUrl")
 	o.AccessKeyID = viper.GetString("oss.accessKeyID")
 	o.AccessKeySecret = viper.GetString("oss.accessKeySecret")
 	return o

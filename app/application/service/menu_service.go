@@ -1,11 +1,11 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/shared"
 	"context"
 	"sort"
 	"strconv"
@@ -140,9 +140,9 @@ func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
 	result := make([]model.MenuDTO, 0, len(catalogs))
 	for _, catalog := range catalogs {
 		var dto model.MenuDTO
-		shared.StructCopy(catalog, &dto)
+		support.StructCopy(catalog, &dto)
 		var childDTOs []model.MenuDTO
-		shared.StructCopy(children[catalog.Id], &childDTOs)
+		support.StructCopy(children[catalog.Id], &childDTOs)
 		sort.Slice(childDTOs, func(i, j int) bool { return childDTOs[i].OrderNum < childDTOs[j].OrderNum })
 		dto.Children = childDTOs
 		result = append(result, dto)
@@ -151,7 +151,7 @@ func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
 	if len(children) > 0 {
 		for _, childList := range children {
 			var dtos []model.MenuDTO
-			shared.StructCopy(childList, &dtos)
+			support.StructCopy(childList, &dtos)
 			result = append(result, dtos...)
 		}
 	}
@@ -163,15 +163,15 @@ func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int
 	result := make([]model.UserMenuDTO, 0, len(catalogs))
 	for _, catalog := range catalogs {
 		children := hm[catalog.Id]
-		dto := model.UserMenuDTO{Name: catalog.Name, Icon: catalog.Icon, Hidden: catalog.IsHidden == shared.TRUE}
+		dto := model.UserMenuDTO{Name: catalog.Name, Icon: catalog.Icon, Hidden: catalog.IsHidden == support.True}
 		if len(children) == 0 {
 			dto.Path = ""
-			dto.Component = shared.COMPONENT
+			dto.Component = support.Component
 			dto.Children = []model.UserMenuDTO{{Name: catalog.Name, Icon: catalog.Icon, Component: catalog.Component}}
 		} else {
 			sort.Slice(children, func(i, j int) bool { return children[i].OrderNum < children[j].OrderNum })
 			for _, child := range children {
-				dto.Children = append(dto.Children, model.UserMenuDTO{Name: child.Name, Path: child.Path, Icon: child.Icon, Component: child.Component, Hidden: child.IsHidden == shared.TRUE})
+				dto.Children = append(dto.Children, model.UserMenuDTO{Name: child.Name, Path: child.Path, Icon: child.Icon, Component: child.Component, Hidden: child.IsHidden == support.True})
 			}
 		}
 		result = append(result, dto)

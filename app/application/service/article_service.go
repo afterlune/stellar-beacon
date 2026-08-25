@@ -1,17 +1,15 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/SearchEngines"
-	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/shared"
 	"bytes"
 	"container/list"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"log/slog"
 	"sort"
@@ -45,11 +43,25 @@ type ArticleService interface {
 }
 
 type MyArticleService struct {
-	repo port.ArticleRepository
+	repo    port.ArticleRepository
+	cache   port.Cache
+	storage port.ObjectStorage
+	search  port.ArticleSearcher
 }
 
-func NewArticleService(repo port.ArticleRepository) *MyArticleService {
-	return &MyArticleService{repo: repo}
+func NewArticleService(repo port.ArticleRepository, dependencies ...any) *MyArticleService {
+	service := &MyArticleService{repo: repo}
+	for _, dependency := range dependencies {
+		switch value := dependency.(type) {
+		case port.Cache:
+			service.cache = value
+		case port.ObjectStorage:
+			service.storage = value
+		case port.ArticleSearcher:
+			service.search = value
+		}
+	}
+	return service
 }
 
 func (a *MyArticleService) articleRepository() port.ArticleRepository {
@@ -124,15 +136,21 @@ func (a *MyArticleService) ListArticlesByCategoryId(c *gin.Context) model.Result
 
 func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	articleId := c.Param("articleId")
-	get, err := shared.GetCtx(c.Request.Context(), articleId)
-	if err != nil {
-		slog.WarnContext(c.Request.Context(), "read article cache failed", "error", err)
+	var err error
+	get := ""
+	if a.cache != nil {
+		get, err = a.cache.Get(c.Request.Context(), articleId)
+		if err != nil && !errors.Is(err, port.ErrCacheMiss) {
+			slog.WarnContext(c.Request.Context(), "read article cache failed", "error", err)
+		}
 	}
 	if get != "" {
 		var dto model.ArticleDTO
-		if err := shared.Unmarsh(get, &dto); err == nil {
-			if _, err := shared.ExpireCtx(c.Request.Context(), articleId, time.Hour*1); err != nil {
-				slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
+		if err := support.Unmarsh(get, &dto); err == nil {
+			if a.cache != nil {
+				if _, err := a.cache.Expire(c.Request.Context(), articleId, time.Hour*1); err != nil {
+					slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
+				}
 			}
 			return model.ResultOkWithData(dto)
 		} else {
@@ -162,7 +180,10 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 		if !ok {
 			return model.ResultFailWithMessage("无权访问")
 		}
-		isAccess, err := shared.SIsMemberCtx(c.Request.Context(), shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), articleId)
+		if a.cache == nil {
+			return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+		}
+		isAccess, err := a.cache.SIsMember(c.Request.Context(), support.ArticleAccess+strconv.Itoa(dto.Id), articleId)
 		if err != nil {
 			slog.ErrorContext(c.Request.Context(), "check article access failed", "error", err)
 			return model.ResultFail()
@@ -201,9 +222,12 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	if data.Id == 0 {
 		return model.ResultOk()
 	}
-	score, err := shared.ZScoreCtx(c.Request.Context(), shared.ARTICLE_VIEWS_COUNT, articleId)
-	if err != nil {
-		slog.WarnContext(c.Request.Context(), "read article view count failed", "error", err)
+	score := float64(0)
+	if a.cache != nil {
+		score, err = a.cache.ZScore(c.Request.Context(), support.ArticleViewsCount, articleId)
+		if err != nil && !errors.Is(err, port.ErrCacheMiss) {
+			slog.WarnContext(c.Request.Context(), "read article view count failed", "error", err)
+		}
 	}
 	if score != 0 {
 		data.ViewCount = int(score)
@@ -215,14 +239,20 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 		slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
 		return model.ResultFromError(err)
 	}
-	if err := shared.SetWithTimeCtx(c.Request.Context(), strconv.Itoa(data.Id), marshal, time.Hour*1); err != nil {
-		slog.WarnContext(c.Request.Context(), "write article cache failed", "error", err)
+	if a.cache != nil {
+		if err := a.cache.Set(c.Request.Context(), strconv.Itoa(data.Id), marshal, time.Hour*1); err != nil {
+			slog.WarnContext(c.Request.Context(), "write article cache failed", "error", err)
+		}
 	}
 	return model.ResultOkWithData(data)
 }
 
 func (a *MyArticleService) updateArticleViewsCount(ctx context.Context, articleId string) {
-	if _, err := shared.ZIncrCtx(ctx, shared.ARTICLE_VIEWS_COUNT, 1, articleId); err != nil {
+	if a.cache == nil {
+		slog.WarnContext(ctx, "article view cache is not configured")
+		return
+	}
+	if _, err := a.cache.ZIncrBy(ctx, support.ArticleViewsCount, 1, articleId); err != nil {
 		slog.ErrorContext(ctx, "increment article view count failed", "error", err)
 	}
 }
@@ -277,7 +307,10 @@ func (a *MyArticleService) AccessArticle(c *gin.Context) model.ResultVO {
 		if !ok {
 			return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "article.access.user", nil))
 		}
-		if _, err := shared.SAddCtx(c.Request.Context(), shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), vo.ArticleId); err != nil {
+		if a.cache == nil {
+			return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+		}
+		if _, err := a.cache.SAdd(c.Request.Context(), support.ArticleAccess+strconv.Itoa(dto.Id), vo.ArticleId); err != nil {
 			slog.ErrorContext(c.Request.Context(), "record article access failed", "error", err)
 			return model.ResultFail()
 		}
@@ -360,10 +393,13 @@ func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
-	viewsCountMap, err := shared.ZAllScoreCtx(c.Request.Context(), shared.ARTICLE_VIEWS_COUNT)
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "load article view counts failed", "error", err)
-		return model.ResultFail()
+	viewsCountMap := map[string]float64{}
+	if a.cache != nil {
+		viewsCountMap, err = a.cache.ZRangeWithScores(c.Request.Context(), support.ArticleViewsCount)
+		if err != nil {
+			slog.WarnContext(c.Request.Context(), "load article view counts failed", "error", err)
+			viewsCountMap = map[string]float64{}
+		}
 	}
 	for _, v := range articleAdminDTOs {
 		index := strconv.Itoa(v.Id)
@@ -414,9 +450,10 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 			slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
 			return model.ResultFail()
 		}
-		if err := shared.SetCtx(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha); err != nil {
-			slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
-			return model.ResultFail()
+		if a.cache != nil {
+			if err := a.cache.Set(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha, 0); err != nil {
+				slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
+			}
 		}
 	}
 	return model.ResultOk()
@@ -440,9 +477,10 @@ func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.Res
 			slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
 			return model.ResultFail()
 		}
-		if err := shared.SetCtx(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha); err != nil {
-			slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
-			return model.ResultFail()
+		if a.cache != nil {
+			if err := a.cache.Set(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha, 0); err != nil {
+				slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
+			}
 		}
 	}
 	return model.ResultOk()
@@ -476,8 +514,11 @@ func (a *MyArticleService) SaveArticleImages(c *gin.Context) model.ResultVO {
 		slog.ErrorContext(c.Request.Context(), "read article image failed", "error", err)
 		return model.ResultFail()
 	}
-	fileUri := oss.Upload(file, "articles/")
-	return model.ResultOkWithData(shared.FILEURL + fileUri)
+	ref, err := uploadMultipart(c.Request.Context(), a.storage, file, "articles/")
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(ref.URL)
 }
 
 func (a *MyArticleService) GetArticleBackById(c *gin.Context) model.ResultVO {
@@ -555,8 +596,11 @@ func (a *MyArticleService) ExportArticles(c *gin.Context) model.ResultVO {
 	}
 	var urls []string
 	for _, v := range articles {
-		fileUri := oss.UploadFile(bytes.NewReader([]byte(v.ArticleContent)), v.ArticleTitle+".md", "markdown/")
-		urls = append(urls, shared.FILEURL+fileUri)
+		ref, err := uploadNamed(c.Request.Context(), a.storage, bytes.NewReader([]byte(v.ArticleContent)), v.ArticleTitle+".md", "markdown/")
+		if err != nil {
+			return model.ResultFromError(err)
+		}
+		urls = append(urls, ref.URL)
 	}
 	return model.ResultOkWithData(urls)
 }
@@ -566,38 +610,23 @@ func (a *MyArticleService) ListArticlesBySearch(c *gin.Context) model.ResultVO {
 	if keywords == "" {
 		return model.ResultOk()
 	}
-	data := SearchEngines.Search(keywords)
-	filtered := make([]interface{}, 0, len(data))
-	for _, value := range data {
-		result, ok := value.(map[string]interface{})
-		if !ok {
-			slog.Warn("skip malformed search result", "type", fmt.Sprintf("%T", value))
-			continue
-		}
-		formatted, ok := result["_formatted"].(map[string]interface{})
-		if !ok {
-			slog.Warn("skip search result without formatted fields")
-			continue
-		}
-		if title, ok := formatted["articleTitle"]; ok {
-			result["articleTitle"] = title
-		}
-		if content, ok := formatted["articleContent"]; ok {
-			result["articleContent"] = content
-		}
-		filtered = append(filtered, result)
+	if a.search == nil {
+		return model.ResultFromError(apperrors.Unavailable("article.search", nil))
 	}
-	jsonData, err := json.Marshal(filtered)
+	hits, err := a.search.Search(c.Request.Context(), keywords)
 	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "marshal article search results failed", "error", err)
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
-
-	var articleSearchDTOs []model.ArticleSearchDTO
-	err = json.Unmarshal(jsonData, &articleSearchDTOs)
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "decode article search results failed", "error", err)
-		return model.ResultFail()
+	articleSearchDTOs := make([]model.ArticleSearchDTO, 0, len(hits))
+	for _, hit := range hits {
+		dto := model.ArticleSearchDTO(hit.ArticleSearch)
+		if hit.HighlightedTitle != "" {
+			dto.ArticleTitle = hit.HighlightedTitle
+		}
+		if hit.HighlightedContent != "" {
+			dto.ArticleContent = hit.HighlightedContent
+		}
+		articleSearchDTOs = append(articleSearchDTOs, dto)
 	}
 
 	return model.ResultOkWithData(articleSearchDTOs)

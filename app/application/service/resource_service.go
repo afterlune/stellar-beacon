@@ -1,11 +1,11 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/shared"
 	"context"
 	"strconv"
 
@@ -117,16 +117,16 @@ func (r *MyResourceService) resourceDTOs(resources []entity.TResource) []model.R
 	result := make([]model.ResourceDTO, 0, len(parents))
 	for _, parent := range parents {
 		var dto model.ResourceDTO
-		shared.StructCopy(parent, &dto)
+		support.StructCopy(parent, &dto)
 		var childDTOs []model.ResourceDTO
-		shared.StructCopy(children[parent.Id], &childDTOs)
+		support.StructCopy(children[parent.Id], &childDTOs)
 		dto.Children = childDTOs
 		result = append(result, dto)
 		delete(children, parent.Id)
 	}
 	for _, childList := range children {
 		var dtos []model.ResourceDTO
-		shared.StructCopy(childList, &dtos)
+		support.StructCopy(childList, &dtos)
 		result = append(result, dtos...)
 	}
 	return result

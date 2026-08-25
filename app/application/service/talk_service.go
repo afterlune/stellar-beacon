@@ -5,8 +5,6 @@ import (
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/shared"
 	"container/list"
 	"log/slog"
 	"strconv"
@@ -28,6 +26,7 @@ type TalkService interface {
 type MyTalkService struct {
 	repo     port.TalkRepository
 	comments port.CommentRepository
+	storage  port.ObjectStorage
 }
 
 func NewTalkService(repo port.TalkRepository, comments ...port.CommentRepository) *MyTalkService {
@@ -35,6 +34,12 @@ func NewTalkService(repo port.TalkRepository, comments ...port.CommentRepository
 	if len(comments) > 0 {
 		service.comments = comments[0]
 	}
+	return service
+}
+
+func NewTalkServiceWithStorage(repo port.TalkRepository, comments port.CommentRepository, storage port.ObjectStorage) *MyTalkService {
+	service := NewTalkService(repo, comments)
+	service.storage = storage
 	return service
 }
 
@@ -131,8 +136,11 @@ func (t *MyTalkService) SaveTalkImages(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	fileURL := oss.Upload(file, "talks/")
-	return model.ResultOkWithData(shared.FILEURL + fileURL)
+	ref, err := uploadMultipart(c.Request.Context(), t.storage, file, "talks/")
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(ref.URL)
 }
 
 func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {

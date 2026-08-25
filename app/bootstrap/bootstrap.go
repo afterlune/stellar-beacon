@@ -4,9 +4,15 @@ import (
 	"benetnasch/app/application/service"
 	"benetnasch/app/domain/errors"
 	"benetnasch/app/facade/api"
+	"benetnasch/app/infra/cache"
+	"benetnasch/app/infra/config"
+	"benetnasch/app/infra/mailer"
 	"benetnasch/app/infra/middlewares"
+	"benetnasch/app/infra/oss"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/repository"
+	"benetnasch/app/infra/search"
+	"benetnasch/app/infra/visitor"
 )
 
 // Initialize is the composition root for application services.  The only
@@ -17,6 +23,12 @@ func Initialize() error {
 	if engine == nil {
 		return errors.Unavailable("bootstrap.database", nil)
 	}
+	redisConfig := new(config.Redis).Redis()
+	redisCache := cache.NewRedisCache(redisConfig)
+	ossStorage := oss.NewAliyunStorage(new(config.Oss).Oss())
+	searcher := search.NewMeiliSearcher(new(config.MeiliSearch).MeiliSearch())
+	smtpMailer := mailer.NewSMTPMailer(new(config.Email).Email())
+	visitorResolver := visitor.NewResolver()
 
 	site := repository.NewSiteInfoRepo(engine)
 	article := repository.NewArticleRepo(engine)
@@ -38,11 +50,11 @@ func Initialize() error {
 	userInfo := repository.NewUserInfoRepo(engine)
 
 	service.ConfigureRepositories(site, article, category, comment, job, jobLog, errorLog, operationLog, friendLink, menu, resource, photoAlbum, photo, role, tag, talk, auth, userInfo)
-	benetnasch := service.NewBenetnaschInfoService(site, article, category, tag)
+	benetnasch := service.NewBenetnaschInfoService(site, article, category, tag, redisCache, visitorResolver)
 	service.ConfigureBenetnaschService(benetnasch)
 
 	api.ConfigureServices(api.Services{
-		Article:      service.NewArticleService(article),
+		Article:      service.NewArticleService(article, redisCache, ossStorage, searcher),
 		Benetnasch:   benetnasch,
 		Category:     service.NewCategoryService(category),
 		Comment:      service.NewCommentService(comment, benetnasch),
@@ -52,14 +64,14 @@ func Initialize() error {
 		Job:          service.NewJobService(job),
 		Menu:         service.NewMenuService(menu),
 		OperationLog: service.NewOperationLogService(operationLog),
-		PhotoAlbum:   service.NewPhotoAlbumService(photoAlbum, photo),
-		Photo:        service.NewPhotoService(photo, photoAlbum),
+		PhotoAlbum:   service.NewPhotoAlbumService(photoAlbum, photo, ossStorage),
+		Photo:        service.NewPhotoService(photo, photoAlbum, ossStorage),
 		Resource:     service.NewResourceService(resource),
 		Role:         service.NewRoleService(role),
 		Tag:          service.NewTagService(tag),
-		Talk:         service.NewTalkService(talk, comment),
-		UserAuth:     service.NewUserAuthService(auth, benetnasch),
-		UserInfo:     service.NewUserInfoService(userInfo),
+		Talk:         service.NewTalkServiceWithStorage(talk, comment, ossStorage),
+		UserAuth:     service.NewUserAuthServiceWithDependencies(auth, benetnasch, redisCache, smtpMailer, visitorResolver),
+		UserInfo:     service.NewUserInfoService(userInfo, redisCache, ossStorage),
 	})
 	middlewares.ConfigureRoleRepository(role)
 	return nil

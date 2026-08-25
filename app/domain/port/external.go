@@ -1,0 +1,94 @@
+package port
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"time"
+)
+
+// ErrCacheMiss is returned when a cache key or hash field does not exist.
+// Callers can decide whether the cache is optional for their operation.
+var ErrCacheMiss = errors.New("cache miss")
+
+// Cache is the application-facing cache contract. It deliberately exposes
+// only the Redis primitives currently used by the application and keeps the
+// concrete client out of application services.
+type Cache interface {
+	Get(context.Context, string) (string, error)
+	Set(context.Context, string, any, time.Duration) error
+	SetNX(context.Context, string, any, time.Duration) (bool, error)
+	IncrementWithExpiry(context.Context, string, time.Duration) (int64, error)
+	Expire(context.Context, string, time.Duration) (bool, error)
+	Delete(context.Context, string) error
+
+	HGet(context.Context, string, string) (string, error)
+	HGetAll(context.Context, string) (map[string]string, error)
+	HSet(context.Context, string, string, any, time.Duration) error
+	HDel(context.Context, string, string) error
+	HIncrBy(context.Context, string, string, int64) (int64, error)
+
+	SIsMember(context.Context, string, any) (bool, error)
+	SAdd(context.Context, string, ...any) (int64, error)
+
+	IncrBy(context.Context, string, int64) (int64, error)
+	ZIncrBy(context.Context, string, float64, string) (float64, error)
+	ZScore(context.Context, string, string) (float64, error)
+	ZRevRangeWithScores(context.Context, string, int64, int64) (map[string]float64, error)
+	ZRangeWithScores(context.Context, string) (map[string]float64, error)
+}
+
+// ObjectRef is the public result of an object-storage upload.
+type ObjectRef struct {
+	Key string
+	URL string
+}
+
+// ObjectStorage hides the provider-specific object SDK from application code.
+type ObjectStorage interface {
+	Put(context.Context, string, io.Reader) (ObjectRef, error)
+}
+
+// ArticleSearchHit is a typed search result. Highlighted fields preserve the
+// existing MeiliSearch response behavior without exposing raw SDK maps.
+type ArticleSearchHit struct {
+	ArticleSearch
+	HighlightedTitle   string
+	HighlightedContent string
+}
+
+// ArticleSearcher provides article search to the application layer.
+type ArticleSearcher interface {
+	Search(context.Context, string) ([]ArticleSearchHit, error)
+}
+
+// EmailMessage is the provider-neutral email command used by services.
+type EmailMessage struct {
+	To         string
+	Subject    string
+	Template   string
+	CommentMap map[string]any
+}
+
+// Mailer sends HTML email using an infrastructure-specific provider.
+type Mailer interface {
+	SendHTML(context.Context, EmailMessage) error
+}
+
+// VisitorIdentity contains request-derived information used by rate limiting
+// and unique-visitor accounting.
+type VisitorIdentity struct {
+	IP             string
+	Region         string
+	Browser        string
+	BrowserVersion string
+	OS             string
+	Fingerprint    string
+	IsBot          bool
+}
+
+// VisitorResolver keeps IP/UA parsing and the IP-region database in infra.
+type VisitorResolver interface {
+	Resolve(context.Context, *http.Request) (VisitorIdentity, error)
+}

@@ -1,11 +1,11 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/shared"
 	"container/list"
+	"errors"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -26,10 +26,23 @@ type UserInfoService interface {
 	GetUserInfoById(c *gin.Context) model.ResultVO
 }
 
-type MyUserInfoService struct{ repo port.UserInfoRepository }
+type MyUserInfoService struct {
+	repo    port.UserInfoRepository
+	cache   port.Cache
+	storage port.ObjectStorage
+}
 
-func NewUserInfoService(repo port.UserInfoRepository) *MyUserInfoService {
-	return &MyUserInfoService{repo: repo}
+func NewUserInfoService(repo port.UserInfoRepository, dependencies ...any) *MyUserInfoService {
+	service := &MyUserInfoService{repo: repo}
+	for _, dependency := range dependencies {
+		switch value := dependency.(type) {
+		case port.Cache:
+			service.cache = value
+		case port.ObjectStorage:
+			service.storage = value
+		}
+	}
+	return service
 }
 
 func (u *MyUserInfoService) userInfoRepository() port.UserInfoRepository {
@@ -63,7 +76,10 @@ func (u *MyUserInfoService) UpdateUserAvatar(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	fileURI := oss.Upload(file, "avatar/")
+	ref, err := uploadMultipart(c.Request.Context(), u.storage, file, "avatar/")
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	value, ok := c.Get("userInfo")
 	if !ok {
 		return model.ResultFailWithStatus(model.NO_LOGIN)
@@ -72,7 +88,7 @@ func (u *MyUserInfoService) UpdateUserAvatar(c *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFailWithStatus(model.NO_LOGIN)
 	}
-	avatar := shared.FILEURL + fileURI
+	avatar := ref.URL
 	if err := u.userInfoRepository().UpdateAvatar(c.Request.Context(), dto.UserInfoId, avatar); err != nil {
 		return model.ResultFromError(err)
 	}
@@ -85,8 +101,14 @@ func (u *MyUserInfoService) SaveUserEmail(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	vo.Email = strings.ToLower(strings.TrimSpace(vo.Email))
-	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+vo.Email)
+	if u.cache == nil {
+		return model.ResultFail()
+	}
+	code, err := u.cache.Get(c.Request.Context(), support.UserCodeKey+vo.Email)
 	if err != nil {
+		if errors.Is(err, port.ErrCacheMiss) {
+			return model.ResultFailWithMessage("验证码错误")
+		}
 		return model.ResultFail()
 	}
 	if code == "" || code != vo.Code {
@@ -151,21 +173,24 @@ func (u *MyUserInfoService) ListOnlineUsers(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	userMaps, err := shared.HGetAllCtx(c.Request.Context(), shared.LOGIN_USER)
+	if u.cache == nil {
+		return model.ResultFail()
+	}
+	userMaps, err := u.cache.HGetAll(c.Request.Context(), support.LoginUser)
 	if err != nil {
 		return model.ResultFail()
 	}
 	users := make([]model.UserDetailsDTO, 0, len(userMaps))
 	for _, value := range userMaps {
 		var dto model.UserDetailsDTO
-		if err := shared.Unmarsh(value, &dto); err != nil {
+		if err := support.Unmarsh(value, &dto); err != nil {
 			slog.WarnContext(c.Request.Context(), "skip malformed online user cache", "error", err)
 			continue
 		}
 		users = append(users, dto)
 	}
 	var online []model.UserOnlineDTO
-	shared.StructCopy(users, &online)
+	support.StructCopy(users, &online)
 	filtered := online[:0]
 	for _, user := range online {
 		if vo.Keywords == "" || strings.Contains(user.Nickname, vo.Keywords) {
@@ -203,7 +228,10 @@ func (u *MyUserInfoService) RemoveOnlineUser(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
-	if err := shared.HDelCtx(c.Request.Context(), shared.LOGIN_USER, strconv.Itoa(auth.Id)); err != nil {
+	if u.cache == nil {
+		return model.ResultFail()
+	}
+	if err := u.cache.HDel(c.Request.Context(), support.LoginUser, strconv.Itoa(auth.Id)); err != nil {
 		return model.ResultFail()
 	}
 	return model.ResultOk()
@@ -219,6 +247,6 @@ func (u *MyUserInfoService) GetUserInfoById(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dto model.UserInfoDTO
-	shared.StructCopy(info, &dto)
+	support.StructCopy(info, &dto)
 	return model.ResultOkWithData(dto)
 }

@@ -1,9 +1,9 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/shared"
 	"container/list"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +37,7 @@ func (o *MyOperationLogService) ListOperationLogs(c *gin.Context) model.ResultVO
 		return model.ResultFromError(err)
 	}
 	var dtos []model.OperationLogDTO
-	shared.StructCopy(logs, &dtos)
+	support.StructCopy(logs, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}

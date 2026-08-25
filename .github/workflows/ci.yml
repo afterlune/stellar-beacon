@@ -32,6 +32,10 @@ jobs:
         shell: bash
         run: bash scripts/check-service-db-boundary.sh
 
+      - name: Check service infrastructure boundary
+        shell: bash
+        run: bash scripts/check-service-infra-boundary.sh
+
       - name: Vet
         run: go vet ./...
 

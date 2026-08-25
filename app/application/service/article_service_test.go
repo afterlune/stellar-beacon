@@ -19,6 +19,15 @@ type fakeArticleRepository struct {
 	archives []port.ArticleCard
 }
 
+type fakeArticleSearcher struct {
+	hits []port.ArticleSearchHit
+	err  error
+}
+
+func (f *fakeArticleSearcher) Search(context.Context, string) ([]port.ArticleSearchHit, error) {
+	return f.hits, f.err
+}
+
 func (f *fakeArticleRepository) ListTopAndFeaturedArticles(context.Context) ([]*port.ArticleCard, error) {
 	return nil, nil
 }
@@ -148,6 +157,33 @@ func TestArticleServiceSortsArchivesNewestFirst(t *testing.T) {
 	}
 	if len(archives[1].Articles) != 2 {
 		t.Fatalf("same-day articles were not grouped: %#v", archives[1].Articles)
+	}
+}
+
+func TestArticleServiceUsesTypedSearchPort(t *testing.T) {
+	service := NewArticleService(&fakeArticleRepository{}, &fakeArticleSearcher{hits: []port.ArticleSearchHit{{
+		ArticleSearch:      port.ArticleSearch{Id: 7, ArticleTitle: "raw title", ArticleContent: "raw content"},
+		HighlightedTitle:   "<mark>title</mark>",
+		HighlightedContent: "<mark>content</mark>",
+	}}})
+	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title"))
+	if !result.Flag {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	hits, ok := result.Data.([]model.ArticleSearchDTO)
+	if !ok || len(hits) != 1 {
+		t.Fatalf("unexpected search result: %#v", result.Data)
+	}
+	if hits[0].ArticleTitle != "<mark>title</mark>" || hits[0].ArticleContent != "<mark>content</mark>" {
+		t.Fatalf("highlighted fields were not applied: %#v", hits[0])
+	}
+}
+
+func TestArticleServiceMapsSearchFailure(t *testing.T) {
+	service := NewArticleService(&fakeArticleRepository{}, &fakeArticleSearcher{err: apperrors.Unavailable("search.articles", testServiceError("meili unavailable"))})
+	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title"))
+	if result.Flag || result.Message != "系统繁忙，请稍后再试" {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 

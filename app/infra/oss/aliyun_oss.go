@@ -1,66 +1,73 @@
 package oss
 
 import (
+	"benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/infra/config"
-	"benetnasch/app/infra/shared"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"context"
+	stdErrors "errors"
+	"fmt"
 	"io"
-	"log/slog"
-	"mime/multipart"
 	"strings"
+
+	aliyunoss "github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 )
 
-func Upload(file *multipart.FileHeader, path string) string {
-	c := getOssClient()
-	open, err := file.Open()
-	if err != nil {
-		slog.Error("open uploaded file failed", "error", err)
-	}
+type AliyunStorage struct {
+	client    *aliyunoss.Client
+	bucket    string
+	publicURL string
+}
 
-	index := strings.LastIndex(file.Filename, ".")
-	preSuffix := file.Filename[:index]
-	postSuffix := file.Filename[index:]
-	fileName := shared.GetMD5(preSuffix)
-
-	exist, err := c.IsObjectExist(path + fileName + postSuffix)
-	if err != nil {
-		slog.Error("check OSS object failed", "error", err)
+func NewAliyunStorage(conf *config.Oss) *AliyunStorage {
+	provider := credentials.NewStaticCredentialsProvider(conf.AccessKeyID, conf.AccessKeySecret)
+	options := aliyunoss.LoadDefaultConfig().
+		WithCredentialsProvider(provider).
+		WithRegion(conf.Region).
+		WithEndpoint(conf.EndPoint)
+	return &AliyunStorage{
+		client:    aliyunoss.NewClient(options),
+		bucket:    conf.BucketName,
+		publicURL: conf.PublicURL,
 	}
-	if !exist {
-		err = c.PutObject(path+fileName+postSuffix, io.Reader(open))
-		if err != nil {
-			slog.Error("upload OSS object failed", "error", err)
+}
+
+func (s *AliyunStorage) Put(ctx context.Context, key string, body io.Reader) (port.ObjectRef, error) {
+	if s == nil || s.client == nil {
+		return port.ObjectRef{}, errors.Unavailable("oss.put", fmt.Errorf("OSS client is not configured"))
+	}
+	if key == "" || body == nil {
+		return port.ObjectRef{}, errors.Invalid("oss.put", "object key and body are required")
+	}
+	if _, err := s.client.HeadObject(ctx, &aliyunoss.HeadObjectRequest{
+		Bucket: aliyunoss.Ptr(s.bucket),
+		Key:    aliyunoss.Ptr(key),
+	}); err == nil {
+		return s.ref(key), nil
+	} else {
+		var serviceErr *aliyunoss.ServiceError
+		if !stdErrors.As(err, &serviceErr) || serviceErr.HttpStatusCode() != 404 {
+			return port.ObjectRef{}, errors.Unavailable("oss.head", err)
 		}
 	}
-	return path + fileName + postSuffix
+	_, err := s.client.PutObject(ctx, &aliyunoss.PutObjectRequest{
+		Bucket:          aliyunoss.Ptr(s.bucket),
+		Key:             aliyunoss.Ptr(key),
+		Body:            body,
+		ForbidOverwrite: aliyunoss.Ptr("true"),
+	})
+	if err != nil {
+		return port.ObjectRef{}, errors.Unavailable("oss.put", err)
+	}
+	return s.ref(key), nil
 }
 
-func getOssClient() *oss.Bucket {
-	cfg := new(config.Oss).Oss()
-	client, err := oss.New(cfg.EndPoint, cfg.AccessKeyID, cfg.AccessKeySecret)
-	if err != nil {
-		slog.Error("create OSS client failed", "error", err)
+func (s *AliyunStorage) ref(key string) port.ObjectRef {
+	return port.ObjectRef{
+		Key: key,
+		URL: strings.TrimRight(s.publicURL, "/") + "/" + strings.TrimLeft(key, "/"),
 	}
-
-	bucket, err := client.Bucket(cfg.BucketName)
-	if err != nil {
-		slog.Error("open OSS bucket failed", "error", err)
-	}
-
-	return bucket
 }
 
-func UploadFile(value io.Reader, fileName, path string) string {
-	c := getOssClient()
-	exist, err := c.IsObjectExist(path + fileName)
-	if err != nil {
-		slog.Error("check OSS object failed", "error", err)
-	}
-	if !exist {
-		err = c.PutObject(path+fileName, value)
-		if err != nil {
-			slog.Error("upload OSS object failed", "error", err)
-		}
-	}
-	return path + fileName
-}
+var _ port.ObjectStorage = (*AliyunStorage)(nil)

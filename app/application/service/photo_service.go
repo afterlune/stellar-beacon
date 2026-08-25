@@ -1,11 +1,10 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/shared"
 	"container/list"
 	"strconv"
 
@@ -24,12 +23,17 @@ type PhotoService interface {
 }
 
 type MyPhotoService struct {
-	repo   port.PhotoRepository
-	albums port.PhotoAlbumRepository
+	repo    port.PhotoRepository
+	albums  port.PhotoAlbumRepository
+	storage port.ObjectStorage
 }
 
-func NewPhotoService(repo port.PhotoRepository, albums port.PhotoAlbumRepository) *MyPhotoService {
-	return &MyPhotoService{repo: repo, albums: albums}
+func NewPhotoService(repo port.PhotoRepository, albums port.PhotoAlbumRepository, storage ...port.ObjectStorage) *MyPhotoService {
+	service := &MyPhotoService{repo: repo, albums: albums}
+	if len(storage) > 0 {
+		service.storage = storage[0]
+	}
+	return service
 }
 
 func (p *MyPhotoService) photoRepository() port.PhotoRepository {
@@ -51,8 +55,11 @@ func (p *MyPhotoService) SavePhotosAlbumCover(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	fileURI := oss.Upload(file, "photos/")
-	return model.ResultOkWithData(shared.FILEURL + fileURI)
+	ref, err := uploadMultipart(c.Request.Context(), p.storage, file, "photos/")
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(ref.URL)
 }
 
 func (p *MyPhotoService) ListPhotos(c *gin.Context) model.ResultVO {
@@ -68,7 +75,7 @@ func (p *MyPhotoService) ListPhotos(c *gin.Context) model.ResultVO {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New()})
 	}
 	var dtos []model.PhotoAdminDTO
-	shared.StructCopy(photos, &dtos)
+	support.StructCopy(photos, &dtos)
 	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
@@ -92,7 +99,7 @@ func (p *MyPhotoService) SavePhotos(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	uuid := shared.GetUUID()
+	uuid := support.GetUUID()
 	photos := make([]entity.TPhoto, 0, len(vo.PhotoUrls))
 	for _, url := range vo.PhotoUrls {
 		photos = append(photos, entity.TPhoto{AlbumId: albumID, PhotoName: uuid[:20], PhotoSrc: url})
@@ -145,7 +152,7 @@ func (p *MyPhotoService) ListPhotosByAlbumId(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("相册不存在")
 	}
-	if album.IsDelete != shared.FALSE || album.Status != 1 {
+	if album.IsDelete != support.False || album.Status != 1 {
 		return model.ResultFailWithMessage("相册不存在")
 	}
 	current, _ := strconv.Atoi(c.Query("current"))

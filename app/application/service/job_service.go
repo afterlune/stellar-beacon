@@ -1,9 +1,9 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/shared"
 	"container/list"
 	"context"
 	"log/slog"
@@ -74,7 +74,7 @@ func (j *MyJobService) GetJobById(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dto model.JobDTO
-	shared.StructCopy(job, &dto)
+	support.StructCopy(job, &dto)
 	return model.ResultOkWithData(dto)
 }
 
@@ -96,7 +96,7 @@ func (j *MyJobService) ListJobs(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.JobDTO
-	shared.StructCopy(jobs, &dtos)
+	support.StructCopy(jobs, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}

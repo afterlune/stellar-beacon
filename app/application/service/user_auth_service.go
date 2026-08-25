@@ -1,11 +1,11 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/shared"
 	"container/list"
 	"context"
 	"crypto/sha256"
@@ -38,6 +38,9 @@ type UserAuthService interface {
 type MyUserAuthService struct {
 	repo    port.AuthRepository
 	website BenetnaschInfoService
+	cache   port.Cache
+	mailer  port.Mailer
+	visitor port.VisitorResolver
 }
 
 func NewUserAuthService(repo port.AuthRepository, website ...BenetnaschInfoService) *MyUserAuthService {
@@ -46,6 +49,10 @@ func NewUserAuthService(repo port.AuthRepository, website ...BenetnaschInfoServi
 		service.website = website[0]
 	}
 	return service
+}
+
+func NewUserAuthServiceWithDependencies(repo port.AuthRepository, website BenetnaschInfoService, cache port.Cache, mailer port.Mailer, visitor port.VisitorResolver) *MyUserAuthService {
+	return &MyUserAuthService{repo: repo, website: website, cache: cache, mailer: mailer, visitor: visitor}
 }
 
 func (u *MyUserAuthService) authRepository() port.AuthRepository {
@@ -64,26 +71,33 @@ func (u *MyUserAuthService) websiteService() BenetnaschInfoService {
 
 func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 	username := strings.ToLower(strings.TrimSpace(c.Query("username")))
-	if !shared.CheckEmail(username) {
+	if !support.CheckEmail(username) {
 		return model.ResultFailWithMessage("请输入正确邮箱")
 	}
 	ctx := c.Request.Context()
+	if u.cache == nil || u.mailer == nil || u.visitor == nil {
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
 	key := func(prefix, value string) string {
 		sum := sha256.Sum256([]byte(value))
 		return prefix + hex.EncodeToString(sum[:])
 	}
-	if allowed, err := shared.SetNXCtx(ctx, key("captcha:cooldown:", username), "1", time.Minute); err != nil {
+	if allowed, err := u.cache.SetNX(ctx, key("captcha:cooldown:", username), "1", time.Minute); err != nil {
 		slog.Error("captcha rate limiter failed", "error", err)
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	} else if !allowed {
 		return model.ResultFailWithMessage("验证码发送过于频繁")
 	}
-	emailCount, err := shared.IncrExpireCtx(ctx, key("captcha:email:", username), time.Hour)
+	emailCount, err := u.cache.IncrementWithExpiry(ctx, key("captcha:email:", username), time.Hour)
 	if err != nil {
 		slog.Error("captcha email limiter failed", "error", err)
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	}
-	ipCount, err := shared.IncrExpireCtx(ctx, key("captcha:ip:", shared.GetIpAddress(c.Request)), time.Hour)
+	identity, err := u.visitor.Resolve(ctx, c.Request)
+	if err != nil {
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
+	ipCount, err := u.cache.IncrementWithExpiry(ctx, key("captcha:ip:", identity.IP), time.Hour)
 	if err != nil {
 		slog.Error("captcha IP limiter failed", "error", err)
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
@@ -91,20 +105,20 @@ func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 	if emailCount > 5 || ipCount > 20 {
 		return model.ResultFailWithMessage("验证码发送过于频繁")
 	}
-	code := shared.RandomCode()
+	code := support.RandomCode()
 	codem := make(map[string]interface{})
 	codem["content"] = "您的验证码为 " + code + " 有效期15分钟，请不要告诉他人哦！"
 	emailDTO := model.EmailDTO{
 		Email:      username,
 		CommentMap: codem,
 		Template:   "resource/template/common.html",
-		Subject:    shared.CAPTCHA,
+		Subject:    support.Captcha,
 	}
-	if err := shared.SendHtmlEmail(emailDTO); err != nil {
+	if err := u.mailer.SendHTML(ctx, port.EmailMessage{To: emailDTO.Email, Subject: emailDTO.Subject, Template: emailDTO.Template, CommentMap: emailDTO.CommentMap}); err != nil {
 		slog.Error("send captcha email failed", "error", err)
 		return model.ResultFailWithMessage("验证码发送失败")
 	}
-	if err := shared.SetWithTimeCtx(ctx, shared.USER_CODE_KEY+username, code, 15*time.Minute); err != nil {
+	if err := u.cache.Set(ctx, support.UserCodeKey+username, code, 15*time.Minute); err != nil {
 		slog.Error("store captcha failed", "error", err)
 		return model.ResultFailWithMessage("验证码发送失败")
 	}
@@ -116,7 +130,10 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 	var userAreaDTOs []model.UserAreaDTO
 	switch typeId {
 	case "1":
-		userArea, err := shared.GetCtx(c.Request.Context(), shared.USER_AREA)
+		if u.cache == nil {
+			return model.ResultFail()
+		}
+		userArea, err := u.cache.Get(c.Request.Context(), support.UserArea)
 		if err != nil {
 			slog.Error("load user area failed", "error", err)
 			return model.ResultFail()
@@ -129,7 +146,10 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 		}
 		return model.ResultOkWithData(userAreaDTOs)
 	case "2":
-		visitorArea, err := shared.HGetAllCtx(c.Request.Context(), shared.VISITOR_AREA)
+		if u.cache == nil {
+			return model.ResultFail()
+		}
+		visitorArea, err := u.cache.HGetAll(c.Request.Context(), support.VisitorArea)
 		if err != nil {
 			slog.Error("load visitor area failed", "error", err)
 			return model.ResultFail()
@@ -182,7 +202,10 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
 
-	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+strings.ToLower(strings.TrimSpace(userVo.Username)))
+	if u.cache == nil {
+		return model.ResultFail()
+	}
+	code, err := u.cache.Get(c.Request.Context(), support.UserCodeKey+strings.ToLower(strings.TrimSpace(userVo.Username)))
 	if err != nil {
 		slog.Error("load registration captcha failed", "error", err)
 		return model.ResultFail()
@@ -191,7 +214,7 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("验证码有误！")
 	}
 
-	if !shared.CheckEmail(userVo.Username) {
+	if !support.CheckEmail(userVo.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
 	username := strings.ToLower(strings.TrimSpace(userVo.Username))
@@ -210,7 +233,7 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 	}
 	userInfo := entity.TUserInfo{
 		Email:    username,
-		Nickname: shared.DEFAULT_NICKNAME,
+		Nickname: support.DefaultNickname,
 		Avatar:   websiteConfig.UserAvatar,
 	}
 
@@ -236,7 +259,10 @@ func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	userVO.Username = strings.ToLower(strings.TrimSpace(userVO.Username))
-	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+strings.ToLower(strings.TrimSpace(userVO.Username)))
+	if u.cache == nil {
+		return model.ResultFail()
+	}
+	code, err := u.cache.Get(c.Request.Context(), support.UserCodeKey+strings.ToLower(strings.TrimSpace(userVO.Username)))
 	if err != nil {
 		slog.Error("load password reset captcha failed", "error", err)
 		return model.ResultFail()
@@ -244,7 +270,7 @@ func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	if userVO.Code != code {
 		return model.ResultFailWithMessage("验证码有误！")
 	}
-	if !shared.CheckEmail(userVO.Username) {
+	if !support.CheckEmail(userVO.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
 	exists, err := u.userExists(c.Request.Context(), userVO.Username)
@@ -304,7 +330,10 @@ func (u *MyUserAuthService) UpdateAdminPassword(c *gin.Context) model.ResultVO {
 }
 
 func (u *MyUserAuthService) Logout(ctx context.Context, id int) model.ResultVO {
-	if err := shared.HDelCtx(ctx, shared.LOGIN_USER, strconv.Itoa(id)); err != nil {
+	if u.cache == nil {
+		return model.ResultFailWithMessage("注销失败，请稍后再试")
+	}
+	if err := u.cache.HDel(ctx, support.LoginUser, strconv.Itoa(id)); err != nil {
 		slog.Error("remove login session failed", "error", err)
 		return model.ResultFailWithMessage("注销失败，请稍后再试")
 	}
@@ -376,7 +405,7 @@ func (u *MyUserAuthService) CheckUserAuth(ctx context.Context, vo model.UserVO) 
 
 func (u *MyUserAuthService) UpdateUserIp(ctx context.Context, user entity.TUserAuth) error {
 	if user.IpSource == "0" || user.IpSource == "" {
-		user.IpSource = shared.UNKNOWN
+		user.IpSource = support.Unknown
 	}
 	return u.authRepository().UpdateLoginMetadata(ctx, user)
 }

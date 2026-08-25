@@ -1,12 +1,11 @@
 package service
 
 import (
+	"benetnasch/app/application/support"
 	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/shared"
 	"context"
 	"strconv"
 
@@ -24,12 +23,17 @@ type PhotoAlbumService interface {
 }
 
 type MyPhotoAlbumService struct {
-	repo   port.PhotoAlbumRepository
-	photos port.PhotoRepository
+	repo    port.PhotoAlbumRepository
+	photos  port.PhotoRepository
+	storage port.ObjectStorage
 }
 
-func NewPhotoAlbumService(repo port.PhotoAlbumRepository, photos port.PhotoRepository) *MyPhotoAlbumService {
-	return &MyPhotoAlbumService{repo: repo, photos: photos}
+func NewPhotoAlbumService(repo port.PhotoAlbumRepository, photos port.PhotoRepository, storage ...port.ObjectStorage) *MyPhotoAlbumService {
+	service := &MyPhotoAlbumService{repo: repo, photos: photos}
+	if len(storage) > 0 {
+		service.storage = storage[0]
+	}
+	return service
 }
 
 func (p *MyPhotoAlbumService) photoAlbumRepository() port.PhotoAlbumRepository {
@@ -52,7 +56,7 @@ func (p *MyPhotoAlbumService) ListPhotoAlbums() model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.PhotoAlbumDTO
-	shared.StructCopy(albums, &dtos)
+	support.StructCopy(albums, &dtos)
 	return model.ResultOkWithData(dtos)
 }
 
@@ -61,8 +65,11 @@ func (p *MyPhotoAlbumService) SavePhotoAlbumCover(c *gin.Context) model.ResultVO
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	fileURI := oss.Upload(file, "photos/")
-	return model.ResultOkWithData(shared.FILEURL + fileURI)
+	ref, err := uploadMultipart(c.Request.Context(), p.storage, file, "photos/")
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(ref.URL)
 }
 
 func (p *MyPhotoAlbumService) SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO {
@@ -105,7 +112,7 @@ func (p *MyPhotoAlbumService) ListPhotoAlbumBackInfos() model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.PhotoAlbumDTO
-	shared.StructCopy(albums, &dtos)
+	support.StructCopy(albums, &dtos)
 	return model.ResultOkWithData(dtos)
 }
 
@@ -121,12 +128,12 @@ func (p *MyPhotoAlbumService) GetPhotoAlbumBackById(c *gin.Context) model.Result
 		}
 		return model.ResultFromError(err)
 	}
-	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, shared.FALSE)
+	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, support.False)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	var dto model.PhotoAlbumAdminDTO
-	shared.StructCopy(album, &dto)
+	support.StructCopy(album, &dto)
 	dto.PhotoCount = int(count)
 	return model.ResultOkWithData(dto)
 }

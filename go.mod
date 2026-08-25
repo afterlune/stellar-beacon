@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/alicebob/miniredis/v2 v2.35.0
-	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
+	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.3
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/casbin/xorm-adapter/v2 v2.5.1
