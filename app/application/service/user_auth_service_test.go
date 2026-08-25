@@ -41,7 +41,7 @@ func TestUserAuthServiceAuthenticatesThroughPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := NewUserAuthService(&fakeAuthRepository{user: port.AuthUser{
+	service := mustUserAuthService(t, &fakeAuthRepository{user: port.AuthUser{
 		Auth:  entity.TUserAuth{Id: 7, UserInfoId: 8, Username: "user@example.com", Password: string(hash)},
 		Info:  entity.TUserInfo{Id: 8, Email: "user@example.com", Nickname: "user"},
 		Roles: []string{"user"},
@@ -56,7 +56,7 @@ func TestUserAuthServiceAuthenticatesThroughPort(t *testing.T) {
 }
 
 func TestUserAuthServiceTreatsMissingUserAsBadCredentials(t *testing.T) {
-	service := NewUserAuthService(&fakeAuthRepository{err: apperrors.NotFound("auth.find_username")})
+	service := mustUserAuthService(t, &fakeAuthRepository{err: apperrors.NotFound("auth.find_username")})
 	dto, err := service.Authenticate(context.Background(), modelUser("missing@example.com", "password"))
 	if err != nil || dto != nil {
 		t.Fatalf("missing user should be a credential failure: dto=%+v err=%v", dto, err)

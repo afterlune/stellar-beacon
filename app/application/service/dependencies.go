@@ -1,0 +1,197 @@
+package service
+
+import (
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
+)
+
+// ArticleServiceDeps contains every dependency required by the article use
+// cases. Keeping the fields named prevents accidental argument reordering at
+// the composition root.
+type ArticleServiceDeps struct {
+	Repo    port.ArticleRepository
+	Cache   port.Cache
+	Storage port.ObjectStorage
+	Search  port.ArticleSearcher
+}
+
+// BenetnaschInfoServiceDeps contains the site-information use-case ports.
+type BenetnaschInfoServiceDeps struct {
+	Site       port.SiteInfoRepository
+	Articles   port.ArticleRepository
+	Categories port.CategoryRepository
+	Tags       port.TagRepository
+	Cache      port.Cache
+	Visitor    port.VisitorResolver
+}
+
+// UserInfoServiceDeps contains the user-profile use-case ports.
+type UserInfoServiceDeps struct {
+	Repo    port.UserInfoRepository
+	Cache   port.Cache
+	Storage port.ObjectStorage
+}
+
+// CommentServiceDeps contains the comment repository and site-information
+// collaborator.
+type CommentServiceDeps struct {
+	Repo    port.CommentRepository
+	Website BenetnaschInfoService
+}
+
+// PhotoAlbumServiceDeps contains the album repository, photo repository and
+// object storage port.
+type PhotoAlbumServiceDeps struct {
+	Repo    port.PhotoAlbumRepository
+	Photos  port.PhotoRepository
+	Storage port.ObjectStorage
+}
+
+// PhotoServiceDeps contains the photo repository, album repository and object
+// storage port.
+type PhotoServiceDeps struct {
+	Repo    port.PhotoRepository
+	Albums  port.PhotoAlbumRepository
+	Storage port.ObjectStorage
+}
+
+// TalkServiceDeps contains the talk repository, comment repository and object
+// storage port.
+type TalkServiceDeps struct {
+	Repo     port.TalkRepository
+	Comments port.CommentRepository
+	Storage  port.ObjectStorage
+}
+
+// UserAuthServiceDeps contains all collaborators used by authentication and
+// account-protection flows.
+type UserAuthServiceDeps struct {
+	Repo    port.AuthRepository
+	Website BenetnaschInfoService
+	Cache   port.Cache
+	Mailer  port.Mailer
+	Visitor port.VisitorResolver
+}
+
+func missingServiceDependency(serviceName, dependency string) error {
+	return apperrors.Invalid("service."+serviceName+".dependencies", dependency+" is required")
+}
+
+func (d ArticleServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("article", "repository")
+	}
+	if d.Cache == nil {
+		return missingServiceDependency("article", "cache")
+	}
+	if d.Storage == nil {
+		return missingServiceDependency("article", "storage")
+	}
+	if d.Search == nil {
+		return missingServiceDependency("article", "search")
+	}
+	return nil
+}
+
+func (d BenetnaschInfoServiceDeps) validate() error {
+	if d.Site == nil {
+		return missingServiceDependency("benetnasch_info", "site repository")
+	}
+	if d.Articles == nil {
+		return missingServiceDependency("benetnasch_info", "article repository")
+	}
+	if d.Categories == nil {
+		return missingServiceDependency("benetnasch_info", "category repository")
+	}
+	if d.Tags == nil {
+		return missingServiceDependency("benetnasch_info", "tag repository")
+	}
+	if d.Cache == nil {
+		return missingServiceDependency("benetnasch_info", "cache")
+	}
+	if d.Visitor == nil {
+		return missingServiceDependency("benetnasch_info", "visitor")
+	}
+	return nil
+}
+
+func (d UserInfoServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("user_info", "repository")
+	}
+	if d.Cache == nil {
+		return missingServiceDependency("user_info", "cache")
+	}
+	if d.Storage == nil {
+		return missingServiceDependency("user_info", "storage")
+	}
+	return nil
+}
+
+func (d CommentServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("comment", "repository")
+	}
+	if d.Website == nil {
+		return missingServiceDependency("comment", "website")
+	}
+	return nil
+}
+
+func (d PhotoAlbumServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("photo_album", "repository")
+	}
+	if d.Photos == nil {
+		return missingServiceDependency("photo_album", "photo repository")
+	}
+	if d.Storage == nil {
+		return missingServiceDependency("photo_album", "storage")
+	}
+	return nil
+}
+
+func (d PhotoServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("photo", "repository")
+	}
+	if d.Albums == nil {
+		return missingServiceDependency("photo", "album repository")
+	}
+	if d.Storage == nil {
+		return missingServiceDependency("photo", "storage")
+	}
+	return nil
+}
+
+func (d TalkServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("talk", "repository")
+	}
+	if d.Comments == nil {
+		return missingServiceDependency("talk", "comment repository")
+	}
+	if d.Storage == nil {
+		return missingServiceDependency("talk", "storage")
+	}
+	return nil
+}
+
+func (d UserAuthServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("user_auth", "repository")
+	}
+	if d.Website == nil {
+		return missingServiceDependency("user_auth", "website")
+	}
+	if d.Cache == nil {
+		return missingServiceDependency("user_auth", "cache")
+	}
+	if d.Mailer == nil {
+		return missingServiceDependency("user_auth", "mailer")
+	}
+	if d.Visitor == nil {
+		return missingServiceDependency("user_auth", "visitor")
+	}
+	return nil
+}

@@ -42,30 +42,25 @@ type MyUserAuthService struct {
 	visitor port.VisitorResolver
 }
 
-func NewUserAuthService(repo port.AuthRepository, website ...BenetnaschInfoService) *MyUserAuthService {
-	service := &MyUserAuthService{repo: repo}
-	if len(website) > 0 {
-		service.website = website[0]
+func NewUserAuthService(deps UserAuthServiceDeps) (*MyUserAuthService, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
 	}
-	return service
-}
-
-func NewUserAuthServiceWithDependencies(repo port.AuthRepository, website BenetnaschInfoService, cache port.Cache, mailer port.Mailer, visitor port.VisitorResolver) *MyUserAuthService {
-	return &MyUserAuthService{repo: repo, website: website, cache: cache, mailer: mailer, visitor: visitor}
+	return &MyUserAuthService{
+		repo:    deps.Repo,
+		website: deps.Website,
+		cache:   deps.Cache,
+		mailer:  deps.Mailer,
+		visitor: deps.Visitor,
+	}, nil
 }
 
 func (u *MyUserAuthService) authRepository() port.AuthRepository {
-	if u.repo != nil {
-		return u.repo
-	}
-	return userAuthRepo
+	return u.repo
 }
 
 func (u *MyUserAuthService) websiteService() BenetnaschInfoService {
-	if u.website != nil {
-		return u.website
-	}
-	return benetnaschService
+	return u.website
 }
 
 func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {

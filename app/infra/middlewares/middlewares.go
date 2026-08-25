@@ -546,6 +546,15 @@ func ConfigureRoleRepository(repo port.RoleRepository) {
 	roleRepo = repo
 }
 
+// ConfigureUserAuthService injects the application authentication service
+// used by the login filter. Keeping this wiring in the composition root avoids
+// falling back to an unconfigured service instance.
+func ConfigureUserAuthService(auth service.UserAuthService) {
+	if auth != nil {
+		userAuthService = auth
+	}
+}
+
 func AccessLimiter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		value, ok := c.Get("userInfo")

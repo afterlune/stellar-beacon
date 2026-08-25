@@ -64,6 +64,10 @@ jobs:
         shell: bash
         run: bash scripts/check-service-infra-boundary.sh
 
+      - name: Check service constructor boundary
+        shell: bash
+        run: bash scripts/check-service-constructor-boundary.sh
+
       - name: Vet
         run: go vet ./...
 

@@ -49,26 +49,20 @@ type MyArticleService struct {
 	search  port.ArticleSearcher
 }
 
-func NewArticleService(repo port.ArticleRepository, dependencies ...any) *MyArticleService {
-	service := &MyArticleService{repo: repo}
-	for _, dependency := range dependencies {
-		switch value := dependency.(type) {
-		case port.Cache:
-			service.cache = value
-		case port.ObjectStorage:
-			service.storage = value
-		case port.ArticleSearcher:
-			service.search = value
-		}
+func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
 	}
-	return service
+	return &MyArticleService{
+		repo:    deps.Repo,
+		cache:   deps.Cache,
+		storage: deps.Storage,
+		search:  deps.Search,
+	}, nil
 }
 
 func (a *MyArticleService) articleRepository() port.ArticleRepository {
-	if a.repo != nil {
-		return a.repo
-	}
-	return articleRepo
+	return a.repo
 }
 
 func (a *MyArticleService) ListTopAndFeaturedArticles(c *gin.Context) model.ResultVO {

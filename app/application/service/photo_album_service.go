@@ -28,26 +28,19 @@ type MyPhotoAlbumService struct {
 	storage port.ObjectStorage
 }
 
-func NewPhotoAlbumService(repo port.PhotoAlbumRepository, photos port.PhotoRepository, storage ...port.ObjectStorage) *MyPhotoAlbumService {
-	service := &MyPhotoAlbumService{repo: repo, photos: photos}
-	if len(storage) > 0 {
-		service.storage = storage[0]
+func NewPhotoAlbumService(deps PhotoAlbumServiceDeps) (*MyPhotoAlbumService, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
 	}
-	return service
+	return &MyPhotoAlbumService{repo: deps.Repo, photos: deps.Photos, storage: deps.Storage}, nil
 }
 
 func (p *MyPhotoAlbumService) photoAlbumRepository() port.PhotoAlbumRepository {
-	if p.repo != nil {
-		return p.repo
-	}
-	return photoAlbumRepo
+	return p.repo
 }
 
 func (p *MyPhotoAlbumService) photoRepository() port.PhotoRepository {
-	if p.photos != nil {
-		return p.photos
-	}
-	return photoRepo
+	return p.photos
 }
 
 func (p *MyPhotoAlbumService) ListPhotoAlbums() model.ResultVO {

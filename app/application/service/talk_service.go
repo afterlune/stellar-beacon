@@ -29,32 +29,19 @@ type MyTalkService struct {
 	storage  port.ObjectStorage
 }
 
-func NewTalkService(repo port.TalkRepository, comments ...port.CommentRepository) *MyTalkService {
-	service := &MyTalkService{repo: repo}
-	if len(comments) > 0 {
-		service.comments = comments[0]
+func NewTalkService(deps TalkServiceDeps) (*MyTalkService, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
 	}
-	return service
-}
-
-func NewTalkServiceWithStorage(repo port.TalkRepository, comments port.CommentRepository, storage port.ObjectStorage) *MyTalkService {
-	service := NewTalkService(repo, comments)
-	service.storage = storage
-	return service
+	return &MyTalkService{repo: deps.Repo, comments: deps.Comments, storage: deps.Storage}, nil
 }
 
 func (t *MyTalkService) talkRepository() port.TalkRepository {
-	if t.repo != nil {
-		return t.repo
-	}
-	return talkRepo
+	return t.repo
 }
 
 func (t *MyTalkService) commentRepository() port.CommentRepository {
-	if t.comments != nil {
-		return t.comments
-	}
-	return commentRepo
+	return t.comments
 }
 
 func (t *MyTalkService) ListTalks(c *gin.Context) model.ResultVO {

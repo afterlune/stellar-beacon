@@ -38,45 +38,34 @@ type MyBenetnaschInfoService struct {
 	visitor    port.VisitorResolver
 }
 
-func NewBenetnaschInfoService(site port.SiteInfoRepository, articles port.ArticleRepository, categories port.CategoryRepository, tags port.TagRepository, dependencies ...any) *MyBenetnaschInfoService {
-	service := &MyBenetnaschInfoService{site: site, articles: articles, categories: categories, tags: tags}
-	for _, dependency := range dependencies {
-		switch value := dependency.(type) {
-		case port.Cache:
-			service.cache = value
-		case port.VisitorResolver:
-			service.visitor = value
-		}
+func NewBenetnaschInfoService(deps BenetnaschInfoServiceDeps) (*MyBenetnaschInfoService, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
 	}
-	return service
+	return &MyBenetnaschInfoService{
+		site:       deps.Site,
+		articles:   deps.Articles,
+		categories: deps.Categories,
+		tags:       deps.Tags,
+		cache:      deps.Cache,
+		visitor:    deps.Visitor,
+	}, nil
 }
 
 func (b *MyBenetnaschInfoService) siteRepository() port.SiteInfoRepository {
-	if b.site != nil {
-		return b.site
-	}
-	return siteInfoRepo
+	return b.site
 }
 
 func (b *MyBenetnaschInfoService) articleRepository() port.ArticleRepository {
-	if b.articles != nil {
-		return b.articles
-	}
-	return articleRepo
+	return b.articles
 }
 
 func (b *MyBenetnaschInfoService) categoryRepository() port.CategoryRepository {
-	if b.categories != nil {
-		return b.categories
-	}
-	return categoryRepo
+	return b.categories
 }
 
 func (b *MyBenetnaschInfoService) tagRepository() port.TagRepository {
-	if b.tags != nil {
-		return b.tags
-	}
-	return tagRepo
+	return b.tags
 }
 
 func (b *MyBenetnaschInfoService) GetBenetnaschHomeInfo() model.ResultVO {

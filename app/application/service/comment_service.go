@@ -28,26 +28,19 @@ type MyCommentService struct {
 	website BenetnaschInfoService
 }
 
-func NewCommentService(repo port.CommentRepository, website ...BenetnaschInfoService) *MyCommentService {
-	service := &MyCommentService{repo: repo}
-	if len(website) > 0 {
-		service.website = website[0]
+func NewCommentService(deps CommentServiceDeps) (*MyCommentService, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
 	}
-	return service
+	return &MyCommentService{repo: deps.Repo, website: deps.Website}, nil
 }
 
 func (c *MyCommentService) commentRepository() port.CommentRepository {
-	if c.repo != nil {
-		return c.repo
-	}
-	return commentRepo
+	return c.repo
 }
 
 func (c *MyCommentService) websiteService() BenetnaschInfoService {
-	if c.website != nil {
-		return c.website
-	}
-	return benetnaschService
+	return c.website
 }
 
 func (c *MyCommentService) ListTopSixComments() model.ResultVO {

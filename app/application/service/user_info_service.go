@@ -32,24 +32,19 @@ type MyUserInfoService struct {
 	storage port.ObjectStorage
 }
 
-func NewUserInfoService(repo port.UserInfoRepository, dependencies ...any) *MyUserInfoService {
-	service := &MyUserInfoService{repo: repo}
-	for _, dependency := range dependencies {
-		switch value := dependency.(type) {
-		case port.Cache:
-			service.cache = value
-		case port.ObjectStorage:
-			service.storage = value
-		}
+func NewUserInfoService(deps UserInfoServiceDeps) (*MyUserInfoService, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
 	}
-	return service
+	return &MyUserInfoService{
+		repo:    deps.Repo,
+		cache:   deps.Cache,
+		storage: deps.Storage,
+	}, nil
 }
 
 func (u *MyUserInfoService) userInfoRepository() port.UserInfoRepository {
-	if u.repo != nil {
-		return u.repo
-	}
-	return userInfoRepo
+	return u.repo
 }
 
 func (u *MyUserInfoService) UpdateUserInfo(c *gin.Context) model.ResultVO {

@@ -50,7 +50,7 @@ func talkTestContext(path string) *gin.Context {
 }
 
 func TestTalkServiceMapsRepositoryFailure(t *testing.T) {
-	result := NewTalkService(&fakeTalkRepository{
+	result := mustTalkService(t, &fakeTalkRepository{
 		err: apperrors.Unavailable("talk.count", testServiceError("database password=secret")),
 	}).ListTalks(talkTestContext("/talks?current=1&size=10"))
 	if result.Flag || result.Message != "系统繁忙，请稍后再试" {
@@ -61,7 +61,7 @@ func TestTalkServiceMapsRepositoryFailure(t *testing.T) {
 func TestTalkServiceKeepsNotFoundMessage(t *testing.T) {
 	c := talkTestContext("/talks/1")
 	c.Params = gin.Params{{Key: "talkId", Value: "1"}}
-	result := NewTalkService(&fakeTalkRepository{err: apperrors.NotFound("talk.get")}).GetTalkById(c)
+	result := mustTalkService(t, &fakeTalkRepository{err: apperrors.NotFound("talk.get")}).GetTalkById(c)
 	if result.Flag || result.Message != "说说不存在" {
 		t.Fatalf("unexpected result: %+v", result)
 	}

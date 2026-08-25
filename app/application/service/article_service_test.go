@@ -100,7 +100,7 @@ func articleRequestContext(target string) *gin.Context {
 }
 
 func TestArticleServiceListPropagatesRepositoryData(t *testing.T) {
-	result := NewArticleService(&fakeArticleRepository{}).ListArticles(articleTestContext())
+	result := mustArticleService(t, &fakeArticleRepository{}, nil).ListArticles(articleTestContext())
 	if !result.Flag || result.Code != 20000 {
 		t.Fatalf("unexpected result: %+v", result)
 	}
@@ -111,9 +111,9 @@ func TestArticleServiceListPropagatesRepositoryData(t *testing.T) {
 }
 
 func TestArticleServiceMapsRepositoryFailureWithoutLeakingDetail(t *testing.T) {
-	result := NewArticleService(&fakeArticleRepository{
+	result := mustArticleService(t, &fakeArticleRepository{
 		listErr: apperrors.Unavailable("article.list", testServiceError("connection refused: password=secret")),
-	}).ListArticles(articleTestContext())
+	}, nil).ListArticles(articleTestContext())
 	if result.Flag {
 		t.Fatal("expected failed result")
 	}
@@ -123,7 +123,7 @@ func TestArticleServiceMapsRepositoryFailureWithoutLeakingDetail(t *testing.T) {
 }
 
 func TestArticleServiceRejectsInvalidArticleIDs(t *testing.T) {
-	service := NewArticleService(&fakeArticleRepository{})
+	service := mustArticleService(t, &fakeArticleRepository{}, nil)
 	for name, result := range map[string]model.ResultVO{
 		"category": service.ListArticlesByCategoryId(articleRequestContext("/articles?current=1&size=10&categoryId=bad")),
 		"tag":      service.ListArticlesByTagId(articleRequestContext("/articles?current=1&size=10&tagId=bad")),
@@ -135,11 +135,11 @@ func TestArticleServiceRejectsInvalidArticleIDs(t *testing.T) {
 }
 
 func TestArticleServiceSortsArchivesNewestFirst(t *testing.T) {
-	service := NewArticleService(&fakeArticleRepository{archives: []port.ArticleCard{
+	service := mustArticleService(t, &fakeArticleRepository{archives: []port.ArticleCard{
 		{Id: 1, CreateTime: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)},
 		{Id: 2, CreateTime: time.Date(2025, 3, 4, 0, 0, 0, 0, time.UTC)},
 		{Id: 3, CreateTime: time.Date(2024, 1, 2, 1, 0, 0, 0, time.UTC)},
-	}})
+	}}, nil)
 	result := service.ListArchives(articleRequestContext("/archives/all?current=1&size=10"))
 	if !result.Flag {
 		t.Fatalf("unexpected result: %+v", result)
@@ -161,7 +161,7 @@ func TestArticleServiceSortsArchivesNewestFirst(t *testing.T) {
 }
 
 func TestArticleServiceUsesTypedSearchPort(t *testing.T) {
-	service := NewArticleService(&fakeArticleRepository{}, &fakeArticleSearcher{hits: []port.ArticleSearchHit{{
+	service := mustArticleService(t, &fakeArticleRepository{}, &fakeArticleSearcher{hits: []port.ArticleSearchHit{{
 		ArticleSearch:      port.ArticleSearch{Id: 7, ArticleTitle: "raw title", ArticleContent: "raw content"},
 		HighlightedTitle:   "<mark>title</mark>",
 		HighlightedContent: "<mark>content</mark>",
@@ -180,7 +180,7 @@ func TestArticleServiceUsesTypedSearchPort(t *testing.T) {
 }
 
 func TestArticleServiceMapsSearchFailure(t *testing.T) {
-	service := NewArticleService(&fakeArticleRepository{}, &fakeArticleSearcher{err: apperrors.Unavailable("search.articles", testServiceError("meili unavailable"))})
+	service := mustArticleService(t, &fakeArticleRepository{}, &fakeArticleSearcher{err: apperrors.Unavailable("search.articles", testServiceError("meili unavailable"))})
 	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title"))
 	if result.Flag || result.Message != "系统繁忙，请稍后再试" {
 		t.Fatalf("unexpected result: %+v", result)

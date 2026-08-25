@@ -46,7 +46,7 @@ func TestCommentServiceAttachesRepliesUsingPortData(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/comments?current=1&size=10", nil)
-	result := NewCommentService(&fakeCommentRepository{}).ListComments(c)
+	result := mustCommentService(t, &fakeCommentRepository{}).ListComments(c)
 	if !result.Flag {
 		t.Fatalf("unexpected result: %+v", result)
 	}

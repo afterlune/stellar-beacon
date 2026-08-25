@@ -53,29 +53,99 @@ func Initialize() error {
 	userInfo := repository.NewUserInfoRepo(engine)
 
 	service.ConfigureRepositories(site, article, category, comment, job, jobLog, errorLog, operationLog, friendLink, menu, resource, photoAlbum, photo, role, tag, talk, auth, userInfo)
-	benetnasch := service.NewBenetnaschInfoService(site, article, category, tag, redisCache, visitorResolver)
+	benetnasch, err := service.NewBenetnaschInfoService(service.BenetnaschInfoServiceDeps{
+		Site:       site,
+		Articles:   article,
+		Categories: category,
+		Tags:       tag,
+		Cache:      redisCache,
+		Visitor:    visitorResolver,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.benetnasch_info", err)
+	}
 	service.ConfigureBenetnaschService(benetnasch)
 
+	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
+		Repo:    article,
+		Cache:   redisCache,
+		Storage: ossStorage,
+		Search:  searcher,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.article", err)
+	}
+	commentService, err := service.NewCommentService(service.CommentServiceDeps{
+		Repo:    comment,
+		Website: benetnasch,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.comment", err)
+	}
+	photoAlbumService, err := service.NewPhotoAlbumService(service.PhotoAlbumServiceDeps{
+		Repo:    photoAlbum,
+		Photos:  photo,
+		Storage: ossStorage,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.photo_album", err)
+	}
+	photoService, err := service.NewPhotoService(service.PhotoServiceDeps{
+		Repo:    photo,
+		Albums:  photoAlbum,
+		Storage: ossStorage,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.photo", err)
+	}
+	talkService, err := service.NewTalkService(service.TalkServiceDeps{
+		Repo:     talk,
+		Comments: comment,
+		Storage:  ossStorage,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.talk", err)
+	}
+	userAuthService, err := service.NewUserAuthService(service.UserAuthServiceDeps{
+		Repo:    auth,
+		Website: benetnasch,
+		Cache:   redisCache,
+		Mailer:  smtpMailer,
+		Visitor: visitorResolver,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.user_auth", err)
+	}
+	userInfoService, err := service.NewUserInfoService(service.UserInfoServiceDeps{
+		Repo:    userInfo,
+		Cache:   redisCache,
+		Storage: ossStorage,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.user_info", err)
+	}
+
 	api.ConfigureServices(api.Services{
-		Article:      service.NewArticleService(article, redisCache, ossStorage, searcher),
+		Article:      articleService,
 		Benetnasch:   benetnasch,
 		Category:     service.NewCategoryService(category),
-		Comment:      service.NewCommentService(comment, benetnasch),
+		Comment:      commentService,
 		ErrorLog:     service.NewErrorLogService(errorLog),
 		FriendLink:   service.NewFriendLinkService(friendLink),
 		JobLog:       service.NewJobLogService(jobLog),
 		Job:          service.NewJobService(job),
 		Menu:         service.NewMenuService(menu),
 		OperationLog: service.NewOperationLogService(operationLog),
-		PhotoAlbum:   service.NewPhotoAlbumService(photoAlbum, photo, ossStorage),
-		Photo:        service.NewPhotoService(photo, photoAlbum, ossStorage),
+		PhotoAlbum:   photoAlbumService,
+		Photo:        photoService,
 		Resource:     service.NewResourceService(resource),
 		Role:         service.NewRoleService(role),
 		Tag:          service.NewTagService(tag),
-		Talk:         service.NewTalkServiceWithStorage(talk, comment, ossStorage),
-		UserAuth:     service.NewUserAuthServiceWithDependencies(auth, benetnasch, redisCache, smtpMailer, visitorResolver),
-		UserInfo:     service.NewUserInfoService(userInfo, redisCache, ossStorage),
+		Talk:         talkService,
+		UserAuth:     userAuthService,
+		UserInfo:     userInfoService,
 	})
 	middlewares.ConfigureRoleRepository(role)
+	middlewares.ConfigureUserAuthService(userAuthService)
 	return nil
 }
