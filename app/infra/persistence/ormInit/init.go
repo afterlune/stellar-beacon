@@ -20,6 +20,8 @@ func GetEngine() *xorm.Engine {
 		engine, err = xorm.NewEngine(dataBase.DriverName, dataBase.URL)
 		if err != nil {
 			zlog.Error(err.Error())
+			engine = nil
+			return
 		}
 		// 打印sql
 		engine.ShowSQL(true)

@@ -4,9 +4,11 @@ import (
 	"benetnasch/app/infra/config"
 	"benetnasch/app/infra/zlog"
 	"context"
-	"github.com/redis/go-redis/v9"
-	"sync"
+	"errors"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 const (
@@ -23,176 +25,298 @@ const (
 	ARTICLE_ACCESS      = "article_access:"
 )
 
-var rdbOnce sync.Once
 var rdb *redis.Client
 
+// setRedisClientForTest swaps the package client and returns a restore
+// function. It is intentionally small so unit tests can use an in-memory
+// Redis server without depending on application configuration.
+func setRedisClientForTest(client *redis.Client) func() {
+	previous := rdb
+	rdb = client
+	return func() { rdb = previous }
+}
+
 func init() {
-	rdbOnce.Do(func() {
-		redisConf := new(config.Redis).Redis()
-		rdb = redis.NewClient(&redis.Options{
-			Addr:     redisConf.Addr,
-			Password: redisConf.Password,
-			DB:       redisConf.DB,
-		})
+	redisConf := new(config.Redis).Redis()
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     redisConf.Addr,
+		Password: redisConf.Password,
+		DB:       redisConf.DB,
 	})
 }
 
+func validContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func SIsMemberCtx(ctx context.Context, key string, value interface{}) (bool, error) {
+	return rdb.SIsMember(validContext(ctx), key, value).Result()
+}
+
+func HIncrByCtx(ctx context.Context, key, hashKey string, delta int64) (int64, error) {
+	return rdb.HIncrBy(validContext(ctx), key, hashKey, delta).Result()
+}
+
+func IncrByCtx(ctx context.Context, key string, delta int64) (int64, error) {
+	return rdb.IncrBy(validContext(ctx), key, delta).Result()
+}
+
+func SAddCtx(ctx context.Context, key string, values ...interface{}) (int64, error) {
+	return rdb.SAdd(validContext(ctx), key, values...).Result()
+}
+
+func GetCtx(ctx context.Context, key string) (string, error) {
+	result, err := rdb.Get(validContext(ctx), key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return result, err
+}
+
+func SetCtx(ctx context.Context, key string, value interface{}) error {
+	_, err := rdb.Set(validContext(ctx), key, value, -1).Result()
+	return err
+}
+
+func ZIncrCtx(ctx context.Context, key string, score float64, value string) (float64, error) {
+	return rdb.ZIncrBy(validContext(ctx), key, score, value).Result()
+}
+
+func ZScoreCtx(ctx context.Context, key, value string) (float64, error) {
+	result, err := rdb.ZScore(validContext(ctx), key, value).Result()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	}
+	return result, err
+}
+
+func SetWithTimeCtx(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	_, err := rdb.Set(validContext(ctx), key, value, ttl).Result()
+	return err
+}
+
+// HSetCtx overwrites an existing field and updates the hash TTL atomically.
+func HSetCtx(ctx context.Context, key, hashKey string, value interface{}, ttl time.Duration) error {
+	ctx = validContext(ctx)
+	_, err := rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.HSet(ctx, key, hashKey, value)
+		pipe.Expire(ctx, key, ttl)
+		return nil
+	})
+	return err
+}
+
+func ExpireCtx(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	return rdb.Expire(validContext(ctx), key, ttl).Result()
+}
+
+func HGetCtx(ctx context.Context, key, hashKey string) (string, error) {
+	result, err := rdb.HGet(validContext(ctx), key, hashKey).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return result, err
+}
+
+func HDelCtx(ctx context.Context, key, hashKey string) error {
+	_, err := rdb.HDel(validContext(ctx), key, hashKey).Result()
+	return err
+}
+
+func ZReverseRangeWithScoreCtx(ctx context.Context, key string, start, end int64) (map[interface{}]float64, error) {
+	result, err := rdb.ZRevRangeWithScores(validContext(ctx), key, start, end).Result()
+	if err != nil {
+		return nil, err
+	}
+	hm := make(map[interface{}]float64, len(result))
+	for _, value := range result {
+		hm[value.Member] = value.Score
+	}
+	return hm, nil
+}
+
+func HGetAllCtx(ctx context.Context, key string) (map[string]string, error) {
+	return rdb.HGetAll(validContext(ctx), key).Result()
+}
+
+func ZAllScoreCtx(ctx context.Context, key string) (map[interface{}]float64, error) {
+	result, err := rdb.ZRangeWithScores(validContext(ctx), key, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+	hm := make(map[interface{}]float64, len(result))
+	for _, value := range result {
+		hm[value.Member] = value.Score
+	}
+	return hm, nil
+}
+
+func DelCtx(ctx context.Context, key string) error {
+	_, err := rdb.Del(validContext(ctx), key).Result()
+	return err
+}
+
+func SetNXCtx(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error) {
+	return rdb.SetNX(validContext(ctx), key, value, ttl).Result()
+}
+
+func IncrExpireCtx(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	seconds := int64(ttl / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	script := redis.NewScript(`
+local count = redis.call('INCRBY', KEYS[1], 1)
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`)
+	result, err := script.Run(validContext(ctx), rdb, []string{key}, seconds).Int64()
+	return result, err
+}
+
+// The following wrappers are kept for non-HTTP legacy callers. New code must
+// use the Context variants above so request cancellation reaches Redis.
 func SIsMember(key string, value interface{}) bool {
-	ctx := context.Background()
-	result, _ := rdb.SIsMember(ctx, key, value).Result()
+	result, err := SIsMemberCtx(context.Background(), key, value)
+	if err != nil {
+		logRedisError("SIsMember", err)
+	}
 	return result
 }
 
-func HIncrBy(key, hashkey string, delta int64) int64 {
-	ctx := context.Background()
-	result, err := rdb.HIncrBy(ctx, key, hashkey, delta).Result()
+func HIncrBy(key, hashKey string, delta int64) int64 {
+	result, err := HIncrByCtx(context.Background(), key, hashKey, delta)
 	if err != nil {
-		zlog.Error(err.Error())
+		logRedisError("HIncrBy", err)
 	}
 	return result
 }
+
 func IncrBy(key string, delta int64) int64 {
-	ctx := context.Background()
-	result, err := rdb.IncrBy(ctx, key, delta).Result()
+	result, err := IncrByCtx(context.Background(), key, delta)
 	if err != nil {
-		zlog.Error(err.Error())
+		logRedisError("IncrBy", err)
 	}
 	return result
 }
+
 func SAdd(key string, values ...interface{}) int64 {
-	ctx := context.Background()
-	result, err := rdb.SAdd(ctx, key, values).Result()
+	result, err := SAddCtx(context.Background(), key, values...)
 	if err != nil {
-		zlog.Error(err.Error())
+		logRedisError("SAdd", err)
 	}
 	return result
 }
 
 func Get(key string) interface{} {
-	ctx := context.Background()
-	result, _ := rdb.Get(ctx, key).Result()
+	result, err := GetCtx(context.Background(), key)
+	if err != nil {
+		logRedisError("Get", err)
+	}
 	return result
 }
 
 func Set(key string, value interface{}) {
-	ctx := context.Background()
-	_, err := rdb.Set(ctx, key, value, -1).Result()
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := SetCtx(context.Background(), key, value); err != nil {
+		logRedisError("Set", err)
 	}
 }
 
 func ZIncr(key string, score float64, value string) float64 {
-	ctx := context.Background()
-	result, err := rdb.ZIncrBy(ctx, key, score, value).Result()
+	result, err := ZIncrCtx(context.Background(), key, score, value)
 	if err != nil {
-		zlog.Error(err.Error())
+		logRedisError("ZIncr", err)
 	}
 	return result
 }
 
-func ZScore(key string, value string) float64 {
-	ctx := context.Background()
-	result, err := rdb.ZScore(ctx, key, value).Result()
+func ZScore(key, value string) float64 {
+	result, err := ZScoreCtx(context.Background(), key, value)
 	if err != nil {
-		zlog.Error(err.Error())
+		logRedisError("ZScore", err)
 	}
 	return result
 }
 
-func SetWithTime(key string, value interface{}, time time.Duration) {
-	ctx := context.Background()
-	rdb.Set(ctx, key, value, time)
-}
-
-func HSet(key, hashKey string, value interface{}, time time.Duration) bool {
-	ctx := context.Background()
-	_, err := rdb.HSetNX(ctx, key, hashKey, value).Result()
-	if err != nil {
-		zlog.Error(err.Error())
+func SetWithTime(key string, value interface{}, ttl time.Duration) {
+	if err := SetWithTimeCtx(context.Background(), key, value, ttl); err != nil {
+		logRedisError("SetWithTime", err)
 	}
-	return Expire(key, time)
 }
 
-func Expire(key string, time time.Duration) bool {
-	ctx := context.Background()
-	result, err := rdb.Expire(ctx, key, time).Result()
+func HSet(key, hashKey string, value interface{}, ttl time.Duration) bool {
+	if err := HSetCtx(context.Background(), key, hashKey, value, ttl); err != nil {
+		logRedisError("HSet", err)
+		return false
+	}
+	return true
+}
+
+func Expire(key string, ttl time.Duration) bool {
+	result, err := ExpireCtx(context.Background(), key, ttl)
 	if err != nil {
-		zlog.Error(err.Error())
+		logRedisError("Expire", err)
 	}
 	return result
 }
 
 func HGet(key, hashKey string) string {
-	ctx := context.Background()
-	result, err := rdb.HGet(ctx, key, hashKey).Result()
+	result, err := HGetCtx(context.Background(), key, hashKey)
 	if err != nil {
-		// 只在真正的Redis错误时记录错误，key不存在是正常情况
-		if err != redis.Nil {
-			zlog.Error(err.Error())
-		}
-		return ""
+		logRedisError("HGet", err)
 	}
 	return result
 }
 
 func HDel(key, hashKey string) {
-	ctx := context.Background()
-	rdb.HDel(ctx, key, hashKey)
+	if err := HDelCtx(context.Background(), key, hashKey); err != nil {
+		logRedisError("HDel", err)
+	}
 }
 
 func ZReverseRangeWithScore(key string, start, end int64) map[interface{}]float64 {
-	ctx := context.Background()
-	result, err := rdb.ZRevRangeWithScores(ctx, key, start, end).Result()
+	result, err := ZReverseRangeWithScoreCtx(context.Background(), key, start, end)
 	if err != nil {
-		zlog.Error(err.Error())
-		return nil
+		logRedisError("ZReverseRangeWithScore", err)
 	}
-	hm := make(map[interface{}]float64)
-	for _, v := range result {
-		hm[v.Member] = v.Score
-	}
-	return hm
+	return result
 }
 
 func HGetAll(key string) map[string]string {
-	ctx := context.Background()
-	result, err := rdb.HGetAll(ctx, key).Result()
+	result, err := HGetAllCtx(context.Background(), key)
 	if err != nil {
-		zlog.Error(err.Error())
-		return nil
+		logRedisError("HGetAll", err)
 	}
 	return result
 }
 
 func ZAllScore(key string) map[interface{}]float64 {
-	ctx := context.Background()
-	result, err := rdb.ZRangeWithScores(ctx, key, 0, -1).Result()
+	result, err := ZAllScoreCtx(context.Background(), key)
 	if err != nil {
-		zlog.Error(err.Error())
-		return nil
+		logRedisError("ZAllScore", err)
 	}
-	hm := make(map[interface{}]float64)
-	for _, v := range result {
-		hm[v.Member] = v.Score
-	}
-	return hm
+	return result
 }
 
 func Del(key string) {
-	ctx := context.Background()
-	rdb.Del(ctx, key)
+	if err := DelCtx(context.Background(), key); err != nil {
+		logRedisError("Del", err)
+	}
 }
 
-func IncrExpire(key string, time time.Duration) int64 {
-	ctx := context.Background()
-	count, err := rdb.IncrBy(ctx, key, 1).Result()
+func IncrExpire(key string, ttl time.Duration) int64 {
+	result, err := IncrExpireCtx(context.Background(), key, ttl)
 	if err != nil {
-		zlog.Error(err.Error())
-		return -1
+		logRedisError("IncrExpire", err)
 	}
-	if count == 1 {
-		Expire(key, time)
-	}
-	return count
+	return result
+}
+
+func logRedisError(operation string, err error) {
+	zlog.Error("redis operation failed", zap.String("operation", operation), zap.Error(err))
 }

@@ -12,13 +12,9 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 )
 
-func GetClient() *meilisearch.Client {
+func GetClient() meilisearch.ServiceManager {
 	meili := new(config.MeiliSearch).MeiliSearch()
-	client := meilisearch.NewClient(meilisearch.ClientConfig{
-		Host:   meili.URL,
-		APIKey: meili.ApiKey,
-	})
-	return client
+	return meilisearch.New(meili.URL, meilisearch.WithAPIKey(meili.ApiKey))
 }
 
 func Search(keywords string) []interface{} {
@@ -38,14 +34,23 @@ func Search(keywords string) []interface{} {
 	if searchResponse.EstimatedTotalHits == 0 {
 		return []interface{}{}
 	}
-	return searchResponse.Hits
+	hits := make([]interface{}, len(searchResponse.Hits))
+	for index, hit := range searchResponse.Hits {
+		hits[index] = hit
+	}
+	return hits
 }
 
 func docSyncTask() {
 	for {
 		client := GetClient()
 		var articleSearchDTOs []model.ArticleSearchDTO
-		err := ormInit.GetEngine().SQL("select id, article_title, SUBSTR(article_content, 1, 500) AS " +
+		engine := ormInit.GetEngine()
+		if engine == nil {
+			time.Sleep(time.Minute)
+			continue
+		}
+		err := engine.SQL("select id, article_title, SUBSTR(article_content, 1, 500) AS " +
 			"article_content, is_delete, status from t_article where is_delete = 0 and status = 1").Find(&articleSearchDTOs)
 		if err != nil {
 			zlog.Error(err.Error())
@@ -58,7 +63,7 @@ func docSyncTask() {
 			zlog.Error(err.Error())
 			continue
 		}
-		_, err = client.Index("articles").UpdateDocuments(docs)
+		_, err = client.Index("articles").UpdateDocuments(docs, nil)
 		if err != nil {
 			zlog.Error(err.Error())
 			continue
@@ -69,11 +74,20 @@ func docSyncTask() {
 }
 
 func init() {
+	if err := config.Validate(); err != nil {
+		zlog.Warn("search initialization skipped: " + err.Error())
+		return
+	}
 	client := GetClient()
 	index, err1 := client.GetIndex("articles")
 	if index == nil && err1 != nil {
+		engine := ormInit.GetEngine()
+		if engine == nil {
+			zlog.Warn("search index initialization skipped: database is unavailable")
+			return
+		}
 		var articleSearchDTOs []model.ArticleSearchDTO
-		err := ormInit.GetEngine().SQL("select id, article_title, SUBSTR(article_content, 1, 500) AS " +
+		err := engine.SQL("select id, article_title, SUBSTR(article_content, 1, 500) AS " +
 			"article_content, is_delete, status from t_article where is_delete = 0 and status = 1").Find(&articleSearchDTOs)
 		if err != nil {
 			zlog.Error(err.Error())
@@ -84,7 +98,7 @@ func init() {
 		if err != nil {
 			zlog.Error(err.Error())
 		}
-		_, err = client.Index("articles").AddDocuments(docs)
+		_, err = client.Index("articles").AddDocuments(docs, nil)
 		if err != nil {
 			zlog.Error(err.Error())
 		}

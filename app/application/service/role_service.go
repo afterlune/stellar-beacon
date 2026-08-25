@@ -7,10 +7,10 @@ import (
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"xorm.io/builder"
+	"xorm.io/xorm"
 )
 
 type RoleService interface {
@@ -31,6 +31,10 @@ func (r *MyRoleService) ListUserRoles() model.ResultVO {
 	}
 	var userRoleDTOs []model.UserRoleDTO
 	marshal, err := json.Marshal(roles)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	err = json.Unmarshal(marshal, &userRoleDTOs)
 	if err != nil {
 		zlog.Error(err.Error())
@@ -72,7 +76,7 @@ func (r *MyRoleService) SaveOrUpdateRole(c *gin.Context) model.ResultVO {
 	}
 	engine := ormInit.GetEngine()
 	var roleCheck entity.TRole
-	_, err = engine.Select("id").Where("role_name = '" + vo.RoleName + "'").Get(&roleCheck)
+	_, err = engine.Select("id").Where("role_name = ?", vo.RoleName).Get(&roleCheck)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -85,66 +89,47 @@ func (r *MyRoleService) SaveOrUpdateRole(c *gin.Context) model.ResultVO {
 		RoleName:  vo.RoleName,
 		IsDisable: shared.FALSE,
 	}
-	session := engine.NewSession()
-	session.Begin()
-	defer session.Close()
-	if roleCheck.Id != 0 {
-		_, err = session.Prepare().ID(roleCheck.Id).Update(&role)
-	} else {
-		_, err = session.Prepare().Insert(&role)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if roleCheck.Id != 0 {
+			if _, err = session.ID(roleCheck.Id).Update(&role); err != nil {
+				return err
+			}
+		} else if _, err = session.Insert(&role); err != nil {
+			return err
+		}
+		if len(vo.ResourceIds) != 0 {
+			if vo.Id != 0 {
+				if _, err = session.Where("role_id = ?", vo.Id).Delete(&entity.TRoleResource{}); err != nil {
+					return err
+				}
+			}
+			roleResources := make([]entity.TRoleResource, 0, len(vo.ResourceIds))
+			for _, v := range vo.ResourceIds {
+				roleResources = append(roleResources, entity.TRoleResource{RoleId: role.Id, ResourceId: v})
+			}
+			if _, err = session.Insert(&roleResources); err != nil {
+				return err
+			}
+		}
+		if len(vo.MenuIds) != 0 {
+			if vo.Id != 0 {
+				if _, err = session.Where("role_id = ?", vo.Id).Delete(&entity.TRoleMenu{}); err != nil {
+					return err
+				}
+			}
+			roleMenus := make([]entity.TRoleMenu, 0, len(vo.MenuIds))
+			for _, v := range vo.MenuIds {
+				roleMenus = append(roleMenus, entity.TRoleMenu{RoleId: role.Id, MenuId: v})
+			}
+			if _, err = session.Insert(&roleMenus); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	if len(vo.ResourceIds) != 0 {
-		if vo.Id != 0 {
-			_, err = session.Where(fmt.Sprintf("role_id = %d", vo.Id)).Delete(&entity.TRoleResource{})
-			if err != nil {
-				zlog.Error(err.Error())
-				session.Rollback()
-				return model.ResultFail()
-			}
-		}
-		var roleResources []entity.TRoleResource
-		for _, v := range vo.ResourceIds {
-			roleResources = append(roleResources, entity.TRoleResource{
-				RoleId:     role.Id,
-				ResourceId: v,
-			})
-		}
-		_, err = session.Insert(&roleResources)
-		if err != nil {
-			zlog.Error(err.Error())
-			session.Rollback()
-			return model.ResultFail()
-		}
-	}
-	if len(vo.MenuIds) != 0 {
-		if vo.Id != 0 {
-			_, err = session.Where(fmt.Sprintf("role_id = %d", vo.Id)).Delete(&entity.TRoleMenu{})
-			if err != nil {
-				zlog.Error(err.Error())
-				session.Rollback()
-				return model.ResultFail()
-			}
-		}
-		var roleMenus []entity.TRoleMenu
-		for _, v := range vo.MenuIds {
-			roleMenus = append(roleMenus, entity.TRoleMenu{
-				RoleId: role.Id,
-				MenuId: v,
-			})
-		}
-		_, err = session.Insert(&roleMenus)
-		if err != nil {
-			zlog.Error(err.Error())
-			session.Rollback()
-			return model.ResultFail()
-		}
-	}
-	session.Commit()
 	return model.ResultOk()
 }
 

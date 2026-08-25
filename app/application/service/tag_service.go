@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"xorm.io/builder"
+	"xorm.io/xorm"
 )
 
 type TagService interface {
@@ -35,10 +36,11 @@ func (t *MyTagService) ListTagsAdmin(c *gin.Context) model.ResultVO {
 	err := c.ShouldBind(&vo)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	var count int64
 	if vo.Keywords != "" {
-		count, err = ormInit.GetEngine().Where("tag_name", vo.Keywords).Count(&entity.TTag{})
+		count, err = ormInit.GetEngine().Where("tag_name = ?", vo.Keywords).Count(&entity.TTag{})
 	} else {
 		count, err = ormInit.GetEngine().Count(&entity.TTag{})
 	}
@@ -82,7 +84,7 @@ func (t *MyTagService) SaveOrUpdateTag(c *gin.Context) model.ResultVO {
 	}
 	var tag entity.TTag
 	engine := ormInit.GetEngine()
-	_, err = engine.Select("id").Where("tag_name = '" + vo.TagName + "'").Get(&tag)
+	_, err = engine.Select("id").Where("tag_name = ?", vo.TagName).Get(&tag)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -90,20 +92,17 @@ func (t *MyTagService) SaveOrUpdateTag(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("标签名已存在")
 	}
 	tag.TagName = vo.TagName
-	session := engine.NewSession()
-	session.Begin()
-	defer session.Close()
-	if tag.Id != 0 {
-		_, err = session.ID(tag.Id).Update(&tag)
-	} else {
-		_, err = session.Insert(&tag)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if tag.Id != 0 {
+			_, err = session.ID(tag.Id).Update(&tag)
+		} else {
+			_, err = session.Insert(&tag)
+		}
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 

@@ -8,10 +8,10 @@ import (
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"strconv"
+	"xorm.io/xorm"
 )
 
 type TalkService interface {
@@ -89,9 +89,7 @@ func (t *MyTalkService) GetTalkById(c *gin.Context) model.ResultVO {
 		talkDTO.Imgs = s
 	}
 	commentCountDTO := commentRepo.ListCommentCountByTypeAndTopicId(5, id)
-	if &commentCountDTO != nil {
-		talkDTO.CommentCount = commentCountDTO.CommentCount
-	}
+	talkDTO.CommentCount = commentCountDTO.CommentCount
 	return model.ResultOkWithData(talkDTO)
 }
 
@@ -99,6 +97,7 @@ func (t *MyTalkService) SaveTalkImages(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	fileUrl := oss.Upload(file, "talks/")
 	return model.ResultOkWithData(shared.FILEURL + fileUrl)
@@ -109,6 +108,7 @@ func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	err := c.ShouldBind(&vo)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 
 	value, _ := c.Get("userInfo")
@@ -122,20 +122,17 @@ func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 		Status:  vo.Status,
 		UserId:  dto.UserInfoId,
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	if talk.Id != 0 {
-		_, err = session.Prepare().ID(talk.Id).MustCols("is_top", "status").Update(&talk)
-	} else {
-		_, err = session.Prepare().Insert(&talk)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if talk.Id != 0 {
+			_, err = session.ID(talk.Id).MustCols("is_top", "status").Update(&talk)
+		} else {
+			_, err = session.Insert(&talk)
+		}
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -167,7 +164,7 @@ func (t *MyTalkService) ListBackTalks(c *gin.Context) model.ResultVO {
 	var count int64
 	engine := ormInit.GetEngine()
 	if vo.Status != 0 {
-		count, err = engine.Where(fmt.Sprintf("status = %d", vo.Status)).Count(&entity.TTalk{})
+		count, err = engine.Where("status = ?", vo.Status).Count(&entity.TTalk{})
 	} else {
 		count, err = engine.Count(&entity.TTalk{})
 	}

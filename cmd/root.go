@@ -1,12 +1,14 @@
 package cmd
 
 import (
-	_ "benetnasch/app/infra/config"
+	"benetnasch/app/infra/config"
 	"benetnasch/app/infra/middlewares"
+	"benetnasch/app/infra/persistence/repository"
 	"benetnasch/app/infra/task"
 	"benetnasch/app/infra/tls"
 	"benetnasch/app/infra/zlog"
 	"benetnasch/route"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -39,9 +41,20 @@ func Execute() {
 }
 
 func runServer() error {
+	if err := config.Validate(); err != nil {
+		return fmt.Errorf("configuration validation failed: %w", err)
+	}
 	banner()
 
 	settings()
+	repository.StartLogQueue(context.Background())
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := repository.StopLogQueue(shutdownCtx); err != nil {
+			zlog.Error(err.Error())
+		}
+		cancel()
+	}()
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -86,7 +99,11 @@ func banner() {
 func settings() {
 	gin.DisableConsoleColor()
 
-	file, _ := os.Create("resource/log/server.log")
+	file, err := os.Create("resource/log/server.log")
+	if err != nil {
+		zlog.Error("create server log failed: " + err.Error())
+		return
+	}
 
 	gin.DefaultWriter = io.MultiWriter(file, os.Stdout)
 }

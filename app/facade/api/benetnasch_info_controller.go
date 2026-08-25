@@ -20,7 +20,7 @@ func Report(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       / [GET]
 func GetBlogHomeInfo(c *gin.Context) {
-	c.JSON(http.StatusOK, benetnaschService.GetBlogHomeInfo())
+	c.JSON(http.StatusOK, benetnaschService.GetBlogHomeInfo(c.Request.Context()))
 }
 
 // GetBlogBackInfo
@@ -29,7 +29,7 @@ func GetBlogHomeInfo(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin [GET]
 func GetBlogBackInfo(c *gin.Context) {
-	c.JSON(http.StatusOK, benetnaschService.GetBlogBackInfo())
+	c.JSON(http.StatusOK, benetnaschService.GetBlogBackInfo(c.Request.Context()))
 }
 
 // UpdateWebsiteConfig
@@ -47,7 +47,7 @@ func UpdateWebsiteConfig(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/website/config [GET]
 func GetWebsiteConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, benetnaschService.GetWebsiteConfig())
+	c.JSON(http.StatusOK, benetnaschService.GetWebsiteConfig(c.Request.Context()))
 }
 
 // GetAbout
@@ -56,7 +56,7 @@ func GetWebsiteConfig(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /about [GET]
 func GetAbout(c *gin.Context) {
-	c.JSON(http.StatusOK, benetnaschService.GetAbout())
+	c.JSON(http.StatusOK, benetnaschService.GetAbout(c.Request.Context()))
 }
 
 // UpdateAbout

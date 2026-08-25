@@ -10,7 +10,7 @@ import (
 	"benetnasch/app/infra/zlog"
 	"bytes"
 	"container/list"
-	"fmt"
+	"context"
 	"io"
 	"sort"
 	"strconv"
@@ -28,7 +28,7 @@ type ArticleService interface {
 	ListArticles(c *gin.Context) model.ResultVO
 	ListArticlesByCategoryId(c *gin.Context) model.ResultVO
 	GetArticleById(c *gin.Context) model.ResultVO
-	updateArticleViewsCount(articleId string)
+	updateArticleViewsCount(ctx context.Context, articleId string)
 	ListArticlesByTagId(c *gin.Context) model.ResultVO
 	AccessArticle(c *gin.Context) model.ResultVO
 	ListArchives(c *gin.Context) model.ResultVO
@@ -42,8 +42,8 @@ type ArticleService interface {
 	ImportArticles(c *gin.Context) model.ResultVO
 	ExportArticles(c *gin.Context) model.ResultVO
 	ListArticlesBySearch(c *gin.Context) model.ResultVO
-	saveArticleCategory(vo model.ArticleVO, session *xorm.Session) entity.TCategory
-	saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session)
+	saveArticleCategory(vo model.ArticleVO, session *xorm.Session) (entity.TCategory, error)
+	saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session) error
 }
 
 type MyArticleService struct{}
@@ -88,7 +88,7 @@ func (a *MyArticleService) ListArticlesByCategoryId(c *gin.Context) model.Result
 
 	categoryId, _ := strconv.Atoi(c.Query("categoryId"))
 	var count int
-	_, err = ormInit.GetEngine().SQL("select count(0) from t_article where category_id = " + strconv.Itoa(categoryId)).Get(&count)
+	_, err = ormInit.GetEngine().SQL("select count(0) from t_article where category_id = ?", categoryId).Get(&count)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -102,33 +102,47 @@ func (a *MyArticleService) ListArticlesByCategoryId(c *gin.Context) model.Result
 
 func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	articleId := c.Param("articleId")
-	get := shared.Get(articleId)
+	get, err := shared.GetCtx(c.Request.Context(), articleId)
+	if err != nil {
+		zlog.Error(err.Error())
+	}
 	if get != "" {
 		var dto model.ArticleDTO
 		shared.Unmarsh(get, &dto)
-		shared.Expire(articleId, time.Hour*1)
+		if _, err := shared.ExpireCtx(c.Request.Context(), articleId, time.Hour*1); err != nil {
+			zlog.Error(err.Error())
+		}
 		return model.ResultOkWithData(dto)
 	}
 	var article entity.TArticle
-	_, err := ormInit.GetEngine().ID(articleId).Get(&article)
+	_, err = ormInit.GetEngine().Context(c.Request.Context()).ID(articleId).Get(&article)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultVO{}
 	}
-	if &article == nil {
+	if article.Id == 0 {
 		return model.ResultOk()
 	}
 	if article.Status == 2 {
-		var isAccess bool
-		value, _ := c.Get("userInfo")
-		dto := value.(model.UserDetailsDTO)
-		isAccess = shared.SIsMember(shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), articleId)
-		if isAccess == false {
+		value, ok := c.Get("userInfo")
+		if !ok {
+			return model.ResultFailWithMessage("无权访问")
+		}
+		dto, ok := value.(model.UserDetailsDTO)
+		if !ok {
+			return model.ResultFailWithMessage("无权访问")
+		}
+		isAccess, err := shared.SIsMemberCtx(c.Request.Context(), shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), articleId)
+		if err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
+		if !isAccess {
 			status := model.ResultInfo(model.ARTICLE_ACCESS_FAIL)
 			return model.ResultFailWithCodeAndMessage(52003, status["message"])
 		}
 	}
-	a.updateArticleViewsCount(articleId)
+	a.updateArticleViewsCount(c.Request.Context(), articleId)
 	id, err := strconv.Atoi(articleId)
 	if err != nil {
 		zlog.Error(err.Error())
@@ -146,19 +160,26 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	if data.Id == 0 {
 		return model.ResultOk()
 	}
-	score := shared.ZScore(shared.ARTICLE_VIEWS_COUNT, articleId)
+	score, err := shared.ZScoreCtx(c.Request.Context(), shared.ARTICLE_VIEWS_COUNT, articleId)
+	if err != nil {
+		zlog.Error(err.Error())
+	}
 	if score == 0 {
 		data.ViewCount = int(score)
 	}
 	data.PreArticleCard = preData
 	data.NextArticleCard = nextData
 	marshal, _ := json.Marshal(data)
-	shared.SetWithTime(strconv.Itoa(data.Id), marshal, time.Hour*1)
+	if err := shared.SetWithTimeCtx(c.Request.Context(), strconv.Itoa(data.Id), marshal, time.Hour*1); err != nil {
+		zlog.Error(err.Error())
+	}
 	return model.ResultOkWithData(data)
 }
 
-func (a *MyArticleService) updateArticleViewsCount(articleId string) {
-	shared.ZIncr(shared.ARTICLE_VIEWS_COUNT, 1, articleId)
+func (a *MyArticleService) updateArticleViewsCount(ctx context.Context, articleId string) {
+	if _, err := shared.ZIncrCtx(ctx, shared.ARTICLE_VIEWS_COUNT, 1, articleId); err != nil {
+		zlog.Error(err.Error())
+	}
 }
 
 func (a *MyArticleService) ListArticlesByTagId(c *gin.Context) model.ResultVO {
@@ -198,7 +219,10 @@ func (a *MyArticleService) AccessArticle(c *gin.Context) model.ResultVO {
 	if article.Password == vo.ArticlePassword {
 		value, _ := c.Get("userInfo")
 		dto := value.(model.UserDetailsDTO)
-		shared.SAdd(shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), vo.ArticleId)
+		if _, err := shared.SAddCtx(c.Request.Context(), shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), vo.ArticleId); err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
 	} else {
 		return model.ResultFailWithMessage("密码错误")
 	}
@@ -304,7 +328,11 @@ func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 	}
 	count := articleRepo.CountArticleAdmins(&conditionVO)
 	articleAdminDTOs := articleRepo.ListArticlesAdmin(conditionVO.Current, conditionVO.Size, &conditionVO)
-	viewsCountMap := shared.ZAllScore(shared.ARTICLE_VIEWS_COUNT)
+	viewsCountMap, err := shared.ZAllScoreCtx(c.Request.Context(), shared.ARTICLE_VIEWS_COUNT)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	for _, v := range articleAdminDTOs {
 		index := strconv.Itoa(v.Id)
 		viewsCount := viewsCountMap[index]
@@ -329,57 +357,39 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 	if ok {
 		articleVO = vo.(model.ArticleVO)
 	}
-	session := ormInit.GetEngine().NewSession()
-	defer func(session *xorm.Session) {
-		err := session.Close()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-	}(session)
-	err = session.Begin()
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	category := a.saveArticleCategory(articleVO, session)
-	var article entity.TArticle
-	marshal, err := json.Marshal(articleVO)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	err = json.Unmarshal(marshal, &article)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	if category.Id != 0 {
-		article.CategoryId = category.Id
-	}
-
 	value, _ := c.Get("userInfo")
 	dto := value.(model.UserDetailsDTO)
-
-	article.UserId = dto.UserInfoId
-	if article.Id != 0 {
-		_, err = session.Prepare().ID(article.Id).Update(&article)
-	} else {
-		_, err = session.Prepare().Insert(&article)
-	}
-	if err != nil {
-		zlog.Error(err.Error())
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		return model.ResultFail()
-	}
-	a.saveArticleTag(articleVO, article.Id, session)
-	if article.Status == 1 {
-		// TODO subscribe article; args: article.Id
-	}
 	var articlebase entity.TArticle
-	_, err = ormInit.GetEngine().Prepare().ID(articleVO.Id).Get(&articlebase)
+	err = ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		category, err := a.saveArticleCategory(articleVO, session)
+		if err != nil {
+			return err
+		}
+		var article entity.TArticle
+		marshal, err := json.Marshal(articleVO)
+		if err != nil {
+			return err
+		}
+		if err = json.Unmarshal(marshal, &article); err != nil {
+			return err
+		}
+		if category.Id != 0 {
+			article.CategoryId = category.Id
+		}
+		article.UserId = dto.UserInfoId
+		if article.Id != 0 {
+			if _, err = session.ID(article.Id).Update(&article); err != nil {
+				return err
+			}
+		} else if _, err = session.Insert(&article); err != nil {
+			return err
+		}
+		if err = a.saveArticleTag(articleVO, article.Id, session); err != nil {
+			return err
+		}
+		_, err = session.ID(article.Id).Get(&articlebase)
+		return err
+	})
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -390,19 +400,10 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 			zlog.Error(err.Error())
 			return model.ResultFail()
 		}
-		get := shared.Get(strconv.Itoa(articlebase.Id))
-		if get == "" {
-			shared.Set(strconv.Itoa(articlebase.Id), marsha)
-		} else {
-			shared.Del(strconv.Itoa(articlebase.Id))
-			shared.Set(strconv.Itoa(articlebase.Id), marsha)
+		if err := shared.SetCtx(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha); err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
 		}
-	}
-	err = session.Commit()
-	if err != nil {
-		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
-		return model.ResultFail()
 	}
 	return model.ResultOk()
 }
@@ -419,31 +420,15 @@ func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.Res
 		IsTop:      articleTopFeaturedVO.IsTop,
 		IsFeatured: articleTopFeaturedVO.IsFeatured,
 	}
-	session := ormInit.GetEngine().NewSession()
-	err = session.Begin()
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Exec("update t_article set is_top = ?, is_featured = ? where id = ?", article.IsTop, article.IsFeatured, article.Id)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	defer func(session *xorm.Session) {
-		err := session.Close()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-	}(session)
-	_, err = session.Exec(fmt.Sprintf("update t_article set is_top = %d, is_featured = %d where id = %d", article.IsTop, article.IsFeatured, article.Id))
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	err = session.Commit()
-	if err != nil {
-		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return model.ResultFail()
 	}
 	var articlebase entity.TArticle
-	_, err = ormInit.GetEngine().Prepare().ID(article.Id).Get(&articlebase)
+	_, err = ormInit.GetEngine().Context(c.Request.Context()).ID(article.Id).Get(&articlebase)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -454,12 +439,9 @@ func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.Res
 			zlog.Error(err.Error())
 			return model.ResultFail()
 		}
-		get := shared.Get(strconv.Itoa(articlebase.Id))
-		if get == "" {
-			shared.Set(strconv.Itoa(articlebase.Id), marsha)
-		} else {
-			shared.Del(strconv.Itoa(articlebase.Id))
-			shared.Set(strconv.Itoa(articlebase.Id), marsha)
+		if err := shared.SetCtx(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha); err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
 		}
 	}
 	return model.ResultOk()
@@ -478,21 +460,16 @@ func (a *MyArticleService) UpdateArticleDelete(c *gin.Context) model.ResultVO {
 			IsDelete: deleteVO.IsDelete,
 		})
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	for _, v := range articles {
-		_, err = session.Prepare().MustCols("is_delete").ID(v.Id).Update(&v)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		for _, v := range articles {
+			if _, err := session.MustCols("is_delete").ID(v.Id).Update(&v); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return model.ResultFail()
-	}
-	err = session.Commit()
-	if err != nil {
-		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 	}
 	return model.ResultOk()
 }
@@ -503,24 +480,17 @@ func (a *MyArticleService) DeleteArticles(c *gin.Context) model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	for _, id := range ids {
-		_, err = session.Prepare().Exec("delete from t_article where id = " + strconv.Itoa(id))
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		for _, id := range ids {
+			if _, err := session.Exec("delete from t_article where id = ?", id); err != nil {
+				return err
+			}
+			if _, err := session.Where(builder.Eq{"article_id": id}).Delete(&entity.TArticleTag{}); err != nil {
+				return err
+			}
 		}
-		_, err = session.Where(builder.Eq{"article_id": id}).Delete(&entity.TArticleTag{})
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-	}
-	err = session.Commit()
-	if err != nil {
-		err = session.Rollback()
+		return nil
+	}); err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
@@ -663,61 +633,54 @@ func (a *MyArticleService) ListArticlesBySearch(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(articleSearchDTOs)
 }
 
-func (a *MyArticleService) saveArticleCategory(vo model.ArticleVO, session *xorm.Session) entity.TCategory {
+func (a *MyArticleService) saveArticleCategory(vo model.ArticleVO, session *xorm.Session) (entity.TCategory, error) {
 	var category entity.TCategory
-	_, err := session.Prepare().SQL("select * from t_category where category_name = '" + vo.CategoryName + "'").Get(&category)
+	_, err := session.SQL("select * from t_category where category_name = ?", vo.CategoryName).Get(&category)
 	if err != nil {
-		zlog.Error(err.Error())
-		return entity.TCategory{}
+		return entity.TCategory{}, err
 	}
 	if category.Id == 0 && vo.Status != 3 {
 		category.CategoryName = vo.CategoryName
 		_, err = session.Prepare().Insert(&category)
 		if err != nil {
-			zlog.Error(err.Error())
-			zlog.Unwrap(session.Rollback())
-			return entity.TCategory{}
+			return entity.TCategory{}, err
 		}
 	}
-	return category
+	return category, nil
 }
 
-func (a *MyArticleService) saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session) {
+func (a *MyArticleService) saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session) error {
 	var atag entity.TArticleTag
 	if vo.Id != 0 {
-		_, err := session.Prepare().Where("article_id = " + strconv.Itoa(vo.Id)).Delete(&atag)
+		_, err := session.Where("article_id = ?", vo.Id).Delete(&atag)
 		if err != nil {
-			zlog.Error(err.Error())
-			zlog.Unwrap(session.Rollback())
-			return
+			return err
 		}
 	}
-	tagNames := vo.TagNames
-	if len(tagNames) != 0 {
+	if len(vo.TagNames) != 0 {
 		var existTags []entity.TTag
-		err := session.Prepare().In("tag_name", tagNames).Find(&existTags)
+		err := session.In("tag_name", vo.TagNames).Find(&existTags)
 		if err != nil {
-			return
+			return err
 		}
+		existingNames := make(map[string]struct{}, len(existTags))
 		var existTagIds []int
 		for _, v := range existTags {
-			for k, value := range tagNames {
-				if v.TagName == value {
-					tagNames = append(tagNames[:k], tagNames[k+1:]...)
-				}
-			}
+			existingNames[v.TagName] = struct{}{}
 			existTagIds = append(existTagIds, v.Id)
 		}
 		var tags []entity.TTag
-		if len(tagNames) != 0 {
-			for _, v := range tagNames {
-				tags = append(tags, entity.TTag{TagName: v})
+		for _, name := range vo.TagNames {
+			if _, exists := existingNames[name]; !exists {
+				tags = append(tags, entity.TTag{TagName: name})
+				existingNames[name] = struct{}{}
 			}
+		}
+		if len(tags) != 0 {
 			for k, tag := range tags {
-				_, err := session.Prepare().Insert(&tag)
+				_, err := session.Insert(&tag)
 				if err != nil {
-					zlog.Error(err.Error())
-					return
+					return err
 				}
 				tags[k] = tag
 			}
@@ -735,10 +698,12 @@ func (a *MyArticleService) saveArticleTag(vo model.ArticleVO, articleId int, ses
 				TagId:     tagId,
 			})
 		}
-		_, err = session.Prepare().Insert(&articleTags)
-		if err != nil {
-			zlog.Error(err.Error())
-			return
+		if len(articleTags) != 0 {
+			_, err = session.Insert(&articleTags)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }

@@ -6,24 +6,26 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
+	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"net/http"
 	"sort"
 	"strconv"
+	"xorm.io/xorm"
 )
 
 type BenetnaschInfoService interface {
 	GetBenetnaschHomeInfo() model.ResultVO
 	Report(req *http.Request) model.ResultVO
-	GetBlogHomeInfo() model.ResultVO
-	GetWebsiteConfig() model.ResultVO
-	GetBlogBackInfo() model.ResultVO
+	GetBlogHomeInfo(ctx context.Context) model.ResultVO
+	GetWebsiteConfig(ctx context.Context) model.ResultVO
+	GetBlogBackInfo(ctx context.Context) model.ResultVO
 	UpdateWebsiteConfig(c *gin.Context) model.ResultVO
-	GetAbout() model.ResultVO
+	GetAbout(ctx context.Context) model.ResultVO
 	UpdateAbout(c *gin.Context) model.ResultVO
 	SaveBlogPhotoAlbumCover(c *gin.Context) model.ResultVO
-	listArticleRank(hm map[interface{}]float64) []model.ArticleRankDTO
+	listArticleRank(ctx context.Context, hm map[interface{}]float64) []model.ArticleRankDTO
 }
 
 type MyBenetnaschInfoService struct{}
@@ -33,23 +35,41 @@ func (b *MyBenetnaschInfoService) GetBenetnaschHomeInfo() model.ResultVO {
 }
 
 func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
+	ctx := req.Context()
 	md5 := shared.GetMD5(shared.GetRedisId(req))
-	if !shared.SIsMember(shared.UNIQUE_VISITOR, md5) {
+	seen, err := shared.SIsMemberCtx(ctx, shared.UNIQUE_VISITOR, md5)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+	if !seen {
 		ipSource := shared.GetIpSource(shared.GetIpAddress(req))
 		if ipSource != "" {
-			shared.HIncrBy(shared.VISITOR_AREA, ipSource, 1)
+			if _, err := shared.HIncrByCtx(ctx, shared.VISITOR_AREA, ipSource, 1); err != nil {
+				zlog.Error(err.Error())
+				return model.ResultFail()
+			}
 		} else {
-			shared.HIncrBy(shared.VISITOR_AREA, shared.UNKNOWN, 1)
+			if _, err := shared.HIncrByCtx(ctx, shared.VISITOR_AREA, shared.UNKNOWN, 1); err != nil {
+				zlog.Error(err.Error())
+				return model.ResultFail()
+			}
 		}
-		shared.IncrBy(shared.BLOG_VIEWS_COUNT, 1)
-		shared.SAdd(shared.UNIQUE_VISITOR, md5)
+		if _, err := shared.IncrByCtx(ctx, shared.BLOG_VIEWS_COUNT, 1); err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
+		if _, err := shared.SAddCtx(ctx, shared.UNIQUE_VISITOR, md5); err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
 	}
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) GetBlogHomeInfo() model.ResultVO {
+func (b *MyBenetnaschInfoService) GetBlogHomeInfo(ctx context.Context) model.ResultVO {
 	var articleCount, categoryCount, tagCount, talkCount int64
-	engine := ormInit.GetEngine()
+	engine := ormInit.GetEngine().Context(ctx)
 	_, err := engine.SQL("select count(0) from t_article where is_delete = 0").Get(&articleCount)
 	if err != nil {
 		zlog.Error(err.Error())
@@ -70,14 +90,22 @@ func (b *MyBenetnaschInfoService) GetBlogHomeInfo() model.ResultVO {
 		zlog.Error(err.Error())
 	}
 
-	reData := shared.Get(shared.BLOG_VIEWS_COUNT).(string)
+	reData, err := shared.GetCtx(ctx, shared.BLOG_VIEWS_COUNT)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	var viewCount int
 	if reData != "" {
 		viewCount, _ = strconv.Atoi(reData)
 	} else {
 		viewCount = 0
 	}
-	websiteConfig := b.GetWebsiteConfig().Data.(model.WebsiteConfigDTO)
+	websiteConfigResult := b.GetWebsiteConfig(ctx)
+	websiteConfig, ok := websiteConfigResult.Data.(model.WebsiteConfigDTO)
+	if !ok {
+		return websiteConfigResult
+	}
 	return model.ResultOkWithData(model.BenetnaschHomeInfoDTO{
 		ArticleCount:    articleCount,
 		CategoryCount:   categoryCount,
@@ -88,31 +116,49 @@ func (b *MyBenetnaschInfoService) GetBlogHomeInfo() model.ResultVO {
 	})
 }
 
-func (b *MyBenetnaschInfoService) GetWebsiteConfig() model.ResultVO {
+func (b *MyBenetnaschInfoService) GetWebsiteConfig(ctx context.Context) model.ResultVO {
 	var webConfig model.WebsiteConfigDTO
 	var config string
-	websiteConfig := shared.Get(shared.WEBSITE_CONFIG).(string)
+	websiteConfig, err := shared.GetCtx(ctx, shared.WEBSITE_CONFIG)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	if websiteConfig != "" {
-		zlog.Unwrap(json.Unmarshal([]byte(websiteConfig), &webConfig))
+		if err := json.Unmarshal([]byte(websiteConfig), &webConfig); err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
 	} else {
-		_, err := ormInit.GetEngine().SQL("select config from t_website_config where id = 1").Get(&config)
+		_, err := ormInit.GetEngine().Context(ctx).SQL("select config from t_website_config where id = 1").Get(&config)
 		if err != nil {
 			zlog.Error(err.Error())
+			return model.ResultFail()
 		}
 
-		zlog.Unwrap(json.Unmarshal([]byte(config), &webConfig))
+		if err := json.Unmarshal([]byte(config), &webConfig); err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
 
-		shared.Set(shared.WEBSITE_CONFIG, config)
+		if err := shared.SetCtx(ctx, shared.WEBSITE_CONFIG, config); err != nil {
+			zlog.Error(err.Error())
+		}
 	}
 	return model.ResultOkWithData(webConfig)
 }
 
-func (b *MyBenetnaschInfoService) GetBlogBackInfo() model.ResultVO {
-	count, err := strconv.Atoi(shared.Get(shared.BLOG_VIEWS_COUNT).(string))
+func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.ResultVO {
+	viewCount, err := shared.GetCtx(ctx, shared.BLOG_VIEWS_COUNT)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+	count, err := strconv.Atoi(viewCount)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	engine := ormInit.GetEngine()
+	engine := ormInit.GetEngine().Context(ctx)
 	messageCount, err := engine.Where("type = 2").Count(&entity.TComment{})
 	if err != nil {
 		zlog.Error(err.Error())
@@ -125,7 +171,7 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo() model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	uniqueViews := listUniqueViews()
+	uniqueViews := listUniqueViews(ctx)
 	articleStatisticsDTOs := articleRepo.ListArticleStatistics()
 	categoryDTOs := categoryRepo.ListCategories()
 	var tags []entity.TTag
@@ -142,7 +188,11 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo() model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	articleMap := shared.ZReverseRangeWithScore(shared.ARTICLE_VIEWS_COUNT, 0, 4)
+	articleMap, err := shared.ZReverseRangeWithScoreCtx(ctx, shared.ARTICLE_VIEWS_COUNT, 0, 4)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	auroraAdminInfoDTO := model.BenetnaschBackInfoDTO{
 		ArticleStatisticsDTOs: articleStatisticsDTOs,
 		TagDTOs:               tagDTOs,
@@ -154,7 +204,7 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo() model.ResultVO {
 		UniqueViewDTOs:        uniqueViews,
 	}
 	if len(articleMap) != 0 {
-		articleRankDTOs := b.listArticleRank(articleMap)
+		articleRankDTOs := b.listArticleRank(ctx, articleMap)
 		auroraAdminInfoDTO.ArticleRankDTOs = articleRankDTOs
 	}
 	return model.ResultOkWithData(auroraAdminInfoDTO)
@@ -173,25 +223,27 @@ func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.Resu
 		return model.ResultFail()
 	}
 
-	engine := ormInit.GetEngine()
-	session := engine.NewSession()
-	defer session.Close()
-	session.Begin()
-	_, err = session.Exec("update t_website_config set config = ? where id = 1", string(m))
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Exec("update t_website_config set config = ? where id = 1", string(m))
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFailWithMessage(err.Error())
 	}
-	session.Commit()
-	shared.Set(shared.WEBSITE_CONFIG, string(m))
+	if err := shared.SetCtx(c.Request.Context(), shared.WEBSITE_CONFIG, string(m)); err != nil {
+		zlog.Error(err.Error())
+	}
 
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) GetAbout() model.ResultVO {
+func (b *MyBenetnaschInfoService) GetAbout(ctx context.Context) model.ResultVO {
 	var aboutDTO model.AboutDTO
-	about := shared.Get(shared.ABOUT).(string)
+	about, err := shared.GetCtx(ctx, shared.ABOUT)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	if about != "" {
 		err := json.Unmarshal([]byte(about), &aboutDTO)
 		if err != nil {
@@ -199,7 +251,7 @@ func (b *MyBenetnaschInfoService) GetAbout() model.ResultVO {
 		}
 	} else {
 		var abt entity.TAbout
-		_, err := ormInit.GetEngine().ID(shared.DEFAULT_ABOUT_ID).Get(&abt)
+		_, err := ormInit.GetEngine().Context(ctx).ID(shared.DEFAULT_ABOUT_ID).Get(&abt)
 		if err != nil {
 			zlog.Error(err.Error())
 		}
@@ -209,7 +261,9 @@ func (b *MyBenetnaschInfoService) GetAbout() model.ResultVO {
 			zlog.Error(err.Error())
 		}
 
-		shared.Set(shared.ABOUT, abt.Content)
+		if err := shared.SetCtx(ctx, shared.ABOUT, abt.Content); err != nil {
+			zlog.Error(err.Error())
+		}
 	}
 	return model.ResultOkWithData(aboutDTO)
 }
@@ -221,18 +275,16 @@ func (b *MyBenetnaschInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
 		return model.ResultFail()
 	}
 
-	engine := ormInit.GetEngine()
-	session := engine.NewSession()
-	defer session.Close()
-	session.Begin()
-	_, err := session.Exec("update t_about set config = ? where id = 1", abt.Content)
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Exec("update t_about set config = ? where id = 1", abt.Content)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFailWithMessage(err.Error())
 	}
-	session.Commit()
-	shared.Set(shared.ABOUT, abt.Content)
+	if err := shared.SetCtx(c.Request.Context(), shared.ABOUT, abt.Content); err != nil {
+		zlog.Error(err.Error())
+	}
 
 	return model.ResultOk()
 }
@@ -241,9 +293,9 @@ func (b *MyBenetnaschInfoService) SaveBlogPhotoAlbumCover(c *gin.Context) model.
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) listArticleRank(hm map[interface{}]float64) []model.ArticleRankDTO {
+func (b *MyBenetnaschInfoService) listArticleRank(ctx context.Context, hm map[interface{}]float64) []model.ArticleRankDTO {
 	var articleIds []int
-	for k, _ := range hm {
+	for k := range hm {
 		id, err := strconv.Atoi(k.(string))
 		if err != nil {
 			zlog.Error(err.Error())
@@ -251,7 +303,7 @@ func (b *MyBenetnaschInfoService) listArticleRank(hm map[interface{}]float64) []
 		articleIds = append(articleIds, id)
 	}
 	var articles []entity.TArticle
-	err := ormInit.GetEngine().Select("id, article_title").In("id", articleIds).Find(&articles)
+	err := ormInit.GetEngine().Context(ctx).Select("id, article_title").In("id", articleIds).Find(&articles)
 	if err != nil {
 		zlog.Error(err.Error())
 	}

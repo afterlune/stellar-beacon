@@ -5,7 +5,6 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/zlog"
-	"fmt"
 )
 
 type TagRepo interface {
@@ -15,54 +14,45 @@ type TagRepo interface {
 	ListTagsAdmin(current, size int, vo *model.ConditionVO) []*model.TagAdminDTO
 }
 
-type MyTagRepo struct {
-}
+type MyTagRepo struct{}
 
 func (t *MyTagRepo) ListTags() []*model.TagDTO {
-	engine := ormInit.GetEngine()
 	var tags []*model.TagDTO
-	err := engine.SQL(pgsql.ListTags).Find(&tags)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ormInit.GetEngine().SQL(pgsql.ListTags).Find(&tags); err != nil {
+		zlog.Error("list tags: " + err.Error())
 	}
-
 	return tags
 }
 
 func (t *MyTagRepo) ListTopTenTags() []*model.TagDTO {
-	engine := ormInit.GetEngine()
 	var tags []*model.TagDTO
-	err := engine.SQL(pgsql.ListTopTenTags).Find(&tags)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ormInit.GetEngine().SQL(pgsql.ListTopTenTags).Find(&tags); err != nil {
+		zlog.Error("list top tags: " + err.Error())
 	}
-
 	return tags
 }
 
-func (t *MyTagRepo) ListTagNamesByArticleId(articleId int) (s []string) {
-	engine := ormInit.GetEngine()
-	sql := fmt.Sprintf(pgsql.ListTagNamesByArticleId, articleId)
-	err := engine.SQL(sql).Find(&s)
-	if err != nil {
-		zlog.Error(err.Error())
+func (t *MyTagRepo) ListTagNamesByArticleId(articleID int) []string {
+	var names []string
+	if err := ormInit.GetEngine().SQL("SELECT tag_name FROM t_tag t JOIN t_article_tag at ON t.id = at.tag_id WHERE article_id = ?", articleID).Find(&names); err != nil {
+		zlog.Error("list article tag names: " + err.Error())
 	}
-
-	return s
+	return names
 }
 
 func (t *MyTagRepo) ListTagsAdmin(current, size int, vo *model.ConditionVO) []*model.TagAdminDTO {
-	s := ""
+	limit, offset := pgsql.Page(current, size)
+	query := "SELECT t.id, tag_name, COUNT(at.article_id) AS article_count, t.create_time FROM t_tag t LEFT JOIN t_article_tag at ON t.id = at.tag_id"
+	args := []interface{}{}
 	if vo.Keywords != "" {
-		s += " where tag_name like '%" + vo.Keywords + "%'"
+		query += " WHERE t.tag_name LIKE ? ESCAPE '\\'"
+		args = append(args, pgsql.ContainsPattern(vo.Keywords))
 	}
-	s = fmt.Sprintf(pgsql.ListTagsAdmin, s, size, (current-1)*size)
-	engine := ormInit.GetEngine()
-	var tagsAdmin []*model.TagAdminDTO
-	err := engine.SQL(s).Find(&tagsAdmin)
-	if err != nil {
-		zlog.Error(err.Error())
+	query += " GROUP BY t.id LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	var tags []*model.TagAdminDTO
+	if err := ormInit.GetEngine().SQL(query, args...).Find(&tags); err != nil {
+		zlog.Error("list admin tags: " + err.Error())
 	}
-
-	return tagsAdmin
+	return tags
 }

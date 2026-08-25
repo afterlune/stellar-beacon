@@ -7,8 +7,12 @@ import (
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
@@ -23,31 +27,61 @@ type UserAuthService interface {
 	Register(c *gin.Context) model.ResultVO
 	UpdatePassword(c *gin.Context) model.ResultVO
 	UpdateAdminPassword(c *gin.Context) model.ResultVO
-	Logout(id int) model.ResultVO
+	Logout(ctx context.Context, id int) model.ResultVO
 	QQLogin(c *gin.Context) model.ResultVO
-	CheckUser(vo model.UserVO) bool
-	CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO
-	UpdateUserIp(user entity.TUserAuth)
+	CheckUser(ctx context.Context, vo model.UserVO) bool
+	CheckUserAuth(ctx context.Context, vo model.UserVO) *model.UserDetailsDTO
+	UpdateUserIp(ctx context.Context, user entity.TUserAuth)
 }
 
 type MyUserAuthService struct{}
 
 func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
-	Username := c.Query("username")
-	if !shared.CheckEmail(Username) {
+	username := strings.ToLower(strings.TrimSpace(c.Query("username")))
+	if !shared.CheckEmail(username) {
 		return model.ResultFailWithMessage("请输入正确邮箱")
+	}
+	ctx := c.Request.Context()
+	key := func(prefix, value string) string {
+		sum := sha256.Sum256([]byte(value))
+		return prefix + hex.EncodeToString(sum[:])
+	}
+	if allowed, err := shared.SetNXCtx(ctx, key("captcha:cooldown:", username), "1", time.Minute); err != nil {
+		zlog.Error("captcha rate limiter failed: " + err.Error())
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	} else if !allowed {
+		return model.ResultFailWithMessage("验证码发送过于频繁")
+	}
+	emailCount, err := shared.IncrExpireCtx(ctx, key("captcha:email:", username), time.Hour)
+	if err != nil {
+		zlog.Error("captcha email limiter failed: " + err.Error())
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
+	ipCount, err := shared.IncrExpireCtx(ctx, key("captcha:ip:", shared.GetIpAddress(c.Request)), time.Hour)
+	if err != nil {
+		zlog.Error("captcha IP limiter failed: " + err.Error())
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
+	if emailCount > 5 || ipCount > 20 {
+		return model.ResultFailWithMessage("验证码发送过于频繁")
 	}
 	code := shared.RandomCode()
 	codem := make(map[string]interface{})
 	codem["content"] = "您的验证码为 " + code + " 有效期15分钟，请不要告诉他人哦！"
 	emailDTO := model.EmailDTO{
-		Email:      Username,
+		Email:      username,
 		CommentMap: codem,
 		Template:   "resource/template/common.html",
 		Subject:    shared.CAPTCHA,
 	}
-	shared.SendHtmlEmail(emailDTO)
-	shared.SetWithTime(shared.USER_CODE_KEY+Username, code, shared.CODE_EXPIRE_TIME)
+	if err := shared.SendHtmlEmail(emailDTO); err != nil {
+		zlog.Error("send captcha email failed: " + err.Error())
+		return model.ResultFailWithMessage("验证码发送失败")
+	}
+	if err := shared.SetWithTimeCtx(ctx, shared.USER_CODE_KEY+username, code, 15*time.Minute); err != nil {
+		zlog.Error("store captcha: " + err.Error())
+		return model.ResultFailWithMessage("验证码发送失败")
+	}
 	return model.ResultOk()
 }
 
@@ -56,7 +90,11 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 	var userAreaDTOs []model.UserAreaDTO
 	switch typeId {
 	case "1":
-		userArea := shared.Get(shared.USER_AREA).(string)
+		userArea, err := shared.GetCtx(c.Request.Context(), shared.USER_AREA)
+		if err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
 		if userArea != "" {
 			err := json.Unmarshal([]byte(userArea), &userAreaDTOs)
 			if err != nil {
@@ -65,24 +103,26 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 		}
 		return model.ResultOkWithData(userAreaDTOs)
 	case "2":
-		visitorArea := shared.HGetAll(shared.VISITOR_AREA)
-		if visitorArea != nil {
-			for k, v := range visitorArea {
-				visitCount, err := strconv.Atoi(v)
-				region := strings.Split(k, "|")[2]
-				province := region
-				if strings.HasSuffix(region, "省") {
-					province = strings.Split(region, "省")[0]
-				}
-				if err != nil {
-					zlog.Error(err.Error())
-				}
-				userAreaDTO := model.UserAreaDTO{
-					Name:  province,
-					Value: int64(visitCount),
-				}
-				userAreaDTOs = append(userAreaDTOs, userAreaDTO)
+		visitorArea, err := shared.HGetAllCtx(c.Request.Context(), shared.VISITOR_AREA)
+		if err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
+		for k, v := range visitorArea {
+			visitCount, err := strconv.Atoi(v)
+			region := strings.Split(k, "|")[2]
+			province := region
+			if strings.HasSuffix(region, "省") {
+				province = strings.Split(region, "省")[0]
 			}
+			if err != nil {
+				zlog.Error(err.Error())
+			}
+			userAreaDTO := model.UserAreaDTO{
+				Name:  province,
+				Value: int64(visitCount),
+			}
+			userAreaDTOs = append(userAreaDTOs, userAreaDTO)
 		}
 	default:
 		break
@@ -113,96 +153,52 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 		return model.ResultFail()
 	}
 
-	if userVo.Code != shared.Get(shared.USER_CODE_KEY+userVo.Username) {
+	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+strings.ToLower(strings.TrimSpace(userVo.Username)))
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+	if userVo.Code != code {
 		return model.ResultFailWithMessage("验证码有误！")
 	}
 
 	if !shared.CheckEmail(userVo.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
-	if u.CheckUser(userVo) {
+	username := strings.ToLower(strings.TrimSpace(userVo.Username))
+	userVo.Username = username
+	if u.CheckUser(c.Request.Context(), userVo) {
 		return model.ResultFailWithMessage("邮箱已被注册！")
 	}
 	userInfo := entity.TUserInfo{
-		Email:    userVo.Username,
+		Email:    username,
 		Nickname: shared.DEFAULT_NICKNAME,
-		Avatar:   benetnaschService.GetWebsiteConfig().Data.(model.WebsiteConfigDTO).UserAvatar,
+		Avatar:   benetnaschService.GetWebsiteConfig(c.Request.Context()).Data.(model.WebsiteConfigDTO).UserAvatar,
 	}
 
-	engine := ormInit.GetEngine()
-	session := engine.NewSession()
-	defer func(session *xorm.Session) {
-		err := session.Close()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-	}(session)
-
-	err = session.Begin()
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
-	_, err = session.Prepare().Insert(&userInfo)
-	if err != nil {
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		return model.ResultFailWithMessage("注册失败，稍后再试")
-	}
-	userRole := entity.TUserRole{
-		UserId: userInfo.Id,
-		RoleId: 2,
-	}
-	_, err = session.Prepare().Insert(&userRole)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFailWithMessage("注册失败，稍后再试")
-	}
 	password, err := bcrypt.GenerateFromPassword([]byte(userVo.Password), bcrypt.DefaultCost)
 	if err != nil {
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
+		zlog.Error(err.Error())
 		return model.ResultFailWithMessage("注册失败，稍后再试")
 	}
 	userAuth := entity.TUserAuth{
-		UserInfoId: userInfo.Id,
-		Username:   userVo.Username,
-		Password:   string(password),
-		LoginType:  1,
+		Username:  username,
+		Password:  string(password),
+		LoginType: 1,
 	}
-	_, err = session.Prepare().Insert(&userAuth)
-	if err != nil {
-		if err != nil {
-			zlog.Error(err.Error())
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if _, err := session.Insert(&userInfo); err != nil {
+			return err
 		}
-
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
+		userRole := entity.TUserRole{UserId: userInfo.Id, RoleId: 2}
+		if _, err := session.Insert(&userRole); err != nil {
+			return err
 		}
-		return model.ResultFailWithMessage("注册失败，稍后再试")
-	}
-
-	err = session.Commit()
-	if err != nil {
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
+		userAuth.UserInfoId = userInfo.Id
+		_, err := session.Insert(&userAuth)
+		return err
+	}); err != nil {
+		zlog.Error(err.Error())
 		return model.ResultFailWithMessage("注册失败，稍后再试")
 	}
 	return model.ResultOk()
@@ -213,51 +209,38 @@ func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	err := c.ShouldBind(&userVO)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
-	if userVO.Code != shared.Get(shared.USER_CODE_KEY+userVO.Username) {
+	userVO.Username = strings.ToLower(strings.TrimSpace(userVO.Username))
+	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+strings.ToLower(strings.TrimSpace(userVO.Username)))
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+	if userVO.Code != code {
 		return model.ResultFailWithMessage("验证码有误！")
 	}
 	if !shared.CheckEmail(userVO.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
-	if !u.CheckUser(userVO) {
+	if !u.CheckUser(c.Request.Context(), userVO) {
 		return model.ResultFailWithMessage("邮箱未注册！")
 	}
 
 	password, err := bcrypt.GenerateFromPassword([]byte(userVO.Password), bcrypt.DefaultCost)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	userAuth := entity.TUserAuth{
 		Password: string(password),
 		Username: userVO.Username,
 	}
-	session := ormInit.GetEngine().NewSession()
-	err = session.Begin()
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Where("username = ?", userAuth.Username).Update(&userAuth)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-	}
-	defer func(session *xorm.Session) {
-		err := session.Close()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-	}(session)
-
-	_, err = session.Prepare().Where("username = '" + userAuth.Username + "'").Update(&userAuth)
-	if err != nil {
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		return model.ResultFailWithMessage(err.Error())
-	}
-	err = session.Commit()
-	if err != nil {
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
 		return model.ResultFailWithMessage(err.Error())
 	}
 	return model.ResultOk()
@@ -269,8 +252,10 @@ func (u *MyUserAuthService) UpdateAdminPassword(c *gin.Context) model.ResultVO {
 
 	var passwordVO model.PasswordVO
 	err := c.ShouldBind(&passwordVO)
-	if err != nil && passwordVO.NewPassword == "" || passwordVO.OldPassword == "" {
-		zlog.Error(err.Error())
+	if err != nil || passwordVO.NewPassword == "" || passwordVO.OldPassword == "" {
+		if err != nil {
+			zlog.Error(err.Error())
+		}
 		return model.ResultFail()
 	}
 	engine := ormInit.GetEngine()
@@ -296,26 +281,10 @@ func (u *MyUserAuthService) UpdateAdminPassword(c *gin.Context) model.ResultVO {
 			Id:       dto.Id,
 			Password: string(password),
 		}
-		session := engine.NewSession()
-		err := session.Begin()
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-		defer func(session *xorm.Session) {
-			err := session.Close()
-			if err != nil {
-				zlog.Error(err.Error())
-			}
-		}(session)
-		_, err = session.Prepare().ID(userAuth.Id).Update(&userAuth)
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-		err = session.Commit()
-		if err != nil {
-			zlog.Unwrap(session.Rollback())
+		if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+			_, err := session.ID(userAuth.Id).Update(&userAuth)
+			return err
+		}); err != nil {
 			zlog.Error(err.Error())
 			return model.ResultFail()
 		}
@@ -324,8 +293,11 @@ func (u *MyUserAuthService) UpdateAdminPassword(c *gin.Context) model.ResultVO {
 	return model.ResultFailWithMessage("旧密码不正确")
 }
 
-func (u *MyUserAuthService) Logout(id int) model.ResultVO {
-	shared.HDel(shared.LOGIN_USER, strconv.Itoa(id))
+func (u *MyUserAuthService) Logout(ctx context.Context, id int) model.ResultVO {
+	if err := shared.HDelCtx(ctx, shared.LOGIN_USER, strconv.Itoa(id)); err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("注销失败，请稍后再试")
+	}
 	return model.ResultOkWithData(model.UserLogoutStatusDTO{
 		Message: "注销成功",
 	})
@@ -335,9 +307,9 @@ func (u *MyUserAuthService) QQLogin(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func (u *MyUserAuthService) CheckUser(vo model.UserVO) bool {
+func (u *MyUserAuthService) CheckUser(ctx context.Context, vo model.UserVO) bool {
 	var userAuth entity.TUserAuth
-	b, err := ormInit.GetEngine().Where("Username = ?", vo.Username).Get(&userAuth)
+	b, err := ormInit.GetEngine().Context(ctx).Where("Username = ?", vo.Username).Get(&userAuth)
 	if err != nil {
 		zlog.Error(err.Error())
 		return false
@@ -345,9 +317,9 @@ func (u *MyUserAuthService) CheckUser(vo model.UserVO) bool {
 	return b
 }
 
-func (u *MyUserAuthService) CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO {
+func (u *MyUserAuthService) CheckUserAuth(ctx context.Context, vo model.UserVO) *model.UserDetailsDTO {
 	var userAuth entity.TUserAuth
-	engine := ormInit.GetEngine()
+	engine := ormInit.GetEngine().Context(ctx)
 	_, err := engine.Where("Username = ?", vo.Username).Get(&userAuth)
 	if err != nil {
 		zlog.Error(err.Error())
@@ -387,28 +359,15 @@ func (u *MyUserAuthService) CheckUserAuth(vo model.UserVO) *model.UserDetailsDTO
 	return userDetailsDTO
 }
 
-func (u *MyUserAuthService) UpdateUserIp(user entity.TUserAuth) {
+func (u *MyUserAuthService) UpdateUserIp(ctx context.Context, user entity.TUserAuth) {
 	if user.IpSource == "0" || user.IpSource == "" {
 		user.IpSource = shared.UNKNOWN
 	}
-	session := ormInit.GetEngine().NewSession()
-	err := session.Begin()
-	if err != nil {
+	if err := ormInit.WithTx(ctx, func(session *xorm.Session) error {
+		_, err := session.ID(user.Id).MustCols("ip_source", "ip_address").Update(&user)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		return
-	}
-	defer session.Close()
-
-	_, err = session.Prepare().ID(user.Id).MustCols("ip_source", "ip_address").Update(&user)
-	if err != nil {
-		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
-		return
-	}
-	err = session.Commit()
-	if err != nil {
-		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return
 	}
 }

@@ -1,10 +1,13 @@
 package service
 
-import "benetnasch/app/infra/persistence/repository"
+import (
+	"benetnasch/app/domain/port"
+	"benetnasch/app/infra/persistence/repository"
+)
 
 var (
 	benetnaschService BenetnaschInfoService     = new(MyBenetnaschInfoService)
-	articleRepo       repository.ArticleRepo    = new(repository.MyArticleRepo)
+	articleRepo       port.ArticleRepository    = new(repository.MyArticleRepo)
 	categoryRepo      repository.CategoryRepo   = new(repository.MyCategoryRepo)
 	commentRepo       repository.CommentRepo    = new(repository.MyCommentRepo)
 	jobRepo           repository.JobRepo        = new(repository.MyJobRepo)

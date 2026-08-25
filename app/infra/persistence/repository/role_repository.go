@@ -5,7 +5,6 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/zlog"
-	"fmt"
 )
 
 type RoleRepo interface {
@@ -19,62 +18,61 @@ type MyRoleRepo struct{}
 func (r *MyRoleRepo) ListResourceRoles() []*model.ResourceRoleDTO {
 	engine := ormInit.GetEngine()
 	var resourceRoles []*model.ResourceRoleDTO
-	err := engine.SQL(pgsql.ListResourceRoles).Find(&resourceRoles)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := engine.SQL(pgsql.ListResourceRoles).Find(&resourceRoles); err != nil {
+		zlog.Error("list resource roles: " + err.Error())
 	}
-
-	for _, v := range resourceRoles {
-		var s []string
-		err := engine.SQL(pgsql.ResourceRoles, v.Id).Find(&s)
-		if err != nil {
-			zlog.Error(err.Error())
+	for _, resource := range resourceRoles {
+		var roles []string
+		if err := engine.SQL(pgsql.ResourceRoles, resource.Id).Find(&roles); err != nil {
+			zlog.Error("load resource roles: " + err.Error())
 		}
-		v.RoleList = s
+		resource.RoleList = roles
 	}
 	return resourceRoles
 }
 
 func (r *MyRoleRepo) ListRolesByUserInfoId(userInfoId int) []string {
-	engine := ormInit.GetEngine()
-	var s []string
-	sql := fmt.Sprintf(pgsql.ListRolesByUserInfoId, userInfoId)
-	err := engine.SQL(sql).Find(&s)
-	if err != nil {
-		zlog.Error(err.Error())
+	var roles []string
+	if err := ormInit.GetEngine().SQL(pgsql.ListRolesByUserInfoId, userInfoId).Find(&roles); err != nil {
+		zlog.Error("list user roles: " + err.Error())
 	}
+	return roles
+}
 
-	return s
+func roleFilter(vo *model.ConditionVO) (string, []interface{}) {
+	if vo.Keywords == "" {
+		return "", nil
+	}
+	return " WHERE role_name LIKE ? ESCAPE '\\'", []interface{}{pgsql.ContainsPattern(vo.Keywords)}
 }
 
 func (r *MyRoleRepo) ListRoles(current, size int, vo *model.ConditionVO) []*model.RoleDTO {
-	s := ""
-	if vo.Keywords != "" {
-		s += " where role_name like '%" + vo.Keywords + "%'"
-	}
-	sql1 := fmt.Sprintf(pgsql.ListRoles, s, size, (current-1)*size)
+	limit, offset := pgsql.Page(current, size)
+	filter, filterArgs := roleFilter(vo)
 	engine := ormInit.GetEngine()
+	query := "SELECT r.id, role_name, r.create_time, r.is_disable FROM (SELECT id, role_name, create_time, is_disable FROM t_role" + filter + " LIMIT ? OFFSET ?) r ORDER BY r.id"
+	args := append(filterArgs, limit, offset)
 	var roles []*model.RoleDTO
-	err := engine.SQL(sql1).Find(&roles)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := engine.SQL(query, args...).Find(&roles); err != nil {
+		zlog.Error("list roles: " + err.Error())
 	}
 
-	for _, v := range roles {
-		var rIds []int
-		var mids []int
-		sql2 := fmt.Sprintf(pgsql.ResourceIds, s, size, (current-1)*size, v.Id)
-		sql3 := fmt.Sprintf(pgsql.MenuIds, s, size, (current-1)*size, v.Id)
-		err := engine.SQL(sql2).Find(&rIds)
-		if err != nil {
-			zlog.Error(err.Error())
+	for _, role := range roles {
+		resourceQuery := "SELECT rr.resource_id FROM (SELECT id, role_name, create_time, is_disable FROM t_role" + filter + " LIMIT ? OFFSET ?) r LEFT JOIN t_role_resource rr ON r.id = rr.role_id WHERE r.id = ? AND rr.resource_id IS NOT NULL"
+		resourceArgs := append(append([]interface{}{}, filterArgs...), limit, offset, role.Id)
+		var resourceIDs []int
+		if err := engine.SQL(resourceQuery, resourceArgs...).Find(&resourceIDs); err != nil {
+			zlog.Error("load role resources: " + err.Error())
 		}
-		err = engine.SQL(sql3).Find(&mids)
-		if err != nil {
-			zlog.Error(err.Error())
+
+		menuQuery := "SELECT rm.menu_id FROM (SELECT id, role_name, create_time, is_disable FROM t_role" + filter + " LIMIT ? OFFSET ?) r LEFT JOIN t_role_menu rm ON r.id = rm.role_id WHERE r.id = ? AND rm.menu_id IS NOT NULL"
+		menuArgs := append(append([]interface{}{}, filterArgs...), limit, offset, role.Id)
+		var menuIDs []int
+		if err := engine.SQL(menuQuery, menuArgs...).Find(&menuIDs); err != nil {
+			zlog.Error("load role menus: " + err.Error())
 		}
-		v.MenuIds = mids
-		v.ResourceIds = rIds
+		role.MenuIds = menuIDs
+		role.ResourceIds = resourceIDs
 	}
 	return roles
 }

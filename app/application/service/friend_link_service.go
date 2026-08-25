@@ -4,11 +4,13 @@ import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
+	"xorm.io/xorm"
 )
 
 type FriendLinkService interface {
@@ -51,10 +53,11 @@ func (f *MyFriendLinkService) ListFriendLinkDTO(c *gin.Context) model.ResultVO {
 	}
 	engine := ormInit.GetEngine()
 	var friendLinks []entity.TFriendLink
+	limit, offset := pgsql.Page(vo.Current, vo.Size)
 	if vo.Keywords != "" {
-		err = engine.Prepare().Where("link_name like '%"+vo.Keywords+"%'").Limit(vo.Size, vo.Size*(vo.Current-1)).Find(&friendLinks)
+		err = engine.Prepare().Where("link_name LIKE ? ESCAPE '\\'", pgsql.ContainsPattern(vo.Keywords)).Limit(limit, offset).Find(&friendLinks)
 	} else {
-		err = engine.Prepare().Limit(vo.Size, vo.Size*(vo.Current-1)).Find(&friendLinks)
+		err = engine.Prepare().Limit(limit, offset).Find(&friendLinks)
 	}
 	if err != nil {
 		zlog.Error(err.Error())
@@ -82,20 +85,17 @@ func (f *MyFriendLinkService) SaveOrUpdateFriendLink(c *gin.Context) model.Resul
 	}
 	var friendLink entity.TFriendLink
 	shared.StructCopy(vo, &friendLink)
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	if friendLink.Id != 0 {
-		_, err = session.Prepare().ID(friendLink.Id).Update(&friendLink)
-	} else {
-		_, err = session.Prepare().Insert(&friendLink)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if friendLink.Id != 0 {
+			_, err = session.ID(friendLink.Id).Update(&friendLink)
+		} else {
+			_, err = session.Insert(&friendLink)
+		}
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 

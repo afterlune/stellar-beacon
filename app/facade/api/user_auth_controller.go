@@ -84,7 +84,7 @@ func Logout(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, userAuthService.Logout(dto.Id))
+	c.JSON(http.StatusOK, userAuthService.Logout(c.Request.Context(), dto.Id))
 }
 
 // QQLogin

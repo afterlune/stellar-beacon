@@ -7,7 +7,7 @@ import (
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
-	"fmt"
+	"context"
 	"github.com/gin-gonic/gin"
 	"strconv"
 	"xorm.io/xorm"
@@ -21,7 +21,7 @@ type CommentService interface {
 	ListCommentBackDTO(c *gin.Context) model.ResultVO
 	UpdateCommentsReview(c *gin.Context) model.ResultVO
 	DeleteComments(c *gin.Context) model.ResultVO
-	checkComment(vo model.CommentVO) string
+	checkComment(ctx context.Context, vo model.CommentVO) string
 }
 
 type MyCommentService struct{}
@@ -44,15 +44,18 @@ func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	sql := ""
-	if commentVO.TopicId == "" {
-		sql = fmt.Sprintf("select count(0) from t_comment where type = %d and is_review = %d", commentVO.Type, shared.TRUE)
-	} else {
-		sql = fmt.Sprintf("select count(0) from t_comment where topic_id = %s and type = %d and is_review = %d",
-			commentVO.TopicId, commentVO.Type, shared.TRUE)
+	sql := "select count(0) from t_comment where type = ? and is_review = ?"
+	args := []interface{}{commentVO.Type, shared.TRUE}
+	if commentVO.TopicId != "" {
+		topicID, parseErr := strconv.Atoi(commentVO.TopicId)
+		if parseErr != nil {
+			return model.ResultFailWithMessage("参数校验异常")
+		}
+		sql += " and topic_id = ?"
+		args = append(args, topicID)
 	}
 	var count int
-	_, err = ormInit.GetEngine().SQL(sql).Get(&count)
+	_, err = ormInit.GetEngine().Context(ctx.Request.Context()).SQL(sql, args...).Get(&count)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -84,13 +87,20 @@ func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 
 func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 	var commentVO model.CommentVO
-	zlog.Unwrap(ctx.ShouldBind(&commentVO))
+	if err := ctx.ShouldBind(&commentVO); err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 
-	s := c.checkComment(commentVO)
+	s := c.checkComment(ctx.Request.Context(), commentVO)
 	if s != "" {
 		return model.ResultFailWithMessage(s)
 	}
-	websiteConfig := benetnaschService.GetWebsiteConfig().Data.(model.WebsiteConfigDTO)
+	websiteConfigResult := benetnaschService.GetWebsiteConfig(ctx.Request.Context())
+	websiteConfig, ok := websiteConfigResult.Data.(model.WebsiteConfigDTO)
+	if !ok {
+		return websiteConfigResult
+	}
 	// TODO过滤敏感词汇
 	isCommentReview, _ := strconv.Atoi(strconv.Itoa(websiteConfig.IsCommentReview))
 	isReview := 0
@@ -101,6 +111,9 @@ func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 		isReview = 1
 	}
 	topicId, err := strconv.Atoi(commentVO.TopicId)
+	if err != nil {
+		return model.ResultFailWithMessage("参数校验异常")
+	}
 
 	value, _ := ctx.Get("userInfo")
 	dto := value.(model.UserDetailsDTO)
@@ -114,22 +127,12 @@ func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 		Type:           commentVO.Type,
 		IsReview:       isReview,
 	}
-	session := ormInit.GetEngine().NewSession()
-	zlog.Unwrap(session.Begin())
-	defer session.Close()
-	defer func(session *xorm.Session) {
-		zlog.Unwrap(session.Close())
-	}(session)
-
-	_, err = session.Prepare().Insert(comment)
-	if err != nil {
+	if err := ormInit.WithTx(ctx.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Insert(&comment)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		return model.ResultVO{}
-	}
-	err = session.Commit()
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultVO{}
+		return model.ResultFail()
 	}
 	return model.ResultOk()
 }
@@ -164,6 +167,7 @@ func (c *MyCommentService) UpdateCommentsReview(ctx *gin.Context) model.ResultVO
 	err := ctx.ShouldBind(&vo)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	var comments []entity.TComment
 	for _, v := range vo.Ids {
@@ -173,18 +177,17 @@ func (c *MyCommentService) UpdateCommentsReview(ctx *gin.Context) model.ResultVO
 		}
 		comments = append(comments, comment)
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	for _, v := range comments {
-		_, err = session.Prepare().ID(v.Id).MustCols("is_review").Update(&v)
-		if err != nil {
-			zlog.Error(err.Error())
-			zlog.Unwrap(session.Rollback())
-			return model.ResultFail()
+	if err := ormInit.WithTx(ctx.Request.Context(), func(session *xorm.Session) error {
+		for _, v := range comments {
+			if _, err := session.ID(v.Id).MustCols("is_review").Update(&v); err != nil {
+				return err
+			}
 		}
+		return nil
+	}); err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -194,7 +197,7 @@ func (c *MyCommentService) DeleteComments(ctx *gin.Context) model.ResultVO {
 	if err != nil {
 		zlog.Error(err.Error())
 	}
-	_, err = ormInit.GetEngine().In("id", iDs).Delete(&entity.TComment{})
+	_, err = ormInit.GetEngine().Context(ctx.Request.Context()).In("id", iDs).Delete(&entity.TComment{})
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -202,8 +205,8 @@ func (c *MyCommentService) DeleteComments(ctx *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func (c *MyCommentService) checkComment(vo model.CommentVO) string {
-	engine := ormInit.GetEngine()
+func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO) string {
+	engine := ormInit.GetEngine().Context(ctx)
 	if len(shared.TypeHM[vo.Type]) == 0 {
 		return "参数校验异常"
 	}
@@ -214,14 +217,22 @@ func (c *MyCommentService) checkComment(vo model.CommentVO) string {
 		} else {
 			if vo.Type == shared.ARTICLE {
 				var article entity.TArticle
-				get, err := engine.SQL("select id, user_id from t_article where id = " + vo.TopicId).Get(&article)
+				topicID, parseErr := strconv.Atoi(vo.TopicId)
+				if parseErr != nil {
+					return "参数校验异常"
+				}
+				get, err := engine.SQL("select id, user_id from t_article where id = ?", topicID).Get(&article)
 				if err != nil || !get {
 					return "参数校验异常"
 				}
 			}
 			if vo.Type == shared.TALK {
 				var talk entity.TTalk
-				get, err := engine.SQL("select id, user_id from t_talk where id = " + vo.TopicId).Get(&talk)
+				topicID, parseErr := strconv.Atoi(vo.TopicId)
+				if parseErr != nil {
+					return "参数校验异常"
+				}
+				get, err := engine.SQL("select id, user_id from t_talk where id = ?", topicID).Get(&talk)
 				if err != nil || !get {
 					return "参数校验异常"
 				}
@@ -239,7 +250,7 @@ func (c *MyCommentService) checkComment(vo model.CommentVO) string {
 
 	if vo.ParentId != 0 {
 		var parentComment entity.TComment
-		get, err := engine.SQL("select id, parent_id, type from t_comment where id = " + strconv.Itoa(vo.ParentId)).Get(&parentComment)
+		get, err := engine.SQL("select id, parent_id, type from t_comment where id = ?", vo.ParentId).Get(&parentComment)
 		if err != nil || !get {
 			return "参数校验异常"
 		}
@@ -253,7 +264,7 @@ func (c *MyCommentService) checkComment(vo model.CommentVO) string {
 			return "参数校验异常"
 		} else {
 			var userInfo entity.TUserInfo
-			get, err := engine.SQL("select id from t_user_info where id = " + strconv.Itoa(vo.ReplyUserId)).Get(&userInfo)
+			get, err := engine.SQL("select id from t_user_info where id = ?", vo.ReplyUserId).Get(&userInfo)
 			if err != nil || !get {
 				return "参数校验异常"
 			}

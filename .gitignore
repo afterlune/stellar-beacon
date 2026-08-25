@@ -19,3 +19,13 @@
 
 # Go workspace file
 go.work
+
+# Local secrets and runtime configuration
+.env
+.env.*
+!.env.example
+resource/config-*.local.yaml
+
+# Runtime logs
+*.log
+resource/log/

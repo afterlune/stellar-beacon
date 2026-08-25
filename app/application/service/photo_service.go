@@ -5,12 +5,13 @@ import (
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/oss"
 	"benetnasch/app/infra/persistence/ormInit"
+	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"strconv"
+	"xorm.io/xorm"
 )
 
 type PhotoService interface {
@@ -29,9 +30,8 @@ type MyPhotoService struct{}
 func (p *MyPhotoService) SavePhotosAlbumCover(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
-		if err != nil {
-			return model.ResultFail()
-		}
+		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	fileUri := oss.Upload(file, "photos/")
 	return model.ResultOkWithData(shared.FILEURL + fileUri)
@@ -45,14 +45,15 @@ func (p *MyPhotoService) ListPhotos(c *gin.Context) model.ResultVO {
 	}
 	engine := ormInit.GetEngine()
 	var photos []entity.TPhoto
+	limit, offset := pgsql.Page(vo.Current, vo.Size)
 	if vo.AlbumId != 0 {
 		err = engine.Prepare().
-			SQL(fmt.Sprintf("select * from t_photo where album_id = %d and is_delete = %d order by id, update_time desc limit %d offset %d",
-				vo.AlbumId, vo.IsDelete, vo.Size, vo.Size*(vo.Current-1))).Find(&photos)
+			SQL("select * from t_photo where album_id = ? and is_delete = ? order by id, update_time desc limit ? offset ?",
+				vo.AlbumId, vo.IsDelete, limit, offset).Find(&photos)
 	} else {
 		err = engine.Prepare().
-			SQL(fmt.Sprintf("select * from t_photo where is_delete = %d order by id, update_time desc limit %d offset %d",
-				vo.IsDelete, vo.Size, vo.Size*(vo.Current-1))).Find(&photos)
+			SQL("select * from t_photo where is_delete = ? order by id, update_time desc limit ? offset ?",
+				vo.IsDelete, limit, offset).Find(&photos)
 	}
 	if err != nil {
 		return model.ResultFail()
@@ -77,16 +78,13 @@ func (p *MyPhotoService) UpdatePhoto(c *gin.Context) model.ResultVO {
 	}
 	var photo entity.TPhoto
 	shared.StructCopy(vo, &photo)
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	_, err = session.Prepare().ID(photo.Id).Update(&photo)
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.ID(photo.Id).Update(&photo)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -107,16 +105,16 @@ func (p *MyPhotoService) SavePhotos(c *gin.Context) model.ResultVO {
 			PhotoSrc:  v,
 		})
 	}
-	session := ormInit.GetEngine().NewSession()
-	zlog.Unwrap(session.Begin())
-	defer session.Close()
-	_, err = session.Prepare().Insert(&photos)
-	if err != nil {
+	if len(photos) == 0 {
+		return model.ResultOk()
+	}
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Insert(&photos)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return model.ResultFail()
 	}
-	zlog.Unwrap(session.Commit())
 	return model.ResultOk()
 }
 
@@ -134,18 +132,17 @@ func (p *MyPhotoService) UpdatePhotosAlbum(c *gin.Context) model.ResultVO {
 			AlbumId: vo.AlbumId,
 		})
 	}
-	session := ormInit.GetEngine().NewSession()
-	zlog.Unwrap(session.Begin())
-	defer session.Close()
-	for _, v := range photos {
-		_, err = session.Prepare().ID(v.Id).Update(&v)
-		if err != nil {
-			zlog.Error(err.Error())
-			zlog.Unwrap(session.Rollback())
-			return model.ResultFail()
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		for _, v := range photos {
+			if _, err := session.ID(v.Id).Update(&v); err != nil {
+				return err
+			}
 		}
+		return nil
+	}); err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -163,42 +160,34 @@ func (p *MyPhotoService) UpdatePhotoDelete(c *gin.Context) model.ResultVO {
 			IsDelete: vo.IsDelete,
 		})
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	for _, v := range photos {
-		_, err = session.Prepare().ID(v.Id).MustCols("is_delete").Update(&v)
-		if err != nil {
-			zlog.Error(err.Error())
-			zlog.Unwrap(session.Rollback())
-			return model.ResultFail()
-		}
-	}
-	if vo.IsDelete == 0 {
-		var photoList []entity.TPhoto
-		err = session.Prepare().Select("album_id").In("id", vo.Ids).GroupBy("album_id").Find(&photoList)
-		if err != nil {
-			zlog.Error(err.Error())
-			session.Rollback()
-			return model.ResultFail()
-		}
-		var photoAlbums []entity.TPhotoAlbum
-		for _, v := range photoList {
-			photoAlbums = append(photoAlbums, entity.TPhotoAlbum{
-				Id:       v.AlbumId,
-				IsDelete: shared.FALSE,
-			})
-		}
-		for _, v := range photoAlbums {
-			_, err = session.Prepare().ID(v.Id).Update(&v)
-			if err != nil {
-				zlog.Error(err.Error())
-				session.Rollback()
-				return model.ResultFail()
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		for _, v := range photos {
+			if _, err := session.ID(v.Id).MustCols("is_delete").Update(&v); err != nil {
+				return err
 			}
 		}
+		if vo.IsDelete == 0 && len(vo.Ids) > 0 {
+			var photoList []entity.TPhoto
+			if err := session.Select("album_id").In("id", vo.Ids).GroupBy("album_id").Find(&photoList); err != nil {
+				return err
+			}
+			var photoAlbums []entity.TPhotoAlbum
+			for _, v := range photoList {
+				photoAlbums = append(photoAlbums, entity.TPhotoAlbum{Id: v.AlbumId, IsDelete: shared.FALSE})
+			}
+			for _, v := range photoAlbums {
+				if _, err := session.ID(v.Id).Update(&v); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		if err != nil {
+			zlog.Error(err.Error())
+		}
+		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -220,10 +209,13 @@ func (p *MyPhotoService) DeletePhotos(c *gin.Context) model.ResultVO {
 func (p *MyPhotoService) ListPhotosByAlbumId(c *gin.Context) model.ResultVO {
 	current := c.Query("current")
 	size := c.Query("size")
-	albumId := c.Param("albumId")
+	albumID, parseErr := strconv.Atoi(c.Param("albumId"))
+	if parseErr != nil {
+		return model.ResultFailWithMessage("相册不存在")
+	}
 	engine := ormInit.GetEngine()
 	var photoAlbum entity.TPhotoAlbum
-	_, err := engine.Where("id = " + albumId + " and is_delete = 0 and status = 1").Get(&photoAlbum)
+	_, err := engine.Where("id = ? and is_delete = 0 and status = 1", albumID).Get(&photoAlbum)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -234,16 +226,17 @@ func (p *MyPhotoService) ListPhotosByAlbumId(c *gin.Context) model.ResultVO {
 	var photos []entity.TPhoto
 	cu, err := strconv.Atoi(current)
 	if err != nil {
-		zlog.Error(err.Error())
+		cu = 1
 	}
 
 	si, err := strconv.Atoi(size)
 	if err != nil {
-		zlog.Error(err.Error())
+		si = pgsql.DefaultPageSize
 	}
+	limit, offset := pgsql.Page(cu, si)
 
-	err = engine.SQL("select photo_src from t_photo where album_id = " + albumId + " and is_delete = 0 order by id desc " +
-		"limit " + size + " offset " + strconv.Itoa((cu-1)*si)).Find(&photos)
+	err = engine.SQL("select photo_src from t_photo where album_id = ? and is_delete = 0 order by id desc limit ? offset ?",
+		albumID, limit, offset).Find(&photos)
 	if err != nil {
 		zlog.Error(err.Error())
 	}

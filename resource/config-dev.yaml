@@ -6,33 +6,33 @@ verification: "127.0.0.1"
 # MeiliSearch 密码至少16字节
 meiliSearch:
   host: "host.docker.internal"
-  apiKey: "[REDACTED_SECRET]"
+  apiKey: "${MEILI_MASTER_KEY}"
   port: 7700
 # redis
 redis:
   host: "host.docker.internal"
-  password: "[REDACTED_SECRET]"
+  password: "${REDIS_PASSWORD}"
   port: 6379
   db: 1
 # email smtp 163
 emailSmtp:
   smtp: "smtp.163.com"
   email: "dev@example.test"
-  password: "[REDACTED_SECRET]"
+  password: "${SMTP_PASSWORD}"
   port: 465
 # database postgres
 database:
   driverName: "postgres"
   host: "host.docker.internal"
   username: "postgres"
-  password: "[REDACTED_SECRET]"
+  password: "${POSTGRES_PASSWORD}"
   port: 5432
   baseName: "stellar_beacon"
 # oss
 oss:
   endPoint: "https://oss-cn-shanghai.aliyuncs.com"
-  accessKeyID: "[REDACTED_SECRET]"
-  accessKeySecret: "[REDACTED_SECRET]"
+  accessKeyID: "${ALIYUN_OSS_ACCESS_KEY_ID}"
+  accessKeySecret: "${ALIYUN_OSS_ACCESS_KEY_SECRET}"
   bucketName: "example-bucket"
 
 logger:

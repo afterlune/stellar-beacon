@@ -5,14 +5,13 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/zlog"
-	"fmt"
+	"context"
 )
 
-func ListUniqueViews(startTime, endTime string) []model.UniqueViewDTO {
-	s := fmt.Sprintf(pgsql.ListUniqueViews, startTime, endTime)
-	engine := ormInit.GetEngine()
+func ListUniqueViews(ctx context.Context, startTime, endTime string) []model.UniqueViewDTO {
+	engine := ormInit.GetEngine().Context(ctx)
 	var uqvs []model.UniqueViewDTO
-	err := engine.SQL(s).Find(&uqvs)
+	err := engine.SQL(pgsql.ListUniqueViews, startTime, endTime).Find(&uqvs)
 	if err != nil {
 		zlog.Error(err.Error())
 	}

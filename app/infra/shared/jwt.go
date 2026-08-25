@@ -2,12 +2,12 @@ package shared
 
 import (
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/zlog"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -18,239 +18,222 @@ import (
 	"github.com/google/uuid"
 )
 
-// 全局 Ed25519 密钥对
+const jwtIssuer = "红白"
+
 var (
 	ed25519PublicKey  ed25519.PublicKey
 	ed25519PrivateKey ed25519.PrivateKey
+	keyLoadErr        error
 )
 
-// 初始化 Ed25519 密钥对
 func init() {
-	loadOrGenerateKeys()
+	keyLoadErr = loadOrGenerateKeys()
 }
 
-// 加载或生成密钥
-func loadOrGenerateKeys() {
-	// 尝试从环境变量加载密钥
+func loadOrGenerateKeys() error {
 	privateKeyBase64 := os.Getenv("JWT_PRIVATE_KEY")
 	publicKeyBase64 := os.Getenv("JWT_PUBLIC_KEY")
-
-	if privateKeyBase64 != "" && publicKeyBase64 != "" {
-		// 解析已有密钥
-		privateKey, err := base64.StdEncoding.DecodeString(privateKeyBase64)
-		if err != nil {
-			zlog.Error("Failed to decode private key: " + err.Error())
-			generateAndSaveKeys()
-			return
+	if privateKeyBase64 == "" || publicKeyBase64 == "" {
+		if strings.EqualFold(os.Getenv("JWT_ALLOW_EPHEMERAL"), "true") {
+			publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				return fmt.Errorf("generate ephemeral JWT key: %w", err)
+			}
+			ed25519PublicKey = publicKey
+			ed25519PrivateKey = privateKey
+			return nil
 		}
-
-		publicKey, err := base64.StdEncoding.DecodeString(publicKeyBase64)
-		if err != nil {
-			zlog.Error("Failed to decode public key: " + err.Error())
-			generateAndSaveKeys()
-			return
-		}
-
-		ed25519PrivateKey = ed25519.PrivateKey(privateKey)
-		ed25519PublicKey = ed25519.PublicKey(publicKey)
-		zlog.Info("Loaded JWT keys from environment variables")
-	} else {
-		// 生成新密钥
-		generateAndSaveKeys()
+		return errors.New("JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured")
 	}
-}
 
-// 生成并保存密钥
-func generateAndSaveKeys() {
-	var err error
-	ed25519PublicKey, ed25519PrivateKey, err = ed25519.GenerateKey(rand.Reader)
+	privateKey, err := base64.StdEncoding.DecodeString(privateKeyBase64)
 	if err != nil {
-		log.Fatalf("Error generating Ed25519 keys: %v", err)
+		return fmt.Errorf("decode JWT private key: %w", err)
 	}
-
-	// 编码为base64并输出（实际生产环境中应该存储到安全的地方）
-	privateKeyBase64 := base64.StdEncoding.EncodeToString(ed25519PrivateKey)
-	publicKeyBase64 := base64.StdEncoding.EncodeToString(ed25519PublicKey)
-
-	zlog.Info("Generated new JWT keys")
-	zlog.Debug("Private key: " + privateKeyBase64)
-	zlog.Debug("Public key: " + publicKeyBase64)
+	publicKey, err := base64.StdEncoding.DecodeString(publicKeyBase64)
+	if err != nil {
+		return fmt.Errorf("decode JWT public key: %w", err)
+	}
+	if len(privateKey) != ed25519.PrivateKeySize || len(publicKey) != ed25519.PublicKeySize {
+		return errors.New("invalid Ed25519 JWT key length")
+	}
+	ed25519PrivateKey = ed25519.PrivateKey(privateKey)
+	ed25519PublicKey = ed25519.PublicKey(publicKey)
+	if !ed25519PrivateKey.Public().(ed25519.PublicKey).Equal(ed25519PublicKey) {
+		ed25519PrivateKey = nil
+		ed25519PublicKey = nil
+		return errors.New("JWT public key does not match private key")
+	}
+	return nil
 }
 
-// CreateToken 创建访问令牌
 func CreateToken(dto *model.UserDetailsDTO) (string, string, error) {
-	refreshToken(dto)
-	userAuthId := strconv.Itoa(dto.Id)
+	return CreateTokenCtx(context.Background(), dto)
+}
 
-	// 创建访问令牌
+func CreateTokenCtx(ctx context.Context, dto *model.UserDetailsDTO) (string, string, error) {
+	if keyLoadErr != nil {
+		return "", "", keyLoadErr
+	}
+	if err := refreshTokenCtx(ctx, dto); err != nil {
+		return "", "", err
+	}
+	userAuthID := strconv.Itoa(dto.Id)
+	now := time.Now()
+
 	accessTokenClaims := jwt2.RegisteredClaims{
 		ID:        GetUUID(),
-		Subject:   userAuthId,
-		Issuer:    "红白",
-		IssuedAt:  jwt2.NewNumericDate(time.Now()),
-		ExpiresAt: jwt2.NewNumericDate(time.Now().Add(EXPIRE_TIME)),
+		Subject:   userAuthID,
+		Issuer:    jwtIssuer,
+		IssuedAt:  jwt2.NewNumericDate(now),
+		ExpiresAt: jwt2.NewNumericDate(now.Add(EXPIRE_TIME)),
 	}
-	accessToken := jwt2.NewWithClaims(jwt2.SigningMethodEdDSA, accessTokenClaims)
-	accessTokenString, err := accessToken.SignedString(ed25519PrivateKey)
+	accessTokenString, err := signToken(accessTokenClaims)
 	if err != nil {
-		zlog.Error("Failed to sign access token: " + err.Error())
-		return "", "", err
+		return "", "", fmt.Errorf("sign access token: %w", err)
 	}
 
-	// 创建刷新令牌
 	refreshTokenClaims := jwt2.RegisteredClaims{
 		ID:        GetUUID(),
-		Subject:   userAuthId,
-		Issuer:    "红白",
-		IssuedAt:  jwt2.NewNumericDate(time.Now()),
-		ExpiresAt: jwt2.NewNumericDate(time.Now().Add(REFRESH_EXPIRE_TIME)),
+		Subject:   userAuthID,
+		Issuer:    jwtIssuer,
+		IssuedAt:  jwt2.NewNumericDate(now),
+		ExpiresAt: jwt2.NewNumericDate(now.Add(REFRESH_EXPIRE_TIME)),
 	}
-	refreshToken := jwt2.NewWithClaims(jwt2.SigningMethodEdDSA, refreshTokenClaims)
-	refreshTokenString, err := refreshToken.SignedString(ed25519PrivateKey)
+	refreshTokenString, err := signToken(refreshTokenClaims)
 	if err != nil {
-		zlog.Error("Failed to sign refresh token: " + err.Error())
-		return "", "", err
+		return "", "", fmt.Errorf("sign refresh token: %w", err)
 	}
-
-	// 存储刷新令牌
-	success := HSet(REFRESH_TOKEN_PREFIX+userAuthId, refreshTokenString, refreshTokenString, REFRESH_EXPIRE_TIME)
-	if !success {
-		zlog.Error("Failed to store refresh token")
-		return "", "", fmt.Errorf("failed to store refresh token")
+	if err := HSetCtx(ctx, REFRESH_TOKEN_PREFIX+userAuthID, refreshTokenString, refreshTokenString, REFRESH_EXPIRE_TIME); err != nil {
+		return "", "", fmt.Errorf("store refresh token: %w", err)
 	}
-
 	return accessTokenString, refreshTokenString, nil
 }
 
-func refreshToken(dto *model.UserDetailsDTO) {
-	expireTime := time.Now().Add(EXPIRE_TIME)
-	dto.ExpireTime = expireTime
+func signToken(claims jwt2.RegisteredClaims) (string, error) {
+	token := jwt2.NewWithClaims(jwt2.SigningMethodEdDSA, claims)
+	return token.SignedString(ed25519PrivateKey)
+}
+
+func refreshTokenCtx(ctx context.Context, dto *model.UserDetailsDTO) error {
+	dto.ExpireTime = time.Now().Add(EXPIRE_TIME)
 	dto.LastLoginTime = time.Now()
-	marshal, err := json.Marshal(dto)
+	data, err := json.Marshal(dto)
 	if err != nil {
-		zlog.Error("Failed to marshal user details: " + err.Error())
+		return fmt.Errorf("marshal user details: %w", err)
 	}
-	HSet(LOGIN_USER, strconv.Itoa(dto.Id), marshal, EXPIRE_TIME)
+	if err := HSetCtx(ctx, LOGIN_USER, strconv.Itoa(dto.Id), data, EXPIRE_TIME); err != nil {
+		return fmt.Errorf("store login user: %w", err)
+	}
+	return nil
 }
 
 func GetUUID() string {
 	newUUID, err := uuid.NewUUID()
 	if err != nil {
-		zlog.Error("Failed to generate UUID: " + err.Error())
+		return ""
 	}
 	return strings.ReplaceAll(newUUID.String(), "-", "")
 }
 
-// TokenParse 解析并验证令牌
 func TokenParse(tokenStr string) (jwt2.MapClaims, error) {
-	// 检查令牌是否在黑名单中
-	if IsTokenBlacklisted(tokenStr) {
-		return nil, fmt.Errorf("token is blacklisted")
+	return TokenParseCtx(context.Background(), tokenStr)
+}
+
+func TokenParseCtx(ctx context.Context, tokenStr string) (jwt2.MapClaims, error) {
+	if tokenStr == "" {
+		return nil, errors.New("empty token")
+	}
+	if keyLoadErr != nil {
+		return nil, keyLoadErr
+	}
+	if blacklisted, err := IsTokenBlacklistedCtx(ctx, tokenStr); err != nil {
+		return nil, err
+	} else if blacklisted {
+		return nil, errors.New("token is blacklisted")
 	}
 
 	token, err := jwt2.Parse(tokenStr, func(token *jwt2.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt2.SigningMethodEd25519); !ok {
+		if token.Method != jwt2.SigningMethodEdDSA {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return ed25519PublicKey, nil
-	})
-
+	}, jwt2.WithValidMethods([]string{jwt2.SigningMethodEdDSA.Alg()}), jwt2.WithIssuer(jwtIssuer))
 	if err != nil {
-		zlog.Error("Failed to parse token: " + err.Error())
 		return nil, err
 	}
-
-	if claims, ok := token.Claims.(jwt2.MapClaims); ok && token.Valid {
-		return claims, nil
-	} else {
-		return nil, fmt.Errorf("invalid token")
+	claims, ok := token.Claims.(jwt2.MapClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid token")
 	}
+	return claims, nil
 }
 
-// InvalidateToken 将令牌加入黑名单
 func InvalidateToken(tokenStr string) error {
-	// 解析令牌获取过期时间
+	return InvalidateTokenCtx(context.Background(), tokenStr)
+}
+
+func InvalidateTokenCtx(ctx context.Context, tokenStr string) error {
 	claims, err := parseTokenWithoutValidation(tokenStr)
 	if err != nil {
 		return err
 	}
-
-	// 计算过期时间
-	var ttl time.Duration
+	ttl := time.Hour
 	if exp, ok := claims["exp"].(float64); ok {
-		expTime := time.Unix(int64(exp), 0)
-		ttl = time.Until(expTime)
+		ttl = time.Until(time.Unix(int64(exp), 0))
 		if ttl < 0 {
 			ttl = 0
 		}
-	} else {
-		// 如果没有过期时间，设置默认TTL为1小时
-		ttl = time.Hour
 	}
-
-	// 添加到黑名单
-	success := HSet(TOKEN_BLACKLIST, tokenStr, "1", ttl)
-	if !success {
-		zlog.Error("Failed to add token to blacklist")
-		return fmt.Errorf("failed to add token to blacklist")
-	}
-
-	zlog.Info("Token added to blacklist")
-	return nil
+	return HSetCtx(ctx, TOKEN_BLACKLIST, tokenStr, "1", ttl)
 }
 
-// IsTokenBlacklisted 检查令牌是否在黑名单中
 func IsTokenBlacklisted(tokenStr string) bool {
-	result := HGet(TOKEN_BLACKLIST, tokenStr)
-	return result != ""
+	result, err := IsTokenBlacklistedCtx(context.Background(), tokenStr)
+	return err == nil && result
 }
 
-// RefreshToken 使用刷新令牌获取新的访问令牌
+func IsTokenBlacklistedCtx(ctx context.Context, tokenStr string) (bool, error) {
+	value, err := HGetCtx(ctx, TOKEN_BLACKLIST, tokenStr)
+	return value != "", err
+}
+
 func RefreshToken(refreshTokenStr string) (string, string, error) {
-	// 解析刷新令牌
-	claims, err := TokenParse(refreshTokenStr)
+	return RefreshTokenCtx(context.Background(), refreshTokenStr)
+}
+
+func RefreshTokenCtx(ctx context.Context, refreshTokenStr string) (string, string, error) {
+	claims, err := TokenParseCtx(ctx, refreshTokenStr)
 	if err != nil {
 		return "", "", err
 	}
-
-	// 获取用户ID
-	userAuthId, ok := claims["sub"].(string)
-	if !ok || userAuthId == "" {
-		return "", "", fmt.Errorf("invalid refresh token: missing subject")
+	userAuthID, ok := claims["sub"].(string)
+	if !ok || userAuthID == "" {
+		return "", "", errors.New("invalid refresh token: missing subject")
 	}
-
-	// 验证刷新令牌是否与存储的一致
-	storedRefreshToken := HGet(REFRESH_TOKEN_PREFIX+userAuthId, refreshTokenStr)
-	if storedRefreshToken != refreshTokenStr {
-		return "", "", fmt.Errorf("invalid refresh token")
+	storedRefreshToken, err := HGetCtx(ctx, REFRESH_TOKEN_PREFIX+userAuthID, refreshTokenStr)
+	if err != nil || storedRefreshToken != refreshTokenStr {
+		return "", "", errors.New("invalid refresh token")
 	}
-
-	// 从Redis获取用户信息
-	dtoStr := HGet(LOGIN_USER, userAuthId)
-	if dtoStr == "" {
-		return "", "", fmt.Errorf("user not found")
+	dtoStr, err := HGetCtx(ctx, LOGIN_USER, userAuthID)
+	if err != nil || dtoStr == "" {
+		return "", "", errors.New("user not found")
 	}
-
-	var userDetailsDTO model.UserDetailsDTO
-	if err := json.Unmarshal([]byte(dtoStr), &userDetailsDTO); err != nil {
-		zlog.Error("Failed to unmarshal user details: " + err.Error())
-		return "", "", err
+	var dto model.UserDetailsDTO
+	if err := json.Unmarshal([]byte(dtoStr), &dto); err != nil {
+		return "", "", fmt.Errorf("unmarshal user details: %w", err)
 	}
-
-	// 生成新的访问令牌和刷新令牌
-	return CreateToken(&userDetailsDTO)
+	return CreateTokenCtx(ctx, &dto)
 }
 
-// parseTokenWithoutValidation 解析令牌但不验证签名
 func parseTokenWithoutValidation(tokenStr string) (jwt2.MapClaims, error) {
 	token, _, err := new(jwt2.Parser).ParseUnverified(tokenStr, jwt2.MapClaims{})
 	if err != nil {
 		return nil, err
 	}
-
-	if claims, ok := token.Claims.(jwt2.MapClaims); ok {
-		return claims, nil
+	claims, ok := token.Claims.(jwt2.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid token claims")
 	}
-
-	return nil, fmt.Errorf("invalid token claims")
+	return claims, nil
 }

@@ -6,10 +6,10 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"strconv"
 	"xorm.io/builder"
+	"xorm.io/xorm"
 )
 
 type ResourceService interface {
@@ -71,7 +71,7 @@ func (r *MyResourceService) ListResources(c *gin.Context) model.ResultVO {
 func (r *MyResourceService) DeleteResource(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("resourceId"))
 	engine := ormInit.GetEngine()
-	count, err := engine.Prepare().Where(fmt.Sprintf("resource_id = %d", id)).Count(&entity.TRoleResource{})
+	count, err := engine.Prepare().Where("resource_id = ?", id).Count(&entity.TRoleResource{})
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -80,7 +80,7 @@ func (r *MyResourceService) DeleteResource(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("该资源下存在角色")
 	}
 	var iDs []int
-	err = engine.Prepare().Select("id").Where(fmt.Sprintf("parent_id = %d", id)).Find(&iDs)
+	err = engine.Prepare().Select("id").Where("parent_id = ?", id).Find(&iDs)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -103,27 +103,24 @@ func (r *MyResourceService) SaveOrUpdateResource(c *gin.Context) model.ResultVO 
 	}
 	var resource entity.TResource
 	shared.StructCopy(vo, &resource)
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	if resource.Id != 0 {
-		_, err = session.Prepare().ID(resource.Id).Update(&resource)
-	} else {
-		_, err = session.Insert(&resource)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if resource.Id != 0 {
+			_, err = session.ID(resource.Id).Update(&resource)
+		} else {
+			_, err = session.Insert(&resource)
+		}
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
 func (r *MyResourceService) ListResourceOption() model.ResultVO {
 	engine := ormInit.GetEngine()
 	var resources []entity.TResource
-	err := engine.Select("id, resource_name, parent_id").Where(fmt.Sprintf("is_anonymous = %d", shared.FALSE)).Find(&resources)
+	err := engine.Select("id, resource_name, parent_id").Where("is_anonymous = ?", shared.FALSE).Find(&resources)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()

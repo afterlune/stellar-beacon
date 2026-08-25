@@ -3,29 +3,34 @@ package repository
 import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/infra/persistence/ormInit"
-	"benetnasch/app/infra/zlog"
+	"context"
+	"fmt"
 )
 
-func SaveOptLog(optLog entity.TOperationLog) {
-	session := ormInit.GetEngine().NewSession()
-	defer session.Close()
-	// 直接使用引擎插入，不使用事务，减少开销
-	// Id为指针类型，默认值为nil，xorm不会尝试插入
-	_, err := session.Insert(&optLog)
-	if err != nil {
-		zlog.Error(err.Error())
-		return
+func SaveOptLog(ctx context.Context, optLog entity.TOperationLog) (err error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
+	session := ormInit.GetEngine().NewSession().Context(ctx)
+	defer func() {
+		if closeErr := session.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close operation log session: %w", closeErr)
+		}
+	}()
+	_, err = session.Insert(&optLog)
+	return err
 }
 
-func SaveExLog(exLog entity.TExceptionLog) {
-	session := ormInit.GetEngine().NewSession()
-	defer session.Close()
-	// 直接使用引擎插入，不使用事务，减少开销
-	// Id为指针类型，默认值为nil，xorm不会尝试插入
-	_, err := session.Insert(&exLog)
-	if err != nil {
-		zlog.Error(err.Error())
-		return
+func SaveExLog(ctx context.Context, exLog entity.TExceptionLog) (err error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
+	session := ormInit.GetEngine().NewSession().Context(ctx)
+	defer func() {
+		if closeErr := session.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close exception log session: %w", closeErr)
+		}
+	}()
+	_, err = session.Insert(&exLog)
+	return err
 }

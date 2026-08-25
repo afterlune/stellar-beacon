@@ -2,335 +2,216 @@ package repository
 
 import (
 	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/zlog"
 	"container/list"
-	"fmt"
-	"strconv"
 )
 
-type ArticleRepo interface {
-	ListTopAndFeaturedArticles() []*model.ArticleCardDTO
-	ListArticles(current, size int) []*model.ArticleCardDTO
-	GetArticlesByCategoryId(current, size int, categoryId int) []*model.ArticleCardDTO
-	GetArticleById(articleId int) model.ArticleDTO
-	GetPreArticleById(articleId int) model.ArticleCardDTO
-	GetNextArticleById(articleId int) model.ArticleCardDTO
-	GetFirstArticle() model.ArticleCardDTO
-	GetLastArticle() model.ArticleCardDTO
-	ListArticlesByTagId(current, size int, tagId int) []*model.ArticleCardDTO
-	ListArchives(current, size int) []model.ArticleCardDTO
-	CountArticleAdmins(vo *model.ConditionVO) (count int)
-	ListArticlesAdmin(current, size int, vo *model.ConditionVO) []*model.ArticleAdminDTO
-	ListArticleStatistics() []model.ArticleStatisticsDTO
-}
+type ArticleRepo = port.ArticleRepository
 
 type MyArticleRepo struct{}
+
+func (a *MyArticleRepo) attachTags(articleID int, tags *[]entity.TTag) {
+	if err := ormInit.GetEngine().SQL(pgsql.ArticleTags, articleID).Find(tags); err != nil {
+		zlog.Error("load article tags: " + err.Error())
+	}
+}
+
+func setArticleTags(tags []entity.TTag) interface{} {
+	if len(tags) == 0 {
+		return list.New()
+	}
+	return tags
+}
 
 func (a *MyArticleRepo) ListTopAndFeaturedArticles() []*model.ArticleCardDTO {
 	engine := ormInit.GetEngine()
 	var articles []*model.ArticleCardDTO
-	err := engine.SQL(pgsql.ListTopAndFeaturedArticles).Find(&articles)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := engine.SQL(pgsql.ListTopAndFeaturedArticles).Find(&articles); err != nil {
+		zlog.Error("list top articles: " + err.Error())
 	}
-
-	for _, v := range articles {
+	for _, article := range articles {
 		var tags []entity.TTag
-		s := fmt.Sprintf(pgsql.ArticleTags, v.Id)
-		err := engine.SQL(s).Find(&tags)
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		if len(tags) != 0 {
-			v.Tags = tags
-			continue
-		}
-		v.Tags = list.New()
+		a.attachTags(article.Id, &tags)
+		article.Tags = setArticleTags(tags)
 	}
 	return articles
 }
 
 func (a *MyArticleRepo) ListArticles(current, size int) []*model.ArticleCardDTO {
+	limit, offset := pgsql.Page(current, size)
 	engine := ormInit.GetEngine()
 	var articles []*model.ArticleCardDTO
-	s1 := fmt.Sprintf(pgsql.ListArticles, size, (current-1)*size)
-	err := engine.SQL(s1).Find(&articles)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := engine.SQL(pgsql.ListArticles, limit, offset).Find(&articles); err != nil {
+		zlog.Error("list articles: " + err.Error())
 	}
-
-	for _, v := range articles {
+	for _, article := range articles {
 		var tags []entity.TTag
-		s2 := fmt.Sprintf(pgsql.ArticleTags, v.Id)
-		err := engine.SQL(s2).Find(&tags)
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		if len(tags) != 0 {
-			v.Tags = tags
-			continue
-		}
-		v.Tags = list.New()
+		a.attachTags(article.Id, &tags)
+		article.Tags = setArticleTags(tags)
 	}
 	return articles
 }
 
 func (a *MyArticleRepo) GetArticlesByCategoryId(current, size int, categoryId int) []*model.ArticleCardDTO {
+	limit, offset := pgsql.Page(current, size)
 	engine := ormInit.GetEngine()
 	var articles []*model.ArticleCardDTO
-	s1 := fmt.Sprintf(pgsql.GetArticlesByCategoryId, categoryId, size, (current-1)*size)
-	err := engine.SQL(s1).Find(&articles)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := engine.SQL(pgsql.GetArticlesByCategoryId, categoryId, limit, offset).Find(&articles); err != nil {
+		zlog.Error("list articles by category: " + err.Error())
 	}
-
-	for _, v := range articles {
+	for _, article := range articles {
 		var tags []entity.TTag
-		s2 := fmt.Sprintf(pgsql.ArticleTags, v.Id)
-		err := engine.SQL(s2).Find(&tags)
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		if len(tags) != 0 {
-			v.Tags = tags
-			continue
-		}
-		v.Tags = list.New()
+		a.attachTags(article.Id, &tags)
+		article.Tags = setArticleTags(tags)
 	}
 	return articles
 }
 
-func (a *MyArticleRepo) GetArticleById(articleId int) model.ArticleDTO {
+func (a *MyArticleRepo) GetArticleById(articleID int) model.ArticleDTO {
 	engine := ormInit.GetEngine()
 	var article model.ArticleDTO
-	s1 := fmt.Sprintf(pgsql.GetArticleById, articleId)
-	_, err := engine.SQL(s1).Get(&article)
-	if err != nil {
-		zlog.Error(err.Error())
+	if _, err := engine.SQL(pgsql.GetArticleById, articleID).Get(&article); err != nil {
+		zlog.Error("get article: " + err.Error())
 	}
-
 	var tags []entity.TTag
-	s2 := fmt.Sprintf(pgsql.ArticleTags, article.Id)
-	err = engine.SQL(s2).Find(&tags)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	if len(tags) != 0 {
-		article.Tags = tags
-	} else {
-		article.Tags = list.New()
-	}
+	a.attachTags(article.Id, &tags)
+	article.Tags = setArticleTags(tags)
 	return article
 }
 
-func (a *MyArticleRepo) GetPreArticleById(articleId int) model.ArticleCardDTO {
-	engine := ormInit.GetEngine()
-	var article model.ArticleCardDTO
-	s1 := fmt.Sprintf(pgsql.GetPreArticleById, articleId)
-	get, err := engine.SQL(s1).Get(&article)
-	if !get {
-		return model.ArticleCardDTO{}
-	}
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
+func (a *MyArticleRepo) cardWithTags(article model.ArticleCardDTO) model.ArticleCardDTO {
 	var tags []entity.TTag
-	s2 := fmt.Sprintf(pgsql.ArticleTags, article.Id)
-	err = engine.SQL(s2).Find(&tags)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	if len(tags) != 0 {
-		article.Tags = tags
-	} else {
-		article.Tags = list.New()
-	}
+	a.attachTags(article.Id, &tags)
+	article.Tags = setArticleTags(tags)
 	return article
 }
 
-func (a *MyArticleRepo) GetNextArticleById(articleId int) model.ArticleCardDTO {
-	engine := ormInit.GetEngine()
+func (a *MyArticleRepo) GetPreArticleById(articleID int) model.ArticleCardDTO {
 	var article model.ArticleCardDTO
-	s1 := fmt.Sprintf(pgsql.GetNextArticleById, articleId)
-	get, err := engine.SQL(s1).Get(&article)
+	get, err := ormInit.GetEngine().SQL(pgsql.GetPreArticleById, articleID).Get(&article)
+	if err != nil {
+		zlog.Error("get previous article: " + err.Error())
+	}
 	if !get {
 		return model.ArticleCardDTO{}
 	}
-	if err != nil {
-		zlog.Error(err.Error())
-	}
+	return a.cardWithTags(article)
+}
 
-	var tags []entity.TTag
-	s2 := fmt.Sprintf(pgsql.ArticleTags, article.Id)
-	err = engine.SQL(s2).Find(&tags)
+func (a *MyArticleRepo) GetNextArticleById(articleID int) model.ArticleCardDTO {
+	var article model.ArticleCardDTO
+	get, err := ormInit.GetEngine().SQL(pgsql.GetNextArticleById, articleID).Get(&article)
 	if err != nil {
-		zlog.Error(err.Error())
+		zlog.Error("get next article: " + err.Error())
 	}
-	if len(tags) != 0 {
-		article.Tags = tags
-	} else {
-		article.Tags = list.New()
+	if !get {
+		return model.ArticleCardDTO{}
 	}
-	return article
+	return a.cardWithTags(article)
+}
+
+func (a *MyArticleRepo) firstOrLast(query string) model.ArticleCardDTO {
+	var article model.ArticleCardDTO
+	if _, err := ormInit.GetEngine().SQL(query).Get(&article); err != nil {
+		zlog.Error("get article navigation: " + err.Error())
+	}
+	return a.cardWithTags(article)
 }
 
 func (a *MyArticleRepo) GetFirstArticle() model.ArticleCardDTO {
-	engine := ormInit.GetEngine()
-	var article model.ArticleCardDTO
-	_, err := engine.SQL(pgsql.GetFirstArticle).Get(&article)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
-	var tags []entity.TTag
-	s := fmt.Sprintf(pgsql.ArticleTags, article.Id)
-	err = engine.SQL(s).Find(&tags)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	if len(tags) != 0 {
-		article.Tags = tags
-	} else {
-		article.Tags = list.New()
-	}
-	return article
+	return a.firstOrLast(pgsql.GetFirstArticle)
 }
 
 func (a *MyArticleRepo) GetLastArticle() model.ArticleCardDTO {
-	engine := ormInit.GetEngine()
-	var article model.ArticleCardDTO
-	_, err := engine.SQL(pgsql.GetLastArticle).Get(&article)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
-	var tags []entity.TTag
-	s := fmt.Sprintf(pgsql.ArticleTags, article.Id)
-	err = engine.SQL(s).Find(&tags)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	if len(tags) != 0 {
-		article.Tags = tags
-	} else {
-		article.Tags = list.New()
-	}
-	return article
+	return a.firstOrLast(pgsql.GetLastArticle)
 }
 
-func (a *MyArticleRepo) ListArticlesByTagId(current, size int, tagId int) []*model.ArticleCardDTO {
+func (a *MyArticleRepo) ListArticlesByTagId(current, size int, tagID int) []*model.ArticleCardDTO {
+	limit, offset := pgsql.Page(current, size)
 	engine := ormInit.GetEngine()
 	var articles []*model.ArticleCardDTO
-	s1 := fmt.Sprintf(pgsql.ListArticlesByTagId, tagId, size, (current-1)*size)
-	err := engine.SQL(s1).Find(&articles)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := engine.SQL(pgsql.ListArticlesByTagId, tagID, limit, offset).Find(&articles); err != nil {
+		zlog.Error("list articles by tag: " + err.Error())
 	}
-
-	for _, v := range articles {
+	for _, article := range articles {
 		var tags []entity.TTag
-		s2 := fmt.Sprintf(pgsql.ArticleTags, v.Id)
-		err := engine.SQL(s2).Find(&tags)
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		if len(tags) != 0 {
-			v.Tags = tags
-			continue
-		}
-		v.Tags = list.New()
+		a.attachTags(article.Id, &tags)
+		article.Tags = setArticleTags(tags)
 	}
 	return articles
 }
 
 func (a *MyArticleRepo) ListArchives(current, size int) []model.ArticleCardDTO {
-	engine := ormInit.GetEngine()
+	limit, offset := pgsql.Page(current, size)
 	var articles []model.ArticleCardDTO
-	s := fmt.Sprintf(pgsql.ListArchives, size, (current-1)*size)
-	err := engine.SQL(s).Find(&articles)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ormInit.GetEngine().SQL(pgsql.ListArchives, limit, offset).Find(&articles); err != nil {
+		zlog.Error("list article archives: " + err.Error())
 	}
-
 	return articles
 }
 
-func (a *MyArticleRepo) CountArticleAdmins(vo *model.ConditionVO) (count int) {
-	s := fmt.Sprintf("where is_delete = %d", vo.IsDelete)
+func articleAdminFilters(vo *model.ConditionVO) (string, []interface{}) {
+	query := " WHERE a.is_delete = ?"
+	args := []interface{}{vo.IsDelete}
 	if vo.Keywords != "" {
-		s += " and article_title like '%" + vo.Keywords + "%'"
+		query += " AND a.article_title LIKE ? ESCAPE '\\'"
+		args = append(args, pgsql.ContainsPattern(vo.Keywords))
 	}
 	if vo.Status != 0 {
-		s += " and status = " + strconv.Itoa(vo.Status)
+		query += " AND a.status = ?"
+		args = append(args, vo.Status)
 	}
 	if vo.CategoryId != 0 {
-		s += " and category_id = " + strconv.Itoa(vo.CategoryId)
+		query += " AND a.category_id = ?"
+		args = append(args, vo.CategoryId)
 	}
 	if vo.Type != 0 {
-		s += " and type = " + strconv.Itoa(vo.Type)
+		query += " AND a.type = ?"
+		args = append(args, vo.Type)
 	}
 	if vo.TagId != 0 {
-		s += " and at.tag_id = " + strconv.Itoa(vo.TagId)
+		query += " AND a.id IN (SELECT article_id FROM t_article_tag WHERE tag_id = ?)"
+		args = append(args, vo.TagId)
 	}
-	engine := ormInit.GetEngine()
-	s = fmt.Sprintf(pgsql.CountArticleAdmins, s)
-	_, err := engine.SQL(s).Get(&count)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
+	return query, args
+}
 
+func (a *MyArticleRepo) CountArticleAdmins(vo *model.ConditionVO) (count int) {
+	filters, args := articleAdminFilters(vo)
+	query := "SELECT count(DISTINCT a.id) FROM t_article a LEFT JOIN t_article_tag at ON a.id = at.article_id" + filters
+	if _, err := ormInit.GetEngine().SQL(query, args...).Get(&count); err != nil {
+		zlog.Error("count admin articles: " + err.Error())
+	}
 	return count
 }
 
 func (a *MyArticleRepo) ListArticlesAdmin(current, size int, vo *model.ConditionVO) []*model.ArticleAdminDTO {
-	s := fmt.Sprintf("where is_delete = %d", vo.IsDelete)
-	if vo.Keywords != "" {
-		s += " and article_title like '%" + vo.Keywords + "%'"
+	limit, offset := pgsql.Page(current, size)
+	filters, args := articleAdminFilters(vo)
+	query := "SELECT a.id, a.article_cover, a.article_title, a.is_top, a.is_featured, a.is_delete, a.status, a.type, a.create_time, c.category_name FROM (SELECT id, article_cover, article_title, is_top, is_featured, is_delete, status, type, create_time, category_id FROM t_article a" + filters + " ORDER BY is_top DESC, is_featured DESC, id DESC LIMIT ? OFFSET ?) a LEFT JOIN t_category c ON a.category_id = c.id ORDER BY is_top DESC, is_featured DESC, a.id DESC"
+	args = append(args, limit, offset)
+	var articles []*model.ArticleAdminDTO
+	if err := ormInit.GetEngine().SQL(query, args...).Find(&articles); err != nil {
+		zlog.Error("list admin articles: " + err.Error())
 	}
-	if vo.Status != 0 {
-		s += " and status = " + strconv.Itoa(vo.Status)
-	}
-	if vo.CategoryId != 0 {
-		s += " and category_id = " + strconv.Itoa(vo.CategoryId)
-	}
-	if vo.Type != 0 {
-		s += " and type = " + strconv.Itoa(vo.Type)
-	}
-	if vo.TagId != 0 {
-		s += " and id in (select article_id from t_article_tag where tag_id = " + strconv.Itoa(vo.TagId) + ")"
-	}
-	engine := ormInit.GetEngine()
-	var articlesAdmin []*model.ArticleAdminDTO
-	s = fmt.Sprintf(pgsql.ListArticlesAdmin, s, size, (current-1)*size)
-	err := engine.SQL(s).Find(&articlesAdmin)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
-	for _, v := range articlesAdmin {
-		var tagDTOs []model.TagDTO
-		s2 := fmt.Sprintf(pgsql.ArticlesAdminTags, v.Id)
-		err := engine.SQL(s2).Find(&tagDTOs)
-		if err != nil {
-			zlog.Error(err.Error())
+	for _, article := range articles {
+		var tags []model.TagDTO
+		if err := ormInit.GetEngine().SQL(pgsql.ArticlesAdminTags, article.Id).Find(&tags); err != nil {
+			zlog.Error("load admin article tags: " + err.Error())
 		}
-
-		v.TagDTOs = tagDTOs
+		article.TagDTOs = tags
 	}
-	return articlesAdmin
+	return articles
 }
 
 func (a *MyArticleRepo) ListArticleStatistics() []model.ArticleStatisticsDTO {
-	engine := ormInit.GetEngine()
-	var articleStatistics []model.ArticleStatisticsDTO
-	err := engine.SQL(pgsql.ListArticleStatistics).Find(&articleStatistics)
-	if err != nil {
-		zlog.Error(err.Error())
+	var statistics []model.ArticleStatisticsDTO
+	if err := ormInit.GetEngine().SQL(pgsql.ListArticleStatistics).Find(&statistics); err != nil {
+		zlog.Error("list article statistics: " + err.Error())
 	}
-
-	return articleStatistics
+	return statistics
 }

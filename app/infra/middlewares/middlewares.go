@@ -10,6 +10,9 @@ import (
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -176,7 +179,7 @@ func Log() gin.HandlerFunc {
 				IpAddress:     ip,
 				IpSource:      ipSource,
 			}
-			go repository.SaveOptLog(optLog)
+			repository.EnqueueOptLog(optLog)
 		}
 		resData := make(map[string]interface{})
 		json.Unmarshal(blw.body.Bytes(), &resData)
@@ -200,15 +203,14 @@ func Log() gin.HandlerFunc {
 				IpAddress:     ip,
 				IpSource:      ipSource,
 			}
-			go repository.SaveExLog(exLog)
+			repository.EnqueueExLog(exLog)
 		}
 	}
 }
 
 func SpiderReject() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if shared.IsBot(c.Request) || !strings.Contains(c.Request.Host, config.Verification) ||
-			!strings.Contains(c.Request.Referer(), config.Verification) {
+		if shared.IsBot(c.Request) {
 			c.AbortWithStatusJSON(http.StatusForbidden, model.ResultFailWithMessage("You may be a robot！"))
 			return
 		}
@@ -218,15 +220,23 @@ func SpiderReject() gin.HandlerFunc {
 
 func Cors() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		method := c.Request.Method
-		// 限制 CORS 来源，使用配置中的 verification 值
-		c.Header("Access-Control-Allow-Origin", "http://"+config.Verification)
+		origin := c.GetHeader("Origin")
+		allowed := origin != "" && config.IsAllowedOrigin(origin)
+		if allowed {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Header("Vary", "Origin")
+		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Cache-Control, Content-Language, Content-Type")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		if method == "OPTIONS" {
+		if c.Request.Method == http.MethodOptions {
+			if origin != "" && !allowed {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
 			c.AbortWithStatus(http.StatusNoContent)
+			return
 		}
 		c.Next()
 	}
@@ -235,7 +245,7 @@ func Cors() gin.HandlerFunc {
 func LoginFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req := c.Request
-		uri := req.RequestURI
+		uri := req.URL.Path
 		if uri == "/users/login" && req.Method == http.MethodPost {
 			resultVO := Users(c)
 			c.AbortWithStatusJSON(http.StatusOK, resultVO)
@@ -255,11 +265,26 @@ func Users(c *gin.Context) model.ResultVO {
 	if !shared.CheckEmail(userVO.Username) {
 		return model.ResultFailWithMessage("邮箱格式不正确！")
 	}
-	userDetailsDTO := userAuthService.CheckUserAuth(userVO)
-	if userDetailsDTO == nil {
+	ctx := c.Request.Context()
+	ipAddress := shared.GetIpAddress(c.Request)
+	allowed, err := loginAttemptAllowed(ctx, userVO.Username, ipAddress)
+	if err != nil {
+		zlog.Error("login rate limiter failed: " + err.Error())
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
+	if !allowed {
 		return model.ResultFailWithMessage("账号或密码不正确！")
 	}
-	ipAddress := shared.GetIpAddress(c.Request)
+	userDetailsDTO := userAuthService.CheckUserAuth(ctx, userVO)
+	if userDetailsDTO == nil {
+		if err := recordLoginFailure(ctx, userVO.Username, ipAddress); err != nil {
+			zlog.Error("record login failure: " + err.Error())
+		}
+		return model.ResultFailWithMessage("账号或密码不正确！")
+	}
+	if err := clearLoginFailures(ctx, userVO.Username, ipAddress); err != nil {
+		zlog.Error("clear login failures: " + err.Error())
+	}
 	region := shared.GetIpSource(ipAddress)
 	userAuth := entity.TUserAuth{
 		Id:            userDetailsDTO.Id,
@@ -267,7 +292,7 @@ func Users(c *gin.Context) model.ResultVO {
 		IpSource:      region,
 		LastLoginTime: time.Now(),
 	}
-	userAuthService.UpdateUserIp(userAuth)
+	userAuthService.UpdateUserIp(ctx, userAuth)
 
 	regionlist := strings.Split(region, "|")
 	ipSource := "Unknown"
@@ -281,7 +306,7 @@ func Users(c *gin.Context) model.ResultVO {
 	userDetailsDTO.Browser = name + version
 	userDetailsDTO.Os = osName
 
-	accessToken, _, err := shared.CreateToken(userDetailsDTO)
+	accessToken, _, err := shared.CreateTokenCtx(ctx, userDetailsDTO)
 	if err != nil {
 		zlog.Error("Failed to create token: " + err.Error())
 		return model.ResultFailWithMessage("登录失败")
@@ -301,65 +326,132 @@ func Users(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(userInfoDTO)
 }
 
+const (
+	loginFailureWindow = 10 * time.Minute
+	loginLockDuration  = 15 * time.Minute
+	loginAccountLimit  = int64(5)
+	loginIPLimit       = int64(20)
+)
+
+func loginKey(prefix, value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return prefix + hex.EncodeToString(sum[:])
+}
+
+func normalizedLoginUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func loginAttemptAllowed(ctx context.Context, username, ip string) (bool, error) {
+	accountLock, err := shared.GetCtx(ctx, loginKey("login:lock:account:", normalizedLoginUsername(username)))
+	if err != nil {
+		return false, err
+	}
+	if accountLock != "" {
+		return false, nil
+	}
+	ipLock, err := shared.GetCtx(ctx, loginKey("login:lock:ip:", ip))
+	if err != nil {
+		return false, err
+	}
+	return ipLock == "", nil
+}
+
+func recordLoginFailure(ctx context.Context, username, ip string) error {
+	accountKey := loginKey("login:failure:account:", normalizedLoginUsername(username))
+	ipKey := loginKey("login:failure:ip:", ip)
+	accountCount, err := shared.IncrExpireCtx(ctx, accountKey, loginFailureWindow)
+	if err != nil {
+		return err
+	}
+	ipCount, err := shared.IncrExpireCtx(ctx, ipKey, loginFailureWindow)
+	if err != nil {
+		return err
+	}
+	if accountCount >= loginAccountLimit {
+		if err := shared.SetWithTimeCtx(ctx, loginKey("login:lock:account:", normalizedLoginUsername(username)), "1", loginLockDuration); err != nil {
+			return err
+		}
+	}
+	if ipCount >= loginIPLimit {
+		if err := shared.SetWithTimeCtx(ctx, loginKey("login:lock:ip:", ip), "1", loginLockDuration); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func clearLoginFailures(ctx context.Context, username, ip string) error {
+	accountKey := loginKey("login:failure:account:", normalizedLoginUsername(username))
+	ipKey := loginKey("login:failure:ip:", ip)
+	if err := shared.DelCtx(ctx, accountKey); err != nil {
+		return err
+	}
+	return shared.DelCtx(ctx, ipKey)
+}
+
 func AuthorizationFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 只对后台接口进行认证检查
-		if strings.Contains(c.Request.RequestURI, "/admin") {
-			authorization := c.Request.Header.Get(shared.TOKEN_HEADER)
-			if strings.Contains(authorization, shared.TOKEN_PREFIX) {
-				strs := strings.Split(authorization, shared.TOKEN_PREFIX)
-				if len(strs) == 2 {
-					token := strs[1]
-					if token == "" || token == "null" {
-						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
-						return
-					}
-					hm, err := shared.TokenParse(token)
-					if err != nil || hm == nil {
-						zlog.Error("Token validation failed: " + err.Error())
-						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
-						return
-					}
-					userAuthId, ok := hm["sub"].(string)
-					if !ok || userAuthId == "" {
-						c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
-						return
-					}
-					var userDetailsDTO model.UserDetailsDTO
-
-					dto := shared.HGet(shared.LOGIN_USER, userAuthId)
-					if dto == "" {
-						c.Abort()
-						c.JSON(http.StatusOK, model.ResultFailWithCode(41000))
-						return
-					}
-					err = json.Unmarshal([]byte(dto), &userDetailsDTO)
-					if err != nil {
-						zlog.Error(err.Error())
-						c.Abort()
-						c.JSON(http.StatusInternalServerError, model.ResultFailWithMessage("server error"))
-						return
-					}
-					userDetailsDTO.LastLoginTime = time.Now()
-					c.Set("userInfo", userDetailsDTO)
-					c.Next()
-				}
-			}
-			if !strings.Contains(authorization, shared.TOKEN_PREFIX) {
-				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("非法操作"))
-				return
-			}
-		} else {
+		if !isAdminPath(c.Request.URL.Path) {
 			// 前台接口不限制，直接放行
 			c.Next()
+			return
 		}
+
+		authorization := strings.TrimSpace(c.Request.Header.Get(shared.TOKEN_HEADER))
+		parts := strings.Fields(authorization)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "null" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
+			return
+		}
+		token := parts[1]
+		hm, err := shared.TokenParseCtx(c.Request.Context(), token)
+		if err != nil || hm == nil {
+			if err != nil {
+				zlog.Error("token validation failed: " + err.Error())
+			}
+			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
+			return
+		}
+		userAuthID, ok := hm["sub"].(string)
+		if !ok || userAuthID == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
+			return
+		}
+		var userDetailsDTO model.UserDetailsDTO
+		dto, err := shared.HGetCtx(c.Request.Context(), shared.LOGIN_USER, userAuthID)
+		if err != nil {
+			zlog.Error("load login user: " + err.Error())
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, model.ResultFailWithMessage("服务暂不可用"))
+			return
+		}
+		if dto == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithCode(41000))
+			return
+		}
+		if err = json.Unmarshal([]byte(dto), &userDetailsDTO); err != nil {
+			zlog.Error(err.Error())
+			c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("server error"))
+			return
+		}
+		userDetailsDTO.LastLoginTime = time.Now()
+		c.Set("userInfo", userDetailsDTO)
+		c.Next()
 	}
 }
 
+func isAdminPath(path string) bool {
+	return path == "/admin" || strings.HasPrefix(path, "/admin/")
+}
+
 // getRolesByUserInfoId 获取用户角色，优先从缓存中获取
-func getRolesByUserInfoId(userInfoId int) []string {
+func getRolesByUserInfoId(ctx context.Context, userInfoId int) []string {
 	cacheKey := fmt.Sprintf("roles:%d", userInfoId)
-	cachedRoles := shared.HGet("user_roles", cacheKey)
+	cachedRoles, err := shared.HGetCtx(ctx, "user_roles", cacheKey)
+	if err != nil {
+		zlog.Error("load cached roles: " + err.Error())
+	}
 	if cachedRoles != "" {
 		var roles []string
 		if err := json.Unmarshal([]byte(cachedRoles), &roles); err == nil {
@@ -369,7 +461,9 @@ func getRolesByUserInfoId(userInfoId int) []string {
 
 	roles := roleRepo.ListRolesByUserInfoId(userInfoId)
 	rolesJson, _ := json.Marshal(roles)
-	shared.HSet("user_roles", cacheKey, rolesJson, 1*time.Hour)
+	if err := shared.HSetCtx(ctx, "user_roles", cacheKey, rolesJson, 1*time.Hour); err != nil {
+		zlog.Error("cache roles: " + err.Error())
+	}
 	return roles
 }
 
@@ -391,15 +485,15 @@ func checkPermission(roles []string, uri, method string) (bool, string) {
 
 func CasbinResourceFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.Contains(c.Request.RequestURI, "/admin") {
+		if isAdminPath(c.Request.URL.Path) {
 			value, ok := c.Get("userInfo")
 			if !ok {
 				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
 				return
 			}
 			dto := value.(model.UserDetailsDTO)
-			roles := getRolesByUserInfoId(dto.UserInfoId)
-			ok, errorMsg := checkPermission(roles, c.Request.RequestURI, c.Request.Method)
+			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
+			ok, errorMsg := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
 			if errorMsg != "" {
 				if strings.Contains(errorMsg, "Permission check failed") {
 					c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("权限检查失败"))
@@ -435,8 +529,8 @@ func AccessLimiter() gin.HandlerFunc {
 		value, ok := c.Get("userInfo")
 		if ok {
 			dto := value.(model.UserDetailsDTO)
-			roles := getRolesByUserInfoId(dto.UserInfoId)
-			ok, errorMsg := checkPermission(roles, c.Request.RequestURI, c.Request.Method)
+			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
+			ok, errorMsg := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
 			if errorMsg != "" {
 				if strings.Contains(errorMsg, "Permission check failed") {
 					zlog.Error("Permission check failed in AccessLimiter: " + errorMsg)

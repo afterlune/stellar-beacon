@@ -8,7 +8,6 @@ import (
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
 	"container/list"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"sort"
 	"strconv"
@@ -35,6 +34,7 @@ func (u *MyUserInfoService) UpdateUserInfo(c *gin.Context) model.ResultVO {
 	err := c.ShouldBind(&userInfoVO)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	value, _ := c.Get("userInfo")
 	dto := value.(model.UserDetailsDTO)
@@ -45,32 +45,11 @@ func (u *MyUserInfoService) UpdateUserInfo(c *gin.Context) model.ResultVO {
 		Intro:    userInfoVO.Intro,
 		Website:  userInfoVO.Website,
 	}
-	session := ormInit.GetEngine().NewSession()
-	err = session.Begin()
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Exec("update t_user_info set nickname = ?, intro = ?, website = ? where id = ?", userinfo.Nickname, userinfo.Intro, userinfo.Website, userinfo.Id)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-	}
-	defer func(session *xorm.Session) {
-		err := session.Close()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-	}(session)
-	sql := fmt.Sprintf("update t_user_info set nickname = '%s', intro = '%s', website = '%s' where id = %d", userinfo.Nickname, userinfo.Intro, userinfo.Website, userinfo.Id)
-	_, err = session.Prepare().Exec(sql)
-	if err != nil {
-		err = session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		return model.ResultFail()
-	}
-	err = session.Commit()
-	if err != nil {
-		err = session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
 		return model.ResultFail()
 	}
 	return model.ResultOk()
@@ -80,7 +59,7 @@ func (u *MyUserInfoService) UpdateUserAvatar(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
 		zlog.Error(err.Error())
-
+		return model.ResultFail()
 	}
 	fileUri := oss.Upload(file, "avatar/")
 	value, _ := c.Get("userInfo")
@@ -91,32 +70,11 @@ func (u *MyUserInfoService) UpdateUserAvatar(c *gin.Context) model.ResultVO {
 		Avatar: shared.FILEURL + fileUri,
 	}
 
-	session := ormInit.GetEngine().NewSession()
-	err = session.Begin()
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Exec("update t_user_info set avatar = ? where id = ?", userinfo.Avatar, userinfo.Id)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-	}
-	defer func(session *xorm.Session) {
-		err := session.Close()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-	}(session)
-	sql := fmt.Sprintf("update t_user_info set avatar = '%s' where id = %d", userinfo.Avatar, userinfo.Id)
-	_, err = session.Prepare().Exec(sql)
-	if err != nil {
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		return model.ResultFailWithMessage(err.Error())
-	}
-	err = session.Commit()
-	if err != nil {
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
 		return model.ResultFailWithMessage(err.Error())
 	}
 	return model.ResultOkWithData(shared.FILEURL + fileUri)
@@ -129,7 +87,13 @@ func (u *MyUserInfoService) SaveUserEmail(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	if shared.Get(shared.USER_CODE_KEY+vo.Email) == "" || shared.Get(shared.USER_CODE_KEY+vo.Email) != vo.Code {
+	vo.Email = strings.ToLower(strings.TrimSpace(vo.Email))
+	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+vo.Email)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
+	if code == "" || code != vo.Code {
 		return model.ResultFailWithMessage("验证码错误")
 	}
 	value, _ := c.Get("userInfo")
@@ -139,16 +103,13 @@ func (u *MyUserInfoService) SaveUserEmail(c *gin.Context) model.ResultVO {
 		Id:    dto.UserInfoId,
 		Email: vo.Email,
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	_, err = session.Prepare().ID(userInfo.Id).Update(&userInfo)
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.ID(userInfo.Id).Update(&userInfo)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -157,10 +118,11 @@ func (u *MyUserInfoService) UpdateUserSubscribe(c *gin.Context) model.ResultVO {
 	err := c.ShouldBind(&subVO)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	engine := ormInit.GetEngine()
 	var userinfo entity.TUserInfo
-	_, err = engine.ID(subVO.UserId).Get(&userinfo)
+	_, err = engine.Context(c.Request.Context()).ID(subVO.UserId).Get(&userinfo)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -170,36 +132,11 @@ func (u *MyUserInfoService) UpdateUserSubscribe(c *gin.Context) model.ResultVO {
 	userinfo.Id = subVO.UserId
 	userinfo.IsSubscribe = subVO.IsSubscribe
 
-	session := engine.NewSession()
-	err = session.Begin()
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.Exec("update t_user_info set is_subscribe = ? where id = ?", userinfo.IsSubscribe, userinfo.Id)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-	}
-	defer func(session *xorm.Session) {
-		err := session.Close()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-	}(session)
-	sql := fmt.Sprintf("update t_user_info set is_subscribe = %d where id = %d", userinfo.IsSubscribe, userinfo.Id)
-	_, err = session.Prepare().Exec(sql)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	if err != nil {
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		return model.ResultFailWithMessage(err.Error())
-	}
-	err = session.Commit()
-	if err != nil {
-		err := session.Rollback()
-		if err != nil {
-			zlog.Error(err.Error())
-		}
 		return model.ResultFailWithMessage(err.Error())
 	}
 	return model.ResultOk()
@@ -216,35 +153,26 @@ func (u *MyUserInfoService) UpdateUserRole(c *gin.Context) model.ResultVO {
 		Id:       vo.UserInfoId,
 		Nickname: vo.NickName,
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	_, err = session.Prepare().ID(userInfo.Id).Update(&userInfo)
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if _, err := session.ID(userInfo.Id).Update(&userInfo); err != nil {
+			return err
+		}
+		if _, err := session.Where("user_id = ?", vo.UserInfoId).Delete(&entity.TUserRole{}); err != nil {
+			return err
+		}
+		userRoles := make([]entity.TUserRole, 0, len(vo.RoleIds))
+		for _, v := range vo.RoleIds {
+			userRoles = append(userRoles, entity.TUserRole{RoleId: v, UserId: vo.UserInfoId})
+		}
+		if len(userRoles) == 0 {
+			return nil
+		}
+		_, err := session.Insert(&userRoles)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	_, err = session.Where(fmt.Sprintf("user_id = %d", vo.UserInfoId)).Delete(&entity.TUserRole{})
-	if err != nil {
-		zlog.Error(err.Error())
-		session.Rollback()
-		return model.ResultFail()
-	}
-	var userRoles []entity.TUserRole
-	for _, v := range vo.RoleIds {
-		userRoles = append(userRoles, entity.TUserRole{
-			RoleId: v,
-			UserId: vo.UserInfoId,
-		})
-	}
-	_, err = session.Prepare().Insert(&userRoles)
-	if err != nil {
-		zlog.Error(err.Error())
-		session.Rollback()
-		return model.ResultFail()
-	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -259,16 +187,13 @@ func (u *MyUserInfoService) UpdateUserDisable(c *gin.Context) model.ResultVO {
 		Id:        vo.Id,
 		IsDisable: vo.IsDisable,
 	}
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	_, err = session.Prepare().ID(userInfo.Id).MustCols("is_disable").Update(&userInfo)
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		_, err := session.ID(userInfo.Id).MustCols("is_disable").Update(&userInfo)
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -279,7 +204,11 @@ func (u *MyUserInfoService) ListOnlineUsers(c *gin.Context) model.ResultVO {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	userMaps := shared.HGetAll(shared.LOGIN_USER)
+	userMaps, err := shared.HGetAllCtx(c.Request.Context(), shared.LOGIN_USER)
+	if err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	var userDetailsDTOs []model.UserDetailsDTO
 	for _, v := range userMaps {
 		var dto model.UserDetailsDTO
@@ -290,14 +219,23 @@ func (u *MyUserInfoService) ListOnlineUsers(c *gin.Context) model.ResultVO {
 	shared.StructCopy(userDetailsDTOs, &userOnlineDTOs)
 	var onlineUsers []model.UserOnlineDTO
 	for _, v := range userOnlineDTOs {
-		if vo.Keywords != "" || strings.Contains(v.Nickname, vo.Keywords) {
+		if vo.Keywords == "" || strings.Contains(v.Nickname, vo.Keywords) {
 			onlineUsers = append(onlineUsers, v)
 		}
 	}
 	sort.Slice(onlineUsers, func(i, j int) bool {
 		return onlineUsers[i].LastLoginTime.After(onlineUsers[j].LastLoginTime)
 	})
+	if vo.Current < 1 {
+		vo.Current = 1
+	}
+	if vo.Size < 1 {
+		vo.Size = 10
+	}
 	fromIndex := (vo.Current - 1) * vo.Size
+	if fromIndex >= len(onlineUsers) {
+		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: len(onlineUsers)})
+	}
 	toIndex := 0
 	n := len(onlineUsers)
 	if (n - fromIndex) > vo.Size {
@@ -315,12 +253,15 @@ func (u *MyUserInfoService) ListOnlineUsers(c *gin.Context) model.ResultVO {
 func (u *MyUserInfoService) RemoveOnlineUser(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("userInfoId"))
 	var userAuth entity.TUserAuth
-	_, err := ormInit.GetEngine().Prepare().Where(fmt.Sprintf("user_info_id = %d", id)).Get(&userAuth)
+	_, err := ormInit.GetEngine().Prepare().Where("user_info_id = ?", id).Get(&userAuth)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	shared.HDel(shared.LOGIN_USER, strconv.Itoa(userAuth.Id))
+	if err := shared.HDelCtx(c.Request.Context(), shared.LOGIN_USER, strconv.Itoa(userAuth.Id)); err != nil {
+		zlog.Error(err.Error())
+		return model.ResultFail()
+	}
 	return model.ResultOk()
 }
 

@@ -7,12 +7,12 @@ import (
 	"benetnasch/app/infra/persistence/repository"
 	"benetnasch/app/infra/shared"
 	"benetnasch/app/infra/zlog"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"sort"
 	"strconv"
 	"xorm.io/builder"
+	"xorm.io/xorm"
 )
 
 type MenuService interface {
@@ -34,6 +34,7 @@ func (m *MyMenuSService) ListMenus(c *gin.Context) model.ResultVO {
 	err := c.ShouldBind(&vo)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	engine := ormInit.GetEngine()
 	var menus []*entity.TMenu
@@ -53,6 +54,10 @@ func (m *MyMenuSService) ListMenus(c *gin.Context) model.ResultVO {
 	for _, v := range catalogs {
 		var dto model.MenuDTO
 		marshal, err := json.Marshal(v)
+		if err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
 		err = json.Unmarshal(marshal, &dto)
 		if err != nil {
 			zlog.Error(err.Error())
@@ -60,6 +65,10 @@ func (m *MyMenuSService) ListMenus(c *gin.Context) model.ResultVO {
 		}
 		var list []model.MenuDTO
 		bytes, err := json.Marshal(childrenMap[v.Id])
+		if err != nil {
+			zlog.Error(err.Error())
+			return model.ResultFail()
+		}
 		err = json.Unmarshal(bytes, &list)
 		if err != nil {
 			zlog.Error(err.Error())
@@ -84,6 +93,10 @@ func (m *MyMenuSService) ListMenus(c *gin.Context) model.ResultVO {
 		for _, v := range childrenList {
 			var menuDTO model.MenuDTO
 			marshal, err := json.Marshal(v)
+			if err != nil {
+				zlog.Error(err.Error())
+				return model.ResultFail()
+			}
 			err = json.Unmarshal(marshal, &menuDTO)
 			if err != nil {
 				zlog.Error(err.Error())
@@ -107,20 +120,17 @@ func (m *MyMenuSService) SaveOrUpdateMenu(c *gin.Context) model.ResultVO {
 	}
 	var menu entity.TMenu
 	shared.StructCopy(vo, &menu)
-	session := ormInit.GetEngine().NewSession()
-	session.Begin()
-	defer session.Close()
-	if menu.Id != 0 {
-		_, err = session.Prepare().ID(menu.Id).Update(&menu)
-	} else {
-		_, err = session.Prepare().Insert(&menu)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if menu.Id != 0 {
+			_, err = session.ID(menu.Id).Update(&menu)
+		} else {
+			_, err = session.Insert(&menu)
+		}
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 
@@ -141,7 +151,7 @@ func (m *MyMenuSService) UpdateMenuIsHidden(c *gin.Context) model.ResultVO {
 func (m *MyMenuSService) DeleteMenu(c *gin.Context) model.ResultVO {
 	id, _ := strconv.Atoi(c.Param("menuId"))
 	engine := ormInit.GetEngine()
-	count, err := engine.Prepare().Where(fmt.Sprintf("menu_id = %d", id)).Count(&entity.TRoleMenu{})
+	count, err := engine.Prepare().Where("menu_id = ?", id).Count(&entity.TRoleMenu{})
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()
@@ -150,7 +160,7 @@ func (m *MyMenuSService) DeleteMenu(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("菜单下有角色关联")
 	}
 	var iDs []int
-	err = engine.Prepare().Select("id").Where(fmt.Sprintf("parent_id = %d", id)).Find(&iDs)
+	err = engine.Prepare().Select("id").Where("parent_id = ?", id).Find(&iDs)
 	if err != nil {
 		zlog.Error(err.Error())
 		return model.ResultFail()

@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"xorm.io/builder"
+	"xorm.io/xorm"
 )
 
 type CategoryService interface {
@@ -99,10 +100,11 @@ func (c *MyCategoryService) SaveOrUpdateCategory(ctx *gin.Context) model.ResultV
 	err := ctx.ShouldBind(&categoryVO)
 	if err != nil {
 		zlog.Error(err.Error())
+		return model.ResultFail()
 	}
 	engine := ormInit.GetEngine()
 	var existCategory entity.TCategory
-	_, err = engine.Select("id").Where("category_name = '" + categoryVO.CategoryName + "'").Get(&existCategory)
+	_, err = engine.Select("id").Where("category_name = ?", categoryVO.CategoryName).Get(&existCategory)
 	if err != nil {
 		zlog.Error(err.Error())
 	}
@@ -110,19 +112,16 @@ func (c *MyCategoryService) SaveOrUpdateCategory(ctx *gin.Context) model.ResultV
 		return model.ResultFailWithMessage("分类名已存在")
 	}
 	category := entity.TCategory{Id: categoryVO.Id, CategoryName: categoryVO.CategoryName}
-	session := engine.NewSession()
-	zlog.Unwrap(session.Begin())
-	defer session.Close()
-	if categoryVO.Id != 0 {
-		_, err = session.ID(categoryVO.Id).Update(&category)
-	} else {
-		_, err = session.Insert(&category)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(ctx.Request.Context(), func(session *xorm.Session) error {
+		if categoryVO.Id != 0 {
+			_, err = session.ID(categoryVO.Id).Update(&category)
+		} else {
+			_, err = session.Insert(&category)
+		}
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		zlog.Unwrap(session.Rollback())
 		return model.ResultFail()
 	}
-	zlog.Unwrap(session.Commit())
 	return model.ResultOk()
 }

@@ -121,7 +121,7 @@ type TMenu struct {
 }
 
 type TOperationLog struct {
-	// Id            *int      `xorm:"pk autoincr comment('主键id')"`
+	Id            int       `xorm:"autoincr not null pk comment('主键id')"`
 	OptModule     string    `xorm:"not null comment('操作模块') VARCHAR(20)"`
 	OptType       string    `xorm:"not null comment('操作类型') VARCHAR(20)"`
 	OptUri        string    `xorm:"not null comment('操作url') VARCHAR(255)"`

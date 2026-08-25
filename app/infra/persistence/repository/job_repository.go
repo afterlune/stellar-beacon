@@ -5,8 +5,6 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/zlog"
-	"fmt"
-	"strconv"
 )
 
 type JobRepo interface {
@@ -17,63 +15,59 @@ type JobRepo interface {
 
 type MyJobRepo struct{}
 
-func (j *MyJobRepo) CountJobs(vo *model.JobSearchVO) (count int) {
-	s := ""
+func jobFilters(vo *model.JobSearchVO) (string, []interface{}) {
+	query := ""
+	args := make([]interface{}, 0, 3)
 	if vo.JobName != "" {
-		s += " where j.job_name like '%" + vo.JobName + "%'"
+		query += " WHERE j.job_name LIKE ? ESCAPE '\\'"
+		args = append(args, pgsql.ContainsPattern(vo.JobName))
 	}
-	if vo.JobGroup != "" && s != "" {
-		s += " and j.job_group = " + vo.JobGroup
-	} else if vo.JobGroup != "" && s == "" {
-		s += " where j.job_group = " + vo.JobGroup
+	if vo.JobGroup != "" {
+		if query == "" {
+			query = " WHERE "
+		} else {
+			query += " AND "
+		}
+		query += "j.job_group = ?"
+		args = append(args, vo.JobGroup)
 	}
-	if vo.Status != 0 && s != "" {
-		s += " and j.status = " + strconv.Itoa(vo.Status)
-	} else if vo.Status != 0 && s == "" {
-		s += " where j.status = " + strconv.Itoa(vo.Status)
+	if vo.Status != 0 {
+		if query == "" {
+			query = " WHERE "
+		} else {
+			query += " AND "
+		}
+		query += "j.status = ?"
+		args = append(args, vo.Status)
 	}
-	s = fmt.Sprintf(pgsql.CountJobs, s)
-	engine := ormInit.GetEngine()
-	_, err := engine.SQL(s).Get(&count)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
+	return query, args
+}
 
+func (j *MyJobRepo) CountJobs(vo *model.JobSearchVO) (count int) {
+	filters, args := jobFilters(vo)
+	query := "SELECT count(DISTINCT j.id) FROM t_job j" + filters
+	if _, err := ormInit.GetEngine().SQL(query, args...).Get(&count); err != nil {
+		zlog.Error("count jobs: " + err.Error())
+	}
 	return count
 }
 
 func (j *MyJobRepo) ListJobs(current, size int, vo *model.JobSearchVO) []*model.JobDTO {
-	s := ""
-	if vo.JobName != "" {
-		s += " where j.job_name like '%" + vo.JobName + "%'"
-	}
-	if vo.JobGroup != "" && s != "" {
-		s += " and j.job_group = " + vo.JobGroup
-	} else if vo.JobGroup != "" && s == "" {
-		s += " where j.job_group = " + vo.JobGroup
-	}
-	if vo.Status != 0 && s != "" {
-		s += " and j.status = " + strconv.Itoa(vo.Status)
-	} else if vo.Status != 0 && s == "" {
-		s += " where j.status = " + strconv.Itoa(vo.Status)
-	}
-	s = fmt.Sprintf(pgsql.ListJobs, s, size, (current-1)*size)
-	engine := ormInit.GetEngine()
+	limit, offset := pgsql.Page(current, size)
+	filters, args := jobFilters(vo)
+	query := "SELECT * FROM t_job j" + filters + " ORDER BY j.status DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 	var jobs []*model.JobDTO
-	err := engine.SQL(s).Find(&jobs)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ormInit.GetEngine().SQL(query, args...).Find(&jobs); err != nil {
+		zlog.Error("list jobs: " + err.Error())
 	}
-
 	return jobs
 }
 
-func (j *MyJobRepo) ListJobGroups() (s []string) {
-	engine := ormInit.GetEngine()
-	err := engine.SQL(pgsql.ListJobGroups).Find(&s)
-	if err != nil {
-		zlog.Error(err.Error())
+func (j *MyJobRepo) ListJobGroups() []string {
+	var groups []string
+	if err := ormInit.GetEngine().SQL(pgsql.ListJobGroups).Find(&groups); err != nil {
+		zlog.Error("list job groups: " + err.Error())
 	}
-
-	return s
+	return groups
 }

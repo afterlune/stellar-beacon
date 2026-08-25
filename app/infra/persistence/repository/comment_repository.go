@@ -1,13 +1,11 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/zlog"
-	"fmt"
-	"strconv"
+	"strings"
 )
 
 type CommentRepo interface {
@@ -22,133 +20,115 @@ type CommentRepo interface {
 
 type MyCommentRepo struct{}
 
-func (c *MyCommentRepo) ListComments(current, size int, vo *model.CommentVO) []*model.CommentDTO {
-	engine := ormInit.GetEngine()
-	var comments []*model.CommentDTO
-	s := ""
-	if vo.TopicId != "" {
-		s += " where topic_id = " + vo.TopicId + " AND type = " + strconv.Itoa(vo.Type) + " AND c.is_review = 1 AND parent_id = 0"
-	} else {
-		s += " where type = " + strconv.Itoa(vo.Type) + " AND c.is_review = 1 AND parent_id = 0"
+func placeholders(count int) string {
+	if count <= 0 {
+		return ""
 	}
-	s = fmt.Sprintf(pgsql.ListComments, s, size, (current-1)*size)
-	err := engine.SQL(s).Find(&comments)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
+	return strings.TrimRight(strings.Repeat("?,", count), ",")
+}
 
+func intArgs(values []int) []interface{} {
+	args := make([]interface{}, 0, len(values))
+	for _, value := range values {
+		args = append(args, value)
+	}
+	return args
+}
+
+func (c *MyCommentRepo) ListComments(current, size int, vo *model.CommentVO) []*model.CommentDTO {
+	limit, offset := pgsql.Page(current, size)
+	query := "SELECT c.id, c.user_id, u.nickname, u.avatar, u.website, c.comment_content, c.create_time FROM t_comment c JOIN t_user_info u ON c.user_id = u.id WHERE c.type = ? AND c.is_review = 1 AND c.parent_id = 0"
+	args := []interface{}{vo.Type}
+	if vo.TopicId != "" {
+		query += " AND c.topic_id = ?"
+		args = append(args, vo.TopicId)
+	}
+	query += " ORDER BY c.id DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	var comments []*model.CommentDTO
+	if err := ormInit.GetEngine().SQL(query, args...).Find(&comments); err != nil {
+		zlog.Error("list comments: " + err.Error())
+	}
 	return comments
 }
 
 func (c *MyCommentRepo) ListReplies(commentIds []int) []*model.ReplyDTO {
-	engine := ormInit.GetEngine()
-	var replys []*model.ReplyDTO
-	s := "("
-	for k, v := range commentIds {
-		if k == len(commentIds)-1 {
-			s += strconv.Itoa(v) + ")"
-			break
-		}
-		s += strconv.Itoa(v) + ","
+	if len(commentIds) == 0 {
+		return []*model.ReplyDTO{}
 	}
-	s = fmt.Sprintf(pgsql.ListReplies, s)
-	err := engine.SQL(s).Find(&replys)
-	if err != nil {
-		zlog.Error(err.Error())
+	query := "SELECT * FROM (SELECT c.id, c.parent_id, c.user_id, u.nickname, u.avatar, u.website, c.reply_user_id, r.nickname AS reply_nickname, r.website AS reply_website, c.comment_content, c.create_time, row_number() OVER (PARTITION BY parent_id ORDER BY c.create_time ASC) row_num FROM t_comment c JOIN t_user_info u ON c.user_id = u.id JOIN t_user_info r ON c.reply_user_id = r.id WHERE c.is_review = 1 AND parent_id IN (" + placeholders(len(commentIds)) + ") ORDER BY c.create_time DESC) t"
+	var replies []*model.ReplyDTO
+	if err := ormInit.GetEngine().SQL(query, intArgs(commentIds)...).Find(&replies); err != nil {
+		zlog.Error("list comment replies: " + err.Error())
 	}
-
-	return replys
+	return replies
 }
 
 func (c *MyCommentRepo) ListTopSixComments() []*model.CommentDTO {
-	engine := ormInit.GetEngine()
 	var comments []*model.CommentDTO
-	err := engine.SQL(pgsql.ListTopSixComments).Find(&comments)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ormInit.GetEngine().SQL(pgsql.ListTopSixComments).Find(&comments); err != nil {
+		zlog.Error("list top comments: " + err.Error())
 	}
-
 	return comments
 }
 
-func (c *MyCommentRepo) CountComments(vo *model.ConditionVO) (count int64) {
-	s := ""
+func commentFilters(vo *model.ConditionVO) (string, []interface{}) {
+	query := " WHERE 1 = 1"
+	args := make([]interface{}, 0, 3)
 	if vo.Type != 0 {
-		s += " where c.type = " + strconv.Itoa(vo.Type)
+		query += " AND c.type = ?"
+		args = append(args, vo.Type)
 	}
-	if vo.IsReview != 0 && s != "" {
-		s += " and c.is_review = " + strconv.Itoa(vo.IsReview)
-	} else if vo.IsReview != 0 && s == "" {
-		s += " where c.is_review = " + strconv.Itoa(vo.IsReview)
+	if vo.IsReview != 0 {
+		query += " AND c.is_review = ?"
+		args = append(args, vo.IsReview)
 	}
-	if vo.Keywords != "" && s != "" {
-		s += " and u.nickname like '%" + vo.Keywords + "%'"
-	} else if vo.Keywords != "" && s == "" {
-		s += " where u.nickname like '%" + vo.Keywords + "%'"
+	if vo.Keywords != "" {
+		query += " AND u.nickname LIKE ? ESCAPE '\\'"
+		args = append(args, pgsql.ContainsPattern(vo.Keywords))
 	}
-	s = fmt.Sprintf(pgsql.CountComments, s)
-	engine := ormInit.GetEngine()
-	count, err := engine.SQL(s).Count(&entity.TComment{})
-	if err != nil {
-		zlog.Error(err.Error())
-	}
+	return query, args
+}
 
+func (c *MyCommentRepo) CountComments(vo *model.ConditionVO) (count int64) {
+	filters, args := commentFilters(vo)
+	query := "SELECT count(1) FROM t_comment c LEFT JOIN t_user_info u ON c.user_id = u.id" + filters
+	if _, err := ormInit.GetEngine().SQL(query, args...).Get(&count); err != nil {
+		zlog.Error("count comments: " + err.Error())
+	}
 	return count
 }
 
 func (c *MyCommentRepo) ListCommentsAdmin(current, size int, vo *model.ConditionVO) []*model.CommentAdminDTO {
-	s := ""
-	if vo.Type != 0 {
-		s += " where c.type = " + strconv.Itoa(vo.Type)
+	limit, offset := pgsql.Page(current, size)
+	filters, args := commentFilters(vo)
+	query := "SELECT c.id, u.avatar, u.nickname, r.nickname AS reply_nickname, a.article_title, c.comment_content, c.type, c.is_review, c.create_time FROM t_comment c LEFT JOIN t_article a ON c.topic_id = a.id LEFT JOIN t_user_info u ON c.user_id = u.id LEFT JOIN t_user_info r ON c.reply_user_id = r.id" + filters + " ORDER BY c.id DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	var comments []*model.CommentAdminDTO
+	if err := ormInit.GetEngine().SQL(query, args...).Find(&comments); err != nil {
+		zlog.Error("list admin comments: " + err.Error())
 	}
-	if vo.IsReview != 0 && s != "" {
-		s += " and c.is_review = " + strconv.Itoa(vo.IsReview)
-	} else if vo.IsReview != 0 && s == "" {
-		s += " where c.is_review = " + strconv.Itoa(vo.IsReview)
-	}
-	if vo.Keywords != "" && s != "" {
-		s += " and u.nickname like '%" + vo.Keywords + "%'"
-	} else if vo.Keywords != "" && s == "" {
-		s += " where u.nickname like '%" + vo.Keywords + "%'"
-	}
-	s = fmt.Sprintf(pgsql.ListCommentsAdmin, s, size, (current-1)*size)
-	engine := ormInit.GetEngine()
-	var commentsAdmin []*model.CommentAdminDTO
-	err := engine.SQL(s).Find(&commentsAdmin)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
-	return commentsAdmin
+	return comments
 }
 
 func (c *MyCommentRepo) ListCommentCountByTypeAndTopicIds(ty int, topicIds []int) []*model.CommentCountDTO {
-	s := "("
-	for k, v := range topicIds {
-		if k == len(topicIds)-1 {
-			s += strconv.Itoa(v) + ")"
-			break
-		}
-		s += strconv.Itoa(v) + ","
+	if len(topicIds) == 0 {
+		return []*model.CommentCountDTO{}
 	}
-	s = fmt.Sprintf(pgsql.ListCommentCountByTypeAndTopicIds, ty, s)
-	engine := ormInit.GetEngine()
-	var cscount []*model.CommentCountDTO
-	err := engine.SQL(s).Find(&cscount)
-	if err != nil {
-		zlog.Error(err.Error())
+	query := "SELECT topic_id AS id, COUNT(1) AS comment_count FROM t_comment WHERE type = ? AND topic_id IN (" + placeholders(len(topicIds)) + ") GROUP BY topic_id"
+	args := []interface{}{ty}
+	args = append(args, intArgs(topicIds)...)
+	var counts []*model.CommentCountDTO
+	if err := ormInit.GetEngine().SQL(query, args...).Find(&counts); err != nil {
+		zlog.Error("count comments by topics: " + err.Error())
 	}
-
-	return cscount
+	return counts
 }
 
 func (c *MyCommentRepo) ListCommentCountByTypeAndTopicId(ty, topicId int) (commentCountDTO model.CommentCountDTO) {
-	engine := ormInit.GetEngine()
-	s := fmt.Sprintf(pgsql.ListCommentCountByTypeAndTopicId, ty, topicId)
-	_, err := engine.SQL(s).Get(&commentCountDTO)
-	if err != nil {
-		zlog.Error(err.Error())
+	query := "SELECT topic_id AS id, COUNT(1) AS comment_count FROM t_comment WHERE type = ? AND topic_id = ? GROUP BY topic_id"
+	if _, err := ormInit.GetEngine().SQL(query, ty, topicId).Get(&commentCountDTO); err != nil {
+		zlog.Error("count comments by topic: " + err.Error())
 	}
-
 	return commentCountDTO
 }

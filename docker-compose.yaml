@@ -1,4 +1,3 @@
-version: '3'
 services:
   benetnasch:
     image: benetnasch:latest
@@ -9,6 +8,15 @@ services:
       - ./stellar-beacon/resource:/app/resource
     environment:
       - TZ=Asia/Shanghai
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:?SMTP_PASSWORD is required}
+      - ALIYUN_OSS_ACCESS_KEY_ID=${ALIYUN_OSS_ACCESS_KEY_ID:?ALIYUN_OSS_ACCESS_KEY_ID is required}
+      - ALIYUN_OSS_ACCESS_KEY_SECRET=${ALIYUN_OSS_ACCESS_KEY_SECRET:?ALIYUN_OSS_ACCESS_KEY_SECRET is required}
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY:?JWT_PRIVATE_KEY is required}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:?JWT_PUBLIC_KEY is required}
+      - JWT_ALLOW_EPHEMERAL=false
     restart: always
   postgresql:
     image: postgres:latest
@@ -22,7 +30,7 @@ services:
       - PGDATA=/var/lib/postgresql/data
       - LANG=C.UTF-8
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=[REDACTED_SECRET]
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     restart: always
   #  nginx:
   #    image: nginx:stable
@@ -59,7 +67,7 @@ services:
   redis:
     image: redis:latest
     container_name: redis
-    command: redis-server --requirepass [REDACTED_SECRET] && sysctl vm.overcommit_memory=1
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     ports:
       - '6379:6379'
     volumes:
@@ -77,6 +85,6 @@ services:
     environment:
       - MEILI_NO_ANALYTICS=true
       - TZ=Asia/Shanghai
-      - MEILI_MASTER_KEY=[REDACTED_SECRET]
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
       - MEILI_ENV=production
     restart: always

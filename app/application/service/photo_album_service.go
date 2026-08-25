@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"strconv"
 	"xorm.io/builder"
+	"xorm.io/xorm"
 )
 
 type PhotoAlbumService interface {
@@ -58,20 +59,17 @@ func (p *MyPhotoAlbumService) SaveOrUpdatePhotoAlbum(c *gin.Context) model.Resul
 	}
 	var photoAlbum entity.TPhotoAlbum
 	shared.StructCopy(vo, &photoAlbum)
-	session := engine.NewSession()
-	session.Begin()
-	defer session.Close()
-	if photoAlbum.Id != 0 {
-		_, err = session.Prepare().ID(photoAlbum.Id).Update(&photoAlbum)
-	} else {
-		_, err = session.Prepare().Insert(&photoAlbum)
-	}
-	if err != nil {
+	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
+		if photoAlbum.Id != 0 {
+			_, err = session.ID(photoAlbum.Id).Update(&photoAlbum)
+		} else {
+			_, err = session.Insert(&photoAlbum)
+		}
+		return err
+	}); err != nil {
 		zlog.Error(err.Error())
-		session.Rollback()
 		return model.ResultFail()
 	}
-	session.Commit()
 	return model.ResultOk()
 }
 

@@ -5,8 +5,6 @@ import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/zlog"
-	"fmt"
-	"strconv"
 )
 
 type TalkRepo interface {
@@ -16,54 +14,46 @@ type TalkRepo interface {
 	GetTalkByIdAdmin(talkId int) (talkAdmin model.TalkAdminDTO)
 }
 
-type MyTalkRepo struct {
-}
+type MyTalkRepo struct{}
 
 func (t *MyTalkRepo) ListTalks(current, size int) []*model.TalkDTO {
-	s := fmt.Sprintf(pgsql.ListTalks, size, (current-1)*size)
-	engine := ormInit.GetEngine()
+	limit, offset := pgsql.Page(current, size)
 	var talks []*model.TalkDTO
-	err := engine.SQL(s).Find(&talks)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ormInit.GetEngine().SQL(pgsql.ListTalks, limit, offset).Find(&talks); err != nil {
+		zlog.Error("list talks: " + err.Error())
 	}
-
 	return talks
 }
 
-func (t *MyTalkRepo) GetTalkById(talkId int) (talk model.TalkDTO) {
-	s := fmt.Sprintf(pgsql.GetTalkById, talkId)
-	engine := ormInit.GetEngine()
-	_, err := engine.SQL(s).Get(&talk)
-	if err != nil {
-		zlog.Error(err.Error())
+func (t *MyTalkRepo) GetTalkById(talkID int) model.TalkDTO {
+	var talk model.TalkDTO
+	if _, err := ormInit.GetEngine().SQL(pgsql.GetTalkById, talkID).Get(&talk); err != nil {
+		zlog.Error("get talk: " + err.Error())
 	}
-
 	return talk
 }
 
 func (t *MyTalkRepo) ListTalksAdmin(current, size int, vo *model.ConditionVO) []*model.TalkAdminDTO {
-	s := ""
+	limit, offset := pgsql.Page(current, size)
+	query := "SELECT t.id, nickname, avatar, content, images, t.is_top, t.status, t.create_time FROM t_talk t JOIN t_user_info ui ON t.user_id = ui.id"
+	args := []interface{}{}
 	if vo.Status != 0 {
-		s += " where t.status = " + strconv.Itoa(vo.Status)
+		query += " WHERE t.status = ?"
+		args = append(args, vo.Status)
 	}
-	s = fmt.Sprintf(pgsql.ListTalksAdmin, s, size, (current-1)*size)
-	engine := ormInit.GetEngine()
-	var talksAdmin []*model.TalkAdminDTO
-	err := engine.SQL(s).Find(&talksAdmin)
-	if err != nil {
-		zlog.Error(err.Error())
+	query += " ORDER BY t.is_top DESC, t.id DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	var talks []*model.TalkAdminDTO
+	if err := ormInit.GetEngine().SQL(query, args...).Find(&talks); err != nil {
+		zlog.Error("list admin talks: " + err.Error())
 	}
-
-	return talksAdmin
+	return talks
 }
 
-func (t *MyTalkRepo) GetTalkByIdAdmin(talkId int) (talkAdmin model.TalkAdminDTO) {
-	s := fmt.Sprintf(pgsql.GetTalkByIdAdmin, talkId)
-	engine := ormInit.GetEngine()
-	_, err := engine.SQL(s).Get(&talkAdmin)
-	if err != nil {
-		zlog.Error(err.Error())
+func (t *MyTalkRepo) GetTalkByIdAdmin(talkID int) model.TalkAdminDTO {
+	var talk model.TalkAdminDTO
+	if _, err := ormInit.GetEngine().SQL(pgsql.GetTalkByIdAdmin, talkID).Get(&talk); err != nil {
+		zlog.Error("get admin talk: " + err.Error())
 	}
-	return talkAdmin
+	return talk
 }
