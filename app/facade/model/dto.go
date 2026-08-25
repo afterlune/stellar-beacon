@@ -213,16 +213,6 @@ type PhotoDTO struct {
 	Photos          any    `json:"photos"`
 }
 
-type QQTokenDTO struct {
-	Openid    string `json:"openid"`
-	Client_id string `json:"client_Id"`
-}
-
-type QQUserInfoDTO struct {
-	Nickname       string `json:"nickname"`
-	Figureurl_qq_1 string `json:"figureurl_qq_1"`
-}
-
 type ReplyDTO = port.Reply
 
 type ResourceDTO struct {
@@ -250,17 +240,6 @@ type RoleDTO struct {
 	IsDisable   int       `json:"isDisable"`
 	ResourceIds []int     `json:"resourceIds"`
 	MenuIds     []int     `json:"menuIds"`
-}
-
-type SocialTokenDTO struct {
-	OpenId      string `json:"openId"`
-	AccessToken string `json:"accessToken"`
-	LoginType   int    `json:"loginType"`
-}
-
-type SocialUserInfoDTO struct {
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
 }
 
 type TagAdminDTO = port.TagAdmin
@@ -363,7 +342,6 @@ type WebsiteConfigDTO struct {
 	Notice            string `json:"notice"`
 	WebsiteCreateTime string `json:"websiteCreateTime"`
 	BeianNumber       string `json:"beianNumber"`
-	QQLogin           int    `json:"qqLogin"`
 	Github            string `json:"github"`
 	Gitee             string `json:"gitee"`
 	QQ                string `json:"qq"`

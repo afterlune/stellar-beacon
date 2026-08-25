@@ -23,7 +23,6 @@ const (
 	USERNAME_EXIST
 	USERNAME_NOT_EXIST
 	ARTICLE_ACCESS_FAIL
-	QQ_LOGIN_ERROR
 )
 
 func ResultInfo(num int) map[string]string {
@@ -37,7 +36,6 @@ func ResultInfo(num int) map[string]string {
 		6: {"code": "52001", "desc": "用户名已存在"},
 		7: {"code": "52002", "desc": "用户名不存在"},
 		8: {"code": "52003", "desc": "文章密码认证未通过"},
-		9: {"code": "53001", "desc": "qq登录错误"},
 	}
 	return reInfo[num]
 }

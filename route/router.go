@@ -161,7 +161,6 @@ func RouterSetup(router *gin.Engine) {
 		users.POST("/register", api.Register)
 		users.PUT("/password", api.UpdatePassword)
 		users.POST("/logout", api.Logout)
-		users.POST("/oauth/qq", api.QQLogin)
 		// userinfo
 		users.PUT("/info", api.UpdateUserInfo)
 		users.POST("/avatar", api.UpdateUserAvatar)

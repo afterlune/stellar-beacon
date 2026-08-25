@@ -167,11 +167,6 @@ type PhotoInfoVO struct {
 	PhotoDesc string `json:"photoDesc"`
 }
 
-type QQLoginVO struct {
-	OpenId      string `json:"openId"`
-	AccessToken string `json:"accessToken"`
-}
-
 type ResourceVO struct {
 	Id            int    `json:"id"`
 	ResourceName  string `json:"resourceName"`
@@ -245,7 +240,6 @@ type WebsiteConfigVO struct {
 	Notice            string `json:"notice"`
 	WebsiteCreateTime string `json:"websiteCreateTime"`
 	BeianNumber       string `json:"beianNumber"`
-	QQLogin           int    `json:"qqLogin"`
 	Github            string `json:"github"`
 	Gitee             string `json:"gitee"`
 	QQ                string `json:"qq"`

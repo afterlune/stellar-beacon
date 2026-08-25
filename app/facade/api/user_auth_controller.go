@@ -86,12 +86,3 @@ func Logout(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, userAuthService.Logout(c.Request.Context(), dto.Id))
 }
-
-// QQLogin
-// @Summary		 用户账号模块
-// @Description  qq登录
-// @Success		 200	{object} model.ResultVO
-// @Router       /users/oauth/qq [POST]
-func QQLogin(c *gin.Context) {
-	c.JSON(http.StatusOK, userAuthService.QQLogin(c))
-}

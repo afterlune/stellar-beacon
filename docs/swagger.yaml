@@ -1002,15 +1002,6 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: 用户账号模块
-  /users/oauth/qq:
-    post:
-      description: qq登录
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.ResultVO'
-      summary: 用户账号模块
   /users/password:
     put:
       description: 修改密码

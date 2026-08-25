@@ -1530,20 +1530,6 @@
                 }
             }
         },
-        "/users/oauth/qq": {
-            "post": {
-                "description": "qq登录",
-                "summary": "用户账号模块",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.ResultVO"
-                        }
-                    }
-                }
-            }
-        },
         "/users/password": {
             "put": {
                 "description": "修改密码",

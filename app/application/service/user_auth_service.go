@@ -28,7 +28,6 @@ type UserAuthService interface {
 	UpdatePassword(c *gin.Context) model.ResultVO
 	UpdateAdminPassword(c *gin.Context) model.ResultVO
 	Logout(ctx context.Context, id int) model.ResultVO
-	QQLogin(c *gin.Context) model.ResultVO
 	CheckUser(ctx context.Context, vo model.UserVO) bool
 	CheckUserAuth(ctx context.Context, vo model.UserVO) *model.UserDetailsDTO
 	Authenticate(ctx context.Context, vo model.UserVO) (*model.UserDetailsDTO, error)
@@ -340,10 +339,6 @@ func (u *MyUserAuthService) Logout(ctx context.Context, id int) model.ResultVO {
 	return model.ResultOkWithData(model.UserLogoutStatusDTO{
 		Message: "注销成功",
 	})
-}
-
-func (u *MyUserAuthService) QQLogin(c *gin.Context) model.ResultVO {
-	return model.ResultOk()
 }
 
 func (u *MyUserAuthService) userExists(ctx context.Context, username string) (bool, error) {
