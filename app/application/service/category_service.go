@@ -2,14 +2,13 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
-	"benetnasch/app/infra/zlog"
 	"container/list"
+	"context"
+
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
-	"xorm.io/builder"
-	"xorm.io/xorm"
 )
 
 type CategoryService interface {
@@ -20,108 +19,88 @@ type CategoryService interface {
 	SaveOrUpdateCategory(c *gin.Context) model.ResultVO
 }
 
-type MyCategoryService struct{}
+type MyCategoryService struct {
+	repo port.CategoryRepository
+}
+
+func NewCategoryService(repo port.CategoryRepository) *MyCategoryService {
+	return &MyCategoryService{repo: repo}
+}
+
+func (c *MyCategoryService) categoryRepository() port.CategoryRepository {
+	if c.repo != nil {
+		return c.repo
+	}
+	return categoryRepo
+}
 
 func (c *MyCategoryService) ListCategories() model.ResultVO {
-	return model.ResultOkWithData(categoryRepo.ListCategories())
+	data, err := c.categoryRepository().List(context.Background())
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(data)
 }
 
 func (c *MyCategoryService) ListCategoriesAdmin(ctx *gin.Context) model.ResultVO {
-	var conditionVO model.ConditionVO
-	err := ctx.ShouldBind(&conditionVO)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	var vo model.ConditionVO
+	if err := ctx.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	engine := ormInit.GetEngine()
-	var count int64
-	if conditionVO.Keywords != "" {
-		count, err = engine.Where(builder.Like{"category_name", conditionVO.Keywords}).Count(&entity.TCategory{})
-	} else {
-		count, err = engine.Count(&entity.TCategory{})
-	}
+	filter := port.CategoryFilter{Keywords: vo.Keywords}
+	count, err := c.categoryRepository().CountAdmin(ctx.Request.Context(), filter)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	data := categoryRepo.ListCategoriesAdmin(conditionVO.Current, conditionVO.Size, &conditionVO)
+	data, err := c.categoryRepository().ListAdmin(ctx.Request.Context(), vo.Current, vo.Size, filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
 }
 
 func (c *MyCategoryService) ListCategoriesAdminBySearch(ctx *gin.Context) model.ResultVO {
-	var conditionVO model.ConditionVO
-	err := ctx.ShouldBind(&conditionVO)
-	if err != nil {
-		zlog.Error(err.Error())
+	var vo model.ConditionVO
+	if err := ctx.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var categorys []entity.TCategory
-	err = ormInit.GetEngine().Where(builder.Like{"category_name", conditionVO.Keywords}).OrderBy("id").Desc("id").Find(&categorys)
+	data, err := c.categoryRepository().Search(ctx.Request.Context(), vo.Keywords)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	marshal, err := json.Marshal(categorys)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	var categoryOptionDTOs []model.CategoryOptionDTO
-	err = json.Unmarshal(marshal, &categoryOptionDTOs)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	return model.ResultOkWithData(categoryOptionDTOs)
+	return model.ResultOkWithData(data)
 }
 
 func (c *MyCategoryService) DeleteCategories(ctx *gin.Context) model.ResultVO {
-	var iDs []int
-	err := ctx.ShouldBind(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
+	var ids []int
+	if err := ctx.ShouldBind(&ids); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	engine := ormInit.GetEngine()
-	count, err := engine.In("category_id", iDs).Count(&entity.TArticle{})
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	if count > 0 {
-		return model.ResultFailWithMessage("删除失败，该分类下存在文章")
-	}
-	_, err = engine.In("id", iDs).Delete(&entity.TCategory{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.categoryRepository().Delete(ctx.Request.Context(), ids); err != nil {
+		if apperrors.IsKind(err, apperrors.KindConflict) {
+			return model.ResultFailWithMessage("删除失败，该分类下存在文章")
+		}
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (c *MyCategoryService) SaveOrUpdateCategory(ctx *gin.Context) model.ResultVO {
-	var categoryVO model.CategoryVO
-	err := ctx.ShouldBind(&categoryVO)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	var vo model.CategoryVO
+	if err := ctx.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	engine := ormInit.GetEngine()
-	var existCategory entity.TCategory
-	_, err = engine.Select("id").Where("category_name = ?", categoryVO.CategoryName).Get(&existCategory)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-	if existCategory.CategoryName != "" && existCategory.Id != categoryVO.Id {
-		return model.ResultFailWithMessage("分类名已存在")
-	}
-	category := entity.TCategory{Id: categoryVO.Id, CategoryName: categoryVO.CategoryName}
-	if err := ormInit.WithTx(ctx.Request.Context(), func(session *xorm.Session) error {
-		if categoryVO.Id != 0 {
-			_, err = session.ID(categoryVO.Id).Update(&category)
-		} else {
-			_, err = session.Insert(&category)
+	category := entity.TCategory{Id: vo.Id, CategoryName: vo.CategoryName}
+	if err := c.categoryRepository().SaveOrUpdate(ctx.Request.Context(), category); err != nil {
+		if apperrors.IsKind(err, apperrors.KindConflict) {
+			return model.ResultFailWithMessage("分类名已存在")
 		}
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
+
+var _ CategoryService = (*MyCategoryService)(nil)

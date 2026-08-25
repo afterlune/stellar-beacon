@@ -5,7 +5,7 @@ import (
 	"benetnasch/app/infra/config"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -29,7 +29,7 @@ func Search(keywords string) []interface{} {
 		HighlightPostTag:      shared.POST_TAG,
 	})
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("search articles failed", "error", err)
 	}
 	if searchResponse.EstimatedTotalHits == 0 {
 		return []interface{}{}
@@ -53,29 +53,29 @@ func docSyncTask() {
 		err := engine.SQL("select id, article_title, SUBSTR(article_content, 1, 500) AS " +
 			"article_content, is_delete, status from t_article where is_delete = 0 and status = 1").Find(&articleSearchDTOs)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("load articles for search synchronization failed", "error", err)
 			continue
 		}
 		var docs []map[string]interface{}
 		data, _ := json.Marshal(articleSearchDTOs)
 		err = json.Unmarshal(data, &docs)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("marshal search documents failed", "error", err)
 			continue
 		}
 		_, err = client.Index("articles").UpdateDocuments(docs, nil)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("update search documents failed", "error", err)
 			continue
 		}
-		zlog.Info("-----docs completed with synchronization-----")
+		slog.Info("search documents synchronized")
 		time.Sleep(time.Minute * 10)
 	}
 }
 
 func init() {
 	if err := config.Validate(); err != nil {
-		zlog.Warn("search initialization skipped: " + err.Error())
+		slog.Warn("search initialization skipped", "error", err)
 		return
 	}
 	client := GetClient()
@@ -83,24 +83,24 @@ func init() {
 	if index == nil && err1 != nil {
 		engine := ormInit.GetEngine()
 		if engine == nil {
-			zlog.Warn("search index initialization skipped: database is unavailable")
+			slog.Warn("search index initialization skipped: database is unavailable")
 			return
 		}
 		var articleSearchDTOs []model.ArticleSearchDTO
 		err := engine.SQL("select id, article_title, SUBSTR(article_content, 1, 500) AS " +
 			"article_content, is_delete, status from t_article where is_delete = 0 and status = 1").Find(&articleSearchDTOs)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("load initial search documents failed", "error", err)
 		}
 		var docs []map[string]interface{}
 		data, _ := json.Marshal(articleSearchDTOs)
 		err = json.Unmarshal(data, &docs)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("marshal initial search documents failed", "error", err)
 		}
 		_, err = client.Index("articles").AddDocuments(docs, nil)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("create search index documents failed", "error", err)
 		}
 	}
 	// 开启一个协程执行search同步工作

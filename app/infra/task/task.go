@@ -5,8 +5,8 @@ import (
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"github.com/goccy/go-json"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -17,7 +17,7 @@ func StatisticsUserArea() {
 		var users []entity.TUserAuth
 		err := ormInit.GetEngine().Prepare().Find(&users)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("load users for area statistics failed", "error", err)
 			continue
 		}
 		var userAreas []model.UserAreaDTO
@@ -41,10 +41,10 @@ func StatisticsUserArea() {
 		}
 		marshal, err := json.Marshal(userAreas)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("marshal user area statistics failed", "error", err)
 			continue
 		}
 		shared.Set(shared.USER_AREA, marshal)
-		zlog.Info("用户地域统计完成")
+		slog.Info("user area statistics completed")
 	}
 }

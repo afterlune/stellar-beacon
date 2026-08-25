@@ -1,7 +1,7 @@
 package shared
 
 import (
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 	"math/rand"
 	"time"
 
@@ -80,7 +80,7 @@ var (
 func init() {
 	nod, err := snowflake.NewNode(rand.Int63n(1023)) // 传入节点ID
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("initialize snowflake node failed", "error", err)
 		return
 	}
 	SECRET = nod.Generate().String()

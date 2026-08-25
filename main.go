@@ -2,6 +2,8 @@ package main
 
 import (
 	"benetnasch/cmd"
+	"log/slog"
+	"os"
 )
 
 // @contact.name   API Support
@@ -13,5 +15,8 @@ import (
 // @Version 1.0
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		slog.Error("command failed", "error", err)
+		os.Exit(1)
+	}
 }

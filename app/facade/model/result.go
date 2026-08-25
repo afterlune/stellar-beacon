@@ -1,7 +1,8 @@
 package model
 
 import (
-	"benetnasch/app/infra/zlog"
+	apperrors "benetnasch/app/domain/errors"
+	"log/slog"
 	"strconv"
 )
 
@@ -44,7 +45,7 @@ func ResultOk() ResultVO {
 	info := ResultInfo(SUCCESS)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Flag: true, Code: code, Message: info["desc"]}
 }
@@ -52,7 +53,7 @@ func ResultOkWithData(data interface{}) ResultVO {
 	info := ResultInfo(SUCCESS)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Flag: true, Code: code, Message: info["desc"], Data: data}
 }
@@ -60,7 +61,7 @@ func ResultOkWithDataAndMessage(data interface{}, message string) ResultVO {
 	info := ResultInfo(SUCCESS)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Flag: true, Code: code, Message: message, Data: data}
 }
@@ -68,7 +69,7 @@ func ResultFail() ResultVO {
 	info := ResultInfo(FAIL)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Flag: false, Code: code, Message: info["desc"]}
 }
@@ -76,7 +77,7 @@ func ResultFailWithStatus(num int) ResultVO {
 	info := ResultInfo(num)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Flag: false, Code: code, Message: info["desc"]}
 }
@@ -84,7 +85,7 @@ func ResultFailWithMessage(message string) ResultVO {
 	info := ResultInfo(FAIL)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Code: code, Flag: false, Message: message}
 }
@@ -92,7 +93,7 @@ func ResultFailWithData(data interface{}) ResultVO {
 	info := ResultInfo(FAIL)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Flag: false, Code: code, Message: info["desc"], Data: data}
 }
@@ -100,7 +101,7 @@ func ResultFailWithDataAndMessage(data interface{}, message string) ResultVO {
 	info := ResultInfo(FAIL)
 	code, err := strconv.Atoi(info["code"])
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("parse result code failed", "error", err)
 	}
 	return ResultVO{Flag: false, Code: code, Message: message, Data: data}
 }
@@ -110,4 +111,32 @@ func ResultFailWithCodeAndMessage(code int, message string) ResultVO {
 
 func ResultFailWithCode(code int) ResultVO {
 	return ResultVO{Flag: false, Code: code}
+}
+
+// ResultFromError keeps the existing response contract while preventing
+// infrastructure error details from reaching API clients.
+func ResultFromError(err error) ResultVO {
+	if err == nil {
+		return ResultOk()
+	}
+	// Keep the public boundary diagnostic free of database, credential, and
+	// request details. Lower layers retain the original error for debugging.
+	slog.Error("application operation failed",
+		"kind", string(apperrors.KindOf(err)),
+		"op", apperrors.Op(err),
+	)
+	switch apperrors.KindOf(err) {
+	case apperrors.KindValidation:
+		return ResultFailWithMessage("参数格式不正确")
+	case apperrors.KindNotFound:
+		return ResultFailWithMessage("数据不存在")
+	case apperrors.KindUnauthorized:
+		return ResultFailWithStatus(NO_LOGIN)
+	case apperrors.KindForbidden:
+		return ResultFailWithStatus(AUTHORIZED)
+	case apperrors.KindConflict:
+		return ResultFail()
+	default:
+		return ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
 }

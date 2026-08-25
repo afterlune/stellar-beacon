@@ -2,14 +2,14 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
-	"github.com/gin-gonic/gin"
+	"context"
 	"strconv"
-	"xorm.io/builder"
-	"xorm.io/xorm"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ResourceService interface {
@@ -17,152 +17,117 @@ type ResourceService interface {
 	DeleteResource(c *gin.Context) model.ResultVO
 	SaveOrUpdateResource(c *gin.Context) model.ResultVO
 	ListResourceOption() model.ResultVO
-	listResourceModule(resources []entity.TResource) (res []entity.TResource)
+	listResourceModule(resources []entity.TResource) []entity.TResource
 	listResourceChildren(resources []entity.TResource) map[int][]entity.TResource
 }
 
-type MyResourceService struct{}
+type MyResourceService struct{ repo port.ResourceRepository }
+
+func NewResourceService(repo port.ResourceRepository) *MyResourceService {
+	return &MyResourceService{repo: repo}
+}
+
+func (r *MyResourceService) resourceRepository() port.ResourceRepository {
+	if r.repo != nil {
+		return r.repo
+	}
+	return resourceRepo
+}
 
 func (r *MyResourceService) ListResources(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	resources, err := r.resourceRepository().List(c.Request.Context(), vo.Keywords)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	engine := ormInit.GetEngine()
-	var resources []entity.TResource
-	if vo.Keywords != "" {
-		err = engine.Prepare().Where(builder.Like{"resource_name", vo.Keywords}).Find(&resources)
-	} else {
-		err = engine.Prepare().Find(&resources)
-	}
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	parents := r.listResourceModule(resources)
-	childrenMap := r.listResourceChildren(resources)
-	var resourceDTOs []model.ResourceDTO
-	for _, v := range parents {
-		var resourceDTO model.ResourceDTO
-		shared.StructCopy(v, &resourceDTO)
-		var child []model.ResourceDTO
-		shared.StructCopy(childrenMap[v.Id], &child)
-		resourceDTO.Children = child
-		delete(childrenMap, v.Id)
-		resourceDTOs = append(resourceDTOs, resourceDTO)
-	}
-	if len(childrenMap) != 0 {
-		var childrenList []entity.TResource
-		for _, v := range childrenMap {
-			childrenList = append(childrenList, v...)
-		}
-		var childrenDTOs []model.ResourceDTO
-		for _, v := range childrenList {
-			var dto model.ResourceDTO
-			shared.StructCopy(v, &dto)
-			childrenDTOs = append(childrenDTOs, dto)
-		}
-		resourceDTOs = append(resourceDTOs, childrenDTOs...)
-	}
-	return model.ResultOkWithData(resourceDTOs)
+	return model.ResultOkWithData(r.resourceDTOs(resources))
 }
 
 func (r *MyResourceService) DeleteResource(c *gin.Context) model.ResultVO {
-	id, _ := strconv.Atoi(c.Param("resourceId"))
-	engine := ormInit.GetEngine()
-	count, err := engine.Prepare().Where("resource_id = ?", id).Count(&entity.TRoleResource{})
+	id, err := strconv.Atoi(c.Param("resourceId"))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if count > 0 {
-		return model.ResultFailWithMessage("该资源下存在角色")
-	}
-	var iDs []int
-	err = engine.Prepare().Select("id").Where("parent_id = ?", id).Find(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	iDs = append(iDs, id)
-	_, err = engine.Prepare().In("id", iDs).Delete(&entity.TResource{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := r.resourceRepository().Delete(c.Request.Context(), id); err != nil {
+		if apperrors.IsKind(err, apperrors.KindConflict) {
+			return model.ResultFailWithMessage("该资源下存在角色")
+		}
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (r *MyResourceService) SaveOrUpdateResource(c *gin.Context) model.ResultVO {
 	var vo model.ResourceVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var resource entity.TResource
-	shared.StructCopy(vo, &resource)
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		if resource.Id != 0 {
-			_, err = session.ID(resource.Id).Update(&resource)
-		} else {
-			_, err = session.Insert(&resource)
-		}
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	resource := entity.TResource{Id: vo.Id, ResourceName: vo.ResourceName, Url: vo.Url, RequestMethod: vo.RequestMethod, ParentId: vo.ParentId, IsAnonymous: vo.IsAnonymous}
+	if err := r.resourceRepository().SaveOrUpdate(c.Request.Context(), resource); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (r *MyResourceService) ListResourceOption() model.ResultVO {
-	engine := ormInit.GetEngine()
-	var resources []entity.TResource
-	err := engine.Select("id, resource_name, parent_id").Where("is_anonymous = ?", shared.FALSE).Find(&resources)
+	resources, err := r.resourceRepository().ListOptions(context.Background())
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
 	parents := r.listResourceModule(resources)
-	childrenMap := r.listResourceChildren(resources)
-	var labelOptionDTOs []model.LabelOptionDTO
-	for _, v := range parents {
-		var dtos []model.LabelOptionDTO
-		children := childrenMap[v.Id]
-		if len(childrenMap) != 0 {
-			for _, va := range children {
-				dtos = append(dtos, model.LabelOptionDTO{
-					Id:    va.Id,
-					Label: va.ResourceName,
-				})
-			}
+	children := r.listResourceChildren(resources)
+	options := make([]model.LabelOptionDTO, 0, len(parents))
+	for _, parent := range parents {
+		items := children[parent.Id]
+		childrenDTO := make([]model.LabelOptionDTO, 0, len(items))
+		for _, child := range items {
+			childrenDTO = append(childrenDTO, model.LabelOptionDTO{Id: child.Id, Label: child.ResourceName})
 		}
-		labelOptionDTOs = append(labelOptionDTOs, model.LabelOptionDTO{
-			Id:       v.Id,
-			Label:    v.ResourceName,
-			Children: dtos,
-		})
+		options = append(options, model.LabelOptionDTO{Id: parent.Id, Label: parent.ResourceName, Children: childrenDTO})
 	}
-	return model.ResultOkWithData(labelOptionDTOs)
+	return model.ResultOkWithData(options)
 }
 
-func (r *MyResourceService) listResourceModule(resources []entity.TResource) (res []entity.TResource) {
-	for _, v := range resources {
-		if v.ParentId == 0 {
-			res = append(res, v)
+func (r *MyResourceService) listResourceModule(resources []entity.TResource) []entity.TResource {
+	result := make([]entity.TResource, 0)
+	for _, resource := range resources {
+		if resource.ParentId == 0 {
+			result = append(result, resource)
 		}
 	}
-	return res
+	return result
 }
 
 func (r *MyResourceService) listResourceChildren(resources []entity.TResource) map[int][]entity.TResource {
-	cm := make(map[int][]entity.TResource)
-	for _, v := range resources {
-		if v.ParentId != 0 {
-			cm[v.ParentId] = append(cm[v.ParentId], v)
+	result := make(map[int][]entity.TResource)
+	for _, resource := range resources {
+		if resource.ParentId != 0 {
+			result[resource.ParentId] = append(result[resource.ParentId], resource)
 		}
 	}
-	return cm
+	return result
+}
+
+func (r *MyResourceService) resourceDTOs(resources []entity.TResource) []model.ResourceDTO {
+	parents := r.listResourceModule(resources)
+	children := r.listResourceChildren(resources)
+	result := make([]model.ResourceDTO, 0, len(parents))
+	for _, parent := range parents {
+		var dto model.ResourceDTO
+		shared.StructCopy(parent, &dto)
+		var childDTOs []model.ResourceDTO
+		shared.StructCopy(children[parent.Id], &childDTOs)
+		dto.Children = childDTOs
+		result = append(result, dto)
+		delete(children, parent.Id)
+	}
+	for _, childList := range children {
+		var dtos []model.ResourceDTO
+		shared.StructCopy(childList, &dtos)
+		result = append(result, dtos...)
+	}
+	return result
 }

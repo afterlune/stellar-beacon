@@ -2,15 +2,15 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
-	"github.com/gin-gonic/gin"
+	"context"
 	"strconv"
-	"xorm.io/builder"
-	"xorm.io/xorm"
+
+	"github.com/gin-gonic/gin"
 )
 
 type PhotoAlbumService interface {
@@ -23,120 +23,123 @@ type PhotoAlbumService interface {
 	DeletePhotoAlbumById(c *gin.Context) model.ResultVO
 }
 
-type MyPhotoAlbumService struct{}
+type MyPhotoAlbumService struct {
+	repo   port.PhotoAlbumRepository
+	photos port.PhotoRepository
+}
+
+func NewPhotoAlbumService(repo port.PhotoAlbumRepository, photos port.PhotoRepository) *MyPhotoAlbumService {
+	return &MyPhotoAlbumService{repo: repo, photos: photos}
+}
+
+func (p *MyPhotoAlbumService) photoAlbumRepository() port.PhotoAlbumRepository {
+	if p.repo != nil {
+		return p.repo
+	}
+	return photoAlbumRepo
+}
+
+func (p *MyPhotoAlbumService) photoRepository() port.PhotoRepository {
+	if p.photos != nil {
+		return p.photos
+	}
+	return photoRepo
+}
 
 func (p *MyPhotoAlbumService) ListPhotoAlbums() model.ResultVO {
-	data := photoAlbumRepo.PhotoAlbums()
-	return model.ResultOkWithData(data)
+	albums, err := p.photoAlbumRepository().ListPublic(context.Background())
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	var dtos []model.PhotoAlbumDTO
+	shared.StructCopy(albums, &dtos)
+	return model.ResultOkWithData(dtos)
 }
 
 func (p *MyPhotoAlbumService) SavePhotoAlbumCover(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	fileUri := oss.Upload(file, "photos/")
-	return model.ResultOkWithData(shared.FILEURL + fileUri)
+	fileURI := oss.Upload(file, "photos/")
+	return model.ResultOkWithData(shared.FILEURL + fileURI)
 }
 
 func (p *MyPhotoAlbumService) SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO {
 	var vo model.PhotoAlbumVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var album entity.TPhotoAlbum
-	engine := ormInit.GetEngine()
-	_, err = engine.Prepare().Select("id").Where(builder.Eq{"album_name": vo.AlbumName}).Get(&album)
+	duplicate, err := p.photoAlbumRepository().FindByName(c.Request.Context(), vo.AlbumName)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
-	if album.Id != 0 && album.Id != vo.Id {
+	if duplicate.Id != 0 && duplicate.Id != vo.Id {
 		return model.ResultFailWithMessage("相册名已存在")
 	}
-	var photoAlbum entity.TPhotoAlbum
-	shared.StructCopy(vo, &photoAlbum)
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		if photoAlbum.Id != 0 {
-			_, err = session.ID(photoAlbum.Id).Update(&photoAlbum)
-		} else {
-			_, err = session.Insert(&photoAlbum)
-		}
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	album := entity.TPhotoAlbum{Id: vo.Id, AlbumName: vo.AlbumName, AlbumDesc: vo.AlbumDesc, AlbumCover: vo.AlbumCover, Status: vo.Status}
+	if err := p.photoAlbumRepository().SaveOrUpdate(c.Request.Context(), album); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (p *MyPhotoAlbumService) ListPhotoAlbumBacks(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	engine := ormInit.GetEngine()
-	var count int64
-	if vo.Keywords != "" {
-		count, err = engine.Prepare().Where(builder.Like{"album_name", vo.Keywords}, builder.Eq{"is_delete": shared.FALSE}).Count(&entity.TPhotoAlbum{})
-
-	} else {
-		count, err = engine.Prepare().Where(builder.Eq{"is_delete": shared.FALSE}).Count(&entity.TPhotoAlbum{})
-	}
+	albums, count, err := p.photoAlbumRepository().ListAdmin(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{})
 	}
-	data := photoAlbumRepo.ListPhotoAlbumsAdmin(vo.Current, vo.Size, &vo)
-	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: albums, Count: int(count)})
 }
 
 func (p *MyPhotoAlbumService) ListPhotoAlbumBackInfos() model.ResultVO {
-	var photoAlbums []entity.TPhotoAlbum
-	err := ormInit.GetEngine().Prepare().Where(builder.Eq{"is_delete": shared.FALSE}).Find(&photoAlbums)
+	albums, err := p.photoAlbumRepository().ListOptions(context.Background())
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
 	var dtos []model.PhotoAlbumDTO
-	shared.StructCopy(photoAlbums, &dtos)
+	shared.StructCopy(albums, &dtos)
 	return model.ResultOkWithData(dtos)
 }
 
 func (p *MyPhotoAlbumService) GetPhotoAlbumBackById(c *gin.Context) model.ResultVO {
-	id, _ := strconv.Atoi(c.Param("albumId"))
-	engine := ormInit.GetEngine()
-	var pm entity.TPhotoAlbum
-	_, err := engine.Prepare().ID(id).Get(&pm)
+	id, err := strconv.Atoi(c.Param("albumId"))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("相册不存在")
 	}
-	count, err := engine.Prepare().Where(builder.Eq{"album_id": id, "is_delete": shared.FALSE}).Count(&entity.TPhoto{})
+	album, err := p.photoAlbumRepository().Get(c.Request.Context(), id)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return model.ResultFailWithMessage("相册不存在")
+		}
+		return model.ResultFromError(err)
 	}
-	var album model.PhotoAlbumAdminDTO
-	shared.StructCopy(pm, &album)
-	album.PhotoCount = int(count)
-	return model.ResultOkWithData(album)
+	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, shared.FALSE)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	var dto model.PhotoAlbumAdminDTO
+	shared.StructCopy(album, &dto)
+	dto.PhotoCount = int(count)
+	return model.ResultOkWithData(dto)
 }
 
 func (p *MyPhotoAlbumService) DeletePhotoAlbumById(c *gin.Context) model.ResultVO {
-	id, _ := strconv.Atoi(c.Param("albumId"))
-	_, err := ormInit.GetEngine().Prepare().ID(id).Delete(&entity.TPhotoAlbum{})
+	id, err := strconv.Atoi(c.Param("albumId"))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	if err := p.photoAlbumRepository().Delete(c.Request.Context(), id); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
+
+var _ PhotoAlbumService = (*MyPhotoAlbumService)(nil)

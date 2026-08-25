@@ -3,12 +3,12 @@ package middlewares
 import (
 	"benetnasch/app/application/service"
 	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/config"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/repository"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -26,7 +27,6 @@ import (
 	model2 "github.com/casbin/casbin/v2/model"
 	xormadapter "github.com/casbin/xorm-adapter/v2"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
 
@@ -53,23 +53,23 @@ func init() {
 	swaggerCache = make(map[string]interface{})
 	open, err := os.Open(SwaggerFilePath)
 	if err != nil {
-		zlog.Error("Failed to open swagger.json: " + err.Error())
+		slog.Error("failed to open swagger.json", "error", err)
 		return
 	}
 	defer open.Close()
 
 	bys, err := io.ReadAll(open)
 	if err != nil {
-		zlog.Error("Failed to read swagger.json: " + err.Error())
+		slog.Error("failed to read swagger.json", "error", err)
 		return
 	}
 
 	err = json.Unmarshal(bys, &swaggerCache)
 	if err != nil {
-		zlog.Error("Failed to unmarshal swagger.json: " + err.Error())
+		slog.Error("failed to unmarshal swagger.json", "error", err)
 		return
 	}
-	zlog.Info("Swagger cache initialized successfully")
+	slog.Info("swagger cache initialized successfully")
 }
 
 // getSwaggerInfo 从缓存中获取 swagger 信息
@@ -77,25 +77,25 @@ func getSwaggerInfo(reqURI, reqMethod string) (module, desc string) {
 	// 使用缓存的 swagger 内容
 	hm := swaggerCache
 	if hm == nil {
-		zlog.Error("Swagger cache not initialized")
+		slog.Error("swagger cache not initialized")
 		return "Unknown", "Unknown"
 	}
 
 	apis, ok := hm["paths"].(map[string]interface{})
 	if !ok {
-		zlog.Error("Invalid swagger format: paths not found")
+		slog.Error("invalid swagger format: paths not found")
 		return "Unknown", "Unknown"
 	}
 
 	pathData, ok := apis[reqURI].(map[string]interface{})
 	if !ok {
-		zlog.Error("Invalid swagger format: path not found")
+		slog.Error("invalid swagger format: path not found")
 		return "Unknown", "Unknown"
 	}
 
 	reqMethodData, ok := pathData[strings.ToLower(reqMethod)].(map[string]interface{})
 	if !ok {
-		zlog.Error("Invalid swagger format: method not found")
+		slog.Error("invalid swagger format: method not found")
 		return "Unknown", "Unknown"
 	}
 
@@ -122,7 +122,7 @@ func Log() gin.HandlerFunc {
 		// 拷贝数据到缓冲区
 		_, err := io.Copy(&buf, c.Request.Body)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("read request body failed", "error", err)
 		}
 
 		// 获取缓冲区中的数据
@@ -259,7 +259,7 @@ func Users(c *gin.Context) model.ResultVO {
 	var userVO model.UserVO
 	err := c.ShouldBind(&userVO)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("bind login request failed", "error", err)
 		return model.ResultFailWithMessage("登录失败，请联系管理员")
 	}
 	if !shared.CheckEmail(userVO.Username) {
@@ -269,21 +269,25 @@ func Users(c *gin.Context) model.ResultVO {
 	ipAddress := shared.GetIpAddress(c.Request)
 	allowed, err := loginAttemptAllowed(ctx, userVO.Username, ipAddress)
 	if err != nil {
-		zlog.Error("login rate limiter failed: " + err.Error())
+		slog.Error("login rate limiter failed", "error", err)
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	}
 	if !allowed {
 		return model.ResultFailWithMessage("账号或密码不正确！")
 	}
-	userDetailsDTO := userAuthService.CheckUserAuth(ctx, userVO)
+	userDetailsDTO, err := userAuthService.Authenticate(ctx, userVO)
+	if err != nil {
+		slog.Error("authenticate user failed", "error", err)
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
 	if userDetailsDTO == nil {
 		if err := recordLoginFailure(ctx, userVO.Username, ipAddress); err != nil {
-			zlog.Error("record login failure: " + err.Error())
+			slog.Error("record login failure", "error", err)
 		}
 		return model.ResultFailWithMessage("账号或密码不正确！")
 	}
 	if err := clearLoginFailures(ctx, userVO.Username, ipAddress); err != nil {
-		zlog.Error("clear login failures: " + err.Error())
+		slog.Error("clear login failures", "error", err)
 	}
 	region := shared.GetIpSource(ipAddress)
 	userAuth := entity.TUserAuth{
@@ -292,7 +296,10 @@ func Users(c *gin.Context) model.ResultVO {
 		IpSource:      region,
 		LastLoginTime: time.Now(),
 	}
-	userAuthService.UpdateUserIp(ctx, userAuth)
+	if err := userAuthService.UpdateUserIp(ctx, userAuth); err != nil {
+		slog.Error("update login metadata failed", "error", err)
+		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
 
 	regionlist := strings.Split(region, "|")
 	ipSource := "Unknown"
@@ -308,18 +315,18 @@ func Users(c *gin.Context) model.ResultVO {
 
 	accessToken, _, err := shared.CreateTokenCtx(ctx, userDetailsDTO)
 	if err != nil {
-		zlog.Error("Failed to create token: " + err.Error())
+		slog.Error("failed to create token", "error", err)
 		return model.ResultFailWithMessage("登录失败")
 	}
 	var userInfoDTO model.UserInfoDTO
 	marshal, err := json.Marshal(userDetailsDTO)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("marshal login user failed", "error", err)
 	}
 
 	err = json.Unmarshal(marshal, &userInfoDTO)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("decode login user failed", "error", err)
 	}
 	userInfoDTO.Token = accessToken
 
@@ -409,7 +416,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 		hm, err := shared.TokenParseCtx(c.Request.Context(), token)
 		if err != nil || hm == nil {
 			if err != nil {
-				zlog.Error("token validation failed: " + err.Error())
+				slog.Error("token validation failed", "error", err)
 			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
 			return
@@ -422,7 +429,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 		var userDetailsDTO model.UserDetailsDTO
 		dto, err := shared.HGetCtx(c.Request.Context(), shared.LOGIN_USER, userAuthID)
 		if err != nil {
-			zlog.Error("load login user: " + err.Error())
+			slog.Error("load login user failed", "error", err)
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, model.ResultFailWithMessage("服务暂不可用"))
 			return
 		}
@@ -431,7 +438,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 			return
 		}
 		if err = json.Unmarshal([]byte(dto), &userDetailsDTO); err != nil {
-			zlog.Error(err.Error())
+			slog.Error("decode cached login user failed", "error", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("server error"))
 			return
 		}
@@ -450,7 +457,7 @@ func getRolesByUserInfoId(ctx context.Context, userInfoId int) []string {
 	cacheKey := fmt.Sprintf("roles:%d", userInfoId)
 	cachedRoles, err := shared.HGetCtx(ctx, "user_roles", cacheKey)
 	if err != nil {
-		zlog.Error("load cached roles: " + err.Error())
+		slog.Warn("load cached roles failed", "error", err)
 	}
 	if cachedRoles != "" {
 		var roles []string
@@ -459,28 +466,39 @@ func getRolesByUserInfoId(ctx context.Context, userInfoId int) []string {
 		}
 	}
 
-	roles := roleRepo.ListRolesByUserInfoId(userInfoId)
+	if roleRepo == nil {
+		slog.Error("role repository is not configured")
+		return nil
+	}
+	roles, err := roleRepo.ListRolesByUserInfoID(ctx, userInfoId)
+	if err != nil {
+		slog.Error("load user roles failed", "error", err)
+		return nil
+	}
 	rolesJson, _ := json.Marshal(roles)
 	if err := shared.HSetCtx(ctx, "user_roles", cacheKey, rolesJson, 1*time.Hour); err != nil {
-		zlog.Error("cache roles: " + err.Error())
+		slog.Warn("cache user roles failed", "error", err)
 	}
 	return roles
 }
 
 // checkPermission 检查用户是否有权限访问资源
-func checkPermission(roles []string, uri, method string) (bool, string) {
+func checkPermission(roles []string, uri, method string) (bool, string, error) {
+	enforcer, err := casbinEnforcer()
+	if err != nil {
+		return false, "", err
+	}
 	for _, role := range roles {
-		ok, err := casbinEnforcer().Enforce(role, uri, method)
+		ok, err := enforcer.Enforce(role, uri, method)
 		if err != nil {
-			errorMsg := "Permission check failed: " + err.Error()
-			zlog.Error(errorMsg)
-			return false, errorMsg
+			slog.Error("permission check failed", "error", err)
+			return false, "", err
 		}
 		if ok {
-			return true, ""
+			return true, "", nil
 		}
 	}
-	return false, fmt.Sprintf("用户角色 %v 没有权限访问 %s %s", roles, method, uri)
+	return false, fmt.Sprintf("用户角色 %v 没有权限访问 %s %s", roles, method, uri), nil
 }
 
 func CasbinResourceFilter() gin.HandlerFunc {
@@ -493,13 +511,14 @@ func CasbinResourceFilter() gin.HandlerFunc {
 			}
 			dto := value.(model.UserDetailsDTO)
 			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
-			ok, errorMsg := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
-			if errorMsg != "" {
-				if strings.Contains(errorMsg, "Permission check failed") {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("权限检查失败"))
-				} else {
-					c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage(errorMsg))
-				}
+			ok, deniedMessage, err := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
+			if err != nil {
+				slog.Error("authorization check failed", "error", err)
+				c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("权限检查失败"))
+				return
+			}
+			if deniedMessage != "" {
+				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage(deniedMessage))
 				return
 			}
 			if !ok {
@@ -520,9 +539,13 @@ var (
 	globalLimiter   = rate.NewLimiter(rate.Every(time.Second/20), 1200)
 	ipLimiter       = make(map[string]*rate.Limiter)
 	mutex           sync.Mutex
-	roleRepo        repository.RoleRepo     = new(repository.MyRoleRepo)
+	roleRepo        port.RoleRepository
 	userAuthService service.UserAuthService = new(service.MyUserAuthService)
 )
+
+func ConfigureRoleRepository(repo port.RoleRepository) {
+	roleRepo = repo
+}
 
 func AccessLimiter() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -530,11 +553,9 @@ func AccessLimiter() gin.HandlerFunc {
 		if ok {
 			dto := value.(model.UserDetailsDTO)
 			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
-			ok, errorMsg := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
-			if errorMsg != "" {
-				if strings.Contains(errorMsg, "Permission check failed") {
-					zlog.Error("Permission check failed in AccessLimiter: " + errorMsg)
-				}
+			ok, _, err := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
+			if err != nil {
+				slog.Error("permission check failed in access limiter", "error", err)
 				// 权限检查失败，继续进行速率限制
 			} else if ok {
 				c.Next()
@@ -558,7 +579,7 @@ func AccessLimiter() gin.HandlerFunc {
 						break
 					}
 				}
-				zlog.Info(fmt.Sprintf("Cleaned up %d old IP limiters", count))
+				slog.Info("cleaned up old IP limiters", "count", count)
 			}
 			limiter = rate.NewLimiter(rate.Every(time.Minute/60), 60)
 			ipLimiter[ip] = limiter
@@ -578,6 +599,8 @@ var (
 	enforcerOnce sync.Once
 	xormAdapter  *xormadapter.Adapter
 	enforcer     *casbin.Enforcer
+	adapterErr   error
+	enforcerErr  error
 )
 
 const (
@@ -600,35 +623,49 @@ m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && r.act == p.act
 )
 
 // casbinAdapter 外部存储，如果需要的话
-func casbinAdapter() *xormadapter.Adapter {
+func casbinAdapter() (*xormadapter.Adapter, error) {
 	adapterOnce.Do(func() {
-		a, err := xormadapter.NewAdapterByEngine(ormInit.GetEngine())
+		engine := ormInit.GetEngine()
+		if engine == nil {
+			adapterErr = fmt.Errorf("database engine is not initialized")
+			return
+		}
+		a, err := xormadapter.NewAdapterByEngine(engine)
 		if err != nil {
-			zlog.Fatal(err.Error())
+			adapterErr = err
+			return
 		}
 		xormAdapter = a
 	})
-	return xormAdapter
+	return xormAdapter, adapterErr
 }
 
-func casbinEnforcer() *casbin.Enforcer {
+func casbinEnforcer() (*casbin.Enforcer, error) {
 	enforcerOnce.Do(func() {
 		m, err := model2.NewModelFromString(text)
 		if err != nil {
-			zlog.Fatal(err.Error())
+			enforcerErr = err
+			return
 		}
 
-		e, err := casbin.NewEnforcer(m, casbinAdapter())
+		adapter, err := casbinAdapter()
 		if err != nil {
-			zlog.Fatal(err.Error())
+			enforcerErr = err
+			return
+		}
+		e, err := casbin.NewEnforcer(m, adapter)
+		if err != nil {
+			enforcerErr = err
+			return
 		}
 
 		err = e.LoadPolicy()
 		if err != nil {
-			zlog.Fatal("策略未成功加载", zap.Error(err))
+			enforcerErr = err
+			return
 		}
 		enforcer = e
 	})
 
-	return enforcer
+	return enforcer, enforcerErr
 }

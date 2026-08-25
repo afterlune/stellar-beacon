@@ -4,7 +4,7 @@ import (
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 )
 
 type RoleRepo interface {
@@ -19,12 +19,12 @@ func (r *MyRoleRepo) ListResourceRoles() []*model.ResourceRoleDTO {
 	engine := ormInit.GetEngine()
 	var resourceRoles []*model.ResourceRoleDTO
 	if err := engine.SQL(pgsql.ListResourceRoles).Find(&resourceRoles); err != nil {
-		zlog.Error("list resource roles: " + err.Error())
+		slog.Error("list resource roles failed", "error", err)
 	}
 	for _, resource := range resourceRoles {
 		var roles []string
 		if err := engine.SQL(pgsql.ResourceRoles, resource.Id).Find(&roles); err != nil {
-			zlog.Error("load resource roles: " + err.Error())
+			slog.Error("load resource roles failed", "error", err)
 		}
 		resource.RoleList = roles
 	}
@@ -34,7 +34,7 @@ func (r *MyRoleRepo) ListResourceRoles() []*model.ResourceRoleDTO {
 func (r *MyRoleRepo) ListRolesByUserInfoId(userInfoId int) []string {
 	var roles []string
 	if err := ormInit.GetEngine().SQL(pgsql.ListRolesByUserInfoId, userInfoId).Find(&roles); err != nil {
-		zlog.Error("list user roles: " + err.Error())
+		slog.Error("list user roles failed", "error", err)
 	}
 	return roles
 }
@@ -54,7 +54,7 @@ func (r *MyRoleRepo) ListRoles(current, size int, vo *model.ConditionVO) []*mode
 	args := append(filterArgs, limit, offset)
 	var roles []*model.RoleDTO
 	if err := engine.SQL(query, args...).Find(&roles); err != nil {
-		zlog.Error("list roles: " + err.Error())
+		slog.Error("list roles failed", "error", err)
 	}
 
 	for _, role := range roles {
@@ -62,14 +62,14 @@ func (r *MyRoleRepo) ListRoles(current, size int, vo *model.ConditionVO) []*mode
 		resourceArgs := append(append([]interface{}{}, filterArgs...), limit, offset, role.Id)
 		var resourceIDs []int
 		if err := engine.SQL(resourceQuery, resourceArgs...).Find(&resourceIDs); err != nil {
-			zlog.Error("load role resources: " + err.Error())
+			slog.Error("load role resources failed", "error", err)
 		}
 
 		menuQuery := "SELECT rm.menu_id FROM (SELECT id, role_name, create_time, is_disable FROM t_role" + filter + " LIMIT ? OFFSET ?) r LEFT JOIN t_role_menu rm ON r.id = rm.role_id WHERE r.id = ? AND rm.menu_id IS NOT NULL"
 		menuArgs := append(append([]interface{}{}, filterArgs...), limit, offset, role.Id)
 		var menuIDs []int
 		if err := engine.SQL(menuQuery, menuArgs...).Find(&menuIDs); err != nil {
-			zlog.Error("load role menus: " + err.Error())
+			slog.Error("load role menus failed", "error", err)
 		}
 		role.MenuIds = menuIDs
 		role.ResourceIds = resourceIDs

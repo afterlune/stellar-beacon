@@ -3,14 +3,14 @@ package repository
 import (
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 )
 
 func ListJobLogGroups() (s string) {
 	engine := ormInit.GetEngine()
 	_, err := engine.SQL(pgsql.ListJobLogGroups).Get(&s)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("list job log groups failed", "error", err)
 	}
 
 	return s

@@ -2,16 +2,18 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/SearchEngines"
 	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"bytes"
 	"container/list"
 	"context"
+	"fmt"
 	"io"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,12 +21,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
-	"xorm.io/builder"
-	"xorm.io/xorm"
 )
 
 type ArticleService interface {
-	ListTopAndFeaturedArticles() model.ResultVO
+	ListTopAndFeaturedArticles(c *gin.Context) model.ResultVO
 	ListArticles(c *gin.Context) model.ResultVO
 	ListArticlesByCategoryId(c *gin.Context) model.ResultVO
 	GetArticleById(c *gin.Context) model.ResultVO
@@ -42,14 +42,32 @@ type ArticleService interface {
 	ImportArticles(c *gin.Context) model.ResultVO
 	ExportArticles(c *gin.Context) model.ResultVO
 	ListArticlesBySearch(c *gin.Context) model.ResultVO
-	saveArticleCategory(vo model.ArticleVO, session *xorm.Session) (entity.TCategory, error)
-	saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session) error
 }
 
-type MyArticleService struct{}
+type MyArticleService struct {
+	repo port.ArticleRepository
+}
 
-func (a *MyArticleService) ListTopAndFeaturedArticles() model.ResultVO {
-	data := articleRepo.ListTopAndFeaturedArticles()
+func NewArticleService(repo port.ArticleRepository) *MyArticleService {
+	return &MyArticleService{repo: repo}
+}
+
+func (a *MyArticleService) articleRepository() port.ArticleRepository {
+	if a.repo != nil {
+		return a.repo
+	}
+	return articleRepo
+}
+
+func (a *MyArticleService) ListTopAndFeaturedArticles(c *gin.Context) model.ResultVO {
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	data, err := a.articleRepository().ListTopAndFeaturedArticles(ctx)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.TopAndFeaturedArticlesDTO{})
 	} else if len(data) > 3 {
@@ -61,14 +79,18 @@ func (a *MyArticleService) ListTopAndFeaturedArticles() model.ResultVO {
 }
 
 func (a *MyArticleService) ListArticles(c *gin.Context) model.ResultVO {
-	current, _ := strconv.Atoi(c.Query("current"))
-	size, _ := strconv.Atoi(c.Query("size"))
-	var count int
-	_, err := ormInit.GetEngine().SQL("SELECT count(0) from t_article where is_delete =0 and status = 1").Get(&count)
+	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	data := articleRepo.ListArticles(current, size)
+	size, err := strconv.Atoi(c.Query("size"))
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	data, count, err := a.articleRepository().ListArticles(c.Request.Context(), current, size)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -78,22 +100,22 @@ func (a *MyArticleService) ListArticles(c *gin.Context) model.ResultVO {
 func (a *MyArticleService) ListArticlesByCategoryId(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 
-	categoryId, _ := strconv.Atoi(c.Query("categoryId"))
-	var count int
-	_, err = ormInit.GetEngine().SQL("select count(0) from t_article where category_id = ?", categoryId).Get(&count)
+	categoryID, err := strconv.Atoi(c.Query("categoryId"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	data := articleRepo.GetArticlesByCategoryId(current, size, categoryId)
+	data, count, err := a.articleRepository().GetArticlesByCategoryID(c.Request.Context(), current, size, categoryID)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -104,21 +126,29 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	articleId := c.Param("articleId")
 	get, err := shared.GetCtx(c.Request.Context(), articleId)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.WarnContext(c.Request.Context(), "read article cache failed", "error", err)
 	}
 	if get != "" {
 		var dto model.ArticleDTO
-		shared.Unmarsh(get, &dto)
-		if _, err := shared.ExpireCtx(c.Request.Context(), articleId, time.Hour*1); err != nil {
-			zlog.Error(err.Error())
+		if err := shared.Unmarsh(get, &dto); err == nil {
+			if _, err := shared.ExpireCtx(c.Request.Context(), articleId, time.Hour*1); err != nil {
+				slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
+			}
+			return model.ResultOkWithData(dto)
+		} else {
+			slog.WarnContext(c.Request.Context(), "decode article cache failed", "error", err)
 		}
-		return model.ResultOkWithData(dto)
 	}
-	var article entity.TArticle
-	_, err = ormInit.GetEngine().Context(c.Request.Context()).ID(articleId).Get(&article)
+	articleID, err := strconv.Atoi(articleId)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultVO{}
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	article, err := a.articleRepository().GetArticleRecord(c.Request.Context(), articleID)
+	if err != nil {
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return model.ResultOk()
+		}
+		return model.ResultFromError(err)
 	}
 	if article.Id == 0 {
 		return model.ResultOk()
@@ -134,7 +164,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 		}
 		isAccess, err := shared.SIsMemberCtx(c.Request.Context(), shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), articleId)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.ErrorContext(c.Request.Context(), "check article access failed", "error", err)
 			return model.ResultFail()
 		}
 		if !isAccess {
@@ -143,57 +173,78 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 		}
 	}
 	a.updateArticleViewsCount(c.Request.Context(), articleId)
-	id, err := strconv.Atoi(articleId)
+	id := articleID
+	data, err := a.articleRepository().GetArticleByID(c.Request.Context(), id)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-
-	data := articleRepo.GetArticleById(id)
-	preData := articleRepo.GetPreArticleById(id)
+	preData, err := a.articleRepository().GetPreArticleByID(c.Request.Context(), id)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if preData.Id == 0 {
-		preData = articleRepo.GetLastArticle()
+		preData, err = a.articleRepository().GetLastArticle(c.Request.Context())
+		if err != nil {
+			return model.ResultFromError(err)
+		}
 	}
-	nextData := articleRepo.GetNextArticleById(id)
+	nextData, err := a.articleRepository().GetNextArticleByID(c.Request.Context(), id)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if nextData.Id == 0 {
-		nextData = articleRepo.GetFirstArticle()
+		nextData, err = a.articleRepository().GetFirstArticle(c.Request.Context())
+		if err != nil {
+			return model.ResultFromError(err)
+		}
 	}
 	if data.Id == 0 {
 		return model.ResultOk()
 	}
 	score, err := shared.ZScoreCtx(c.Request.Context(), shared.ARTICLE_VIEWS_COUNT, articleId)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.WarnContext(c.Request.Context(), "read article view count failed", "error", err)
 	}
-	if score == 0 {
+	if score != 0 {
 		data.ViewCount = int(score)
 	}
 	data.PreArticleCard = preData
 	data.NextArticleCard = nextData
-	marshal, _ := json.Marshal(data)
+	marshal, err := json.Marshal(data)
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
+		return model.ResultFromError(err)
+	}
 	if err := shared.SetWithTimeCtx(c.Request.Context(), strconv.Itoa(data.Id), marshal, time.Hour*1); err != nil {
-		zlog.Error(err.Error())
+		slog.WarnContext(c.Request.Context(), "write article cache failed", "error", err)
 	}
 	return model.ResultOkWithData(data)
 }
 
 func (a *MyArticleService) updateArticleViewsCount(ctx context.Context, articleId string) {
 	if _, err := shared.ZIncrCtx(ctx, shared.ARTICLE_VIEWS_COUNT, 1, articleId); err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(ctx, "increment article view count failed", "error", err)
 	}
 }
 
 func (a *MyArticleService) ListArticlesByTagId(c *gin.Context) model.ResultVO {
-	current, _ := strconv.Atoi(c.Query("current"))
-	size, _ := strconv.Atoi(c.Query("size"))
-	tagId := c.Query("tagId")
-	count, err := ormInit.GetEngine().ID(tagId).Count(&entity.TTag{})
+	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	id, _ := strconv.Atoi(tagId)
-	data := articleRepo.ListArticlesByTagId(current, size, id)
+	size, err := strconv.Atoi(c.Query("size"))
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	tagId := c.Query("tagId")
+	id, err := strconv.Atoi(tagId)
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	data, count, err := a.articleRepository().ListArticlesByTagID(c.Request.Context(), current, size, id)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -204,23 +255,30 @@ func (a *MyArticleService) AccessArticle(c *gin.Context) model.ResultVO {
 	var vo model.ArticlePasswordVO
 	err := c.ShouldBind(&vo)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "bind article password failed", "error", err)
 		return model.ResultFail()
 	}
-	var article entity.TArticle
-	_, err = ormInit.GetEngine().Where(builder.Eq{"id": vo.ArticleId}).Get(&article)
+	article, err := a.articleRepository().GetArticleRecord(c.Request.Context(), vo.ArticleId)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return model.ResultFailWithMessage("文章不存在")
+		}
+		return model.ResultFromError(err)
 	}
 	if article.Id == 0 {
 		return model.ResultFailWithMessage("文章不存在")
 	}
 	if article.Password == vo.ArticlePassword {
-		value, _ := c.Get("userInfo")
-		dto := value.(model.UserDetailsDTO)
+		value, ok := c.Get("userInfo")
+		if !ok {
+			return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "article.access.user", nil))
+		}
+		dto, ok := value.(model.UserDetailsDTO)
+		if !ok {
+			return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "article.access.user", nil))
+		}
 		if _, err := shared.SAddCtx(c.Request.Context(), shared.ARTICLE_ACCESS+strconv.Itoa(dto.Id), vo.ArticleId); err != nil {
-			zlog.Error(err.Error())
+			slog.ErrorContext(c.Request.Context(), "record article access failed", "error", err)
 			return model.ResultFail()
 		}
 	} else {
@@ -232,88 +290,46 @@ func (a *MyArticleService) AccessArticle(c *gin.Context) model.ResultVO {
 func (a *MyArticleService) ListArchives(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 
-	count, err := ormInit.GetEngine().Where("is_delete = 0 and status = 1").Count(&entity.TArticle{})
+	articles, count, err := a.articleRepository().ListArchives(c.Request.Context(), current, size)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-
-	articles := articleRepo.ListArchives(current, size)
-	hm := make(map[string][]model.ArticleCardDTO)
+	type archiveGroup struct {
+		date time.Time
+		dto  model.ArchiveDTO
+	}
+	hm := make(map[string]*archiveGroup)
 	for _, v := range articles {
-		year, month, day := v.CreateTime.Date()
-		key := strconv.Itoa(year) + "-" + strconv.Itoa(int(month)) + "-" + strconv.Itoa(day)
-		value := hm[key]
-		if value == nil {
-			var articleCardDTOS []model.ArticleCardDTO
-			articleCardDTOS = append(articleCardDTOS, v)
-			hm[key] = articleCardDTOS
-		} else {
-			articleCards := hm[key]
-			articleCards = append(articleCards, v)
-			hm[key] = articleCards
+		key := v.CreateTime.Format("2006-1-2")
+		group, ok := hm[key]
+		if !ok {
+			group = &archiveGroup{
+				date: v.CreateTime,
+				dto:  model.ArchiveDTO{Time: key},
+			}
+			hm[key] = group
 		}
+		group.dto.Articles = append(group.dto.Articles, v)
 	}
-	var archiveDTOs []model.ArchiveDTO
-	for k, v := range hm {
-		var archiveDTO model.ArchiveDTO
-		archiveDTO.Time = k
-		archiveDTO.Articles = v
-		archiveDTOs = append(archiveDTOs, archiveDTO)
+	groups := make([]archiveGroup, 0, len(hm))
+	for _, group := range hm {
+		groups = append(groups, *group)
 	}
-	sort.Slice(archiveDTOs, func(i, j int) bool {
-
-		is := strings.Split(archiveDTOs[i].Time, "-")
-		js := strings.Split(archiveDTOs[j].Time, "-")
-		iyear, err := strconv.Atoi(is[0])
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		imonth, err := strconv.Atoi(is[1])
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		iday, err := strconv.Atoi(is[2])
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		jyear, err := strconv.Atoi(js[0])
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		jmonth, err := strconv.Atoi(js[1])
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		jday, err := strconv.Atoi(js[2])
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		if iyear > jyear {
-			return false
-		} else if iyear < jyear {
-			return true
-		}
-		if imonth > jmonth {
-			return false
-		} else if imonth < jmonth {
-			return true
-		}
-		return iday < jday
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].date.After(groups[j].date)
 	})
+	archiveDTOs := make([]model.ArchiveDTO, 0, len(groups))
+	for _, group := range groups {
+		archiveDTOs = append(archiveDTOs, group.dto)
+	}
 	if len(archiveDTOs) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -324,13 +340,29 @@ func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 	var conditionVO model.ConditionVO
 	err := c.ShouldBindQuery(&conditionVO)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	count := articleRepo.CountArticleAdmins(&conditionVO)
-	articleAdminDTOs := articleRepo.ListArticlesAdmin(conditionVO.Current, conditionVO.Size, &conditionVO)
+	filter := port.ArticleFilter{
+		Current:  conditionVO.Current,
+		Size:     conditionVO.Size,
+		Keywords: conditionVO.Keywords,
+		IsDelete: conditionVO.IsDelete,
+		Status:   conditionVO.Status,
+		Category: conditionVO.CategoryId,
+		Type:     conditionVO.Type,
+		Tag:      conditionVO.TagId,
+	}
+	count, err := a.articleRepository().CountArticleAdmins(c.Request.Context(), filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	articleAdminDTOs, err := a.articleRepository().ListArticlesAdmin(c.Request.Context(), filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	viewsCountMap, err := shared.ZAllScoreCtx(c.Request.Context(), shared.ARTICLE_VIEWS_COUNT)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "load article view counts failed", "error", err)
 		return model.ResultFail()
 	}
 	for _, v := range articleAdminDTOs {
@@ -348,60 +380,42 @@ func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 
 func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 	var articleVO model.ArticleVO
-	err := c.ShouldBind(&articleVO)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&articleVO); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	vo, ok := c.Get("articleVO")
 	if ok {
 		articleVO = vo.(model.ArticleVO)
 	}
-	value, _ := c.Get("userInfo")
-	dto := value.(model.UserDetailsDTO)
-	var articlebase entity.TArticle
-	err = ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		category, err := a.saveArticleCategory(articleVO, session)
-		if err != nil {
-			return err
-		}
-		var article entity.TArticle
-		marshal, err := json.Marshal(articleVO)
-		if err != nil {
-			return err
-		}
-		if err = json.Unmarshal(marshal, &article); err != nil {
-			return err
-		}
-		if category.Id != 0 {
-			article.CategoryId = category.Id
-		}
-		article.UserId = dto.UserInfoId
-		if article.Id != 0 {
-			if _, err = session.ID(article.Id).Update(&article); err != nil {
-				return err
-			}
-		} else if _, err = session.Insert(&article); err != nil {
-			return err
-		}
-		if err = a.saveArticleTag(articleVO, article.Id, session); err != nil {
-			return err
-		}
-		_, err = session.ID(article.Id).Get(&articlebase)
-		return err
-	})
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return model.ResultFailWithMessage("用户未登录")
+	}
+	dto, ok := value.(model.UserDetailsDTO)
+	if !ok {
+		return model.ResultFailWithMessage("用户信息无效")
+	}
+	var article entity.TArticle
+	marshal, err := json.Marshal(articleVO)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
+	}
+	if err := json.Unmarshal(marshal, &article); err != nil {
+		return model.ResultFromError(err)
+	}
+	article.UserId = dto.UserInfoId
+	articlebase, err := a.articleRepository().SaveOrUpdate(c.Request.Context(), article, articleVO.CategoryName, articleVO.TagNames)
+	if err != nil {
+		return model.ResultFromError(err)
 	}
 	if articlebase.Id != 0 {
 		marsha, err := json.Marshal(articlebase)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
 			return model.ResultFail()
 		}
 		if err := shared.SetCtx(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha); err != nil {
-			zlog.Error(err.Error())
+			slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
 			return model.ResultFail()
 		}
 	}
@@ -410,37 +424,24 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 
 func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.ResultVO {
 	var articleTopFeaturedVO model.ArticleTopFeaturedVO
-	err := c.ShouldBind(&articleTopFeaturedVO)
+	if err := c.ShouldBind(&articleTopFeaturedVO); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	articlebase, err := a.articleRepository().UpdateTopAndFeatured(c.Request.Context(), articleTopFeaturedVO.Id, articleTopFeaturedVO.IsTop, articleTopFeaturedVO.IsFeatured)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	article := entity.TArticle{
-		Id:         articleTopFeaturedVO.Id,
-		IsTop:      articleTopFeaturedVO.IsTop,
-		IsFeatured: articleTopFeaturedVO.IsFeatured,
-	}
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		_, err := session.Exec("update t_article set is_top = ?, is_featured = ? where id = ?", article.IsTop, article.IsFeatured, article.Id)
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	var articlebase entity.TArticle
-	_, err = ormInit.GetEngine().Context(c.Request.Context()).ID(article.Id).Get(&articlebase)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return model.ResultOk()
+		}
+		return model.ResultFromError(err)
 	}
 	if articlebase.Id != 0 {
 		marsha, err := json.Marshal(articlebase)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
 			return model.ResultFail()
 		}
 		if err := shared.SetCtx(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha); err != nil {
-			zlog.Error(err.Error())
+			slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
 			return model.ResultFail()
 		}
 	}
@@ -449,50 +450,22 @@ func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.Res
 
 func (a *MyArticleService) UpdateArticleDelete(c *gin.Context) model.ResultVO {
 	var deleteVO model.DeleteVO
-	err := c.ShouldBind(&deleteVO)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := c.ShouldBind(&deleteVO); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var articles []entity.TArticle
-	for _, v := range deleteVO.Ids {
-		articles = append(articles, entity.TArticle{
-			Id:       v,
-			IsDelete: deleteVO.IsDelete,
-		})
-	}
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		for _, v := range articles {
-			if _, err := session.MustCols("is_delete").ID(v.Id).Update(&v); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := a.articleRepository().UpdateDelete(c.Request.Context(), deleteVO.Ids, deleteVO.IsDelete); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (a *MyArticleService) DeleteArticles(c *gin.Context) model.ResultVO {
 	var ids []int
-	err := c.ShouldBind(&ids)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := c.ShouldBind(&ids); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		for _, id := range ids {
-			if _, err := session.Exec("delete from t_article where id = ?", id); err != nil {
-				return err
-			}
-			if _, err := session.Where(builder.Eq{"article_id": id}).Delete(&entity.TArticleTag{}); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := a.articleRepository().Delete(c.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
@@ -500,7 +473,7 @@ func (a *MyArticleService) DeleteArticles(c *gin.Context) model.ResultVO {
 func (a *MyArticleService) SaveArticleImages(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "read article image failed", "error", err)
 		return model.ResultFail()
 	}
 	fileUri := oss.Upload(file, "articles/")
@@ -510,36 +483,24 @@ func (a *MyArticleService) SaveArticleImages(c *gin.Context) model.ResultVO {
 func (a *MyArticleService) GetArticleBackById(c *gin.Context) model.ResultVO {
 	id, err := strconv.Atoi(c.Param("articleId"))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	engine := ormInit.GetEngine()
-	var article entity.TArticle
-	_, err = engine.ID(id).Get(&article)
+	article, categoryName, tagNames, err := a.articleRepository().GetAdminArticle(c.Request.Context(), id)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return model.ResultOkWithData(model.ArticleAdminViewDTO{})
+		}
+		return model.ResultFromError(err)
 	}
-	var category entity.TCategory
-	_, err = engine.ID(article.CategoryId).Get(&category)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	categoryName := ""
-	if category.Id != 0 {
-		categoryName = category.CategoryName
-	}
-	tagNames := tagRepo.ListTagNamesByArticleId(id)
 	var articleAdminViewDTO model.ArticleAdminViewDTO
 	marshal, err := json.Marshal(article)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "marshal admin article failed", "error", err)
 		return model.ResultFail()
 	}
 	err = json.Unmarshal(marshal, &articleAdminViewDTO)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "decode admin article failed", "error", err)
 		return model.ResultFail()
 	}
 	articleAdminViewDTO.CategoryName = categoryName
@@ -554,20 +515,23 @@ func (a *MyArticleService) GetArticleBackById(c *gin.Context) model.ResultVO {
 func (a *MyArticleService) ImportArticles(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	filename := file.Filename
 	index := strings.LastIndex(filename, ".")
+	if index <= 0 || index == len(filename)-1 {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
 	articleTitle := filename[:index]
 	content, err := file.Open()
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "open imported article failed", "error", err)
 		return model.ResultFail()
 	}
+	defer content.Close()
 	all, err := io.ReadAll(content)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "read imported article failed", "error", err)
 		return model.ResultFail()
 	}
 	articleVO := model.ArticleVO{
@@ -576,30 +540,21 @@ func (a *MyArticleService) ImportArticles(c *gin.Context) model.ResultVO {
 		Status:         3,
 	}
 	c.Set("articleVO", articleVO)
-	a.SaveOrUpdateArticle(c)
-	return model.ResultOk()
+	return a.SaveOrUpdateArticle(c)
 }
 
 func (a *MyArticleService) ExportArticles(c *gin.Context) model.ResultVO {
 	var iDs []int
 	err := c.ShouldBind(&iDs)
 	if err != nil {
-		zlog.Error(err.Error())
 		return model.ResultFailWithMessage("导出文章失败")
 	}
-	var articles []entity.TArticle
-	err = ormInit.GetEngine().Select("article_title, article_content").In("id", iDs).Find(&articles)
+	articles, err := a.articleRepository().Export(c.Request.Context(), iDs)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFailWithMessage("导出文章失败")
+		return model.ResultFromError(err)
 	}
 	var urls []string
 	for _, v := range articles {
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFailWithMessage("导出文章失败")
-		}
-
 		fileUri := oss.UploadFile(bytes.NewReader([]byte(v.ArticleContent)), v.ArticleTitle+".md", "markdown/")
 		urls = append(urls, shared.FILEURL+fileUri)
 	}
@@ -612,98 +567,38 @@ func (a *MyArticleService) ListArticlesBySearch(c *gin.Context) model.ResultVO {
 		return model.ResultOk()
 	}
 	data := SearchEngines.Search(keywords)
-	for _, v := range data {
-		v1 := v.(map[string]interface{})
-		v1["articleTitle"] = v1["_formatted"].(map[string]interface{})["articleTitle"]
-		v1["articleContent"] = v1["_formatted"].(map[string]interface{})["articleContent"]
+	filtered := make([]interface{}, 0, len(data))
+	for _, value := range data {
+		result, ok := value.(map[string]interface{})
+		if !ok {
+			slog.Warn("skip malformed search result", "type", fmt.Sprintf("%T", value))
+			continue
+		}
+		formatted, ok := result["_formatted"].(map[string]interface{})
+		if !ok {
+			slog.Warn("skip search result without formatted fields")
+			continue
+		}
+		if title, ok := formatted["articleTitle"]; ok {
+			result["articleTitle"] = title
+		}
+		if content, ok := formatted["articleContent"]; ok {
+			result["articleContent"] = content
+		}
+		filtered = append(filtered, result)
 	}
-	jsonData, err := json.Marshal(data)
+	jsonData, err := json.Marshal(filtered)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "marshal article search results failed", "error", err)
 		return model.ResultFail()
 	}
 
 	var articleSearchDTOs []model.ArticleSearchDTO
 	err = json.Unmarshal(jsonData, &articleSearchDTOs)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.ErrorContext(c.Request.Context(), "decode article search results failed", "error", err)
 		return model.ResultFail()
 	}
 
 	return model.ResultOkWithData(articleSearchDTOs)
-}
-
-func (a *MyArticleService) saveArticleCategory(vo model.ArticleVO, session *xorm.Session) (entity.TCategory, error) {
-	var category entity.TCategory
-	_, err := session.SQL("select * from t_category where category_name = ?", vo.CategoryName).Get(&category)
-	if err != nil {
-		return entity.TCategory{}, err
-	}
-	if category.Id == 0 && vo.Status != 3 {
-		category.CategoryName = vo.CategoryName
-		_, err = session.Prepare().Insert(&category)
-		if err != nil {
-			return entity.TCategory{}, err
-		}
-	}
-	return category, nil
-}
-
-func (a *MyArticleService) saveArticleTag(vo model.ArticleVO, articleId int, session *xorm.Session) error {
-	var atag entity.TArticleTag
-	if vo.Id != 0 {
-		_, err := session.Where("article_id = ?", vo.Id).Delete(&atag)
-		if err != nil {
-			return err
-		}
-	}
-	if len(vo.TagNames) != 0 {
-		var existTags []entity.TTag
-		err := session.In("tag_name", vo.TagNames).Find(&existTags)
-		if err != nil {
-			return err
-		}
-		existingNames := make(map[string]struct{}, len(existTags))
-		var existTagIds []int
-		for _, v := range existTags {
-			existingNames[v.TagName] = struct{}{}
-			existTagIds = append(existTagIds, v.Id)
-		}
-		var tags []entity.TTag
-		for _, name := range vo.TagNames {
-			if _, exists := existingNames[name]; !exists {
-				tags = append(tags, entity.TTag{TagName: name})
-				existingNames[name] = struct{}{}
-			}
-		}
-		if len(tags) != 0 {
-			for k, tag := range tags {
-				_, err := session.Insert(&tag)
-				if err != nil {
-					return err
-				}
-				tags[k] = tag
-			}
-
-			var tagIds []int
-			for _, tag := range tags {
-				tagIds = append(tagIds, tag.Id)
-			}
-			existTagIds = append(existTagIds, tagIds...)
-		}
-		var articleTags []entity.TArticleTag
-		for _, tagId := range existTagIds {
-			articleTags = append(articleTags, entity.TArticleTag{
-				ArticleId: articleId,
-				TagId:     tagId,
-			})
-		}
-		if len(articleTags) != 0 {
-			_, err = session.Insert(&articleTags)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

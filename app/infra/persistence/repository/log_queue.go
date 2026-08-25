@@ -2,14 +2,12 @@ package repository
 
 import (
 	"benetnasch/app/domain/entity"
-	"benetnasch/app/infra/zlog"
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 const (
@@ -77,7 +75,7 @@ func StartLogQueue(ctx context.Context) *LogQueue {
 func EnqueueOptLog(log entity.TOperationLog) bool {
 	queue := defaultLogQueue.Load()
 	if queue == nil {
-		zlog.Warn("operation log dropped: queue is not started")
+		slog.Warn("operation log dropped: queue is not started")
 		return false
 	}
 	return queue.enqueueOpt(log)
@@ -87,7 +85,7 @@ func EnqueueOptLog(log entity.TOperationLog) bool {
 func EnqueueExLog(log entity.TExceptionLog) bool {
 	queue := defaultLogQueue.Load()
 	if queue == nil {
-		zlog.Warn("exception log dropped: queue is not started")
+		slog.Warn("exception log dropped: queue is not started")
 		return false
 	}
 	return queue.enqueueEx(log)
@@ -103,7 +101,7 @@ func (q *LogQueue) enqueueOpt(log entity.TOperationLog) bool {
 	case q.optCh <- log:
 		return true
 	default:
-		zlog.Warn("operation log dropped: queue is full", zap.Int("capacity", logQueueCapacity))
+		slog.Warn("operation log dropped: queue is full", "capacity", logQueueCapacity)
 		return false
 	}
 }
@@ -118,7 +116,7 @@ func (q *LogQueue) enqueueEx(log entity.TExceptionLog) bool {
 	case q.exCh <- log:
 		return true
 	default:
-		zlog.Warn("exception log dropped: queue is full", zap.Int("capacity", logQueueCapacity))
+		slog.Warn("exception log dropped: queue is full", "capacity", logQueueCapacity)
 		return false
 	}
 }
@@ -162,7 +160,7 @@ func (q *LogQueue) retry(kind string, save func() error) {
 			return
 		}
 		if attempt == logRetryAttempts {
-			zlog.Error("persist "+kind+" log failed after retries", zap.Error(err))
+			slog.Error("persist log failed after retries", "kind", kind, "error", err)
 			return
 		}
 		delay := time.Duration(1<<(attempt-1)) * 100 * time.Millisecond

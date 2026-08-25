@@ -2,15 +2,15 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
 	"context"
-	"github.com/gin-gonic/gin"
 	"strconv"
-	"xorm.io/xorm"
+
+	"github.com/gin-gonic/gin"
 )
 
 type CommentService interface {
@@ -21,66 +21,85 @@ type CommentService interface {
 	ListCommentBackDTO(c *gin.Context) model.ResultVO
 	UpdateCommentsReview(c *gin.Context) model.ResultVO
 	DeleteComments(c *gin.Context) model.ResultVO
-	checkComment(ctx context.Context, vo model.CommentVO) string
 }
 
-type MyCommentService struct{}
+type MyCommentService struct {
+	repo    port.CommentRepository
+	website BenetnaschInfoService
+}
+
+func NewCommentService(repo port.CommentRepository, website ...BenetnaschInfoService) *MyCommentService {
+	service := &MyCommentService{repo: repo}
+	if len(website) > 0 {
+		service.website = website[0]
+	}
+	return service
+}
+
+func (c *MyCommentService) commentRepository() port.CommentRepository {
+	if c.repo != nil {
+		return c.repo
+	}
+	return commentRepo
+}
+
+func (c *MyCommentService) websiteService() BenetnaschInfoService {
+	if c.website != nil {
+		return c.website
+	}
+	return benetnaschService
+}
 
 func (c *MyCommentService) ListTopSixComments() model.ResultVO {
-	return model.ResultOkWithData(commentRepo.ListTopSixComments())
+	data, err := c.commentRepository().ListTopSixComments(context.Background())
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(data)
 }
 
 func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(ctx.Query("current"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	size, err := strconv.Atoi(ctx.Query("size"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	var commentVO model.CommentVO
-	err = ctx.ShouldBind(&commentVO)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ctx.ShouldBind(&commentVO); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	sql := "select count(0) from t_comment where type = ? and is_review = ?"
-	args := []interface{}{commentVO.Type, shared.TRUE}
+	filter := port.CommentFilter{Current: current, Size: size, Type: commentVO.Type}
 	if commentVO.TopicId != "" {
-		topicID, parseErr := strconv.Atoi(commentVO.TopicId)
-		if parseErr != nil {
+		topicID, err := strconv.Atoi(commentVO.TopicId)
+		if err != nil {
 			return model.ResultFailWithMessage("参数校验异常")
 		}
-		sql += " and topic_id = ?"
-		args = append(args, topicID)
+		filter.TopicID = &topicID
 	}
-	var count int
-	_, err = ormInit.GetEngine().Context(ctx.Request.Context()).SQL(sql, args...).Get(&count)
+	commentData, count, err := c.commentRepository().ListComments(ctx.Request.Context(), filter)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{})
-	}
-	commentData := commentRepo.ListComments(current, size, &commentVO)
-	if len(commentData) == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{})
-	}
-
-	var commentIds []int
-	for _, v := range commentData {
-		commentIds = append(commentIds, v.Id)
-	}
-	replyData := commentRepo.ListReplies(commentIds)
-	replyMap := make(map[int][]model.ReplyDTO)
-	for _, v := range replyData {
-		replyMap[v.ParentId] = append(replyMap[v.ParentId], *v)
-	}
-	for _, v := range commentData {
-		v.ReplyDTOs = replyMap[v.Id]
-	}
-	if len(commentData) == 0 {
+	if count == 0 || len(commentData) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+	}
+	commentIDs := make([]int, 0, len(commentData))
+	for _, comment := range commentData {
+		commentIDs = append(commentIDs, comment.Id)
+	}
+	replyData, err := c.commentRepository().ListReplies(ctx.Request.Context(), commentIDs)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	replyMap := make(map[int][]model.ReplyDTO)
+	for _, reply := range replyData {
+		replyMap[reply.ParentId] = append(replyMap[reply.ParentId], *reply)
+	}
+	for _, comment := range commentData {
+		comment.ReplyDTOs = replyMap[comment.Id]
 	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: commentData, Count: count})
 }
@@ -88,74 +107,86 @@ func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 	var commentVO model.CommentVO
 	if err := ctx.ShouldBind(&commentVO); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	s := c.checkComment(ctx.Request.Context(), commentVO)
-	if s != "" {
-		return model.ResultFailWithMessage(s)
+	if err := c.checkComment(ctx.Request.Context(), commentVO); err != nil {
+		if apperrors.IsKind(err, apperrors.KindValidation) {
+			return model.ResultFailWithMessage("参数校验异常")
+		}
+		return model.ResultFromError(err)
 	}
-	websiteConfigResult := benetnaschService.GetWebsiteConfig(ctx.Request.Context())
+	websiteConfigResult := c.websiteService().GetWebsiteConfig(ctx.Request.Context())
 	websiteConfig, ok := websiteConfigResult.Data.(model.WebsiteConfigDTO)
 	if !ok {
 		return websiteConfigResult
 	}
-	// TODO过滤敏感词汇
-	isCommentReview, _ := strconv.Atoi(strconv.Itoa(websiteConfig.IsCommentReview))
 	isReview := 0
-	if isCommentReview == shared.TRUE {
-		isReview = 0
-	}
-	if isCommentReview == shared.FALSE {
+	if websiteConfig.IsCommentReview == shared.FALSE {
 		isReview = 1
 	}
-	topicId, err := strconv.Atoi(commentVO.TopicId)
-	if err != nil {
-		return model.ResultFailWithMessage("参数校验异常")
+	topicID := 0
+	if commentVO.TopicId != "" {
+		var err error
+		topicID, err = strconv.Atoi(commentVO.TopicId)
+		if err != nil {
+			return model.ResultFailWithMessage("参数校验异常")
+		}
 	}
-
-	value, _ := ctx.Get("userInfo")
-	dto := value.(model.UserDetailsDTO)
-
+	value, ok := ctx.Get("userInfo")
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "comment.user", nil))
+	}
+	dto, ok := value.(model.UserDetailsDTO)
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "comment.user", nil))
+	}
 	comment := entity.TComment{
 		UserId:         dto.UserInfoId,
 		ReplyUserId:    commentVO.ReplyUserId,
-		TopicId:        topicId,
+		TopicId:        topicID,
 		CommentContent: commentVO.CommentContent,
 		ParentId:       commentVO.ParentId,
 		Type:           commentVO.Type,
 		IsReview:       isReview,
 	}
-	if err := ormInit.WithTx(ctx.Request.Context(), func(session *xorm.Session) error {
-		_, err := session.Insert(&comment)
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.commentRepository().Create(ctx.Request.Context(), comment); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (c *MyCommentService) ListRepliesByCommentId(ctx *gin.Context) model.ResultVO {
-	commentId, err := strconv.Atoi(ctx.Param("commentId"))
+	commentID, err := strconv.Atoi(ctx.Param("commentId"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var iDs []int
-	iDs = append(iDs, commentId)
-	data := commentRepo.ListReplies(iDs)
+	data, err := c.commentRepository().ListReplies(ctx.Request.Context(), []int{commentID})
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	return model.ResultOkWithData(data)
 }
 
 func (c *MyCommentService) ListCommentBackDTO(ctx *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := ctx.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := ctx.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	count := commentRepo.CountComments(&vo)
-	data := commentRepo.ListCommentsAdmin(vo.Current, vo.Size, &vo)
+	filter := port.CommentFilter{
+		Current:  vo.Current,
+		Size:     vo.Size,
+		Keywords: vo.Keywords,
+		Type:     vo.Type,
+		IsReview: vo.IsReview,
+	}
+	count, err := c.commentRepository().CountComments(ctx.Request.Context(), filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	data, err := c.commentRepository().ListCommentsAdmin(ctx.Request.Context(), filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -164,111 +195,55 @@ func (c *MyCommentService) ListCommentBackDTO(ctx *gin.Context) model.ResultVO {
 
 func (c *MyCommentService) UpdateCommentsReview(ctx *gin.Context) model.ResultVO {
 	var vo model.ReviewVO
-	err := ctx.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := ctx.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var comments []entity.TComment
-	for _, v := range vo.Ids {
-		comment := entity.TComment{
-			Id:       v,
-			IsReview: vo.IsReview,
-		}
-		comments = append(comments, comment)
-	}
-	if err := ormInit.WithTx(ctx.Request.Context(), func(session *xorm.Session) error {
-		for _, v := range comments {
-			if _, err := session.ID(v.Id).MustCols("is_review").Update(&v); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.commentRepository().Review(ctx.Request.Context(), vo.Ids, vo.IsReview); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (c *MyCommentService) DeleteComments(ctx *gin.Context) model.ResultVO {
-	var iDs []int
-	err := ctx.ShouldBind(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
+	var ids []int
+	if err := ctx.ShouldBind(&ids); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	_, err = ormInit.GetEngine().Context(ctx.Request.Context()).In("id", iDs).Delete(&entity.TComment{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.commentRepository().Delete(ctx.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
-func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO) string {
-	engine := ormInit.GetEngine().Context(ctx)
+func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO) error {
 	if len(shared.TypeHM[vo.Type]) == 0 {
-		return "参数校验异常"
+		return apperrors.Invalid("comment.validate", "invalid comment type")
 	}
-
 	if vo.Type == shared.ARTICLE || vo.Type == shared.TALK {
 		if vo.TopicId == "" {
-			return "参数校验异常"
-		} else {
-			if vo.Type == shared.ARTICLE {
-				var article entity.TArticle
-				topicID, parseErr := strconv.Atoi(vo.TopicId)
-				if parseErr != nil {
-					return "参数校验异常"
-				}
-				get, err := engine.SQL("select id, user_id from t_article where id = ?", topicID).Get(&article)
-				if err != nil || !get {
-					return "参数校验异常"
-				}
-			}
-			if vo.Type == shared.TALK {
-				var talk entity.TTalk
-				topicID, parseErr := strconv.Atoi(vo.TopicId)
-				if parseErr != nil {
-					return "参数校验异常"
-				}
-				get, err := engine.SQL("select id, user_id from t_talk where id = ?", topicID).Get(&talk)
-				if err != nil || !get {
-					return "参数校验异常"
-				}
-			}
+			return apperrors.Invalid("comment.validate", "topic is required")
+		}
+		topicID, err := strconv.Atoi(vo.TopicId)
+		if err != nil {
+			return apperrors.Invalid("comment.validate", "invalid topic")
+		}
+		if err := c.commentRepository().ValidateTarget(ctx, vo.Type, topicID); err != nil {
+			return err
 		}
 	}
-
 	if (vo.Type == shared.LINK || vo.Type == shared.ABOUTS || vo.Type == shared.MESSAGE) && vo.TopicId != "" {
-		return "参数校验异常"
+		return apperrors.Invalid("comment.validate", "topic must be empty")
 	}
-
 	if vo.ParentId == 0 && vo.ReplyUserId != 0 {
-		return "参数校验异常"
+		return apperrors.Invalid("comment.validate", "reply user requires parent")
 	}
-
 	if vo.ParentId != 0 {
-		var parentComment entity.TComment
-		get, err := engine.SQL("select id, parent_id, type from t_comment where id = ?", vo.ParentId).Get(&parentComment)
-		if err != nil || !get {
-			return "参数校验异常"
-		}
-		if parentComment.ParentId != 0 {
-			return "参数校验异常"
-		}
-		if vo.Type != parentComment.Type {
-			return "参数校验异常"
-		}
 		if vo.ReplyUserId == 0 {
-			return "参数校验异常"
-		} else {
-			var userInfo entity.TUserInfo
-			get, err := engine.SQL("select id from t_user_info where id = ?", vo.ReplyUserId).Get(&userInfo)
-			if err != nil || !get {
-				return "参数校验异常"
-			}
+			return apperrors.Invalid("comment.validate", "reply user is required")
 		}
+		return c.commentRepository().ValidateReply(ctx, vo.Type, vo.ParentId, vo.ReplyUserId)
 	}
-	return ""
+	return nil
 }
+
+var _ CommentService = (*MyCommentService)(nil)

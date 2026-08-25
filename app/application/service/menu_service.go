@@ -2,17 +2,15 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
-	"benetnasch/app/infra/persistence/repository"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
-	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
+	"context"
 	"sort"
 	"strconv"
-	"xorm.io/builder"
-	"xorm.io/xorm"
+
+	"github.com/gin-gonic/gin"
 )
 
 type MenuService interface {
@@ -22,266 +20,161 @@ type MenuService interface {
 	DeleteMenu(c *gin.Context) model.ResultVO
 	ListMenuOptions() model.ResultVO
 	ListUserMenus(userInfoId int) model.ResultVO
-	listCatalogs(menus []*entity.TMenu) []*entity.TMenu
-	getMenuMap(menus []*entity.TMenu) map[int][]*entity.TMenu
-	convertUserMenuList(catalogs []*entity.TMenu, hm map[int][]*entity.TMenu) []model.UserMenuDTO
+	listCatalogs(menus []entity.TMenu) []entity.TMenu
+	getMenuMap(menus []entity.TMenu) map[int][]entity.TMenu
+	convertUserMenuList(catalogs []entity.TMenu, hm map[int][]entity.TMenu) []model.UserMenuDTO
 }
 
-type MyMenuSService struct{}
+type MyMenuSService struct{ repo port.MenuRepository }
+
+func NewMenuService(repo port.MenuRepository) *MyMenuSService { return &MyMenuSService{repo: repo} }
+
+func (m *MyMenuSService) menuRepository() port.MenuRepository {
+	if m.repo != nil {
+		return m.repo
+	}
+	return menuRepo
+}
 
 func (m *MyMenuSService) ListMenus(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	menus, err := m.menuRepository().List(c.Request.Context(), vo.Keywords)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
-	engine := ormInit.GetEngine()
-	var menus []*entity.TMenu
-	if vo.Keywords != "" {
-		err = engine.Prepare().Where(builder.Like{"name", vo.Keywords}).Find(&menus)
-	} else {
-		err = engine.Prepare().Find(&menus)
-	}
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	catalogs := m.listCatalogs(menus)
-	childrenMap := m.getMenuMap(menus)
-
-	var dtos []model.MenuDTO
-	for _, v := range catalogs {
-		var dto model.MenuDTO
-		marshal, err := json.Marshal(v)
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-		err = json.Unmarshal(marshal, &dto)
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-		var list []model.MenuDTO
-		bytes, err := json.Marshal(childrenMap[v.Id])
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-		err = json.Unmarshal(bytes, &list)
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-		sort.Slice(list, func(i, j int) bool {
-			return list[i].OrderNum < list[j].OrderNum
-		})
-		dto.Children = list
-		delete(childrenMap, v.Id)
-		dtos = append(dtos, dto)
-	}
-	sort.Slice(dtos, func(i, j int) bool {
-		return dtos[i].OrderNum < dtos[j].OrderNum
-	})
-	if len(childrenMap) != 0 {
-		var childrenList []*entity.TMenu
-		for _, v := range childrenMap {
-			childrenList = append(childrenList, v...)
-		}
-		var childrenDTOList []model.MenuDTO
-		for _, v := range childrenList {
-			var menuDTO model.MenuDTO
-			marshal, err := json.Marshal(v)
-			if err != nil {
-				zlog.Error(err.Error())
-				return model.ResultFail()
-			}
-			err = json.Unmarshal(marshal, &menuDTO)
-			if err != nil {
-				zlog.Error(err.Error())
-				return model.ResultFail()
-			}
-			childrenDTOList = append(childrenDTOList, menuDTO)
-		}
-		sort.Slice(childrenDTOList, func(i, j int) bool {
-			return childrenDTOList[i].OrderNum < childrenDTOList[j].OrderNum
-		})
-		dtos = append(dtos, childrenDTOList...)
-	}
-	return model.ResultOkWithData(dtos)
+	return model.ResultOkWithData(m.menuDTOs(menus))
 }
 
 func (m *MyMenuSService) SaveOrUpdateMenu(c *gin.Context) model.ResultVO {
 	var vo model.MenuVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var menu entity.TMenu
-	shared.StructCopy(vo, &menu)
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		if menu.Id != 0 {
-			_, err = session.ID(menu.Id).Update(&menu)
-		} else {
-			_, err = session.Insert(&menu)
-		}
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	menu := entity.TMenu{Id: vo.Id, Name: vo.Name, Path: vo.Path, Component: vo.Component, Icon: vo.Icon, OrderNum: vo.OrderNum, ParentId: vo.ParentId, IsHidden: vo.IsHidden}
+	if err := m.menuRepository().SaveOrUpdate(c.Request.Context(), menu); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (m *MyMenuSService) UpdateMenuIsHidden(c *gin.Context) model.ResultVO {
 	var vo model.IsHiddenVO
-	zlog.Unwrap(c.ShouldBind(&vo))
-
-	var menu entity.TMenu
-	shared.StructCopy(vo, &menu)
-	_, err := ormInit.GetEngine().ID(menu.Id).MustCols("is_hidden").Update(&menu)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	if err := m.menuRepository().UpdateHidden(c.Request.Context(), vo.Id, vo.IsHidden); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (m *MyMenuSService) DeleteMenu(c *gin.Context) model.ResultVO {
-	id, _ := strconv.Atoi(c.Param("menuId"))
-	engine := ormInit.GetEngine()
-	count, err := engine.Prepare().Where("menu_id = ?", id).Count(&entity.TRoleMenu{})
+	id, err := strconv.Atoi(c.Param("menuId"))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if count > 0 {
-		return model.ResultFailWithMessage("菜单下有角色关联")
-	}
-	var iDs []int
-	err = engine.Prepare().Select("id").Where("parent_id = ?", id).Find(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	iDs = append(iDs, id)
-	_, err = engine.Prepare().In("id", iDs).Delete(&entity.TMenu{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := m.menuRepository().Delete(c.Request.Context(), id); err != nil {
+		if apperrors.IsKind(err, apperrors.KindConflict) {
+			return model.ResultFailWithMessage("菜单下有角色关联")
+		}
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (m *MyMenuSService) ListMenuOptions() model.ResultVO {
-	engine := ormInit.GetEngine()
-	var menus []*entity.TMenu
-	err := engine.Select("id, name, parent_id, order_num").Find(&menus)
+	menus, err := m.menuRepository().ListOptions(context.Background())
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
 	catalogs := m.listCatalogs(menus)
-	childrenMap := m.getMenuMap(menus)
-	var labelOptionDTOs []model.LabelOptionDTO
-	for _, v := range catalogs {
-		var dtos []model.LabelOptionDTO
-		children := childrenMap[v.Id]
-		if len(children) != 0 {
-			sort.Slice(children, func(i, j int) bool {
-				return children[i].OrderNum < children[j].OrderNum
-			})
-			for _, va := range children {
-				dtos = append(dtos, model.LabelOptionDTO{
-					Id:    va.Id,
-					Label: va.Name,
-				})
-			}
+	children := m.getMenuMap(menus)
+	options := make([]model.LabelOptionDTO, 0, len(catalogs))
+	for _, catalog := range catalogs {
+		items := children[catalog.Id]
+		sort.Slice(items, func(i, j int) bool { return items[i].OrderNum < items[j].OrderNum })
+		childrenDTO := make([]model.LabelOptionDTO, 0, len(items))
+		for _, item := range items {
+			childrenDTO = append(childrenDTO, model.LabelOptionDTO{Id: item.Id, Label: item.Name})
 		}
-		labelOptionDTOs = append(labelOptionDTOs, model.LabelOptionDTO{
-			Id:       v.Id,
-			Label:    v.Name,
-			Children: dtos,
-		})
+		options = append(options, model.LabelOptionDTO{Id: catalog.Id, Label: catalog.Name, Children: childrenDTO})
 	}
-	return model.ResultOkWithData(labelOptionDTOs)
+	return model.ResultOkWithData(options)
 }
 
-func (m *MyMenuSService) ListUserMenus(userInfoId int) model.ResultVO {
+func (m *MyMenuSService) ListUserMenus(userInfoID int) model.ResultVO {
+	menus, err := m.menuRepository().ListByUserInfoID(context.Background(), userInfoID)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(m.convertUserMenuList(m.listCatalogs(menus), m.getMenuMap(menus)))
+}
 
-	menus := repository.ListMenusByUserInfoId(userInfoId)
+func (m *MyMenuSService) listCatalogs(menus []entity.TMenu) []entity.TMenu {
+	result := make([]entity.TMenu, 0)
+	for _, menu := range menus {
+		if menu.ParentId == 0 {
+			result = append(result, menu)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].OrderNum < result[j].OrderNum })
+	return result
+}
+
+func (m *MyMenuSService) getMenuMap(menus []entity.TMenu) map[int][]entity.TMenu {
+	result := make(map[int][]entity.TMenu)
+	for _, menu := range menus {
+		if menu.ParentId != 0 {
+			result[menu.ParentId] = append(result[menu.ParentId], menu)
+		}
+	}
+	return result
+}
+
+func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
 	catalogs := m.listCatalogs(menus)
-	childrenMap := m.getMenuMap(menus)
-	return model.ResultOkWithData(m.convertUserMenuList(catalogs, childrenMap))
-}
-
-func (m *MyMenuSService) listCatalogs(menus []*entity.TMenu) []*entity.TMenu {
-	var mens []*entity.TMenu
-	for _, item := range menus {
-		if item.ParentId == 0 {
-			mens = append(mens, item)
+	children := m.getMenuMap(menus)
+	result := make([]model.MenuDTO, 0, len(catalogs))
+	for _, catalog := range catalogs {
+		var dto model.MenuDTO
+		shared.StructCopy(catalog, &dto)
+		var childDTOs []model.MenuDTO
+		shared.StructCopy(children[catalog.Id], &childDTOs)
+		sort.Slice(childDTOs, func(i, j int) bool { return childDTOs[i].OrderNum < childDTOs[j].OrderNum })
+		dto.Children = childDTOs
+		result = append(result, dto)
+		delete(children, catalog.Id)
+	}
+	if len(children) > 0 {
+		for _, childList := range children {
+			var dtos []model.MenuDTO
+			shared.StructCopy(childList, &dtos)
+			result = append(result, dtos...)
 		}
 	}
-	sort.Slice(mens, func(i, j int) bool {
-		return mens[i].OrderNum < mens[j].OrderNum
-	})
-	return mens
+	sort.Slice(result, func(i, j int) bool { return result[i].OrderNum < result[j].OrderNum })
+	return result
 }
 
-func (m *MyMenuSService) getMenuMap(menus []*entity.TMenu) map[int][]*entity.TMenu {
-	hm := make(map[int][]*entity.TMenu)
-	for _, item := range menus {
-		if item.ParentId != 0 {
-			hm[item.ParentId] = append(hm[item.ParentId], item)
-		}
-	}
-	return hm
-}
-
-func (m *MyMenuSService) convertUserMenuList(catalogs []*entity.TMenu, hm map[int][]*entity.TMenu) []model.UserMenuDTO {
-	var dtos []model.UserMenuDTO
-	for i := 0; i < len(catalogs); i++ {
-		var userMenuDTO model.UserMenuDTO
-		var userMenuDTOs []model.UserMenuDTO
-		children := hm[catalogs[i].Id]
-		if len(children) != 0 {
-			marshal, err := json.Marshal(catalogs[i])
-			if err != nil {
-				zlog.Error(err.Error())
-			}
-			err = json.Unmarshal(marshal, &userMenuDTO)
-			if err != nil {
-				zlog.Error(err.Error())
-			}
-			sort.Slice(children, func(i, j int) bool {
-				return children[i].OrderNum < children[j].OrderNum
-			})
-			for i := 0; i < len(children); i++ {
-				var dto model.UserMenuDTO
-				bytes, err := json.Marshal(children[i])
-				if err != nil {
-					zlog.Error(err.Error())
-				}
-				err = json.Unmarshal(bytes, &dto)
-				if err != nil {
-					zlog.Error(err.Error())
-				}
-				dto.Hidden = children[i].IsHidden == shared.TRUE
-				userMenuDTOs = append(userMenuDTOs, dto)
-			}
+func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int][]entity.TMenu) []model.UserMenuDTO {
+	result := make([]model.UserMenuDTO, 0, len(catalogs))
+	for _, catalog := range catalogs {
+		children := hm[catalog.Id]
+		dto := model.UserMenuDTO{Name: catalog.Name, Icon: catalog.Icon, Hidden: catalog.IsHidden == shared.TRUE}
+		if len(children) == 0 {
+			dto.Path = ""
+			dto.Component = shared.COMPONENT
+			dto.Children = []model.UserMenuDTO{{Name: catalog.Name, Icon: catalog.Icon, Component: catalog.Component}}
 		} else {
-			userMenuDTO.Path = catalogs[i].Path
-			userMenuDTO.Component = shared.COMPONENT
-			userMenuDTOs = append(userMenuDTOs, model.UserMenuDTO{
-				Path:      "",
-				Name:      catalogs[i].Name,
-				Icon:      catalogs[i].Icon,
-				Component: catalogs[i].Component,
-			})
+			sort.Slice(children, func(i, j int) bool { return children[i].OrderNum < children[j].OrderNum })
+			for _, child := range children {
+				dto.Children = append(dto.Children, model.UserMenuDTO{Name: child.Name, Path: child.Path, Icon: child.Icon, Component: child.Component, Hidden: child.IsHidden == shared.TRUE})
+			}
 		}
-		userMenuDTO.Hidden = catalogs[i].IsHidden == shared.TRUE
-		userMenuDTO.Children = userMenuDTOs
-		dtos = append(dtos, userMenuDTO)
+		result = append(result, dto)
 	}
-	return dtos
+	return result
 }

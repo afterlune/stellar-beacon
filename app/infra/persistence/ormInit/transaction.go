@@ -15,6 +15,13 @@ import (
 // errors where possible. A panic is rolled back and re-thrown so callers keep
 // the usual panic semantics.
 func WithTx(ctx context.Context, fn func(*xorm.Session) error) (err error) {
+	return WithEngineTx(GetEngine(), ctx, fn)
+}
+
+// WithEngineTx executes fn using the supplied engine. Repository adapters must
+// receive their engine from the composition root; a nil engine is an explicit
+// configuration error rather than an implicit process-wide fallback.
+func WithEngineTx(engine *xorm.Engine, ctx context.Context, fn func(*xorm.Session) error) (err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -22,7 +29,6 @@ func WithTx(ctx context.Context, fn func(*xorm.Session) error) (err error) {
 		return errors.New("transaction callback is nil")
 	}
 
-	engine := GetEngine()
 	if engine == nil {
 		return errors.New("database engine is not initialized")
 	}

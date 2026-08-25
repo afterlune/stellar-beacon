@@ -1,26 +1,31 @@
 package shared
 
 import (
-	"benetnasch/app/infra/zlog"
+	"fmt"
+	"log/slog"
+
 	"github.com/goccy/go-json"
 )
 
 func StructCopy(old, new interface{}) {
 	marshal, err := json.Marshal(old)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("marshal value for struct copy failed", "error", err)
 		return
 	}
 	err = json.Unmarshal(marshal, new)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("unmarshal value for struct copy failed", "error", err)
 		return
 	}
 }
-func Unmarsh(old, new interface{}) {
-	err := json.Unmarshal([]byte(old.(string)), new)
-	if err != nil {
-		zlog.Error(err.Error())
-		return
+
+// Unmarsh decodes a cached JSON string without panicking on an unexpected
+// cache value. Callers can decide whether to fall back to the source of truth.
+func Unmarsh(old any, new any) error {
+	value, ok := old.(string)
+	if !ok {
+		return fmt.Errorf("expected cached JSON string, got %T", old)
 	}
+	return json.Unmarshal([]byte(value), new)
 }

@@ -2,16 +2,17 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/oss"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
+	"log/slog"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
-	"strconv"
-	"xorm.io/xorm"
 )
 
 type TalkService interface {
@@ -24,186 +25,201 @@ type TalkService interface {
 	GetBackTalkById(c *gin.Context) model.ResultVO
 }
 
-type MyTalkService struct{}
+type MyTalkService struct {
+	repo     port.TalkRepository
+	comments port.CommentRepository
+}
+
+func NewTalkService(repo port.TalkRepository, comments ...port.CommentRepository) *MyTalkService {
+	service := &MyTalkService{repo: repo}
+	if len(comments) > 0 {
+		service.comments = comments[0]
+	}
+	return service
+}
+
+func (t *MyTalkService) talkRepository() port.TalkRepository {
+	if t.repo != nil {
+		return t.repo
+	}
+	return talkRepo
+}
+
+func (t *MyTalkService) commentRepository() port.CommentRepository {
+	if t.comments != nil {
+		return t.comments
+	}
+	return commentRepo
+}
 
 func (t *MyTalkService) ListTalks(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	count, err := ormInit.GetEngine().Where("status = 1").Count(&entity.TTalk{})
+	ctx := c.Request.Context()
+	count, err := t.talkRepository().Count(ctx, port.TalkFilter{Status: 1})
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	talks := talkRepo.ListTalks(current, size)
-	var talkIds []int
-	for _, v := range talks {
-		talkIds = append(talkIds, v.Id)
+	talks, err := t.talkRepository().List(ctx, current, size)
+	if err != nil {
+		return model.ResultFromError(err)
 	}
-	comments := commentRepo.ListCommentCountByTypeAndTopicIds(5, talkIds)
-	commentCounthm := make(map[int]int)
-	for _, v := range comments {
-		commentCounthm[v.Id] = v.CommentCount
+	talkIDs := make([]int, 0, len(talks))
+	for _, talk := range talks {
+		talkIDs = append(talkIDs, talk.Id)
 	}
-	for _, v := range talks {
-		v.CommentCount = commentCounthm[v.Id]
-		if v.Images != "" {
-			var s []string
-			err := json.Unmarshal([]byte(v.Images), &s)
-			if err != nil {
-				zlog.Error(err.Error())
+	comments, err := t.commentRepository().ListCommentCountsByTypeAndTopicIDs(ctx, 5, talkIDs)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	commentCounts := make(map[int]int, len(comments))
+	for _, comment := range comments {
+		commentCounts[comment.Id] = comment.CommentCount
+	}
+	for _, talk := range talks {
+		talk.CommentCount = commentCounts[talk.Id]
+		if talk.Images != "" {
+			var images []string
+			if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
+				slog.Error("decode talk images failed", "error", err)
+				return model.ResultFailWithMessage("说说图片格式不正确")
 			}
-			v.Imgs = s
+			talk.Imgs = images
 		}
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: talks, Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: talks, Count: count})
 }
 
 func (t *MyTalkService) GetTalkById(c *gin.Context) model.ResultVO {
-	talkId := c.Param("talkId")
-	id, err := strconv.Atoi(talkId)
+	id, err := strconv.Atoi(c.Param("talkId"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	talkDTO := talkRepo.GetTalkById(id)
-	if talkDTO.Content == "" {
-		return model.ResultFailWithMessage("说说不存在")
-	}
-	if talkDTO.Images != "" {
-		var s []string
-		err := json.Unmarshal([]byte(talkDTO.Images), &s)
-		if err != nil {
-			zlog.Error(err.Error())
+	talk, err := t.talkRepository().Get(c.Request.Context(), id)
+	if err != nil {
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return model.ResultFailWithMessage("说说不存在")
 		}
-		talkDTO.Imgs = s
+		return model.ResultFromError(err)
 	}
-	commentCountDTO := commentRepo.ListCommentCountByTypeAndTopicId(5, id)
-	talkDTO.CommentCount = commentCountDTO.CommentCount
-	return model.ResultOkWithData(talkDTO)
+	if talk.Images != "" {
+		var images []string
+		if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
+			return model.ResultFailWithMessage("说说图片格式不正确")
+		}
+		talk.Imgs = images
+	}
+	commentCount, err := t.commentRepository().ListCommentCountByTypeAndTopicID(c.Request.Context(), 5, id)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	talk.CommentCount = commentCount.CommentCount
+	return model.ResultOkWithData(talk)
 }
 
 func (t *MyTalkService) SaveTalkImages(c *gin.Context) model.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	fileUrl := oss.Upload(file, "talks/")
-	return model.ResultOkWithData(shared.FILEURL + fileUrl)
+	fileURL := oss.Upload(file, "talks/")
+	return model.ResultOkWithData(shared.FILEURL + fileURL)
 }
 
 func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	var vo model.TalkVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	value, _ := c.Get("userInfo")
-	dto := value.(model.UserDetailsDTO)
-
-	talk := entity.TTalk{
-		Id:      vo.Id,
-		Content: vo.Content,
-		Images:  vo.Images,
-		IsTop:   vo.IsTop,
-		Status:  vo.Status,
-		UserId:  dto.UserInfoId,
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
 	}
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		if talk.Id != 0 {
-			_, err = session.ID(talk.Id).MustCols("is_top", "status").Update(&talk)
-		} else {
-			_, err = session.Insert(&talk)
-		}
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	dto, ok := value.(model.UserDetailsDTO)
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
+	}
+	talk := entity.TTalk{Id: vo.Id, Content: vo.Content, Images: vo.Images, IsTop: vo.IsTop, Status: vo.Status, UserId: dto.UserInfoId}
+	if err := t.talkRepository().SaveOrUpdate(c.Request.Context(), talk); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (t *MyTalkService) DeleteTalks(c *gin.Context) model.ResultVO {
-	var iDs []string
-	err := c.ShouldBind(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
+	var values []string
+	if err := c.ShouldBind(&values); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var talkIds []int
-	for _, v := range iDs {
-		id, _ := strconv.Atoi(v)
-		talkIds = append(talkIds, id)
+	ids := make([]int, 0, len(values))
+	for _, value := range values {
+		id, err := strconv.Atoi(value)
+		if err != nil {
+			return model.ResultFailWithMessage("参数格式不正确")
+		}
+		ids = append(ids, id)
 	}
-	_, err = ormInit.GetEngine().In("id", talkIds).Delete(&entity.TTalk{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := t.talkRepository().Delete(c.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (t *MyTalkService) ListBackTalks(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var count int64
-	engine := ormInit.GetEngine()
-	if vo.Status != 0 {
-		count, err = engine.Where("status = ?", vo.Status).Count(&entity.TTalk{})
-	} else {
-		count, err = engine.Count(&entity.TTalk{})
-	}
+	filter := port.TalkFilter{Status: vo.Status}
+	count, err := t.talkRepository().Count(c.Request.Context(), filter)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	talkDTOs := talkRepo.ListTalksAdmin(vo.Current, vo.Size, &vo)
-	for _, v := range talkDTOs {
-		if v.Images != "" {
-			var imgs []string
-			err = json.Unmarshal([]byte(v.Images), &imgs)
-			if err != nil {
-				zlog.Error(err.Error())
-				return model.ResultFail()
+	talks, err := t.talkRepository().ListAdmin(c.Request.Context(), vo.Current, vo.Size, filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	for _, talk := range talks {
+		if talk.Images != "" {
+			var images []string
+			if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
+				return model.ResultFailWithMessage("说说图片格式不正确")
 			}
-			v.Imgs = imgs
+			talk.Imgs = images
 		}
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: talkDTOs, Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: talks, Count: count})
 }
 
 func (t *MyTalkService) GetBackTalkById(c *gin.Context) model.ResultVO {
-	talkId := c.Param("talkId")
-	id, err := strconv.Atoi(talkId)
+	id, err := strconv.Atoi(c.Param("talkId"))
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	talkDTO := talkRepo.GetTalkByIdAdmin(id)
-	if talkDTO.Images != "" {
-		var s []string
-		err := json.Unmarshal([]byte(talkDTO.Images), &s)
-		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
+	talk, err := t.talkRepository().GetAdmin(c.Request.Context(), id)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if talk.Images != "" {
+		var images []string
+		if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
+			return model.ResultFailWithMessage("说说图片格式不正确")
 		}
-		talkDTO.Imgs = s
+		talk.Imgs = images
 	}
-	return model.ResultOkWithData(talkDTO)
+	return model.ResultOkWithData(talk)
 }
+
+var _ TalkService = (*MyTalkService)(nil)

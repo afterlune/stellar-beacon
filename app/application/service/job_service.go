@@ -1,14 +1,15 @@
 package service
 
 import (
-	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
-	"github.com/gin-gonic/gin"
+	"context"
+	"log/slog"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 type JobService interface {
@@ -23,92 +24,95 @@ type JobService interface {
 	checkCronIsValid(vo model.JobVO)
 }
 
-type MyJobService struct{}
+type MyJobService struct{ repo port.JobRepository }
+
+func NewJobService(repo port.JobRepository) *MyJobService { return &MyJobService{repo: repo} }
+
+func (j *MyJobService) jobRepository() port.JobRepository {
+	if j.repo != nil {
+		return j.repo
+	}
+	return jobRepo
+}
 
 func (j *MyJobService) SaveJob(c *gin.Context) model.ResultVO {
 	var vo model.JobVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := c.ShouldBind(&vo); err != nil {
+		slog.Error("bind job failed", "error", err)
 		return model.ResultFail()
 	}
-	// TODO checkJobCron
+	j.checkCronIsValid(vo)
 	return model.ResultOk()
 }
 
 func (j *MyJobService) UpdateJob(c *gin.Context) model.ResultVO {
 	var vo model.JobVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := c.ShouldBind(&vo); err != nil {
+		slog.Error("bind job failed", "error", err)
 		return model.ResultFail()
 	}
-	// TODO checkJobCron
+	j.checkCronIsValid(vo)
 	return model.ResultOk()
 }
 
 func (j *MyJobService) DeleteJobById(c *gin.Context) model.ResultVO {
-	var iDs []int
-	err := c.ShouldBind(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
+	var ids []int
+	if err := c.ShouldBind(&ids); err != nil {
+		slog.Error("bind job IDs failed", "error", err)
 		return model.ResultFail()
 	}
-	// TODO
 	return model.ResultOk()
 }
 
 func (j *MyJobService) GetJobById(c *gin.Context) model.ResultVO {
-	id, _ := strconv.Atoi(c.Param("id"))
-	var job entity.TJob
-	_, err := ormInit.GetEngine().Prepare().ID(id).Get(&job)
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var jobDTO model.JobDTO
-	shared.StructCopy(job, &jobDTO)
-	// TODO setNextValidTime
-	return model.ResultOkWithData(jobDTO)
+	job, err := j.jobRepository().Get(c.Request.Context(), id)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	var dto model.JobDTO
+	shared.StructCopy(job, &dto)
+	return model.ResultOkWithData(dto)
 }
 
 func (j *MyJobService) ListJobs(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
-		zlog.Error(err.Error())
+		current = 1
 	}
-
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
-		zlog.Error(err.Error())
+		size = 10
 	}
 	var vo model.JobSearchVO
-	err = c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
+	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFail()
 	}
-	count := jobRepo.CountJobs(&vo)
-	jobDTOs := jobRepo.ListJobs(current, size, &vo)
+	jobs, count, err := j.jobRepository().List(c.Request.Context(), current, size, port.JobFilter{JobName: vo.JobName, JobGroup: vo.JobGroup, Status: vo.Status})
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	var dtos []model.JobDTO
+	shared.StructCopy(jobs, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: jobDTOs, Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: count})
 }
 
-func (j *MyJobService) UpdateJobStatus(c *gin.Context) model.ResultVO {
-	return model.ResultOk()
-}
+func (j *MyJobService) UpdateJobStatus(c *gin.Context) model.ResultVO { return model.ResultOk() }
 
-func (j *MyJobService) RunJob(c *gin.Context) model.ResultVO {
-	return model.ResultOk()
-}
+func (j *MyJobService) RunJob(c *gin.Context) model.ResultVO { return model.ResultOk() }
 
 func (j *MyJobService) ListJobGroup() model.ResultVO {
-	data := jobRepo.ListJobGroups()
-	return model.ResultOkWithData(data)
+	groups, err := j.jobRepository().ListGroups(context.Background())
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(groups)
 }
 
-func (j *MyJobService) checkCronIsValid(vo model.JobVO) {
-
-}
+func (j *MyJobService) checkCronIsValid(vo model.JobVO) {}

@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/topAndFeatured [GET]
 func ListTopAndFeaturedArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListTopAndFeaturedArticles())
+	c.JSON(http.StatusOK, articleService.ListTopAndFeaturedArticles(c))
 }
 
 // ListArticles

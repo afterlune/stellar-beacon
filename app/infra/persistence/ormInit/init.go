@@ -2,8 +2,8 @@ package ormInit
 
 import (
 	"benetnasch/app/infra/config"
-	"benetnasch/app/infra/zlog"
 	_ "github.com/lib/pq"
+	"log/slog"
 	"sync"
 	"xorm.io/xorm"
 	"xorm.io/xorm/log"
@@ -19,7 +19,7 @@ func GetEngine() *xorm.Engine {
 		dataBase := new(config.Database).DataBase()
 		engine, err = xorm.NewEngine(dataBase.DriverName, dataBase.URL)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("initialize database engine failed", "error", err)
 			engine = nil
 			return
 		}

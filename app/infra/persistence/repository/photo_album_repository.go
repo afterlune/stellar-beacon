@@ -4,7 +4,7 @@ import (
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 )
 
 type PhotoAlbumRepo interface {
@@ -26,7 +26,7 @@ func (p *MyPhotoAlbumRepo) ListPhotoAlbumsAdmin(current, size int, vo *model.Con
 	args = append(args, limit, offset)
 	var albums []*model.PhotoAlbumAdminDTO
 	if err := ormInit.GetEngine().SQL(query, args...).Find(&albums); err != nil {
-		zlog.Error("list admin photo albums: " + err.Error())
+		slog.Error("list admin photo albums failed", "error", err)
 	}
 	return albums
 }
@@ -35,7 +35,7 @@ func (p *MyPhotoAlbumRepo) PhotoAlbums() []*model.PhotoAlbumDTO {
 	var albums []*model.PhotoAlbumDTO
 	query := "SELECT id, album_name, album_desc, album_cover FROM t_photo_album WHERE status = 1 AND is_delete = 0 ORDER BY id DESC"
 	if err := ormInit.GetEngine().SQL(query).Find(&albums); err != nil {
-		zlog.Error("list photo albums: " + err.Error())
+		slog.Error("list photo albums failed", "error", err)
 	}
 	return albums
 }

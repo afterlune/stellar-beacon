@@ -1,7 +1,7 @@
 package model
 
 import (
-	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"container/list"
 	"time"
 )
@@ -15,89 +15,18 @@ type ArchiveDTO struct {
 	Articles []ArticleCardDTO `json:"articles"`
 }
 
-type ArticleAdminDTO struct {
-	Id           int       `json:"id"`
-	ArticleCover string    `json:"articleCover"`
-	ArticleTitle string    `json:"articleTitle"`
-	IsTop        int       `json:"isTop"`
-	IsFeatured   int       `json:"isFeatured"`
-	IsDelete     int       `json:"isDelete"`
-	Status       int       `json:"status"`
-	Type         int       `json:"type"`
-	CreateTime   time.Time `json:"createTime"`
-	CategoryName string    `json:"categoryName"`
-	ViewsCount   int       `json:"viewsCount"`
-	TagDTOs      []TagDTO  `json:"tagDTOs"`
-}
-
-type ArticleCardDTO struct {
-	Id             int              `json:"id"`
-	ArticleCover   string           `json:"articleCover"`
-	ArticleTitle   string           `json:"articleTitle"`
-	ArticleContent string           `json:"articleContent"`
-	IsTop          int              `json:"isTop"`
-	IsFeatured     int              `json:"isFeatured"`
-	CategoryName   string           `json:"categoryName"`
-	Status         int              `json:"status"`
-	CreateTime     time.Time        `json:"createTime"`
-	UpdateTime     time.Time        `json:"updateTime"`
-	Author         entity.TUserInfo `json:"author" xorm:"extends"`
-	Tags           any              `json:"tags" xorm:"extends"`
-}
-
-type ArticleAdminViewDTO struct {
-	Id             int    `json:"id"`
-	ArticleCover   string `json:"articleCover"`
-	ArticleTitle   string `json:"articleTitle"`
-	ArticleContent string `json:"articleContent"`
-	IsTop          int    `json:"isTop"`
-	IsFeatured     int    `json:"isFeatured"`
-	CategoryName   string `json:"categoryName"`
-	TagNames       any    `json:"tagNames"`
-	Status         int    `json:"status"`
-	Type           int    `json:"type"`
-	Password       string `json:"password"`
-	OriginalUrl    string `json:"originalUrl"`
-}
-
-type ArticleDTO struct {
-	Id              int              `json:"id"`
-	ArticleCover    string           `json:"articleCover"`
-	ArticleTitle    string           `json:"articleTitle"`
-	ArticleContent  string           `json:"articleContent"`
-	IsTop           int              `json:"isTop"`
-	IsFeatured      int              `json:"isFeatured"`
-	CategoryName    string           `json:"categoryName"`
-	Status          int              `json:"status"`
-	CreateTime      time.Time        `json:"createTime"`
-	UpdateTime      time.Time        `json:"updateTime"`
-	Author          entity.TUserInfo `json:"author" xorm:"extends"`
-	Type            int              `json:"type"`
-	OriginalUrl     string           `json:"originalUrl"`
-	IsDelete        int              `json:"isDelete"`
-	ViewCount       int              `json:"viewCount"`
-	PreArticleCard  ArticleCardDTO   `json:"preArticleCard"`
-	NextArticleCard ArticleCardDTO   `json:"nextArticleCard"`
-	Tags            any              `json:"tags"`
-}
+type ArticleAdminDTO = port.ArticleAdmin
+type ArticleCardDTO = port.ArticleCard
+type ArticleAdminViewDTO = port.ArticleAdminView
+type ArticleDTO = port.Article
 
 type ArticleRankDTO struct {
 	ArticleTitle string `json:"articleTitle"`
 	ViewsCount   int    `json:"viewsCount"`
 }
 
-type ArticleSearchDTO struct {
-	Id             int    `json:"id"`
-	ArticleTitle   string `json:"articleTitle"`
-	ArticleContent string `json:"articleContent"`
-	IsDelete       int    `json:"isDelete"`
-	Status         int    `json:"status"`
-}
-
-type ArticleStatisticsDTO struct {
-	Date  string `json:"date"`
-	Count int    `json:"count"`
-}
+type ArticleSearchDTO = port.ArticleSearch
+type ArticleStatisticsDTO = port.ArticleStatistics
 
 type BenetnaschAdminInfoDTO struct {
 	ViewsCount            int       `json:"viewsCount"`
@@ -132,51 +61,13 @@ type BenetnaschHomeInfoDTO struct {
 	ViewCount       int              `json:"viewCount"`
 }
 
-type CategoryAdminDTO struct {
-	Id           int       `json:"id"`
-	CategoryName string    `json:"categoryName"`
-	ArticleCount string    `json:"articleCount"`
-	CreateTime   time.Time `json:"createTime"`
-}
+type CategoryAdminDTO = port.CategoryAdmin
+type CategoryDTO = port.Category
+type CategoryOptionDTO = port.CategoryOption
 
-type CategoryDTO struct {
-	Id           int    `json:"id"`
-	CategoryName string `json:"categoryName"`
-	ArticleCount int    `json:"articleCount"`
-}
-
-type CategoryOptionDTO struct {
-	Id           int    `json:"id"`
-	CategoryName string `json:"categoryName"`
-}
-
-type CommentAdminDTO struct {
-	Id             int       `json:"id"`
-	Avatar         string    `json:"avatar"`
-	Nickname       string    `json:"nickname"`
-	ReplyNickname  string    `json:"replyNickname"`
-	ArticleTitle   string    `json:"articleTitle"`
-	CommentContent string    `json:"commentContent"`
-	Type           int       `json:"type"`
-	IsReview       int       `json:"isReview"`
-	CreateTime     time.Time `json:"createTime"`
-}
-
-type CommentCountDTO struct {
-	Id           int `json:"id"`
-	CommentCount int `json:"commentCount"`
-}
-
-type CommentDTO struct {
-	Id             int        `json:"id"`
-	UserId         int        `json:"userId"`
-	Nickname       string     `json:"nickname"`
-	Avatar         string     `json:"avatar"`
-	Website        string     `json:"website"`
-	CommentContent string     `json:"commentContent"`
-	CreateTime     time.Time  `json:"createTime"`
-	ReplyDTOs      []ReplyDTO `json:"replyDTOs"`
-}
+type CommentAdminDTO = port.CommentAdmin
+type CommentCountDTO = port.CommentCount
+type CommentDTO = port.Comment
 
 type EmailDTO struct {
 	Email      string                 `json:"email"`
@@ -332,19 +223,7 @@ type QQUserInfoDTO struct {
 	Figureurl_qq_1 string `json:"figureurl_qq_1"`
 }
 
-type ReplyDTO struct {
-	Id             int       `json:"id"`
-	ParentId       int       `json:"parentId"`
-	UserId         int       `json:"userId"`
-	Nickname       string    `json:"nickname"`
-	Avatar         string    `json:"avatar"`
-	Website        string    `json:"website"`
-	ReplyUserId    int       `json:"replyUserId"`
-	ReplyNickname  string    `json:"replyNickname"`
-	ReplyWebsite   string    `json:"replyWebsite"`
-	CommentContent string    `json:"commentContent"`
-	CreateTime     time.Time `json:"createTime"`
-}
+type ReplyDTO = port.Reply
 
 type ResourceDTO struct {
 	Id            int           `json:"id"`
@@ -384,42 +263,12 @@ type SocialUserInfoDTO struct {
 	Avatar   string `json:"avatar"`
 }
 
-type TagAdminDTO struct {
-	Id           int       `json:"id"`
-	TagName      string    `json:"tagName"`
-	ArticleCount int       `json:"articleCount"`
-	CreateTime   time.Time `json:"createTime"`
-}
+type TagAdminDTO = port.TagAdmin
 
-type TagDTO struct {
-	Id      int    `json:"id"`
-	TagName string `json:"tagName"`
-	Count   int    `json:"count"`
-}
+type TagDTO = port.Tag
 
-type TalkAdminDTO struct {
-	Id         int       `json:"id"`
-	Nickname   string    `json:"nickname"`
-	Avatar     string    `json:"avatar"`
-	Content    string    `json:"content"`
-	Images     string    `json:"images"`
-	Imgs       []string  `json:"imgs"`
-	IsTop      int       `json:"isTop"`
-	Status     int       `json:"status"`
-	CreateTime time.Time `json:"createTime"`
-}
-
-type TalkDTO struct {
-	Id           int       `json:"id"`
-	Nickname     string    `json:"nickName"`
-	Avatar       string    `json:"avatar"`
-	Content      string    `json:"content"`
-	Images       string    `json:"images"`
-	Imgs         []string  `json:"imgs"`
-	IsTop        int       `json:"isTop"`
-	CommentCount int       `json:"commentCount"`
-	CreateTime   time.Time `json:"createTime"`
-}
+type TalkAdminDTO = port.TalkAdmin
+type TalkDTO = port.Talk
 
 type TopAndFeaturedArticlesDTO struct {
 	TopArticle       *ArticleCardDTO   `json:"topArticle"`
@@ -431,20 +280,7 @@ type UniqueViewDTO struct {
 	ViewsCount int    `json:"viewsCount"`
 }
 
-type UserAdminDTO struct {
-	Id            int           `json:"id"`
-	UserInfoId    int           `json:"userInfoId" xorm:"not null comment('用户信息id') INTEGER"`
-	Avatar        string        `json:"avatar"`
-	Nickname      string        `json:"nickname"`
-	LoginType     int           `json:"loginType"`
-	IpAddress     string        `json:"ipAddress"`
-	IpSource      string        `json:"ipSource"`
-	CreateTime    time.Time     `json:"createTime"`
-	LastLoginTime time.Time     `json:"lastLoginTime"`
-	IsDisable     int           `json:"isDisable"`
-	Status        int           `json:"status"`
-	Roles         []UserRoleDTO `json:"roles"`
-}
+type UserAdminDTO = port.UserAdmin
 
 type UserAreaDTO struct {
 	Name  string `json:"name"`
@@ -505,10 +341,7 @@ type UserOnlineDTO struct {
 	LastLoginTime time.Time `json:"lastLoginTime"`
 }
 
-type UserRoleDTO struct {
-	Id       int    `json:"id"`
-	RoleName string `json:"roleName"`
-}
+type UserRoleDTO = port.UserRole
 
 type UserMenuDTO struct {
 	Name      string        `json:"name"`

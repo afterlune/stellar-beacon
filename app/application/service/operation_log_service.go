@@ -1,14 +1,12 @@
 package service
 
 import (
-	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
+
 	"github.com/gin-gonic/gin"
-	"xorm.io/builder"
 )
 
 type OperationLogService interface {
@@ -16,51 +14,43 @@ type OperationLogService interface {
 	DeleteOperationLogs(c *gin.Context) model.ResultVO
 }
 
-type MyOperationLogService struct{}
+type MyOperationLogService struct{ repo port.OperationLogRepository }
+
+func NewOperationLogService(repo port.OperationLogRepository) *MyOperationLogService {
+	return &MyOperationLogService{repo: repo}
+}
+
+func (o *MyOperationLogService) operationLogRepository() port.OperationLogRepository {
+	if o.repo != nil {
+		return o.repo
+	}
+	return operationLogRepo
+}
 
 func (o *MyOperationLogService) ListOperationLogs(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	logs, count, err := o.operationLogRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
-	var operationLogs []entity.TOperationLog
-	engine := ormInit.GetEngine()
-	if vo.Keywords != "" {
-		err = engine.Prepare().Where(builder.Like{"opt_module", vo.Keywords}).Or(builder.Like{"opt_desc", vo.Keywords}).
-			OrderBy("id").Desc("id").Limit(vo.Size, vo.Size*(vo.Current-1)).Find(&operationLogs)
-	} else {
-		err = engine.Prepare().OrderBy("id").Desc("id").Limit(vo.Size, vo.Size*(vo.Current-1)).Find(&operationLogs)
-	}
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	count, err := engine.Count(&entity.TOperationLog{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	var operationLogDTOs []model.OperationLogDTO
-	shared.StructCopy(operationLogs, &operationLogDTOs)
+	var dtos []model.OperationLogDTO
+	shared.StructCopy(logs, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: operationLogDTOs, Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
 func (o *MyOperationLogService) DeleteOperationLogs(c *gin.Context) model.ResultVO {
-	var iDs []int
-	err := c.ShouldBind(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	var ids []int
+	if err := c.ShouldBind(&ids); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	_, err = ormInit.GetEngine().In("id", iDs).Delete(&entity.TOperationLog{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := o.operationLogRepository().Delete(c.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }

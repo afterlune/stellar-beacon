@@ -1,0 +1,213 @@
+//go:build integration
+
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
+	"xorm.io/xorm"
+)
+
+func TestEphemeralPostgresAndRedis(t *testing.T) {
+	if os.Getenv("TESTCONTAINERS_ENABLED") != "1" {
+		t.Skip("set TESTCONTAINERS_ENABLED=1 to run isolated container tests")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	postgres, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "postgres:16.15-alpine3.23",
+			ExposedPorts: []string{"5432/tcp"},
+			Env: map[string]string{
+				"POSTGRES_USER":     "integration",
+				"POSTGRES_PASSWORD": "integration",
+				"POSTGRES_DB":       "integration",
+			},
+			WaitingFor: wait.ForListeningPort("5432/tcp").WithStartupTimeout(90 * time.Second),
+		},
+		Started: true,
+	})
+	if err != nil {
+		t.Fatalf("start isolated postgres: %v", err)
+	}
+	t.Cleanup(func() { _ = postgres.Terminate(context.Background()) })
+
+	pgHost, err := postgres.Host(ctx)
+	if err != nil {
+		t.Fatalf("resolve postgres host: %v", err)
+	}
+	pgPort, err := postgres.MappedPort(ctx, "5432/tcp")
+	if err != nil {
+		t.Fatalf("resolve postgres port: %v", err)
+	}
+	db, err := sql.Open("postgres", fmt.Sprintf("postgres://integration:integration@%s:%s/integration?sslmode=disable", pgHost, pgPort.Port()))
+	if err != nil {
+		t.Fatalf("open isolated postgres: %v", err)
+	}
+	defer db.Close()
+	if err := pingDatabase(ctx, db); err != nil {
+		t.Fatalf("ping isolated postgres: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE TABLE integration_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL)"); err != nil {
+		t.Fatalf("create postgres probe: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO integration_probe (id, value) VALUES ($1, $2)", 1, "ok"); err != nil {
+		t.Fatalf("insert postgres probe: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx, `
+CREATE TABLE t_user_info (
+    id INTEGER PRIMARY KEY,
+    email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
+    intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
+    is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
+);
+CREATE TABLE t_user_auth (
+    id INTEGER PRIMARY KEY, user_info_id INTEGER NOT NULL, username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(100) NOT NULL, login_type SMALLINT NOT NULL, ip_address VARCHAR(50),
+    ip_source VARCHAR(50), create_time TIMESTAMP, update_time TIMESTAMP, last_login_time TIMESTAMP
+);
+CREATE TABLE t_role (
+    id INTEGER PRIMARY KEY, role_name VARCHAR(20) NOT NULL, is_disable SMALLINT DEFAULT 0,
+    create_time TIMESTAMP, update_time TIMESTAMP
+);
+CREATE TABLE t_user_role (id INTEGER PRIMARY KEY, user_id INTEGER, role_id INTEGER);
+CREATE TABLE t_category (id INTEGER PRIMARY KEY, category_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_tag (id INTEGER PRIMARY KEY, tag_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_talk (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, content TEXT NOT NULL, images TEXT, is_top SMALLINT NOT NULL, status SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_comment (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_unique_view (id INTEGER PRIMARY KEY, views_count INTEGER NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_website_config (id INTEGER PRIMARY KEY, config TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_about (id INTEGER PRIMARY KEY, content TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_friend_link (id INTEGER PRIMARY KEY, link_name VARCHAR(50) NOT NULL, link_avatar VARCHAR(255) NOT NULL, link_address VARCHAR(255) NOT NULL, link_intro VARCHAR(255) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_job (id INTEGER PRIMARY KEY, job_name VARCHAR(64) NOT NULL, job_group VARCHAR(64) NOT NULL, invoke_target VARCHAR(500) NOT NULL, cron_expression VARCHAR(255), misfire_policy SMALLINT, concurrent SMALLINT, status SMALLINT, create_time TIMESTAMP, update_time TIMESTAMP, remark VARCHAR(500));
+CREATE TABLE t_job_log (id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, job_name VARCHAR(64) NOT NULL, job_group VARCHAR(64) NOT NULL, invoke_target VARCHAR(500) NOT NULL, job_message VARCHAR(500), status SMALLINT, exception_info VARCHAR(2000), create_time TIMESTAMP, start_time TIMESTAMP, end_time TIMESTAMP);
+CREATE TABLE t_exception_log (id INTEGER PRIMARY KEY, opt_uri VARCHAR(255) NOT NULL, opt_method VARCHAR(255) NOT NULL, request_method VARCHAR(255), request_param TEXT, opt_desc VARCHAR(255), exception_info TEXT, ip_address VARCHAR(255), ip_source VARCHAR(255), create_time TIMESTAMP);
+CREATE TABLE t_operation_log (id INTEGER PRIMARY KEY, opt_module VARCHAR(50) NOT NULL, opt_type VARCHAR(50) NOT NULL, opt_uri VARCHAR(255) NOT NULL, opt_method VARCHAR(255) NOT NULL, opt_desc VARCHAR(255) NOT NULL, request_param TEXT NOT NULL, request_method VARCHAR(20) NOT NULL, response_data TEXT NOT NULL, user_id INTEGER NOT NULL, nickname VARCHAR(50) NOT NULL, ip_address VARCHAR(255) NOT NULL, ip_source VARCHAR(255) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_menu (id INTEGER PRIMARY KEY, name VARCHAR(50) NOT NULL, path VARCHAR(100) NOT NULL, component VARCHAR(100) NOT NULL, icon VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP, order_num SMALLINT NOT NULL, parent_id INTEGER, is_hidden SMALLINT NOT NULL);
+CREATE TABLE t_resource (id INTEGER PRIMARY KEY, resource_name VARCHAR(50) NOT NULL, url VARCHAR(255), request_method VARCHAR(10), parent_id INTEGER, is_anonymous SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_role_menu (id INTEGER PRIMARY KEY, role_id INTEGER, menu_id INTEGER);
+CREATE TABLE t_role_resource (id INTEGER PRIMARY KEY, role_id INTEGER, resource_id INTEGER);
+CREATE TABLE t_photo_album (id INTEGER PRIMARY KEY, album_name VARCHAR(50) NOT NULL, album_desc VARCHAR(100) NOT NULL, album_cover VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_photo (id INTEGER PRIMARY KEY, album_id INTEGER NOT NULL, photo_name VARCHAR(50) NOT NULL, photo_desc VARCHAR(100), photo_src VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_article (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, category_id INTEGER, article_cover VARCHAR(1024),
+    article_title VARCHAR(50) NOT NULL, article_content TEXT NOT NULL, is_top SMALLINT NOT NULL,
+    is_featured SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL,
+    type SMALLINT NOT NULL, password VARCHAR(255), original_url VARCHAR(255),
+    create_time TIMESTAMP, update_time TIMESTAMP
+);`); err != nil {
+		t.Fatalf("create repository fixtures: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO t_user_info (id, email, nickname, avatar, is_subscribe, is_disable) VALUES (1, 'integration@example.com', 'integration', '', 0, 0);
+INSERT INTO t_user_auth (id, user_info_id, username, password, login_type) VALUES (1, 1, 'integration@example.com', 'hashed-password', 1);
+INSERT INTO t_role (id, role_name, is_disable) VALUES (1, 'user', 0);
+INSERT INTO t_user_role (id, user_id, role_id) VALUES (1, 1, 1);
+INSERT INTO t_category (id, category_name) VALUES (1, 'integration category');
+INSERT INTO t_tag (id, tag_name) VALUES (1, 'integration tag');
+INSERT INTO t_talk (id, user_id, content, is_top, status) VALUES (1, 1, 'integration talk', 0, 1);
+INSERT INTO t_website_config (id, config) VALUES (1, '{"name":"integration"}');
+INSERT INTO t_about (id, content) VALUES (1, '{"content":"integration"}');
+INSERT INTO t_menu (id, name, path, component, icon, order_num, parent_id, is_hidden) VALUES (1, 'integration menu', '/', 'Layout', '', 1, 0, 0);
+INSERT INTO t_resource (id, resource_name, url, request_method, parent_id, is_anonymous) VALUES (1, 'integration resource', '/integration', 'GET', 0, 0);
+INSERT INTO t_role_menu (id, role_id, menu_id) VALUES (1, 1, 1);
+INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1);
+INSERT INTO t_photo_album (id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 'integration album', 'integration', '', 0, 1);
+INSERT INTO t_photo (id, album_id, photo_name, photo_src, is_delete) VALUES (1, 1, 'integration photo', 'https://example.com/photo.jpg', 0);
+INSERT INTO t_article (id, user_id, article_title, article_content, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 'integration article', 'content', 0, 0, 0, 1, 1);`); err != nil {
+		t.Fatalf("insert repository fixtures: %v", err)
+	}
+
+	xormEngine, err := xorm.NewEngine("postgres", fmt.Sprintf("postgres://integration:integration@%s:%s/integration?sslmode=disable", pgHost, pgPort.Port()))
+	if err != nil {
+		t.Fatalf("open xorm repository engine: %v", err)
+	}
+	defer xormEngine.Close()
+	authUser, err := NewUserAuthRepo(xormEngine).FindByUsername(ctx, "integration@example.com")
+	if err != nil {
+		t.Fatalf("read auth repository fixture: %v", err)
+	}
+	if authUser.Info.Nickname != "integration" || len(authUser.Roles) != 1 || authUser.Roles[0] != "user" {
+		t.Fatalf("unexpected auth repository result: %+v", authUser)
+	}
+	articles, count, err := NewArticleRepo(xormEngine).ListArchives(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("read article repository fixture: %v", err)
+	}
+	if count != 1 || len(articles) != 1 || articles[0].ArticleTitle != "integration article" {
+		t.Fatalf("unexpected article repository result: count=%d articles=%+v", count, articles)
+	}
+	site := NewSiteInfoRepo(xormEngine)
+	articleCount, err := site.CountArticles(ctx)
+	if err != nil || articleCount != 1 {
+		t.Fatalf("unexpected site article count: count=%d err=%v", articleCount, err)
+	}
+	roles, err := NewRoleRepository(xormEngine).ListRolesByUserInfoID(ctx, 1)
+	if err != nil || len(roles) != 1 || roles[0] != "user" {
+		t.Fatalf("unexpected role repository result: roles=%v err=%v", roles, err)
+	}
+	menus, err := NewMenuRepo(xormEngine).ListByUserInfoID(ctx, 1)
+	if err != nil || len(menus) != 1 || menus[0].Name != "integration menu" {
+		t.Fatalf("unexpected menu repository result: menus=%v err=%v", menus, err)
+	}
+	albums, err := NewPhotoAlbumRepository(xormEngine).ListPublic(ctx)
+	if err != nil || len(albums) != 1 || albums[0].AlbumName != "integration album" {
+		t.Fatalf("unexpected album repository result: albums=%v err=%v", albums, err)
+	}
+
+	redisContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "redis:8.10.0-alpine3.23",
+			ExposedPorts: []string{"6379/tcp"},
+			WaitingFor:   wait.ForListeningPort("6379/tcp").WithStartupTimeout(60 * time.Second),
+		},
+		Started: true,
+	})
+	if err != nil {
+		t.Fatalf("start isolated redis: %v", err)
+	}
+	t.Cleanup(func() { _ = redisContainer.Terminate(context.Background()) })
+	redisHost, err := redisContainer.Host(ctx)
+	if err != nil {
+		t.Fatalf("resolve redis host: %v", err)
+	}
+	redisPort, err := redisContainer.MappedPort(ctx, "6379/tcp")
+	if err != nil {
+		t.Fatalf("resolve redis port: %v", err)
+	}
+	client := redis.NewClient(&redis.Options{Addr: fmt.Sprintf("%s:%s", redisHost, redisPort.Port())})
+	defer client.Close()
+	if err := client.Set(ctx, "integration:probe", "ok", time.Minute).Err(); err != nil {
+		t.Fatalf("write redis probe: %v", err)
+	}
+	value, err := client.Get(ctx, "integration:probe").Result()
+	if err != nil || value != "ok" {
+		t.Fatalf("read redis probe: value=%q err=%v", value, err)
+	}
+}
+
+func pingDatabase(ctx context.Context, db *sql.DB) error {
+	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	for {
+		if err := db.PingContext(deadline); err == nil {
+			return nil
+		}
+		if deadline.Err() != nil {
+			return deadline.Err()
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}

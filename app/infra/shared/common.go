@@ -1,7 +1,7 @@
 package shared
 
 import (
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 	"math/rand"
 	"regexp"
 	"strconv"
@@ -11,7 +11,7 @@ func CheckEmail(check string) bool {
 	rule := "\\w[-\\w.+]*@([A-Za-z0-9][-A-Za-z0-9]+\\.)+[A-Za-z]{2,14}"
 	match, err := regexp.MatchString(rule, check)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("validate email pattern failed", "error", err)
 	}
 	return match
 }

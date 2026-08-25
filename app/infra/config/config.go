@@ -3,7 +3,7 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -40,12 +40,12 @@ func init() {
 	// 读取基础配置文件
 	configFile, ok := findConfigFile("config.yaml")
 	if !ok {
-		log.Printf("基础配置文件不存在：resource/config.yaml")
+		slog.Error("base configuration file not found", "path", "resource/config.yaml")
 		return
 	}
 	if err := loadConfigFile(configFile, false); err != nil {
 		configLoadErr = err
-		log.Printf("读取配置文件失败：%v", err)
+		slog.Error("read base configuration failed", "error", err)
 		return
 	}
 
@@ -54,13 +54,13 @@ func init() {
 	envConfigPath, _ := findConfigFile(fmt.Sprintf("config-%s.yaml", env))
 	if envConfigPath == "" {
 		configLoadErr = fmt.Errorf("environment config file not found: config-%s.yaml", env)
-		log.Printf("环境配置文件不存在：resource/config-%s.yaml", env)
+		slog.Error("environment configuration file not found", "environment", env)
 		return
 	}
 
 	if err := loadConfigFile(envConfigPath, true); err != nil {
 		configLoadErr = err
-		log.Printf("合并环境配置文件失败：%v，将使用默认配置", err)
+		slog.Error("merge environment configuration failed", "error", err)
 	}
 
 	Verification = viper.GetString("verification")
@@ -160,6 +160,16 @@ func findConfigFile(name string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// ResourcePath resolves a path below the repository/container resource
+// directory without depending on the process working directory.
+func ResourcePath(name string) (string, error) {
+	configFile, ok := findConfigFile("config.yaml")
+	if !ok {
+		return "", fmt.Errorf("resource directory not found")
+	}
+	return filepath.Join(filepath.Dir(configFile), name), nil
 }
 
 func IsAllowedOrigin(origin string) bool {

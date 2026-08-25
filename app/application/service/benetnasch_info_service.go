@@ -1,18 +1,19 @@
 package service
 
 import (
-	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"context"
-	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
-	"xorm.io/xorm"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-json"
 )
 
 type BenetnaschInfoService interface {
@@ -25,10 +26,47 @@ type BenetnaschInfoService interface {
 	GetAbout(ctx context.Context) model.ResultVO
 	UpdateAbout(c *gin.Context) model.ResultVO
 	SaveBlogPhotoAlbumCover(c *gin.Context) model.ResultVO
-	listArticleRank(ctx context.Context, hm map[interface{}]float64) []model.ArticleRankDTO
+	listArticleRank(ctx context.Context, hm map[interface{}]float64) ([]model.ArticleRankDTO, error)
 }
 
-type MyBenetnaschInfoService struct{}
+type MyBenetnaschInfoService struct {
+	site       port.SiteInfoRepository
+	articles   port.ArticleRepository
+	categories port.CategoryRepository
+	tags       port.TagRepository
+}
+
+func NewBenetnaschInfoService(site port.SiteInfoRepository, articles port.ArticleRepository, categories port.CategoryRepository, tags port.TagRepository) *MyBenetnaschInfoService {
+	return &MyBenetnaschInfoService{site: site, articles: articles, categories: categories, tags: tags}
+}
+
+func (b *MyBenetnaschInfoService) siteRepository() port.SiteInfoRepository {
+	if b.site != nil {
+		return b.site
+	}
+	return siteInfoRepo
+}
+
+func (b *MyBenetnaschInfoService) articleRepository() port.ArticleRepository {
+	if b.articles != nil {
+		return b.articles
+	}
+	return articleRepo
+}
+
+func (b *MyBenetnaschInfoService) categoryRepository() port.CategoryRepository {
+	if b.categories != nil {
+		return b.categories
+	}
+	return categoryRepo
+}
+
+func (b *MyBenetnaschInfoService) tagRepository() port.TagRepository {
+	if b.tags != nil {
+		return b.tags
+	}
+	return tagRepo
+}
 
 func (b *MyBenetnaschInfoService) GetBenetnaschHomeInfo() model.ResultVO {
 	return model.ResultVO{}
@@ -39,28 +77,24 @@ func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 	md5 := shared.GetMD5(shared.GetRedisId(req))
 	seen, err := shared.SIsMemberCtx(ctx, shared.UNIQUE_VISITOR, md5)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("record unique visitor failed", "error", err)
 		return model.ResultFail()
 	}
 	if !seen {
 		ipSource := shared.GetIpSource(shared.GetIpAddress(req))
-		if ipSource != "" {
-			if _, err := shared.HIncrByCtx(ctx, shared.VISITOR_AREA, ipSource, 1); err != nil {
-				zlog.Error(err.Error())
-				return model.ResultFail()
-			}
-		} else {
-			if _, err := shared.HIncrByCtx(ctx, shared.VISITOR_AREA, shared.UNKNOWN, 1); err != nil {
-				zlog.Error(err.Error())
-				return model.ResultFail()
-			}
+		if ipSource == "" {
+			ipSource = shared.UNKNOWN
+		}
+		if _, err := shared.HIncrByCtx(ctx, shared.VISITOR_AREA, ipSource, 1); err != nil {
+			slog.Error("increment visitor area failed", "error", err)
+			return model.ResultFail()
 		}
 		if _, err := shared.IncrByCtx(ctx, shared.BLOG_VIEWS_COUNT, 1); err != nil {
-			zlog.Error(err.Error())
+			slog.Error("increment blog view count failed", "error", err)
 			return model.ResultFail()
 		}
 		if _, err := shared.SAddCtx(ctx, shared.UNIQUE_VISITOR, md5); err != nil {
-			zlog.Error(err.Error())
+			slog.Error("record unique visitor failed", "error", err)
 			return model.ResultFail()
 		}
 	}
@@ -68,224 +102,178 @@ func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 }
 
 func (b *MyBenetnaschInfoService) GetBlogHomeInfo(ctx context.Context) model.ResultVO {
-	var articleCount, categoryCount, tagCount, talkCount int64
-	engine := ormInit.GetEngine().Context(ctx)
-	_, err := engine.SQL("select count(0) from t_article where is_delete = 0").Get(&articleCount)
+	articles, err := b.siteRepository().CountArticles(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-
-	_, err = engine.SQL("select count(0) from t_category").Get(&categoryCount)
+	categories, err := b.siteRepository().CountCategories(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-
-	_, err = engine.SQL("select count(0) from t_tag").Get(&tagCount)
+	tags, err := b.siteRepository().CountTags(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-
-	_, err = engine.SQL("select count(0) from t_talk").Get(&talkCount)
+	talks, err := b.siteRepository().CountTalks(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-
-	reData, err := shared.GetCtx(ctx, shared.BLOG_VIEWS_COUNT)
+	viewCount, err := shared.GetCtx(ctx, shared.BLOG_VIEWS_COUNT)
 	if err != nil {
-		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	var viewCount int
-	if reData != "" {
-		viewCount, _ = strconv.Atoi(reData)
-	} else {
-		viewCount = 0
+	views, _ := strconv.Atoi(viewCount)
+	config := b.GetWebsiteConfig(ctx)
+	if !config.Flag {
+		return config
 	}
-	websiteConfigResult := b.GetWebsiteConfig(ctx)
-	websiteConfig, ok := websiteConfigResult.Data.(model.WebsiteConfigDTO)
+	websiteConfig, ok := config.Data.(model.WebsiteConfigDTO)
 	if !ok {
-		return websiteConfigResult
+		return model.ResultFail()
 	}
 	return model.ResultOkWithData(model.BenetnaschHomeInfoDTO{
-		ArticleCount:    articleCount,
-		CategoryCount:   categoryCount,
-		TagCount:        tagCount,
-		TalkCount:       talkCount,
-		ViewCount:       viewCount,
-		WebsiteConfigDT: websiteConfig,
+		ArticleCount: articles, CategoryCount: categories, TagCount: tags,
+		TalkCount: talks, ViewCount: views, WebsiteConfigDT: websiteConfig,
 	})
 }
 
 func (b *MyBenetnaschInfoService) GetWebsiteConfig(ctx context.Context) model.ResultVO {
-	var webConfig model.WebsiteConfigDTO
-	var config string
-	websiteConfig, err := shared.GetCtx(ctx, shared.WEBSITE_CONFIG)
+	var configDTO model.WebsiteConfigDTO
+	cached, err := shared.GetCtx(ctx, shared.WEBSITE_CONFIG)
 	if err != nil {
-		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	if websiteConfig != "" {
-		if err := json.Unmarshal([]byte(websiteConfig), &webConfig); err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-	} else {
-		_, err := ormInit.GetEngine().Context(ctx).SQL("select config from t_website_config where id = 1").Get(&config)
+	config := cached
+	if config == "" {
+		config, err = b.siteRepository().GetWebsiteConfig(ctx)
 		if err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
+			return model.ResultFromError(err)
 		}
-
-		if err := json.Unmarshal([]byte(config), &webConfig); err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
-		}
-
 		if err := shared.SetCtx(ctx, shared.WEBSITE_CONFIG, config); err != nil {
-			zlog.Error(err.Error())
+			slog.Error("cache website configuration failed", "error", err)
 		}
 	}
-	return model.ResultOkWithData(webConfig)
+	if err := json.Unmarshal([]byte(config), &configDTO); err != nil {
+		slog.Error("decode website configuration failed", "error", err)
+		return model.ResultFail()
+	}
+	return model.ResultOkWithData(configDTO)
 }
 
 func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.ResultVO {
 	viewCount, err := shared.GetCtx(ctx, shared.BLOG_VIEWS_COUNT)
 	if err != nil {
-		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	count, err := strconv.Atoi(viewCount)
+	views, _ := strconv.Atoi(viewCount)
+	messageCount, err := b.siteRepository().CountComments(ctx, 2)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	engine := ormInit.GetEngine().Context(ctx)
-	messageCount, err := engine.Where("type = 2").Count(&entity.TComment{})
+	userCount, err := b.siteRepository().CountUsers(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	userCount, err := engine.Count(&entity.TUserInfo{})
+	articleCount, err := b.siteRepository().CountArticles(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	articleCount, err := engine.Where("is_delete = 0").Count(&entity.TArticle{})
+	uniqueViews, err := b.listUniqueViews(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	uniqueViews := listUniqueViews(ctx)
-	articleStatisticsDTOs := articleRepo.ListArticleStatistics()
-	categoryDTOs := categoryRepo.ListCategories()
-	var tags []entity.TTag
-	err = engine.Find(&tags)
+	articleStatistics, err := b.articleRepository().ListArticleStatistics(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	marshal, err := json.Marshal(tags)
+	categories, err := b.categoryRepository().List(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
 	}
-	var tagDTOs []model.TagDTO
-	err = json.Unmarshal(marshal, &tagDTOs)
+	tags, err := b.tagRepository().List(ctx)
 	if err != nil {
-		zlog.Error(err.Error())
+		return model.ResultFromError(err)
+	}
+	tagDTOs := make([]model.TagDTO, 0, len(tags))
+	for _, tag := range tags {
+		if tag != nil {
+			tagDTOs = append(tagDTOs, *tag)
+		}
 	}
 	articleMap, err := shared.ZReverseRangeWithScoreCtx(ctx, shared.ARTICLE_VIEWS_COUNT, 0, 4)
 	if err != nil {
-		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	auroraAdminInfoDTO := model.BenetnaschBackInfoDTO{
-		ArticleStatisticsDTOs: articleStatisticsDTOs,
+	data := model.BenetnaschBackInfoDTO{
+		ArticleStatisticsDTOs: articleStatistics,
 		TagDTOs:               tagDTOs,
-		ViewsCount:            count,
+		ViewsCount:            views,
 		MessageCount:          int(messageCount),
 		UserCount:             int(userCount),
 		ArticleCount:          int(articleCount),
-		CategoryDTOs:          categoryDTOs,
+		CategoryDTOs:          categories,
 		UniqueViewDTOs:        uniqueViews,
 	}
-	if len(articleMap) != 0 {
-		articleRankDTOs := b.listArticleRank(ctx, articleMap)
-		auroraAdminInfoDTO.ArticleRankDTOs = articleRankDTOs
+	if len(articleMap) > 0 {
+		data.ArticleRankDTOs, err = b.listArticleRank(ctx, articleMap)
+		if err != nil {
+			return model.ResultFromError(err)
+		}
 	}
-	return model.ResultOkWithData(auroraAdminInfoDTO)
+	return model.ResultOkWithData(data)
 }
 
 func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.ResultVO {
-	var webCfg model.WebsiteConfigVO
-	if err := c.ShouldBind(&webCfg); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	var vo model.WebsiteConfigVO
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	m, err := json.Marshal(&webCfg)
+	data, err := json.Marshal(&vo)
 	if err != nil {
-		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		_, err := session.Exec("update t_website_config set config = ? where id = 1", string(m))
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFailWithMessage(err.Error())
+	if err := b.siteRepository().UpdateWebsiteConfig(c.Request.Context(), string(data)); err != nil {
+		return model.ResultFromError(err)
 	}
-	if err := shared.SetCtx(c.Request.Context(), shared.WEBSITE_CONFIG, string(m)); err != nil {
-		zlog.Error(err.Error())
+	if err := shared.SetCtx(c.Request.Context(), shared.WEBSITE_CONFIG, string(data)); err != nil {
+		slog.Error("cache website configuration failed", "error", err)
 	}
-
 	return model.ResultOk()
 }
 
 func (b *MyBenetnaschInfoService) GetAbout(ctx context.Context) model.ResultVO {
-	var aboutDTO model.AboutDTO
-	about, err := shared.GetCtx(ctx, shared.ABOUT)
+	var about model.AboutDTO
+	cached, err := shared.GetCtx(ctx, shared.ABOUT)
 	if err != nil {
-		zlog.Error(err.Error())
 		return model.ResultFail()
 	}
-	if about != "" {
-		err := json.Unmarshal([]byte(about), &aboutDTO)
+	content := cached
+	if content == "" {
+		content, err = b.siteRepository().GetAbout(ctx, shared.DEFAULT_ABOUT_ID)
 		if err != nil {
-			zlog.Error(err.Error())
+			return model.ResultFromError(err)
 		}
-	} else {
-		var abt entity.TAbout
-		_, err := ormInit.GetEngine().Context(ctx).ID(shared.DEFAULT_ABOUT_ID).Get(&abt)
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		err = json.Unmarshal([]byte(abt.Content), &aboutDTO)
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-
-		if err := shared.SetCtx(ctx, shared.ABOUT, abt.Content); err != nil {
-			zlog.Error(err.Error())
+		if err := shared.SetCtx(ctx, shared.ABOUT, content); err != nil {
+			slog.Error("cache about content failed", "error", err)
 		}
 	}
-	return model.ResultOkWithData(aboutDTO)
+	if err := json.Unmarshal([]byte(content), &about); err != nil {
+		return model.ResultFail()
+	}
+	return model.ResultOkWithData(about)
 }
 
 func (b *MyBenetnaschInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
-	var abt model.AboutVO
-	if err := c.ShouldBind(&abt); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	var vo model.AboutVO
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		_, err := session.Exec("update t_about set config = ? where id = 1", abt.Content)
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFailWithMessage(err.Error())
+	if err := b.siteRepository().UpdateAbout(c.Request.Context(), shared.DEFAULT_ABOUT_ID, vo.Content); err != nil {
+		return model.ResultFromError(err)
 	}
-	if err := shared.SetCtx(c.Request.Context(), shared.ABOUT, abt.Content); err != nil {
-		zlog.Error(err.Error())
+	if err := shared.SetCtx(c.Request.Context(), shared.ABOUT, vo.Content); err != nil {
+		slog.Error("cache about content failed", "error", err)
 	}
-
 	return model.ResultOk()
 }
 
@@ -293,30 +281,38 @@ func (b *MyBenetnaschInfoService) SaveBlogPhotoAlbumCover(c *gin.Context) model.
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) listArticleRank(ctx context.Context, hm map[interface{}]float64) []model.ArticleRankDTO {
-	var articleIds []int
-	for k := range hm {
-		id, err := strconv.Atoi(k.(string))
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		articleIds = append(articleIds, id)
-	}
-	var articles []entity.TArticle
-	err := ormInit.GetEngine().Context(ctx).Select("id, article_title").In("id", articleIds).Find(&articles)
+func (b *MyBenetnaschInfoService) listUniqueViews(ctx context.Context) ([]model.UniqueViewDTO, error) {
+	start := timeNow().Add(-7 * 24 * time.Hour).Format("2006-01-02")
+	end := timeNow().Format("2006-01-02")
+	views, err := b.siteRepository().ListUniqueViews(ctx, start, end)
 	if err != nil {
-		zlog.Error(err.Error())
+		return nil, err
 	}
-	var articleRankDTOs []model.ArticleRankDTO
-	for _, v := range articles {
-		articleRankDTO := model.ArticleRankDTO{
-			ArticleTitle: v.ArticleTitle,
-			ViewsCount:   int(hm[strconv.Itoa(v.Id)]),
-		}
-		articleRankDTOs = append(articleRankDTOs, articleRankDTO)
+	result := make([]model.UniqueViewDTO, 0, len(views))
+	for _, view := range views {
+		result = append(result, model.UniqueViewDTO{Day: view.Day, ViewsCount: view.ViewsCount})
 	}
-	sort.Slice(articleRankDTOs, func(i, j int) bool {
-		return articleRankDTOs[i].ViewsCount > articleRankDTOs[j].ViewsCount
-	})
-	return articleRankDTOs
+	return result, nil
 }
+
+func (b *MyBenetnaschInfoService) listArticleRank(ctx context.Context, hm map[interface{}]float64) ([]model.ArticleRankDTO, error) {
+	ids := make([]int, 0, len(hm))
+	for key := range hm {
+		id, err := strconv.Atoi(fmt.Sprint(key))
+		if err == nil {
+			ids = append(ids, id)
+		}
+	}
+	articles, err := b.siteRepository().ListArticleRank(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]model.ArticleRankDTO, 0, len(articles))
+	for _, article := range articles {
+		result = append(result, model.ArticleRankDTO{ArticleTitle: article.ArticleTitle, ViewsCount: int(hm[strconv.Itoa(article.Id)])})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ViewsCount > result[j].ViewsCount })
+	return result, nil
+}
+
+var timeNow = time.Now

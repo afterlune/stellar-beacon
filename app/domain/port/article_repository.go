@@ -1,23 +1,32 @@
 package port
 
-import "benetnasch/app/facade/model"
+import (
+	"benetnasch/app/domain/entity"
+	"context"
+)
 
 // ArticleRepository is the application-facing contract for article reads.
-// The concrete xorm adapter lives under infra/persistence/repository; keeping
-// this contract in domain prevents the application layer from depending on
-// that adapter while the remaining repositories are migrated incrementally.
+// It owns domain read models and propagates persistence failures instead of
+// turning them into empty result sets.
 type ArticleRepository interface {
-	ListTopAndFeaturedArticles() []*model.ArticleCardDTO
-	ListArticles(current, size int) []*model.ArticleCardDTO
-	GetArticlesByCategoryId(current, size, categoryId int) []*model.ArticleCardDTO
-	GetArticleById(articleId int) model.ArticleDTO
-	GetPreArticleById(articleId int) model.ArticleCardDTO
-	GetNextArticleById(articleId int) model.ArticleCardDTO
-	GetFirstArticle() model.ArticleCardDTO
-	GetLastArticle() model.ArticleCardDTO
-	ListArticlesByTagId(current, size, tagId int) []*model.ArticleCardDTO
-	ListArchives(current, size int) []model.ArticleCardDTO
-	CountArticleAdmins(vo *model.ConditionVO) int
-	ListArticlesAdmin(current, size int, vo *model.ConditionVO) []*model.ArticleAdminDTO
-	ListArticleStatistics() []model.ArticleStatisticsDTO
+	ListTopAndFeaturedArticles(ctx context.Context) ([]*ArticleCard, error)
+	ListArticles(ctx context.Context, current, size int) ([]*ArticleCard, int, error)
+	GetArticlesByCategoryID(ctx context.Context, current, size, categoryID int) ([]*ArticleCard, int, error)
+	GetArticleByID(ctx context.Context, articleID int) (Article, error)
+	GetPreArticleByID(ctx context.Context, articleID int) (ArticleCard, error)
+	GetNextArticleByID(ctx context.Context, articleID int) (ArticleCard, error)
+	GetFirstArticle(ctx context.Context) (ArticleCard, error)
+	GetLastArticle(ctx context.Context) (ArticleCard, error)
+	ListArticlesByTagID(ctx context.Context, current, size, tagID int) ([]*ArticleCard, int, error)
+	ListArchives(ctx context.Context, current, size int) ([]ArticleCard, int, error)
+	CountArticleAdmins(ctx context.Context, filter ArticleFilter) (int, error)
+	ListArticlesAdmin(ctx context.Context, filter ArticleFilter) ([]*ArticleAdmin, error)
+	ListArticleStatistics(ctx context.Context) ([]ArticleStatistics, error)
+	GetArticleRecord(ctx context.Context, articleID int) (entity.TArticle, error)
+	SaveOrUpdate(ctx context.Context, article entity.TArticle, categoryName string, tagNames []string) (entity.TArticle, error)
+	UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (entity.TArticle, error)
+	UpdateDelete(ctx context.Context, ids []int, isDelete int) error
+	Delete(ctx context.Context, ids []int) error
+	GetAdminArticle(ctx context.Context, articleID int) (entity.TArticle, string, []string, error)
+	Export(ctx context.Context, ids []int) ([]entity.TArticle, error)
 }

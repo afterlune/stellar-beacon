@@ -12,7 +12,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags '-w -s' -trimpath -a -o benetnasch
 
-FROM alpine:latest AS final
+FROM alpine:3.24.1 AS final
 
 #FROM scratch
 

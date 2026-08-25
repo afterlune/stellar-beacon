@@ -4,7 +4,7 @@ import (
 	"benetnasch/app/domain/entity"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 )
 
 func ListMenusByUserInfoId(userInfoId int) []*entity.TMenu {
@@ -12,7 +12,7 @@ func ListMenusByUserInfoId(userInfoId int) []*entity.TMenu {
 	var menu []*entity.TMenu
 	err := engine.SQL(pgsql.ListMenusByUserInfoId, userInfoId).Find(&menu)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("list menus by user failed", "error", err)
 	}
 	return menu
 }

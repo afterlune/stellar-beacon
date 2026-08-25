@@ -28,11 +28,32 @@ jobs:
         shell: bash
         run: bash scripts/check-no-dynamic-sql.sh
 
+      - name: Check migrated service boundaries
+        shell: bash
+        run: bash scripts/check-service-db-boundary.sh
+
       - name: Vet
         run: go vet ./...
 
       - name: Test with race detector
         run: go test -race ./...
+
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      TESTCONTAINERS_ENABLED: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+          cache: true
+
+      - name: Run isolated PostgreSQL and Redis tests
+        run: go test -tags=integration ./app/infra/persistence/repository -run TestEphemeralPostgresAndRedis -count=1
 
   lint:
     runs-on: ubuntu-latest

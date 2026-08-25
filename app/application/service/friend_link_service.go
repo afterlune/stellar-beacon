@@ -2,15 +2,13 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
-	"benetnasch/app/infra/persistence/pgsql"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
+	"context"
+
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
-	"xorm.io/xorm"
 )
 
 type FriendLinkService interface {
@@ -20,56 +18,40 @@ type FriendLinkService interface {
 	DeleteFriendLink(c *gin.Context) model.ResultVO
 }
 
-type MyFriendLinkService struct{}
+type MyFriendLinkService struct{ repo port.FriendLinkRepository }
+
+func NewFriendLinkService(repo port.FriendLinkRepository) *MyFriendLinkService {
+	return &MyFriendLinkService{repo: repo}
+}
+
+func (f *MyFriendLinkService) friendLinkRepository() port.FriendLinkRepository {
+	if f.repo != nil {
+		return f.repo
+	}
+	return friendLinkRepo
+}
 
 func (f *MyFriendLinkService) ListFriendLinks() model.ResultVO {
-	var frilinks []entity.TFriendLink
-	err := ormInit.GetEngine().Find(&frilinks)
+	links, err := f.friendLinkRepository().ListPublic(context.Background())
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
-
-	var frilinkDTOs []model.FriendLinkDTO
-	frilinksjson, err := json.Marshal(frilinks)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
-	err = json.Unmarshal(frilinksjson, &frilinkDTOs)
-	if err != nil {
-		zlog.Error(err.Error())
-	}
-
-	return model.ResultOkWithData(frilinkDTOs)
+	var dtos []model.FriendLinkDTO
+	shared.StructCopy(links, &dtos)
+	return model.ResultOkWithData(dtos)
 }
 
 func (f *MyFriendLinkService) ListFriendLinkDTO(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	engine := ormInit.GetEngine()
-	var friendLinks []entity.TFriendLink
-	limit, offset := pgsql.Page(vo.Current, vo.Size)
-	if vo.Keywords != "" {
-		err = engine.Prepare().Where("link_name LIKE ? ESCAPE '\\'", pgsql.ContainsPattern(vo.Keywords)).Limit(limit, offset).Find(&friendLinks)
-	} else {
-		err = engine.Prepare().Limit(limit, offset).Find(&friendLinks)
-	}
+	links, count, err := f.friendLinkRepository().ListAdmin(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	count, err := engine.Count(&entity.TFriendLink{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
 	var dtos []model.FriendLinkAdminDTO
-	shared.StructCopy(friendLinks, &dtos)
+	shared.StructCopy(links, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -78,38 +60,23 @@ func (f *MyFriendLinkService) ListFriendLinkDTO(c *gin.Context) model.ResultVO {
 
 func (f *MyFriendLinkService) SaveOrUpdateFriendLink(c *gin.Context) model.ResultVO {
 	var vo model.FriendLinkVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	var friendLink entity.TFriendLink
-	shared.StructCopy(vo, &friendLink)
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		if friendLink.Id != 0 {
-			_, err = session.ID(friendLink.Id).Update(&friendLink)
-		} else {
-			_, err = session.Insert(&friendLink)
-		}
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	link := entity.TFriendLink{Id: vo.Id, LinkName: vo.LinkName, LinkAvatar: vo.LinkAvatar, LinkAddress: vo.LinkAddress, LinkIntro: vo.LinkIntro}
+	if err := f.friendLinkRepository().SaveOrUpdate(c.Request.Context(), link); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (f *MyFriendLinkService) DeleteFriendLink(c *gin.Context) model.ResultVO {
-	var iDs []int
-	err := c.ShouldBind(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	var ids []int
+	if err := c.ShouldBind(&ids); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	_, err = ormInit.GetEngine().Prepare().In("id", iDs).Delete(&entity.TFriendLink{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := f.friendLinkRepository().Delete(c.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }

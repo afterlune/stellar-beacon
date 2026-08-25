@@ -4,7 +4,7 @@ import (
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
-	"benetnasch/app/infra/zlog"
+	"log/slog"
 )
 
 type JobRepo interface {
@@ -47,7 +47,7 @@ func (j *MyJobRepo) CountJobs(vo *model.JobSearchVO) (count int) {
 	filters, args := jobFilters(vo)
 	query := "SELECT count(DISTINCT j.id) FROM t_job j" + filters
 	if _, err := ormInit.GetEngine().SQL(query, args...).Get(&count); err != nil {
-		zlog.Error("count jobs: " + err.Error())
+		slog.Error("count jobs failed", "error", err)
 	}
 	return count
 }
@@ -59,7 +59,7 @@ func (j *MyJobRepo) ListJobs(current, size int, vo *model.JobSearchVO) []*model.
 	args = append(args, limit, offset)
 	var jobs []*model.JobDTO
 	if err := ormInit.GetEngine().SQL(query, args...).Find(&jobs); err != nil {
-		zlog.Error("list jobs: " + err.Error())
+		slog.Error("list jobs failed", "error", err)
 	}
 	return jobs
 }
@@ -67,7 +67,7 @@ func (j *MyJobRepo) ListJobs(current, size int, vo *model.JobSearchVO) []*model.
 func (j *MyJobRepo) ListJobGroups() []string {
 	var groups []string
 	if err := ormInit.GetEngine().SQL(pgsql.ListJobGroups).Find(&groups); err != nil {
-		zlog.Error("list job groups: " + err.Error())
+		slog.Error("list job groups failed", "error", err)
 	}
 	return groups
 }

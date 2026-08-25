@@ -1,15 +1,12 @@
 package service
 
 import (
-	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
 
 	"github.com/gin-gonic/gin"
-	"xorm.io/builder"
 )
 
 type ErrorLogService interface {
@@ -17,51 +14,43 @@ type ErrorLogService interface {
 	DeleteErrorLogs(c *gin.Context) model.ResultVO
 }
 
-type MyErrorLogService struct{}
+type MyErrorLogService struct{ repo port.ErrorLogRepository }
+
+func NewErrorLogService(repo port.ErrorLogRepository) *MyErrorLogService {
+	return &MyErrorLogService{repo: repo}
+}
+
+func (e *MyErrorLogService) errorLogRepository() port.ErrorLogRepository {
+	if e.repo != nil {
+		return e.repo
+	}
+	return errorLogRepo
+}
 
 func (e *MyErrorLogService) ListErrorLogs(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	logs, count, err := e.errorLogRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
-	var operationLogs []entity.TExceptionLog
-	engine := ormInit.GetEngine()
-	if vo.Keywords != "" {
-		err = engine.Prepare().Where(builder.Like{"opt_desc", vo.Keywords}).
-			OrderBy("id").Desc("id").Limit(vo.Size, vo.Size*(vo.Current-1)).Find(&operationLogs)
-	} else {
-		err = engine.Prepare().OrderBy("id").Desc("id").Limit(vo.Size, vo.Size*(vo.Current-1)).Find(&operationLogs)
-	}
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	count, err := engine.Count(&entity.TExceptionLog{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-	var exceptionLogDTOs []model.ExceptionLogDTO
-	shared.StructCopy(operationLogs, &exceptionLogDTOs)
+	var dtos []model.ExceptionLogDTO
+	shared.StructCopy(logs, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: exceptionLogDTOs, Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
 func (e *MyErrorLogService) DeleteErrorLogs(c *gin.Context) model.ResultVO {
-	var iDs []int
-	err := c.ShouldBind(&iDs)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	var ids []int
+	if err := c.ShouldBind(&ids); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	_, err = ormInit.GetEngine().In("id", iDs).Delete(&entity.TExceptionLog{})
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := e.errorLogRepository().Delete(c.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }

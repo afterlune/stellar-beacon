@@ -1,12 +1,11 @@
 package shared
 
 import (
-	"benetnasch/app/infra/zlog"
 	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 )
 
 func GetIpAddress(req *http.Request) (s string) {
@@ -32,10 +31,11 @@ func GetIpAddress(req *http.Request) (s string) {
 			//根据网卡取本机配置的IP
 			conn, err := net.Dial("udp", "8.8.8.8:53")
 			if err != nil {
-				zlog.Error(err.Error())
+				slog.Error("resolve local IP failed", "error", err)
+			} else {
+				defer conn.Close()
+				ipAddress = conn.LocalAddr().(*net.UDPAddr).IP.String()
 			}
-			localAddr := conn.LocalAddr().(*net.UDPAddr)
-			ipAddress = strings.Split(localAddr.String(), ":")[0]
 		}
 	}
 	return ipAddress
@@ -45,24 +45,18 @@ func GetIpSource(ip string) string {
 	dbpath := "resource/ip/ip2region.xdb"
 	file, err := xdb.LoadContentFromFile(dbpath)
 	if err != nil {
-		if err != nil {
-			zlog.Error(err.Error())
-		}
+		slog.Error("load IP region database failed", "error", err)
 		return ""
 	}
 	searcher, err := xdb.NewWithBuffer(file)
 	if err != nil {
-		if err != nil {
-			zlog.Error(err.Error())
-		}
+		slog.Error("initialize IP region searcher failed", "error", err)
 		return ""
 	}
 	defer searcher.Close()
 	region, err := searcher.SearchByStr(ip)
 	if err != nil && err != io.EOF {
-		if err != nil {
-			zlog.Error(err.Error())
-		}
+		slog.Error("search IP region failed", "error", err)
 		return ""
 	}
 	return region

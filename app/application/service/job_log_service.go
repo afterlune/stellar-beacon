@@ -1,17 +1,14 @@
 package service
 
 import (
-	"benetnasch/app/domain/entity"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
-	"benetnasch/app/infra/persistence/pgsql"
-	"benetnasch/app/infra/persistence/repository"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
-	"github.com/gin-gonic/gin"
+	"context"
 	"strconv"
-	"xorm.io/xorm"
+
+	"github.com/gin-gonic/gin"
 )
 
 type JobLogService interface {
@@ -21,7 +18,18 @@ type JobLogService interface {
 	ListJobLogGroups() model.ResultVO
 }
 
-type MyJobLogService struct{}
+type MyJobLogService struct{ repo port.JobLogRepository }
+
+func NewJobLogService(repo port.JobLogRepository) *MyJobLogService {
+	return &MyJobLogService{repo: repo}
+}
+
+func (j *MyJobLogService) jobLogRepository() port.JobLogRepository {
+	if j.repo != nil {
+		return j.repo
+	}
+	return jobLogRepo
+}
 
 func (j *MyJobLogService) ListJobLogs(c *gin.Context) model.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
@@ -30,66 +38,29 @@ func (j *MyJobLogService) ListJobLogs(c *gin.Context) model.ResultVO {
 	}
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
-		size = pgsql.DefaultPageSize
+		size = 10
 	}
 	var vo model.JobLogSearchVO
-	if err = c.ShouldBind(&vo); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-
-	applyFilters := func(session *xorm.Session) *xorm.Session {
-		session = session.Where("1 = 1")
-		if vo.JobId != 0 {
-			session = session.And("job_id = ?", vo.JobId)
-		}
-		if vo.JobGroup != "" {
-			session = session.And("job_group LIKE ? ESCAPE '\\'", pgsql.ContainsPattern(vo.JobGroup))
-		}
-		if vo.JobName != "" {
-			session = session.And("job_name LIKE ? ESCAPE '\\'", pgsql.ContainsPattern(vo.JobName))
-		}
-		if vo.Status != nil {
-			status, ok := jobLogStatus(vo.Status)
-			if !ok {
-				return nil
-			}
-			session = session.And("status = ?", status)
-		}
-		if vo.StartTime != "" && vo.EndTime != "" {
-			session = session.And("create_time BETWEEN ? AND ?", vo.StartTime, vo.EndTime)
-		}
-		return session
-	}
+	var status *int
 	if vo.Status != nil {
-		if _, ok := jobLogStatus(vo.Status); !ok {
+		value, ok := jobLogStatus(vo.Status)
+		if !ok {
 			return model.ResultFailWithMessage("状态参数无效")
 		}
+		status = &value
 	}
-
-	engine := ormInit.GetEngine()
-	var count int64
-	countSession := applyFilters(engine.Context(c.Request.Context()))
-	if countSession == nil {
-		return model.ResultFailWithMessage("状态参数无效")
-	}
-	if count, err = countSession.Count(&entity.TJobLog{}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
-	}
-
-	limit, offset := pgsql.Page(current, size)
-	var joblogs []entity.TJobLog
-	listSession := applyFilters(engine.Context(c.Request.Context()))
-	if listSession == nil {
-		return model.ResultFailWithMessage("状态参数无效")
-	}
-	if err = listSession.OrderBy("id").Desc("id").Limit(limit, offset).Find(&joblogs); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	logs, count, err := j.jobLogRepository().List(c.Request.Context(), current, size, port.JobLogFilter{
+		JobId: vo.JobId, JobName: vo.JobName, JobGroup: vo.JobGroup,
+		Status: status, StartTime: vo.StartTime, EndTime: vo.EndTime,
+	})
+	if err != nil {
+		return model.ResultFromError(err)
 	}
 	var dtos []model.JobLogDTO
-	shared.StructCopy(joblogs, &dtos)
+	shared.StructCopy(logs, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -113,8 +84,8 @@ func jobLogStatus(value any) (int, bool) {
 	case float64:
 		return int(status), float64(int(status)) == status
 	case string:
-		statusInt, err := strconv.Atoi(status)
-		return statusInt, err == nil
+		parsed, err := strconv.Atoi(status)
+		return parsed, err == nil
 	default:
 		return 0, false
 	}
@@ -123,27 +94,25 @@ func jobLogStatus(value any) (int, bool) {
 func (j *MyJobLogService) DeleteJobLogs(c *gin.Context) model.ResultVO {
 	var ids []int
 	if err := c.ShouldBind(&ids); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if len(ids) == 0 {
-		return model.ResultOk()
-	}
-	if _, err := ormInit.GetEngine().Prepare().In("id", ids).Delete(&entity.TJobLog{}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := j.jobLogRepository().Delete(c.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (j *MyJobLogService) CleanJobLogs() model.ResultVO {
-	if _, err := ormInit.GetEngine().Prepare().Delete(&entity.TJobLog{}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := j.jobLogRepository().Clean(context.Background()); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (j *MyJobLogService) ListJobLogGroups() model.ResultVO {
-	return model.ResultOkWithData(repository.ListJobLogGroups())
+	groups, err := j.jobLogRepository().ListGroups(context.Background())
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(groups)
 }

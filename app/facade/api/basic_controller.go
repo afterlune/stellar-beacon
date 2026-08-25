@@ -22,3 +22,45 @@ var (
 	userAuthService     service.UserAuthService       = new(service.MyUserAuthService)
 	userInfoService     service.UserInfoService       = new(service.MyUserInfoService)
 )
+
+type Services struct {
+	Article      service.ArticleService
+	Benetnasch   service.BenetnaschInfoService
+	Category     service.CategoryService
+	Comment      service.CommentService
+	ErrorLog     service.ErrorLogService
+	FriendLink   service.FriendLinkService
+	JobLog       service.JobLogService
+	Job          service.JobService
+	Menu         service.MenuService
+	OperationLog service.OperationLogService
+	PhotoAlbum   service.PhotoAlbumService
+	Photo        service.PhotoService
+	Resource     service.ResourceService
+	Role         service.RoleService
+	Tag          service.TagService
+	Talk         service.TalkService
+	UserAuth     service.UserAuthService
+	UserInfo     service.UserInfoService
+}
+
+func ConfigureServices(s Services) {
+	articleService = s.Article
+	benetnaschService = s.Benetnasch
+	categoryService = s.Category
+	commentService = s.Comment
+	errorLogService = s.ErrorLog
+	friendLinkService = s.FriendLink
+	jobLogService = s.JobLog
+	jobService = s.Job
+	menuService = s.Menu
+	operationLogService = s.OperationLog
+	photoAlbumService = s.PhotoAlbum
+	photoService = s.Photo
+	resourceService = s.Resource
+	roleService = s.Role
+	tagService = s.Tag
+	talkService = s.Talk
+	userAuthService = s.UserAuth
+	userInfoService = s.UserInfo
+}

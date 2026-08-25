@@ -2,14 +2,15 @@ package service
 
 import (
 	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/shared"
-	"benetnasch/app/infra/zlog"
 	"container/list"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"golang.org/x/crypto/bcrypt"
-	"xorm.io/xorm"
 )
 
 type UserAuthService interface {
@@ -31,10 +31,36 @@ type UserAuthService interface {
 	QQLogin(c *gin.Context) model.ResultVO
 	CheckUser(ctx context.Context, vo model.UserVO) bool
 	CheckUserAuth(ctx context.Context, vo model.UserVO) *model.UserDetailsDTO
-	UpdateUserIp(ctx context.Context, user entity.TUserAuth)
+	Authenticate(ctx context.Context, vo model.UserVO) (*model.UserDetailsDTO, error)
+	UpdateUserIp(ctx context.Context, user entity.TUserAuth) error
 }
 
-type MyUserAuthService struct{}
+type MyUserAuthService struct {
+	repo    port.AuthRepository
+	website BenetnaschInfoService
+}
+
+func NewUserAuthService(repo port.AuthRepository, website ...BenetnaschInfoService) *MyUserAuthService {
+	service := &MyUserAuthService{repo: repo}
+	if len(website) > 0 {
+		service.website = website[0]
+	}
+	return service
+}
+
+func (u *MyUserAuthService) authRepository() port.AuthRepository {
+	if u.repo != nil {
+		return u.repo
+	}
+	return userAuthRepo
+}
+
+func (u *MyUserAuthService) websiteService() BenetnaschInfoService {
+	if u.website != nil {
+		return u.website
+	}
+	return benetnaschService
+}
 
 func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 	username := strings.ToLower(strings.TrimSpace(c.Query("username")))
@@ -47,19 +73,19 @@ func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 		return prefix + hex.EncodeToString(sum[:])
 	}
 	if allowed, err := shared.SetNXCtx(ctx, key("captcha:cooldown:", username), "1", time.Minute); err != nil {
-		zlog.Error("captcha rate limiter failed: " + err.Error())
+		slog.Error("captcha rate limiter failed", "error", err)
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	} else if !allowed {
 		return model.ResultFailWithMessage("验证码发送过于频繁")
 	}
 	emailCount, err := shared.IncrExpireCtx(ctx, key("captcha:email:", username), time.Hour)
 	if err != nil {
-		zlog.Error("captcha email limiter failed: " + err.Error())
+		slog.Error("captcha email limiter failed", "error", err)
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	}
 	ipCount, err := shared.IncrExpireCtx(ctx, key("captcha:ip:", shared.GetIpAddress(c.Request)), time.Hour)
 	if err != nil {
-		zlog.Error("captcha IP limiter failed: " + err.Error())
+		slog.Error("captcha IP limiter failed", "error", err)
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	}
 	if emailCount > 5 || ipCount > 20 {
@@ -75,11 +101,11 @@ func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 		Subject:    shared.CAPTCHA,
 	}
 	if err := shared.SendHtmlEmail(emailDTO); err != nil {
-		zlog.Error("send captcha email failed: " + err.Error())
+		slog.Error("send captcha email failed", "error", err)
 		return model.ResultFailWithMessage("验证码发送失败")
 	}
 	if err := shared.SetWithTimeCtx(ctx, shared.USER_CODE_KEY+username, code, 15*time.Minute); err != nil {
-		zlog.Error("store captcha: " + err.Error())
+		slog.Error("store captcha failed", "error", err)
 		return model.ResultFailWithMessage("验证码发送失败")
 	}
 	return model.ResultOk()
@@ -92,20 +118,20 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 	case "1":
 		userArea, err := shared.GetCtx(c.Request.Context(), shared.USER_AREA)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("load user area failed", "error", err)
 			return model.ResultFail()
 		}
 		if userArea != "" {
 			err := json.Unmarshal([]byte(userArea), &userAreaDTOs)
 			if err != nil {
-				zlog.Error(err.Error())
+				slog.Error("decode user area failed", "error", err)
 			}
 		}
 		return model.ResultOkWithData(userAreaDTOs)
 	case "2":
 		visitorArea, err := shared.HGetAllCtx(c.Request.Context(), shared.VISITOR_AREA)
 		if err != nil {
-			zlog.Error(err.Error())
+			slog.Error("load visitor area failed", "error", err)
 			return model.ResultFail()
 		}
 		for k, v := range visitorArea {
@@ -116,7 +142,7 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 				province = strings.Split(region, "省")[0]
 			}
 			if err != nil {
-				zlog.Error(err.Error())
+				slog.Error("parse visitor count failed", "error", err)
 			}
 			userAreaDTO := model.UserAreaDTO{
 				Name:  province,
@@ -132,30 +158,33 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 
 func (u *MyUserAuthService) ListUsers(c *gin.Context) model.ResultVO {
 	var vo model.ConditionVO
-	err := c.ShouldBind(&vo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	count := userAuthRepo.CountUser(&vo)
+	users, count, err := u.authRepository().ListUsers(c.Request.Context(), port.UserFilter{
+		Current:   vo.Current,
+		Size:      vo.Size,
+		Keywords:  vo.Keywords,
+		LoginType: vo.LonginType,
+	})
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	data := userAuthRepo.ListUsers(vo.Current, vo.Size, &vo)
-	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
+	return model.ResultOkWithData(model.PageResultDTO{Records: users, Count: int(count)})
 }
 
 func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 	var userVo model.UserVO
-	err := c.ShouldBind(&userVo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&userVo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 
 	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+strings.ToLower(strings.TrimSpace(userVo.Username)))
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("load registration captcha failed", "error", err)
 		return model.ResultFail()
 	}
 	if userVo.Code != code {
@@ -167,18 +196,27 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 	}
 	username := strings.ToLower(strings.TrimSpace(userVo.Username))
 	userVo.Username = username
-	if u.CheckUser(c.Request.Context(), userVo) {
+	exists, err := u.userExists(c.Request.Context(), username)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if exists {
 		return model.ResultFailWithMessage("邮箱已被注册！")
+	}
+	websiteConfigResult := u.websiteService().GetWebsiteConfig(c.Request.Context())
+	websiteConfig, ok := websiteConfigResult.Data.(model.WebsiteConfigDTO)
+	if !ok {
+		return websiteConfigResult
 	}
 	userInfo := entity.TUserInfo{
 		Email:    username,
 		Nickname: shared.DEFAULT_NICKNAME,
-		Avatar:   benetnaschService.GetWebsiteConfig(c.Request.Context()).Data.(model.WebsiteConfigDTO).UserAvatar,
+		Avatar:   websiteConfig.UserAvatar,
 	}
 
 	password, err := bcrypt.GenerateFromPassword([]byte(userVo.Password), bcrypt.DefaultCost)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("hash registration password failed", "error", err)
 		return model.ResultFailWithMessage("注册失败，稍后再试")
 	}
 	userAuth := entity.TUserAuth{
@@ -186,35 +224,21 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 		Password:  string(password),
 		LoginType: 1,
 	}
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		if _, err := session.Insert(&userInfo); err != nil {
-			return err
-		}
-		userRole := entity.TUserRole{UserId: userInfo.Id, RoleId: 2}
-		if _, err := session.Insert(&userRole); err != nil {
-			return err
-		}
-		userAuth.UserInfoId = userInfo.Id
-		_, err := session.Insert(&userAuth)
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFailWithMessage("注册失败，稍后再试")
+	if err := u.authRepository().CreateUser(c.Request.Context(), userInfo, userAuth, 2); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	var userVO model.UserVO
-	err := c.ShouldBind(&userVO)
-	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+	if err := c.ShouldBind(&userVO); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	userVO.Username = strings.ToLower(strings.TrimSpace(userVO.Username))
 	code, err := shared.GetCtx(c.Request.Context(), shared.USER_CODE_KEY+strings.ToLower(strings.TrimSpace(userVO.Username)))
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("load password reset captcha failed", "error", err)
 		return model.ResultFail()
 	}
 	if userVO.Code != code {
@@ -223,70 +247,56 @@ func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	if !shared.CheckEmail(userVO.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
-	if !u.CheckUser(c.Request.Context(), userVO) {
+	exists, err := u.userExists(c.Request.Context(), userVO.Username)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if !exists {
 		return model.ResultFailWithMessage("邮箱未注册！")
 	}
 
 	password, err := bcrypt.GenerateFromPassword([]byte(userVO.Password), bcrypt.DefaultCost)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("hash password reset password failed", "error", err)
 		return model.ResultFail()
 	}
-	userAuth := entity.TUserAuth{
-		Password: string(password),
-		Username: userVO.Username,
-	}
-	if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-		_, err := session.Where("username = ?", userAuth.Username).Update(&userAuth)
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFailWithMessage(err.Error())
+	if err := u.authRepository().UpdatePassword(c.Request.Context(), userVO.Username, string(password)); err != nil {
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
 }
 
 func (u *MyUserAuthService) UpdateAdminPassword(c *gin.Context) model.ResultVO {
-	value, _ := c.Get("userInfo")
-	dto := value.(model.UserDetailsDTO)
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "auth.update_admin_password", nil))
+	}
+	dto, ok := value.(model.UserDetailsDTO)
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "auth.update_admin_password", nil))
+	}
 
 	var passwordVO model.PasswordVO
 	err := c.ShouldBind(&passwordVO)
 	if err != nil || passwordVO.NewPassword == "" || passwordVO.OldPassword == "" {
-		if err != nil {
-			zlog.Error(err.Error())
-		}
-		return model.ResultFail()
+		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	engine := ormInit.GetEngine()
-	var user entity.TUserAuth
-	_, err = engine.ID(dto.Id).Get(&user)
+	user, err := u.authRepository().FindByID(c.Request.Context(), dto.Id)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(passwordVO.OldPassword))
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFailWithMessage("旧密码不正确")
 	}
 	password, err := bcrypt.GenerateFromPassword([]byte(passwordVO.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		zlog.Error(err.Error())
-		return model.ResultFail()
+		return model.ResultFromError(err)
 	}
 	if user.Username != "" && err == nil {
-		userAuth := entity.TUserAuth{
-			Id:       dto.Id,
-			Password: string(password),
-		}
-		if err := ormInit.WithTx(c.Request.Context(), func(session *xorm.Session) error {
-			_, err := session.ID(userAuth.Id).Update(&userAuth)
-			return err
-		}); err != nil {
-			zlog.Error(err.Error())
-			return model.ResultFail()
+		if err := u.authRepository().UpdatePasswordByID(c.Request.Context(), dto.Id, string(password)); err != nil {
+			return model.ResultFromError(err)
 		}
 		return model.ResultOk()
 	}
@@ -295,7 +305,7 @@ func (u *MyUserAuthService) UpdateAdminPassword(c *gin.Context) model.ResultVO {
 
 func (u *MyUserAuthService) Logout(ctx context.Context, id int) model.ResultVO {
 	if err := shared.HDelCtx(ctx, shared.LOGIN_USER, strconv.Itoa(id)); err != nil {
-		zlog.Error(err.Error())
+		slog.Error("remove login session failed", "error", err)
 		return model.ResultFailWithMessage("注销失败，请稍后再试")
 	}
 	return model.ResultOkWithData(model.UserLogoutStatusDTO{
@@ -307,67 +317,66 @@ func (u *MyUserAuthService) QQLogin(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func (u *MyUserAuthService) CheckUser(ctx context.Context, vo model.UserVO) bool {
-	var userAuth entity.TUserAuth
-	b, err := ormInit.GetEngine().Context(ctx).Where("Username = ?", vo.Username).Get(&userAuth)
-	if err != nil {
-		zlog.Error(err.Error())
-		return false
+func (u *MyUserAuthService) userExists(ctx context.Context, username string) (bool, error) {
+	_, err := u.authRepository().FindByUsername(ctx, username)
+	if err == nil {
+		return true, nil
 	}
-	return b
+	if apperrors.IsKind(err, apperrors.KindNotFound) {
+		return false, nil
+	}
+	return false, err
+}
+
+func (u *MyUserAuthService) CheckUser(ctx context.Context, vo model.UserVO) bool {
+	exists, err := u.userExists(ctx, strings.ToLower(strings.TrimSpace(vo.Username)))
+	if err != nil {
+		slog.Error("check user failed", "error", err)
+	}
+	return exists
+}
+
+func (u *MyUserAuthService) Authenticate(ctx context.Context, vo model.UserVO) (*model.UserDetailsDTO, error) {
+	username := strings.ToLower(strings.TrimSpace(vo.Username))
+	user, err := u.authRepository().FindByUsername(ctx, username)
+	if err != nil {
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Auth.Password), []byte(vo.Password)); err != nil {
+		return nil, nil
+	}
+	return &model.UserDetailsDTO{
+		Id:          user.Auth.Id,
+		UserInfoId:  user.Info.Id,
+		Email:       user.Info.Email,
+		LoginType:   user.Auth.LoginType,
+		Username:    user.Auth.Username,
+		Password:    user.Auth.Password,
+		Roles:       user.Roles,
+		Nickname:    user.Info.Nickname,
+		Avatar:      user.Info.Avatar,
+		Intro:       user.Info.Intro,
+		Website:     user.Info.Website,
+		IsSubscribe: user.Info.IsSubscribe,
+		IsDisable:   user.Info.IsDisable,
+	}, nil
 }
 
 func (u *MyUserAuthService) CheckUserAuth(ctx context.Context, vo model.UserVO) *model.UserDetailsDTO {
-	var userAuth entity.TUserAuth
-	engine := ormInit.GetEngine().Context(ctx)
-	_, err := engine.Where("Username = ?", vo.Username).Get(&userAuth)
+	dto, err := u.Authenticate(ctx, vo)
 	if err != nil {
-		zlog.Error(err.Error())
+		slog.Error("authenticate user failed", "error", err)
 		return nil
 	}
-	err = bcrypt.CompareHashAndPassword([]byte(userAuth.Password), []byte(vo.Password))
-	if err != nil {
-		return nil
-	}
-	var userInfo entity.TUserInfo
-	_, err = engine.Where("id = ?", userAuth.UserInfoId).Get(&userInfo)
-	if err != nil {
-		zlog.Error(err.Error())
-		return nil
-	}
-	var roles []string
-	err = engine.SQL("select role_name from t_role where id in (select role_id from t_user_role where user_id = ?)", userInfo.Id).Find(&roles)
-	if err != nil {
-		zlog.Error(err.Error())
-		return nil
-	}
-	userDetailsDTO := &model.UserDetailsDTO{
-		Id:          userAuth.Id,
-		UserInfoId:  userInfo.Id,
-		Email:       userInfo.Email,
-		LoginType:   userAuth.LoginType,
-		Username:    userAuth.Username,
-		Password:    userAuth.Password,
-		Roles:       roles,
-		Nickname:    userInfo.Nickname,
-		Avatar:      userInfo.Avatar,
-		Intro:       userInfo.Intro,
-		Website:     userInfo.Website,
-		IsSubscribe: userInfo.IsSubscribe,
-		IsDisable:   userInfo.IsDisable,
-	}
-	return userDetailsDTO
+	return dto
 }
 
-func (u *MyUserAuthService) UpdateUserIp(ctx context.Context, user entity.TUserAuth) {
+func (u *MyUserAuthService) UpdateUserIp(ctx context.Context, user entity.TUserAuth) error {
 	if user.IpSource == "0" || user.IpSource == "" {
 		user.IpSource = shared.UNKNOWN
 	}
-	if err := ormInit.WithTx(ctx, func(session *xorm.Session) error {
-		_, err := session.ID(user.Id).MustCols("ip_source", "ip_address").Update(&user)
-		return err
-	}); err != nil {
-		zlog.Error(err.Error())
-		return
-	}
+	return u.authRepository().UpdateLoginMetadata(ctx, user)
 }

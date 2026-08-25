@@ -1,19 +1,23 @@
 package cmd
 
 import (
+	"benetnasch/app/bootstrap"
 	"benetnasch/app/infra/config"
+	"benetnasch/app/infra/logging"
 	"benetnasch/app/infra/middlewares"
 	"benetnasch/app/infra/persistence/repository"
 	"benetnasch/app/infra/task"
 	"benetnasch/app/infra/tls"
-	"benetnasch/app/infra/zlog"
 	"benetnasch/route"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,24 +38,51 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		zlog.Fatal(err.Error())
-	}
+func Execute() error {
+	return rootCmd.Execute()
 }
 
 func runServer() error {
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
-	banner()
+	logDirectory, err := config.ResourcePath("log")
+	if err != nil {
+		return fmt.Errorf("resolve log directory: %w", err)
+	}
+	shutdownLogging, err := logging.Init(logging.Config{
+		ConsoleLevel: slog.LevelDebug,
+		FilePath:     filepath.Join(logDirectory, fmt.Sprintf("error_%s.log", time.Now().Format(time.DateOnly))),
+		MaxSize:      50,
+		MaxBackups:   5,
+		MaxAge:       7,
+		Compress:     true,
+	})
+	if err != nil {
+		return fmt.Errorf("initialize logging: %w", err)
+	}
+	defer func() {
+		if err := shutdownLogging(); err != nil {
+			slog.Error("close logging failed", "error", err)
+		}
+	}()
+	if err := banner(); err != nil {
+		return err
+	}
 
-	settings()
+	serverLog, err := settings()
+	if err != nil {
+		return err
+	}
+	defer serverLog.Close()
+	if err := bootstrap.Initialize(); err != nil {
+		return fmt.Errorf("application initialization failed: %w", err)
+	}
 	repository.StartLogQueue(context.Background())
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := repository.StopLogQueue(shutdownCtx); err != nil {
-			zlog.Error(err.Error())
+			slog.Error("stop log queue failed", "error", err)
 		}
 		cancel()
 	}()
@@ -76,17 +107,22 @@ func runServer() error {
 	return runH3(router)
 }
 
-func banner() {
-	open, err := os.Open("resource/banner.txt")
+func banner() error {
+	bannerPath, err := config.ResourcePath("banner.txt")
 	if err != nil {
-		zlog.Fatal(err.Error())
+		return err
 	}
+	open, err := os.Open(bannerPath)
+	if err != nil {
+		return fmt.Errorf("open banner: %w", err)
+	}
+	defer open.Close()
 	var data []byte
 	buf := make([]byte, 1024)
 	for {
 		read, err := open.Read(buf)
 		if err != nil && err != io.EOF {
-			zlog.Error(err.Error())
+			return fmt.Errorf("read banner: %w", err)
 		}
 		if read == 0 {
 			break
@@ -94,18 +130,26 @@ func banner() {
 		data = append(data, buf[:read]...)
 	}
 	log.Println(string(data))
+	return nil
 }
 
-func settings() {
+func settings() (*os.File, error) {
 	gin.DisableConsoleColor()
 
-	file, err := os.Create("resource/log/server.log")
+	logPath, err := config.ResourcePath("log/server.log")
 	if err != nil {
-		zlog.Error("create server log failed: " + err.Error())
-		return
+		return nil, fmt.Errorf("resolve server log path: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o750); err != nil {
+		return nil, fmt.Errorf("create server log directory: %w", err)
+	}
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
+	if err != nil {
+		return nil, fmt.Errorf("create server log: %w", err)
 	}
 
 	gin.DefaultWriter = io.MultiWriter(file, os.Stdout)
+	return file, nil
 }
 
 func listener() {
@@ -133,14 +177,16 @@ func runH3(router *gin.Engine) error {
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			err := h3.SetQUICHeaders(w.Header())
 			if err != nil {
-				zlog.Error(err.Error())
+				slog.Error("set HTTP/3 headers failed", "error", err)
 				return
 			}
 			router.ServeHTTP(w, r)
 		}),
 	}
 	go func() {
-		zlog.Unwrap(h.ListenAndServeTLS("", ""))
+		if err := h.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("HTTP/3 companion server failed", "error", err)
+		}
 	}()
 	return h3.ListenAndServe()
 }

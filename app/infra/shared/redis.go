@@ -2,13 +2,12 @@ package shared
 
 import (
 	"benetnasch/app/infra/config"
-	"benetnasch/app/infra/zlog"
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 const (
@@ -318,5 +317,5 @@ func IncrExpire(key string, ttl time.Duration) int64 {
 }
 
 func logRedisError(operation string, err error) {
-	zlog.Error("redis operation failed", zap.String("operation", operation), zap.Error(err))
+	slog.Error("redis operation failed", "operation", operation, "error", err)
 }
