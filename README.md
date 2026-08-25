@@ -67,53 +67,57 @@
 
 ## 3.打包运行前端项目
 
-1. 项目中，更改src/config/config.ts
+1. 根据部署环境修改 `web/blog/src/config/config.ts` 和 `web/admin/src/assets/js/config.js`
 
    ```typescript
      captcha: {
        TENCENT_CAPTCHA: '你自己的天御验证码'
      },
-     qqLogin: {
-       QQ_APP_ID: '你自己的APP_ID',
-       QQ_REDIRECT_URI: 'https://你的前台域名/oauth/login/qq'
-     },
    ```
 
-2. 项目中，更改public/index.html
-
-   ```html
-   <script
-         src="http://connect.qq.com/qc_jssdk.js"
-         data-appid="你自己的APP_ID"
-         data-redirecturi="https://你的前台域名/oauth/login/qq"></script>
-   ```
-
-3. 如果你的网站没有打算使用https,将下面这一行代码给注释掉
+2. 如果你的网站没有打算使用https,将下面这一行代码给注释掉
 
    ```html
    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
    ```
 
-4. 分别到blog和admin下面执行如下命令 (推荐关闭vscode的Eslint,本项目没有遵循Eslint的规范)
+3. 分别到 `web/blog` 和 `web/admin` 下面执行如下命令 (推荐关闭vscode的Eslint,本项目没有遵循Eslint的规范)
 
    如果下列命令执行报错，可以尝试替换版本
 
    参考版本：npm版本为：8.3.1    vue-cli的版本为：5.0.6
 
    ```shell
-   npm install
+   npm ci
    npm run build
    ```
 
-5. 在服务器的/usr/local/下面创建名为vue的文件夹，
+5. 构建结果分别位于 `web/blog/dist` 和 `web/admin/dist`。
 
-6. 将打包好的前台代码重命名为blog, 并传输到服务器的/usr/local/vue下面
+6. 将前台构建结果复制到 Caddy 静态目录的 `blog` 子目录。
 
-7. 将打包好的后台代码重命名为admin, 并传输到服务器的/usr/local/vue下面
+7. 将后台构建结果复制到 Caddy 静态目录的 `admin` 子目录。
 
 ****
 
-## 4.部署
+## 4.隔离前后端联调
+
+联调使用独立的 Compose 项目 `benetnasch-integration`，包含 PostgreSQL、Redis、Meilisearch、MinIO、后端和临时 Caddy，端口为 `18080`（博客）、`18008`（管理端）、`17777`（后端）、`17700`（Meili）和 `19000/19001`（MinIO）。它不会修改现有容器、现有 Caddy 配置或现有数据卷。
+
+```powershell
+Copy-Item .env.integration.example .env.integration
+pwsh ./scripts/integration-up.ps1
+pwsh ./scripts/integration-seed.ps1
+pwsh ./scripts/integration-smoke.ps1
+```
+
+联调结束后只清理这个临时项目：
+
+```powershell
+pwsh ./scripts/integration-down.ps1 -RemoveVolumes
+```
+
+## 5.部署
 
 准备：配置项目下的config.yaml文件，配置docs目录下的docker-compose文件
 

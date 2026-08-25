@@ -24,8 +24,19 @@ go.work
 .env
 .env.*
 !.env.example
+!.env.integration.example
 resource/config-*.local.yaml
+
+# Local integration stack state
+.integration/
+docker-compose.integration.env
 
 # Runtime logs
 *.log
 resource/log/
+
+# Frontend dependencies, local env files, and build output
+web/**/node_modules/
+web/**/dist/
+web/**/.env.local
+web/**/.env.*.local

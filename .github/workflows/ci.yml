@@ -8,6 +8,30 @@ permissions:
   contents: read
 
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [blog, admin]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+          cache-dependency-path: web/${{ matrix.app }}/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web/${{ matrix.app }}
+        run: npm ci --no-audit --no-fund
+
+      - name: Build frontend
+        working-directory: web/${{ matrix.app }}
+        run: npm run build
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -23,6 +47,10 @@ jobs:
       - name: Check formatting
         shell: bash
         run: test -z "$(gofmt -l $(git ls-files '*.go'))"
+
+      - name: Check Go toolchain consistency
+        shell: bash
+        run: bash scripts/check-toolchain-version.sh
 
       - name: Check SQL construction
         shell: bash

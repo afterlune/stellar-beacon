@@ -1,0 +1,40 @@
+listen:
+  host: ""
+  port: 7777
+verification: "127.0.0.1"
+cors:
+  allowed_origins:
+    - "http://127.0.0.1:18080"
+    - "http://127.0.0.1:18008"
+meiliSearch:
+  host: "meilisearch"
+  apiKey: "${MEILI_MASTER_KEY}"
+  port: 7700
+redis:
+  host: "redis"
+  password: "${REDIS_PASSWORD}"
+  port: 6379
+  db: 1
+emailSmtp:
+  smtp: "smtp.invalid"
+  email: "integration@example.test"
+  password: "${SMTP_PASSWORD}"
+  port: 465
+database:
+  driverName: "postgres"
+  host: "postgresql"
+  username: "postgres"
+  password: "${POSTGRES_PASSWORD}"
+  port: 5432
+  baseName: "stellar_beacon"
+oss:
+  provider: "minio"
+  endPoint: "http://minio:9000"
+  region: "us-east-1"
+  publicUrl: "https://example.invalid/removed"
+  publicRead: true
+  accessKeyID: "${MINIO_ROOT_USER}"
+  accessKeySecret: "${MINIO_ROOT_PASSWORD}"
+  bucketName: "demo-user-integration"
+logger:
+  env: integration
