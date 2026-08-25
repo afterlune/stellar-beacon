@@ -399,9 +399,8 @@ func clearLoginFailures(ctx context.Context, username, ip string) error {
 
 func AuthorizationFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 只对后台接口进行认证检查
-		if !isAdminPath(c.Request.URL.Path) {
-			// 前台接口不限制，直接放行
+		// 后台接口和登出接口需要认证；其余前台接口保持公开。
+		if !isAdminPath(c.Request.URL.Path) && c.Request.URL.Path != "/users/logout" {
 			c.Next()
 			return
 		}

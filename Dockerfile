@@ -23,6 +23,7 @@ WORKDIR /app
 COPY --from=builder /build/benetnasch /app/
 
 COPY ./resource /app/resource
+COPY ./docs /app/docs
 
 ENV GIN_MODE=release \
     PORT=7777
