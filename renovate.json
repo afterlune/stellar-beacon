@@ -1,20 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "enabledManagers": ["dockerfile", "docker-compose"],
+  "enabledManagers": ["dockerfile", "docker-compose", "gomod", "npm"],
   "schedule": ["before 5am on monday"],
   "packageRules": [
     {
+      "matchManagers": ["dockerfile", "docker-compose"],
       "matchDatasources": ["docker"],
       "matchPackageNames": [
         "postgres",
         "redis",
         "caddy",
+        "golang",
         "getmeili/meilisearch",
+        "minio/minio",
         "alpine"
       ],
       "automerge": false,
-      "pinDigests": false
+      "pinDigests": true
     }
   ]
 }

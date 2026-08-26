@@ -17,7 +17,7 @@ axios.interceptors.response.use(
         type: 'warning'
       })
       location.href = '/'
-      return
+      return Promise.reject(new Error('登录已过期'))
     }
     switch (response.data.code) {
       case 50000:
