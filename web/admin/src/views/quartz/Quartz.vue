@@ -127,8 +127,8 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="任务分组" prop="jobName">
-              <el-input v-model="job.jobGroup" placeholder="请输入任务名称" />
+            <el-form-item label="任务分组" prop="jobGroup">
+              <el-input v-model="job.jobGroup" placeholder="请输入任务分组" />
             </el-form-item>
           </el-col>
           <el-col :span="24">
@@ -238,10 +238,10 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="执行策略：">
-              <div v-if="job.concurrent === 0">默认策略</div>
-              <div v-else-if="job.concurrent === 1">立即执行</div>
-              <div v-else-if="job.concurrent === 2">执行一次</div>
-              <div v-else-if="job.concurrent === 3">放弃执行</div>
+              <div v-if="job.misfirePolicy === '0' || job.misfirePolicy === 0">默认策略</div>
+              <div v-else-if="job.misfirePolicy === '1' || job.misfirePolicy === 1">立即执行</div>
+              <div v-else-if="job.misfirePolicy === '2' || job.misfirePolicy === 2">执行一次</div>
+              <div v-else-if="job.misfirePolicy === '3' || job.misfirePolicy === 3">放弃执行</div>
             </el-form-item>
           </el-col>
         </el-row>

@@ -21,7 +21,7 @@
     <el-table border :data="userList" v-loading="loading">
       <el-table-column prop="linkAvatar" label="头像" align="center" width="100">
         <template slot-scope="scope">
-          <img :src="scope.row.avatar" width="40" height="40" />
+          <img :src="safeAvatarImageUrl(scope.row.avatar)" width="40" height="40" alt="用户头像" />
         </template>
       </el-table-column>
       <el-table-column prop="nickname" label="昵称" align="center" width="140" />
@@ -103,6 +103,8 @@
 </template>
 
 <script>
+import { safeAvatarImageUrl as normalizeAvatar } from '@/assets/js/image'
+
 export default {
   created() {
     this.current = this.$store.state.pageState.user
@@ -138,6 +140,9 @@ export default {
     }
   },
   methods: {
+    safeAvatarImageUrl(url) {
+      return normalizeAvatar(url)
+    },
     searchUsers() {
       this.current = 1
       this.listUsers()

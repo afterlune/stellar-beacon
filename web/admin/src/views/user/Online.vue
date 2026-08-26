@@ -19,7 +19,7 @@
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column prop="avatar" label="头像" align="center" width="100">
         <template slot-scope="scope">
-          <img :src="scope.row.avatar" width="40" height="40" />
+          <img :src="safeAvatarImageUrl(scope.row.avatar)" width="40" height="40" alt="用户头像" />
         </template>
       </el-table-column>
       <el-table-column prop="nickname" label="昵称" align="center" />
@@ -56,6 +56,7 @@
 
 <script>
 import router from '@/router'
+import { safeAvatarImageUrl as normalizeAvatar } from '@/assets/js/image'
 
 export default {
   created() {
@@ -74,6 +75,9 @@ export default {
     }
   },
   methods: {
+    safeAvatarImageUrl(url) {
+      return normalizeAvatar(url)
+    },
     listOnlineUsers() {
       this.axios
         .get('/api/admin/users/online', {

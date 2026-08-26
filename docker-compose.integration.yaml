@@ -10,6 +10,7 @@ services:
     volumes:
       - integration-postgres-data:/var/lib/postgresql/data
       - ./docs/benetnasch.sql:/docker-entrypoint-initdb.d/001-benetnasch.sql:ro
+      - ./scripts/integration-repair-sequences.sql:/docker-entrypoint-initdb.d/002-repair-sequences.sql:ro
     ports:
       - "15432:5432"
     healthcheck:

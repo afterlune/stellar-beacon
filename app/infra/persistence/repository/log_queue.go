@@ -5,9 +5,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const (
@@ -159,8 +162,12 @@ func (q *LogQueue) retry(kind string, save func() error) {
 		if err = save(); err == nil {
 			return
 		}
+		if !isRetryableLogError(err) {
+			slog.Error("persist log failed", "kind", kind, "attempt", attempt, "retryable", false, "error", err)
+			return
+		}
 		if attempt == logRetryAttempts {
-			slog.Error("persist log failed after retries", "kind", kind, "error", err)
+			slog.Error("persist log failed after retries", "kind", kind, "attempts", attempt, "retryable", true, "error", err)
 			return
 		}
 		delay := time.Duration(1<<(attempt-1)) * 100 * time.Millisecond
@@ -174,6 +181,32 @@ func (q *LogQueue) retry(kind string, save func() error) {
 			return
 		}
 	}
+}
+
+func isRetryableLogError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		code := string(pqErr.Code)
+		if len(code) < 2 {
+			return true
+		}
+		switch code[:2] {
+		case "08", "40", "53", "57", "58":
+			return true
+		default:
+			return false
+		}
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout() || netErr.Temporary()
+	}
+	return true
 }
 
 // Stop closes the queue, drains pending entries, and waits up to ctx's deadline.

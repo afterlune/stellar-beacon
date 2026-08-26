@@ -67,21 +67,13 @@
 
 ## 3.打包运行前端项目
 
-1. 根据部署环境修改 `web/blog/src/config/config.ts` 和 `web/admin/src/assets/js/config.js`
-
-   ```typescript
-     captcha: {
-       TENCENT_CAPTCHA: '你自己的天御验证码'
-     },
-   ```
-
-2. 如果你的网站没有打算使用https,将下面这一行代码给注释掉
+1. 如果你的网站没有打算使用https,将下面这一行代码给注释掉
 
    ```html
    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
    ```
 
-3. 分别到 `web/blog` 和 `web/admin` 下面执行如下命令 (推荐关闭vscode的Eslint,本项目没有遵循Eslint的规范)
+2. 分别到 `web/blog` 和 `web/admin` 下面执行如下命令 (推荐关闭vscode的Eslint,本项目没有遵循Eslint的规范)
 
    如果下列命令执行报错，可以尝试替换版本
 
@@ -92,20 +84,30 @@
    npm run build
    ```
 
-5. 构建结果分别位于 `web/blog/dist` 和 `web/admin/dist`。
+3. 构建结果分别位于 `web/blog/dist` 和 `web/admin/dist`。
 
-6. 将前台构建结果复制到 Caddy 静态目录的 `blog` 子目录。
+4. 将前台构建结果复制到 Caddy 静态目录的 `blog` 子目录。
 
-7. 将后台构建结果复制到 Caddy 静态目录的 `admin` 子目录。
+5. 将后台构建结果复制到 Caddy 静态目录的 `admin` 子目录。
 
 ****
 
 ## 4.隔离前后端联调
 
-联调使用独立的 Compose 项目 `benetnasch-integration`，包含 PostgreSQL、Redis、Meilisearch、MinIO、后端和临时 Caddy，端口为 `18080`（博客）、`18008`（管理端）、`17777`（后端）、`17700`（Meili）和 `19000/19001`（MinIO）。它不会修改现有容器、现有 Caddy 配置或现有数据卷。
+联调使用独立的 Compose 项目 `benetnasch-integration`，包含 PostgreSQL、Redis、Meilisearch、MinIO、后端和临时 Caddy。它不会修改现有容器、现有 Caddy 配置或现有数据卷。
+
+隔离联调期间请访问 `http://127.0.0.1:18080`（博客）和 `http://127.0.0.1:18008`（管理端）。主 Caddy 的 `80/8008` 端口属于另一套生产链路，不用于隔离联调。
+
+一键构建、同步、初始化并验收：
 
 ```powershell
 Copy-Item .env.integration.example .env.integration
+pwsh ./scripts/integration-deploy.ps1
+```
+
+如需分步执行，端口为 `18080`（博客）、`18008`（管理端）、`17777`（后端）、`17700`（Meili）和 `19000/19001`（MinIO）。
+
+```powershell
 pwsh ./scripts/integration-up.ps1
 pwsh ./scripts/integration-seed.ps1
 pwsh ./scripts/integration-smoke.ps1

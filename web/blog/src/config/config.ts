@@ -1,7 +1,4 @@
 export default {
-  captcha: {
-    TENCENT_CAPTCHA: '腾讯天域验证码服务'
-  },
   routes: [
     {
       name: 'Home',

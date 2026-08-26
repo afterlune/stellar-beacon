@@ -2,7 +2,9 @@
   <el-card class="main-card">
     <div class="title">{{ this.$route.name }}</div>
     <div class="album-info">
-      <el-image fit="cover" class="album-cover" :src="albumInfo.albumCover" />
+      <el-image fit="cover" class="album-cover" :src="safePhotoImageUrl(albumInfo.albumCover)">
+        <div slot="error" class="image-slot">图片不可用</div>
+      </el-image>
       <div class="album-detail">
         <div style="margin-bottom: 0.6rem">
           <span class="album-name">{{ albumInfo.albumName }}</span>
@@ -58,7 +60,13 @@
                   </el-dropdown-menu>
                 </el-dropdown>
               </div>
-              <el-image fit="cover" class="photo-img" :src="item.photoSrc" :preview-photoSrc-list="photos" />
+              <el-image
+                fit="cover"
+                class="photo-img"
+                :src="safePhotoImageUrl(item.photoSrc)"
+                :preview-src-list="previewPhotos">
+                <div slot="error" class="image-slot">图片不可用</div>
+              </el-image>
               <div class="photo-name">{{ item.photoName }}</div>
             </div>
           </el-checkbox>
@@ -147,7 +155,9 @@
             <template v-for="item of albumList">
               <el-radio v-if="item.id != albumInfo.id" :key="item.id" :label="item.id" style="margin-bottom: 1rem">
                 <div class="album-check">
-                  <el-image fit="cover" class="album-check-cover" :src="item.albumCover" />
+                  <el-image fit="cover" class="album-check-cover" :src="safePhotoImageUrl(item.albumCover)">
+                    <div slot="error" class="image-slot">图片不可用</div>
+                  </el-image>
                   <div style="margin-left: 0.5rem">{{ item.albumName }}</div>
                 </div>
               </el-radio>
@@ -165,6 +175,7 @@
 
 <script>
 import * as imageConversion from 'image-conversion'
+import { safePhotoImageUrl } from '@/assets/js/image'
 export default {
   created() {
     this.getAlbumInfo()
@@ -205,15 +216,18 @@ export default {
     }
   },
   methods: {
+    safePhotoImageUrl(url) {
+      return safePhotoImageUrl(url)
+    },
     getAlbumInfo() {
       this.axios.get('/api/admin/photos/albums/' + this.$route.params.albumId + '/info').then(({ data }) => {
-        this.albumInfo = data.data
+        const album = data && data.data ? data.data : {}
+        this.albumInfo = { ...this.albumInfo, ...album }
       })
     },
     listAlbums() {
       this.axios.get('/api/admin/photos/albums/info').then(({ data }) => {
-        this.albumList = data.data
-        console.log(this.albumList)
+        this.albumList = data && Array.isArray(data.data) ? data.data : []
       })
     },
     listPhotos() {
@@ -227,8 +241,9 @@ export default {
           }
         })
         .then(({ data }) => {
-          this.photos = data.data.records
-          this.count = data.data.count
+          const page = data && data.data ? data.data : {}
+          this.photos = Array.isArray(page.records) ? page.records : []
+          this.count = Number(page.count) || 0
           this.loading = false
         })
     },
@@ -370,6 +385,11 @@ export default {
       this.batchDeletePhoto = false
     }
   },
+  computed: {
+    previewPhotos() {
+      return this.photos.map((item) => safePhotoImageUrl(item.photoSrc))
+    }
+  },
   watch: {
     photos() {
       this.photoIds = []
@@ -440,6 +460,15 @@ export default {
   font-size: 14px;
   margin-top: 0.3rem;
   text-align: center;
+}
+.image-slot {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  background: #eef3f8;
+  font-size: 13px;
 }
 .upload-container {
   height: 400px;

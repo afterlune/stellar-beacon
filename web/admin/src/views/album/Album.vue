@@ -38,7 +38,9 @@
             <div>{{ item.photoCount }}</div>
             <i v-if="item.status == 2" class="iconfont el-icon-mymima" />
           </div>
-          <el-image fit="cover" class="album-cover" :src="item.albumCover" />
+          <el-image fit="cover" class="album-cover" :src="safePhotoImageUrl(item.albumCover)">
+            <div slot="error" class="image-slot">图片不可用</div>
+          </el-image>
           <div class="album-name">{{ item.albumName }}</div>
         </div>
       </el-col>
@@ -72,7 +74,7 @@
             :on-success="uploadCover">
             <i class="el-icon-upload" v-if="albumForum.albumCover == ''" />
             <div class="el-upload__text" v-if="albumForum.albumCover == ''">将文件拖到此处，或<em>点击上传</em></div>
-            <img v-else :src="albumForum.albumCover" width="360px" height="180px" />
+            <img v-else :src="safePhotoImageUrl(albumForum.albumCover)" width="360px" height="180px" alt="相册封面" />
           </el-upload>
         </el-form-item>
         <el-form-item label="发布形式">
@@ -100,6 +102,7 @@
 
 <script>
 import * as imageConversion from 'image-conversion'
+import { safePhotoImageUrl } from '@/assets/js/image'
 export default {
   created() {
     this.listAlbums()
@@ -125,6 +128,9 @@ export default {
     }
   },
   methods: {
+    safePhotoImageUrl(url) {
+      return safePhotoImageUrl(url)
+    },
     openModel(item) {
       if (item) {
         console.log(item)
@@ -158,8 +164,9 @@ export default {
           }
         })
         .then(({ data }) => {
-          this.albums = data.data.records
-          this.count = data.data.count
+          const page = data && data.data ? data.data : {}
+          this.albums = Array.isArray(page.records) ? page.records : []
+          this.count = Number(page.count) || 0
           this.loading = false
         })
     },
@@ -286,6 +293,15 @@ export default {
   position: relative;
   cursor: pointer;
   margin-bottom: 1rem;
+}
+.image-slot {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  background: #eef3f8;
+  font-size: 13px;
 }
 .album-opreation {
   position: absolute;

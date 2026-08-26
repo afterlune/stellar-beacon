@@ -68,6 +68,10 @@ jobs:
         shell: bash
         run: bash scripts/check-service-constructor-boundary.sh
 
+      - name: Check removed Tencent CAPTCHA integration
+        shell: bash
+        run: bash scripts/check-no-tencent-captcha.sh
+
       - name: Vet
         run: go vet ./...
 

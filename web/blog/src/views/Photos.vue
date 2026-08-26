@@ -25,7 +25,7 @@
                   v-for="(item, index) of photos"
                   class="photo"
                   :key="index"
-                  :src="item"
+                  :src="safePhotoImageUrl(item)"
                   @click="handlePreview(index)" />
               </div>
             </div>
@@ -49,6 +49,8 @@ import { Sidebar, Profile } from '../components/Sidebar'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import { v3ImgPreviewFn } from 'v3-img-preview'
 import api from '@/api/api'
+import { pageData } from '@/utils/page'
+import { safePhotoImageUrl } from '@/utils/image'
 
 export default defineComponent({
   name: 'Photos',
@@ -82,11 +84,14 @@ export default defineComponent({
         size: reactiveData.size
       }
       api.getPhotosBuAlbumId(reactiveData.albumId, params).then(({ data }) => {
-        if (data.data.photos.length > 0) {
+        const album = pageData(data)
+        const photos = Array.isArray(album.photos) ? album.photos : []
+        if (photos.length > 0) {
           reactiveData.current++
-          reactiveData.photoAlbumName = data.data.photoAlbumName
-          reactiveData.photos.push(...data.data.photos)
+          reactiveData.photoAlbumName = album.photoAlbumName || '相册'
+          reactiveData.photos.push(...photos.map((photo: any) => safePhotoImageUrl(photo)))
         } else {
+          reactiveData.photoAlbumName = album.photoAlbumName || '相册不存在'
           reactiveData.noResult = true
         }
       })
@@ -94,6 +99,7 @@ export default defineComponent({
     return {
       ...toRefs(reactiveData),
       handlePreview,
+      safePhotoImageUrl,
       loadDataFromServer,
       isMobile: computed(() => commonStore.isMobile),
       t

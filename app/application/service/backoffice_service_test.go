@@ -81,6 +81,26 @@ func TestMenuServiceBuildsStableTreeFromPortRecords(t *testing.T) {
 	}
 }
 
+func TestMenuServicePreservesUserMenuPaths(t *testing.T) {
+	service := NewMenuService(&fakeMenuRepository{menus: []entity.TMenu{
+		{Id: 1, Name: "home", Path: "/", Component: "/home/Home.vue", ParentId: 0, OrderNum: 1},
+		{Id: 2, Name: "articles", Path: "/article-submenu", Component: "Layout", ParentId: 0, OrderNum: 2},
+		{Id: 3, Name: "article list", Path: "/article-list", Component: "/article/ArticleList.vue", ParentId: 2, OrderNum: 1},
+	}})
+
+	result := service.ListUserMenus(1)
+	menus, ok := result.Data.([]model.UserMenuDTO)
+	if !ok || len(menus) != 2 {
+		t.Fatalf("unexpected user menus: %#v", result.Data)
+	}
+	if menus[0].Path != "/" || len(menus[0].Children) != 1 || menus[0].Children[0].Path != "" {
+		t.Fatalf("home route was not normalized: %#v", menus[0])
+	}
+	if menus[1].Path != "/article-submenu" || len(menus[1].Children) != 1 || menus[1].Children[0].Path != "/article-list" {
+		t.Fatalf("nested route was not preserved: %#v", menus[1])
+	}
+}
+
 type fakeRoleRepository struct{ existing entity.TRole }
 
 func (f *fakeRoleRepository) ListUserRoles(context.Context) ([]entity.TRole, error) { return nil, nil }

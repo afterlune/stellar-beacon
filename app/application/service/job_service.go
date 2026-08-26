@@ -1,7 +1,7 @@
 package service
 
 import (
-	"benetnasch/app/application/support"
+	"benetnasch/app/domain/entity"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"container/list"
@@ -73,9 +73,7 @@ func (j *MyJobService) GetJobById(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
-	var dto model.JobDTO
-	support.StructCopy(job, &dto)
-	return model.ResultOkWithData(dto)
+	return model.ResultOkWithData(jobDTO(job))
 }
 
 func (j *MyJobService) ListJobs(c *gin.Context) model.ResultVO {
@@ -95,8 +93,10 @@ func (j *MyJobService) ListJobs(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
-	var dtos []model.JobDTO
-	support.StructCopy(jobs, &dtos)
+	dtos := make([]model.JobDTO, 0, len(jobs))
+	for _, job := range jobs {
+		dtos = append(dtos, jobDTO(job))
+	}
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -116,3 +116,18 @@ func (j *MyJobService) ListJobGroup() model.ResultVO {
 }
 
 func (j *MyJobService) checkCronIsValid(vo model.JobVO) {}
+
+func jobDTO(job entity.TJob) model.JobDTO {
+	return model.JobDTO{
+		Id:             job.Id,
+		JobName:        job.JobName,
+		JobGroup:       job.JobGroup,
+		InvokeTarget:   job.InvokeTarget,
+		CronExpression: job.CronExpression,
+		MisfirePolicy:  strconv.Itoa(job.MisfirePolicy),
+		Concurrent:     job.Concurrent,
+		Status:         job.Status,
+		CreateTime:     job.CreateTime,
+		Remark:         job.Remark,
+	}
+}

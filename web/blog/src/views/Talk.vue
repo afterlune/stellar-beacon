@@ -27,7 +27,7 @@
                   <el-col :md="4" v-for="(img, index) of talk.imgs" :key="index">
                     <el-image
                       class="images-talks"
-                      :src="img"
+                      :src="safeTalkImageUrl(img)"
                       aspect-ratio="1"
                       max-height="200"
                       @click.prevent="handlePreview(img)" />
@@ -60,6 +60,8 @@ import { useCommentStore } from '@/stores/comment'
 import { v3ImgPreviewFn } from 'v3-img-preview'
 import emitter from '@/utils/mitt'
 import api from '@/api/api'
+import { pageCount, pageRecords } from '@/utils/page'
+import { safeTalkImageUrl } from '@/utils/image'
 
 export default defineComponent({
   name: 'talks',
@@ -115,7 +117,8 @@ export default defineComponent({
           return
         }
         reactiveData.talk = data.data
-        if (reactiveData.talk.imgs) {
+        if (Array.isArray(reactiveData.talk.imgs)) {
+          reactiveData.talk.imgs = reactiveData.talk.imgs.map((image: any) => safeTalkImageUrl(image))
           reactiveData.images.push(...reactiveData.talk.imgs)
         }
       })
@@ -128,13 +131,14 @@ export default defineComponent({
         size: pageInfo.size
       }
       api.getComments(params).then(({ data }) => {
+        const records = pageRecords(data)
         if (reactiveData.isReload) {
-          reactiveData.comments = data.data.records
+          reactiveData.comments = records
           reactiveData.isReload = false
         } else {
-          reactiveData.comments.push(...data.data.records)
+          reactiveData.comments.push(...records)
         }
-        if (data.data.count <= reactiveData.comments.length) {
+        if (pageCount(data) <= reactiveData.comments.length) {
           reactiveData.haveMore = false
         } else {
           reactiveData.haveMore = true
@@ -161,6 +165,7 @@ export default defineComponent({
     return {
       ...toRefs(reactiveData),
       handlePreview,
+      safeTalkImageUrl,
       formatTime,
       t
     }

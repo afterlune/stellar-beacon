@@ -9,24 +9,31 @@
       text-color="#BFCBD9"
       active-text-color="#409EFF">
       <template v-for="route of this.$store.state.userMenus">
-        <template v-if="route.name && route.children && !route.hidden">
+        <template
+          v-if="
+            route.name &&
+            route.children &&
+            route.children.length &&
+            !(route.children.length === 1 && route.children[0].path === '') &&
+            !route.hidden
+          ">
           <el-submenu :key="route.path" :index="route.path">
             <template slot="title">
               <i :class="route.icon" />
               <span>{{ route.name }}</span>
             </template>
-            <template v-for="(item, index) of route.children">
-              <el-menu-item v-if="!item.hidden" :key="index" :index="item.path">
+            <template v-for="item of route.children">
+              <el-menu-item v-if="!item.hidden" :key="item.path || item.name" :index="item.path">
                 <i :class="item.icon" />
                 <span slot="title">{{ item.name }}</span>
               </el-menu-item>
             </template>
           </el-submenu>
         </template>
-        <template v-else-if="!route.hidden">
+        <template v-else-if="!route.hidden && route.path">
           <el-menu-item :index="route.path" :key="route.path">
-            <i :class="route.children[0].icon" />
-            <span slot="title">{{ route.children[0].name }}</span>
+            <i :class="route.children && route.children.length ? route.children[0].icon : route.icon" />
+            <span slot="title">{{ route.children && route.children.length ? route.children[0].name : route.name }}</span>
           </el-menu-item>
         </template>
       </template>

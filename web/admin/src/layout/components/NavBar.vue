@@ -15,7 +15,7 @@
           <i class="iconfont el-icon-myicwindowzoom48px" />
         </div>
         <el-dropdown @command="handleCommand">
-          <el-avatar :size="40" :src="this.$store.state.userInfo.avatar" />
+          <el-avatar :size="40" :src="avatarUrl" />
           <i class="el-icon-caret-bottom" />
           <el-dropdown-menu slot="dropdown">
             <el-dropdown-item command="setting"> <i class="el-icon-s-custom" />个人中心 </el-dropdown-item>
@@ -40,6 +40,8 @@
 
 <script>
 import { resetRouter } from '@/router'
+import { resetMenuState } from '@/assets/js/menu-state'
+import { safeAvatarImageUrl } from '@/assets/js/image'
 export default {
   created() {
     let matched = this.$route.matched.filter((item) => item.name)
@@ -79,6 +81,7 @@ export default {
         this.axios.post('/api/users/logout').then(({ data }) => {
           this.$store.commit('logout')
           this.$store.commit('resetTab')
+          resetMenuState()
           resetRouter()
           this.$router.push({ path: '/login' })
         })
@@ -125,6 +128,10 @@ export default {
     },
     isFold() {
       return this.$store.state.collapse ? 'el-icon-s-unfold' : 'el-icon-s-fold'
+    },
+    avatarUrl() {
+      const userInfo = this.$store.state.userInfo || {}
+      return safeAvatarImageUrl(userInfo.avatar)
     }
   }
 }

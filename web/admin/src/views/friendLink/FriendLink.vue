@@ -28,7 +28,7 @@
       <el-table-column type="selection" width="55" />
       <el-table-column prop="linkAvatar" label="链接头像" align="center" width="180">
         <template slot-scope="scope">
-          <img :src="scope.row.linkAvatar" width="40" height="40" />
+          <img :src="safeAvatarImageUrl(scope.row.linkAvatar)" width="40" height="40" alt="友链头像" />
         </template>
       </el-table-column>
       <el-table-column prop="linkName" label="链接名" align="center" />
@@ -92,6 +92,8 @@
 </template>
 
 <script>
+import { safeAvatarImageUrl as normalizeAvatar } from '@/assets/js/image'
+
 export default {
   created() {
     this.listLinks()
@@ -117,6 +119,9 @@ export default {
     }
   },
   methods: {
+    safeAvatarImageUrl(url) {
+      return normalizeAvatar(url)
+    },
     selectionChange(linkList) {
       this.linkIdList = []
       linkList.forEach((item) => {

@@ -77,7 +77,7 @@ func (s *MySiteInfoRepo) ListArticleRank(ctx context.Context, ids []int) ([]port
 		return nil, err
 	}
 	var articles []port.ArticleRank
-	if err := session.Select("id, article_title").In("id", ids).Find(&articles); err != nil {
+	if err := session.Table("t_article").Select("id, article_title").In("id", ids).Find(&articles); err != nil {
 		return nil, apperrors.Unavailable("site.article_rank", err)
 	}
 	return articles, nil

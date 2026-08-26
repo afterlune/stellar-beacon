@@ -44,7 +44,7 @@
       <el-table-column type="selection" width="55" />
       <el-table-column prop="avatar" label="头像" align="center" width="120">
         <template slot-scope="scope">
-          <img :src="scope.row.avatar" width="40" height="40" />
+          <img :src="safeAvatarImageUrl(scope.row.avatar)" width="40" height="40" alt="用户头像" />
         </template>
       </el-table-column>
       <el-table-column prop="nickname" label="评论人" align="center" width="120" />
@@ -128,6 +128,8 @@
 </template>
 
 <script>
+import { safeAvatarImageUrl as normalizeAvatar } from '@/assets/js/image'
+
 export default {
   created() {
     this.current = this.$store.state.pageState.comment
@@ -166,6 +168,9 @@ export default {
     }
   },
   methods: {
+    safeAvatarImageUrl(url) {
+      return normalizeAvatar(url)
+    },
     selectionChange(comments) {
       this.commentIds = []
       comments.forEach((item) => {

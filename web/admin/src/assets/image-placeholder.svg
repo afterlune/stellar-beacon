@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-labelledby="title desc">
+  <title id="title">图片不可用</title>
+  <desc id="desc">图片不可用占位图</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef3f8" />
+      <stop offset="1" stop-color="#d8e1eb" />
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="16" fill="url(#background)" />
+  <g fill="none" stroke="#7b8b9d" stroke-linecap="round" stroke-linejoin="round" stroke-width="10">
+    <rect x="206" y="92" width="228" height="176" rx="14" />
+    <path d="m226 238 54-55 38 38 29-30 67 65" />
+    <circle cx="349" cy="145" r="17" />
+  </g>
+  <text x="320" y="314" fill="#64748b" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">图片不可用</text>
+</svg>

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 func TestLogQueueRetriesAndDrainsOnStop(t *testing.T) {
@@ -36,5 +38,22 @@ func TestLogQueueRetriesAndDrainsOnStop(t *testing.T) {
 	}
 	if attempts != logRetryAttempts {
 		t.Fatalf("persist attempts = %d, want %d", attempts, logRetryAttempts)
+	}
+}
+
+func TestLogQueueDoesNotRetryPermanentDatabaseErrors(t *testing.T) {
+	attempts := 0
+	queue := newLogQueue(
+		context.Background(),
+		func(context.Context, entity.TOperationLog) error {
+			attempts++
+			return &pq.Error{Code: "23505", Message: "duplicate key"}
+		},
+		func(context.Context, entity.TExceptionLog) error { return nil },
+	)
+
+	queue.retry("operation", func() error { return queue.saveOpt(queue.ctx, entity.TOperationLog{}) })
+	if attempts != 1 {
+		t.Fatalf("permanent database error attempts = %d, want 1", attempts)
 	}
 }

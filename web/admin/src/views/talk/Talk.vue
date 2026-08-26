@@ -55,6 +55,7 @@
 <script>
 import * as imageConversion from 'image-conversion'
 import Editor from '@/components/Editor.vue'
+import { safeTalkImageUrl } from '@/assets/js/image'
 export default {
   components: {
     Editor
@@ -65,7 +66,7 @@ export default {
         this.talk = data.data
         if (data.data.imgs) {
           data.data.imgs.forEach((item) => {
-            this.uploads.push({ url: item })
+            this.uploads.push({ url: safeTalkImageUrl(item), originalUrl: item, status: 'success' })
           })
         }
       })
@@ -94,7 +95,7 @@ export default {
     },
     handleRemove(file) {
       this.uploads.forEach((item, index) => {
-        if (item.url == file.url) {
+        if ((item.originalUrl || item.url) == (file.originalUrl || file.url)) {
           this.uploads.splice(index, 1)
         }
       })
@@ -120,7 +121,7 @@ export default {
       if (this.uploads.length > 0) {
         var img = []
         this.uploads.forEach((item) => {
-          img.push(item.url)
+          img.push(item.originalUrl || item.url)
         })
         this.talk.images = JSON.stringify(img)
       } else {

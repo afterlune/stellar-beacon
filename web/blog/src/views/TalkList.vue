@@ -34,7 +34,7 @@
                 <el-col :md="4" v-for="(img, index) of item.imgs" :key="index">
                   <el-image
                     class="images-items"
-                    :src="img"
+                    :src="safeTalkImageUrl(img)"
                     aspect-ratio="1"
                     max-height="200"
                     @click.stop="handlePreview(img)" />
@@ -68,6 +68,7 @@ import Avatar from '../components/Avatar.vue'
 import { v3ImgPreviewFn } from 'v3-img-preview'
 import { useRouter } from 'vue-router'
 import api from '@/api/api'
+import { safeTalkImageUrl } from '@/utils/image'
 
 export default defineComponent({
   name: 'talkList',
@@ -96,13 +97,17 @@ export default defineComponent({
         size: pagination.size
       }
       api.getTalks(params).then(({ data }) => {
-        reactiveData.talks = data.data.records
-        pagination.total = data.data.count
-        reactiveData.talks.forEach((item: any) => {
-          if (item.imgs) {
+        const page = data && data.data ? data.data : {}
+        const records = Array.isArray(page.records) ? page.records : []
+        reactiveData.images = []
+        records.forEach((item: any) => {
+          if (Array.isArray(item.imgs)) {
+            item.imgs = item.imgs.map((image: any) => safeTalkImageUrl(image))
             reactiveData.images.push(...item.imgs)
           }
         })
+        reactiveData.talks = records
+        pagination.total = Number(page.count) || 0
       })
     }
     const formatTime = (data: any): string => {
@@ -131,6 +136,7 @@ export default defineComponent({
       formatTime,
       pageChangeHanlder,
       handlePreview,
+      safeTalkImageUrl,
       toTalk,
       t
     }

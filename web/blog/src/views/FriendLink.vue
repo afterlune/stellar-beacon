@@ -13,7 +13,7 @@
                 <el-col :span="8" :xs="{ span: 20, offset: 2 }" class="mb-3">
                   <el-card shadow="never" class="shadow-md">
                     <div class="block">
-                      <el-avatar :size="60" :src="link.linkAvatar" />
+                    <el-avatar :size="60" :src="safeAvatarImageUrl(link.linkAvatar)" />
                     </div>
                     <div class="info">
                       <a :href="link.linkAddress" target="_blank">
@@ -52,6 +52,8 @@ import { Comment } from '../components/Comment'
 import { useCommentStore } from '@/stores/comment'
 import emitter from '@/utils/mitt'
 import api from '@/api/api'
+import { pageCount, pageRecords } from '@/utils/page'
+import { safeAvatarImageUrl } from '@/utils/image'
 
 export default defineComponent({
   name: 'FriendLink',
@@ -95,7 +97,7 @@ export default defineComponent({
     })
     const fetchLinks = () => {
       api.getFriendLink().then(({ data }) => {
-        reactiveData.links = data.data
+        reactiveData.links = Array.isArray(data.data) ? data.data : []
       })
     }
     const fetchComments = () => {
@@ -106,13 +108,14 @@ export default defineComponent({
         size: pageInfo.size
       }
       api.getComments(params).then(({ data }) => {
+        const records = pageRecords(data)
         if (reactiveData.isReload) {
-          reactiveData.comments = data.data.records
+          reactiveData.comments = records
           reactiveData.isReload = false
         } else {
-          reactiveData.comments.push(...data.data.records)
+          reactiveData.comments.push(...records)
         }
-        if (data.data.count <= reactiveData.comments.length) {
+        if (pageCount(data) <= reactiveData.comments.length) {
           reactiveData.haveMore = false
         } else {
           reactiveData.haveMore = true
@@ -127,6 +130,7 @@ export default defineComponent({
     }
     return {
       ...toRefs(reactiveData),
+      safeAvatarImageUrl,
       t
     }
   }

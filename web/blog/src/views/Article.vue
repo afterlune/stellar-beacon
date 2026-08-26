@@ -36,8 +36,9 @@
           <div class="post-footer" v-if="article.author">
             <img
               class="hover:opacity-50 cursor-pointer"
-              v-lazy="article.author.avatar || ''"
+              v-lazy="article.author.avatar || avatarPlaceholder"
               alt="author avatar"
+              @error="handleImageError"
               @click="handleAuthorClick(article.author.website)" />
             <span class="text-white opacity-80">
               <strong
@@ -164,6 +165,8 @@ import emitter from '@/utils/mitt'
 import { v3ImgPreviewFn } from 'v3-img-preview'
 import api from '@/api/api'
 import markdownToHtml from '@/utils/markdown'
+import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
+import { pageCount, pageRecords } from '@/utils/page'
 
 export default defineComponent({
   name: 'Article',
@@ -331,13 +334,14 @@ export default defineComponent({
         size: pageInfo.size
       }
       api.getComments(params).then(({ data }) => {
+        const records = pageRecords(data)
         if (reactiveData.isReload) {
-          reactiveData.comments = data.data.records
+          reactiveData.comments = records
           reactiveData.isReload = false
         } else {
-          reactiveData.comments.push(...data.data.records)
+          reactiveData.comments.push(...records)
         }
-        if (data.data.count <= reactiveData.comments.length) {
+        if (pageCount(data) <= reactiveData.comments.length) {
           reactiveData.haveMore = false
         } else {
           reactiveData.haveMore = true
@@ -353,6 +357,12 @@ export default defineComponent({
     const handleAuthorClick = (link: string) => {
       if (link === '') link = window.location.href
       window.location.href = link
+    }
+    const handleImageError = (event: Event) => {
+      const image = event.target as HTMLImageElement
+      if (image.dataset.fallbackApplied === 'true') return
+      image.dataset.fallbackApplied = 'true'
+      image.src = avatarPlaceholder
     }
     const toPageTop = () => {
       window.scrollTo({
@@ -370,6 +380,8 @@ export default defineComponent({
       ...toRefs(reactiveData),
       isMobile: computed(() => commonStore.isMobile),
       handleAuthorClick,
+      handleImageError,
+      avatarPlaceholder,
       loading,
       t
     }

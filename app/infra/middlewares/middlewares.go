@@ -17,11 +17,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/casbin/casbin/v2"
 	model2 "github.com/casbin/casbin/v2/model"
@@ -33,6 +35,61 @@ import (
 type bodyLog struct {
 	gin.ResponseWriter
 	body *bytes.Buffer
+}
+
+const (
+	operationLogRequestParamLimit = 2000
+	operationLogResponseLimit     = 10000
+)
+
+func requestLogPayload(req *http.Request, body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+
+	contentType := ""
+	if req != nil {
+		contentType = req.Header.Get("Content-Type")
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || mediaType == "" {
+		mediaType = strings.TrimSpace(strings.Split(contentType, ";")[0])
+	}
+	if mediaType == "" {
+		mediaType = "unknown"
+	}
+
+	if isBinaryContentType(mediaType) || !utf8.Valid(body) {
+		return fmt.Sprintf("[request body omitted: content-type=%s, bytes=%d]", mediaType, len(body))
+	}
+	return truncateLogText(string(body), operationLogRequestParamLimit)
+}
+
+func isBinaryContentType(contentType string) bool {
+	contentType = strings.ToLower(contentType)
+	return strings.HasPrefix(contentType, "multipart/") ||
+		strings.HasPrefix(contentType, "image/") ||
+		strings.HasPrefix(contentType, "audio/") ||
+		strings.HasPrefix(contentType, "video/") ||
+		contentType == "application/octet-stream" ||
+		contentType == "application/pdf" ||
+		contentType == "application/zip"
+}
+
+func truncateLogText(value string, limit int) string {
+	if !utf8.ValidString(value) {
+		return "[text omitted: invalid UTF-8]"
+	}
+	if len(value) <= limit {
+		return value
+	}
+
+	const suffix = "...[truncated]"
+	cut := limit - len(suffix)
+	for cut > 0 && !utf8.ValidString(value[:cut]) {
+		cut--
+	}
+	return value[:cut] + suffix
 }
 
 func (w bodyLog) Write(b []byte) (int, error) {
@@ -164,14 +221,15 @@ func Log() gin.HandlerFunc {
 			} else {
 				optType = "删除"
 			}
-			resData := blw.body.String()
+			requestParam := requestLogPayload(c.Request, reqData)
+			resData := truncateLogText(blw.body.String(), operationLogResponseLimit)
 			optLog := entity.TOperationLog{
 				OptModule:     module,
 				OptType:       optType,
 				OptUri:        reqURI,
 				OptMethod:     optFunc,
 				OptDesc:       desc,
-				RequestParam:  string(reqData),
+				RequestParam:  requestParam,
 				RequestMethod: reqMethod,
 				ResponseData:  resData,
 				UserId:        userId,
@@ -197,7 +255,7 @@ func Log() gin.HandlerFunc {
 				OptUri:        reqURI,
 				OptMethod:     optFunc,
 				RequestMethod: reqMethod,
-				RequestParam:  string(reqData),
+				RequestParam:  requestLogPayload(c.Request, reqData),
 				OptDesc:       desc,
 				ExceptionInfo: "",
 				IpAddress:     ip,

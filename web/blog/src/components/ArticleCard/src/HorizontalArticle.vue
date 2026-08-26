@@ -47,12 +47,13 @@
         <ob-skeleton v-else tag="h1" height="3rem" />
         <p v-if="article.articleContent">{{ article.articleContent }}</p>
         <ob-skeleton v-else tag="p" :count="4" height="20px" />
-        <div class="article-footer" v-if="article">
+        <div class="article-footer" v-if="article && article.author">
           <div class="flex flex-row items-center">
             <img
               class="hover:opacity-50 cursor-pointer"
-              :src="article.author.avatar"
+              :src="article.author.avatar || avatarPlaceholder"
               alt=""
+              @error="handleImageError"
               @click="handleAuthorClick(article.author.website)" />
             <span class="text-ob-dim">
               <strong
@@ -86,6 +87,7 @@ import { useRouter } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
 import { useI18n } from 'vue-i18n'
 import emitter from '@/utils/mitt'
+import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 
 export default defineComponent({
   name: 'HorizontalArticle',
@@ -99,6 +101,12 @@ export default defineComponent({
     const handleAuthorClick = (link: string) => {
       if (link === '') link = window.location.href
       window.open(link)
+    }
+    const handleImageError = (event: Event) => {
+      const image = event.target as HTMLImageElement
+      if (image.dataset.fallbackApplied === 'true') return
+      image.dataset.fallbackApplied = 'true'
+      image.src = avatarPlaceholder
     }
     const toArticle = () => {
       let isAccess = false
@@ -127,6 +135,8 @@ export default defineComponent({
       }),
       article: toRef(articleStore.$state, 'topArticle'),
       handleAuthorClick,
+      handleImageError,
+      avatarPlaceholder,
       toArticle,
       t
     }

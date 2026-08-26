@@ -1,7 +1,7 @@
 <template>
   <div class="flex-shrink-0">
     <div class="rounded-full ring-gray-100 overflow-hidden shaodw-lg w-9 xl:w-10">
-      <template v-if="url != null"> <img class="avatar-img" :src="url" alt="" /></template>
+      <template v-if="url"> <img class="avatar-img" :src="url" alt="" @error="handleImageError" /></template>
       <template v-else><img class="avatar-img" :src="default" alt="" /></template>
     </div>
   </div>
@@ -9,14 +9,23 @@
 
 <script lang="ts">
 import { defineComponent, toRefs } from 'vue'
+import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 
 export default defineComponent({
   name: 'Avatar',
   props: ['url'],
   setup(props) {
+    const handleImageError = (event: Event) => {
+      const image = event.target as HTMLImageElement
+      if (image.dataset.fallbackApplied === 'true') return
+      image.dataset.fallbackApplied = 'true'
+      image.src = avatarPlaceholder
+    }
+
     return {
       url: toRefs(props).url,
-      default: 'https://static.linhaojun.top/config/52a81cd2772167b645569342e81ce312.jpg'
+      default: avatarPlaceholder,
+      handleImageError
     }
   }
 })

@@ -55,6 +55,7 @@ import { useAppStore } from '@/stores/app'
 import { computed, defineComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Social from '@/components/Social.vue'
+import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 
 export default defineComponent({
   name: 'Profile',
@@ -63,7 +64,7 @@ export default defineComponent({
     const appStore = useAppStore()
     const { t } = useI18n()
     return {
-      default: 'https://static.linhaojun.top/config/52a81cd2772167b645569342e81ce312.jpg',
+      default: avatarPlaceholder,
       avatarClass: computed(() => {
         return {
           'ob-avatar': true,

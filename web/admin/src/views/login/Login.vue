@@ -6,6 +6,9 @@
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
+            id="username"
+            name="username"
+            autocomplete="username"
             prefix-icon="el-icon-user-solid"
             placeholder="用户名"
             @keyup.enter.native="login" />
@@ -13,6 +16,9 @@
         <el-form-item prop="password">
           <el-input
             v-model="loginForm.password"
+            id="password"
+            name="password"
+            autocomplete="current-password"
             prefix-icon="iconfont el-icon-mymima"
             show-password
             placeholder="密码"
@@ -44,24 +50,22 @@ export default {
       this.$refs.ruleForm.validate((valid) => {
         if (valid) {
           const that = this
-          var captcha = new TencentCaptcha(this.config.TENCENT_CAPTCHA, function (res) {
-            if (res.ret === 0) {
-              let param = new URLSearchParams()
-              param.append('username', that.loginForm.username)
-              param.append('password', that.loginForm.password)
-              that.axios.post('/api/users/login', param).then(({ data }) => {
-                if (data.flag) {
-                  that.$store.commit('login', data.data)
-                  generaMenu()
-                  that.$message.success('登录成功')
-                  that.$router.push({ path: '/' })
-                } else {
-                  that.$message.error(data.message)
-                }
-              })
+          let param = new URLSearchParams()
+          param.append('username', that.loginForm.username)
+          param.append('password', that.loginForm.password)
+          that.axios.post('/api/users/login', param).then(({ data }) => {
+            if (!data.flag) {
+              that.$message.error(data.message)
+              return
             }
+            that.$store.commit('login', data.data)
+            return generaMenu().then(() => {
+              that.$message.success('登录成功')
+              return that.$router.replace({ path: '/' })
+            })
+          }).catch(() => {
+            that.$store.commit('logout')
           })
-          captcha.show()
         } else {
           return false
         }
@@ -78,8 +82,7 @@ export default {
   bottom: 0;
   right: 0;
   left: 0;
-  background: url(https://example-bucket.oss-cn-shanghai.aliyuncs.com/photos/miku4389473458934675.jpg) center center / cover
-    no-repeat;
+  background: #0b1220 url('../../assets/login-background.svg') center center / cover no-repeat;
 }
 .login-card {
   position: absolute;
@@ -101,5 +104,14 @@ export default {
 .login-card button {
   margin-top: 1rem;
   width: 100%;
+}
+.login-card .el-button--primary {
+  background-color: #1769aa;
+  border-color: #1769aa;
+}
+.login-card .el-button--primary:hover,
+.login-card .el-button--primary:focus {
+  background-color: #12558a;
+  border-color: #12558a;
 }
 </style>

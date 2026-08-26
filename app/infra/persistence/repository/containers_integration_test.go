@@ -154,6 +154,10 @@ INSERT INTO t_article (id, user_id, article_title, article_content, is_top, is_f
 	if err != nil || articleCount != 1 {
 		t.Fatalf("unexpected site article count: count=%d err=%v", articleCount, err)
 	}
+	rankedArticles, err := site.ListArticleRank(ctx, []int{1})
+	if err != nil || len(rankedArticles) != 1 || rankedArticles[0].ArticleTitle != "integration article" {
+		t.Fatalf("unexpected article rank result: articles=%v err=%v", rankedArticles, err)
+	}
 	roles, err := NewRoleRepository(xormEngine).ListRolesByUserInfoID(ctx, 1)
 	if err != nil || len(roles) != 1 || roles[0] != "user" {
 		t.Fatalf("unexpected role repository result: roles=%v err=%v", roles, err)

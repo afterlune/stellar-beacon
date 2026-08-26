@@ -31,7 +31,13 @@
         <el-col :md="4" v-for="item of photos" :key="item.id">
           <el-checkbox :label="item.id">
             <div class="photo-item">
-              <el-image fit="cover" class="photo-img" :src="item.photoSrc" :preview-photoSrc-list="photos" />
+              <el-image
+                fit="cover"
+                class="photo-img"
+                :src="safePhotoImageUrl(item.photoSrc)"
+                :preview-src-list="previewPhotos">
+                <div slot="error" class="image-slot">图片不可用</div>
+              </el-image>
               <div class="photo-name">{{ item.photoName }}</div>
             </div>
           </el-checkbox>
@@ -59,6 +65,8 @@
 </template>
 
 <script>
+import { safePhotoImageUrl } from '@/assets/js/image'
+
 export default {
   created() {
     this.listPhotos()
@@ -88,8 +96,9 @@ export default {
           }
         })
         .then(({ data }) => {
-          this.photos = data.data.records
-          this.count = data.data.count
+          const page = data && data.data ? data.data : {}
+          this.photos = Array.isArray(page.records) ? page.records : []
+          this.count = Number(page.count) || 0
           this.loading = false
         })
     },
@@ -151,6 +160,14 @@ export default {
       this.isIndeterminate = checkedCount > 0 && checkedCount < this.photoIds.length
     }
   },
+  computed: {
+    safePhotoImageUrl() {
+      return safePhotoImageUrl
+    },
+    previewPhotos() {
+      return this.photos.map((item) => safePhotoImageUrl(item.photoSrc))
+    }
+  },
   watch: {
     photos() {
       this.photoIds = []
@@ -192,5 +209,14 @@ export default {
   font-size: 14px;
   margin-top: 0.3rem;
   text-align: center;
+}
+.image-slot {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  background: #eef3f8;
+  font-size: 13px;
 }
 </style>

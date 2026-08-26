@@ -51,8 +51,9 @@
           <div class="flex flex-row items-center">
             <img
               class="hover:opacity-50 cursor-pointer"
-              :src="article.author.avatar || ''"
+              :src="article.author.avatar || avatarPlaceholder"
               alt="author avatar"
+              @error="handleImageError"
               @click="handleAuthorClick(article.author.website)" />
             <span class="text-ob-dim">
               <strong
@@ -85,6 +86,7 @@ import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import emitter from '@/utils/mitt'
+import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 
 export default defineComponent({
   name: 'ArticleCard',
@@ -98,6 +100,12 @@ export default defineComponent({
     const handleAuthorClick = (link: string) => {
       if (link === '') link = window.location.href
       window.open(link)
+    }
+    const handleImageError = (event: Event) => {
+      const image = event.target as HTMLImageElement
+      if (image.dataset.fallbackApplied === 'true') return
+      image.dataset.fallbackApplied = 'true'
+      image.src = avatarPlaceholder
     }
     const toArticle = () => {
       let isAccess = false
@@ -126,6 +134,8 @@ export default defineComponent({
       }),
       article: toRefs(props).data,
       handleAuthorClick,
+      handleImageError,
+      avatarPlaceholder,
       toArticle,
       t
     }

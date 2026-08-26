@@ -10,7 +10,7 @@
     <el-empty v-if="talks == null" description="暂无说说" />
     <div class="talk-item" v-for="item of talks" :key="item.id">
       <div class="user-info-wrapper">
-        <el-avatar class="user-avatar" :src="item.avatar" :size="36" />
+        <el-avatar class="user-avatar" :src="safeAvatarImageUrl(item.avatar)" :size="36" />
         <div class="user-detail-wrapper">
           <div class="user-nickname">
             <div>{{ item.nickname }}</div>
@@ -30,7 +30,13 @@
           <div class="talk-content" v-html="item.content" />
           <el-row :gutter="4" class="talk-images" v-if="item.imgs">
             <el-col :md="8" :cols="6" v-for="(img, index) of item.imgs" :key="index">
-              <el-image class="images-items" :src="img" :preview-src-list="previews" />
+              <el-image
+                class="images-items"
+                :src="safeTalkImageUrl(img)"
+                :preview-src-list="previews"
+                fit="cover">
+                <div slot="error" class="image-slot">图片不可用</div>
+              </el-image>
             </el-col>
           </el-row>
         </div>
@@ -57,6 +63,8 @@
 </template>
 
 <script>
+import { previewTalkImages, safeAvatarImageUrl as normalizeAvatar, safeTalkImageUrl } from '@/assets/js/image'
+
 export default {
   created() {
     this.current = this.$store.state.pageState.talkList
@@ -75,6 +83,9 @@ export default {
     }
   },
   methods: {
+    safeAvatarImageUrl(url) {
+      return normalizeAvatar(url)
+    },
     handleCommand(command) {
       var arr = command.split(',')
       this.talkId = arr[1]
@@ -100,7 +111,7 @@ export default {
           this.talks = data.data.records
           this.talks.forEach((item) => {
             if (item.imgs) {
-              this.previews.push(...item.imgs)
+              this.previews.push(...previewTalkImages(item.imgs))
             }
           })
           this.count = data.data.count
@@ -142,6 +153,9 @@ export default {
     }
   },
   computed: {
+    safeTalkImageUrl() {
+      return safeTalkImageUrl
+    },
     isActive() {
       return function (status) {
         return this.status == status ? 'active-status' : 'status'
@@ -238,5 +252,14 @@ export default {
   height: 200px;
   width: 100%;
   border-radius: 4px;
+}
+.image-slot {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  background: #eef3f8;
+  font-size: 13px;
 }
 </style>

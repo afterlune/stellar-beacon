@@ -163,11 +163,20 @@ func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int
 	result := make([]model.UserMenuDTO, 0, len(catalogs))
 	for _, catalog := range catalogs {
 		children := hm[catalog.Id]
-		dto := model.UserMenuDTO{Name: catalog.Name, Icon: catalog.Icon, Hidden: catalog.IsHidden == support.True}
+		dto := model.UserMenuDTO{
+			Name:   catalog.Name,
+			Path:   catalog.Path,
+			Icon:   catalog.Icon,
+			Hidden: catalog.IsHidden == support.True,
+		}
 		if len(children) == 0 {
-			dto.Path = ""
 			dto.Component = support.Component
-			dto.Children = []model.UserMenuDTO{{Name: catalog.Name, Icon: catalog.Icon, Component: catalog.Component}}
+			dto.Children = []model.UserMenuDTO{{
+				Name:      catalog.Name,
+				Icon:      catalog.Icon,
+				Component: catalog.Component,
+				Path:      "",
+			}}
 		} else {
 			sort.Slice(children, func(i, j int) bool { return children[i].OrderNum < children[j].OrderNum })
 			for _, child := range children {

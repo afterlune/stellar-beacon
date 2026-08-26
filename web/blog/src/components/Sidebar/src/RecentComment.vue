@@ -9,8 +9,8 @@
           :key="comment.id">
           <div class="flex-shrink-0 mr-2">
             <div class="rounded-full ring-gray-100 overflow-hidden shaodw-lg w-9">
-              <template v-if="comment.avatar != null">
-                <img class="avatar-img" :src="comment.avatar" alt="" />
+              <template v-if="comment.avatar">
+                <img class="avatar-img" :src="comment.avatar" alt="" @error="handleImageError" />
               </template>
               <template v-else>
                 <img class="avatar-img" :src="default" alt="" />
@@ -40,6 +40,7 @@ import { SubTitle } from '@/components/Title'
 import { useCommentStore } from '@/stores/comment'
 import { useI18n } from 'vue-i18n'
 import api from '@/api/api'
+import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 
 export default defineComponent({
   name: 'RecentComment',
@@ -68,9 +69,16 @@ export default defineComponent({
       let day = date.getDate()
       return year + '-' + month + '-' + day
     }
+    const handleImageError = (event: Event) => {
+      const image = event.target as HTMLImageElement
+      if (image.dataset.fallbackApplied === 'true') return
+      image.dataset.fallbackApplied = 'true'
+      image.src = avatarPlaceholder
+    }
     return {
       comments: toRef(commentStore.$state, 'recentComment'),
-      default: 'https://static.linhaojun.top/config/0af1901da1e64dfb99bb61db21e716c4.jpeg',
+      default: avatarPlaceholder,
+      handleImageError,
       t
     }
   }
