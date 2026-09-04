@@ -17,6 +17,23 @@ services:
       - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY:?JWT_PRIVATE_KEY is required}
       - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:?JWT_PUBLIC_KEY is required}
       - JWT_ALLOW_EPHEMERAL=false
+      # Optional AI Provider routes. Empty keys keep all AI capabilities
+      # disabled; values are injected only from the deployment environment.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.deepseek.com}
+      - OPENAI_MODEL=${OPENAI_MODEL:-deepseek-v4-flash-vision-exp}
+       - ALIBAILIAN_API_KEY=${ALIBAILIAN_API_KEY:-}
+       - ALIBAILIAN_BASE_URL=${ALIBAILIAN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+       - ALIBAILIAN_MODEL=${ALIBAILIAN_MODEL:-qwen3.7-text-embedding}
+       - ALIBAILIAN_MODEL2=${ALIBAILIAN_MODEL2:-qwen3.7-text-embedding-flash}
+      - BENETNASCH_AI_ENABLED=${BENETNASCH_AI_ENABLED:-false}
+      - BENETNASCH_AI_OBSERVABILITY=${BENETNASCH_AI_OBSERVABILITY:-false}
+      - BENETNASCH_AI_PROVIDER_PROBE=${BENETNASCH_AI_PROVIDER_PROBE:-false}
+      - BENETNASCH_AI_VISION=${BENETNASCH_AI_VISION:-false}
+      - BENETNASCH_AI_ARTICLE_INDEXING=${BENETNASCH_AI_ARTICLE_INDEXING:-false}
+      # Optional comma-separated Caddy/ingress IPs or CIDRs. Empty means
+      # forwarded client-IP headers are ignored (safe default).
+      - BENETNASCH_TRUSTED_PROXIES=${BENETNASCH_TRUSTED_PROXIES:-}
     restart: always
   postgresql:
     image: postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825

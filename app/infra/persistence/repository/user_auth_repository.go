@@ -1,11 +1,10 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"context"
 
 	"xorm.io/xorm"
@@ -80,7 +79,7 @@ func (u *MyUserAuthRepo) FindByUsername(ctx context.Context, username string) (p
 	if err != nil {
 		return port.AuthUser{}, err
 	}
-	var auth entity.TUserAuth
+	var auth row.TUserAuth
 	found, err := session.Where("username = ?", username).Get(&auth)
 	if err != nil {
 		return port.AuthUser{}, apperrors.Wrap(apperrors.KindUnavailable, "auth.find_username", err)
@@ -88,7 +87,7 @@ func (u *MyUserAuthRepo) FindByUsername(ctx context.Context, username string) (p
 	if !found {
 		return port.AuthUser{}, apperrors.NotFound("auth.find_username")
 	}
-	var info entity.TUserInfo
+	var info row.TUserInfo
 	found, err = session.ID(auth.UserInfoId).Get(&info)
 	if err != nil {
 		return port.AuthUser{}, apperrors.Wrap(apperrors.KindUnavailable, "auth.find_user_info", err)
@@ -100,35 +99,37 @@ func (u *MyUserAuthRepo) FindByUsername(ctx context.Context, username string) (p
 	if err := session.SQL("SELECT role_name FROM t_role WHERE id IN (SELECT role_id FROM t_user_role WHERE user_id = ?)", info.Id).Find(&roles); err != nil {
 		return port.AuthUser{}, apperrors.Wrap(apperrors.KindUnavailable, "auth.find_roles", err)
 	}
-	return port.AuthUser{Auth: auth, Info: info, Roles: roles}, nil
+	return port.AuthUser{Auth: row.FromUserAuth(auth), Info: row.FromUserInfo(info), Roles: roles}, nil
 }
 
-func (u *MyUserAuthRepo) FindByID(ctx context.Context, id int) (entity.TUserAuth, error) {
+func (u *MyUserAuthRepo) FindByID(ctx context.Context, id int) (port.TUserAuth, error) {
 	session, err := u.authSession(ctx)
 	if err != nil {
-		return entity.TUserAuth{}, err
+		return port.TUserAuth{}, err
 	}
-	var auth entity.TUserAuth
+	var auth row.TUserAuth
 	found, err := session.ID(id).Get(&auth)
 	if err != nil {
-		return entity.TUserAuth{}, apperrors.Wrap(apperrors.KindUnavailable, "auth.find_id", err)
+		return port.TUserAuth{}, apperrors.Wrap(apperrors.KindUnavailable, "auth.find_id", err)
 	}
 	if !found {
-		return entity.TUserAuth{}, apperrors.NotFound("auth.find_id")
+		return port.TUserAuth{}, apperrors.NotFound("auth.find_id")
 	}
-	return auth, nil
+	return row.FromUserAuth(auth), nil
 }
 
-func (u *MyUserAuthRepo) CreateUser(ctx context.Context, info entity.TUserInfo, auth entity.TUserAuth, roleID int) error {
-	return ormInit.WithEngineTx(u.engine, ctx, func(session *xorm.Session) error {
-		if _, err := session.Insert(&info); err != nil {
+func (u *MyUserAuthRepo) CreateUser(ctx context.Context, info port.TUserInfo, auth port.TUserAuth, roleID int) error {
+	return repoTx(u.engine, ctx, "auth.create_user", func(session *xorm.Session) error {
+		infoRow := row.ToUserInfo(info)
+		if _, err := session.Insert(&infoRow); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "auth.create_info", err)
 		}
-		if _, err := session.Insert(&entity.TUserRole{UserId: info.Id, RoleId: roleID}); err != nil {
+		if _, err := session.Insert(&row.TUserRole{UserId: infoRow.Id, RoleId: roleID}); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "auth.create_role", err)
 		}
-		auth.UserInfoId = info.Id
-		if _, err := session.Insert(&auth); err != nil {
+		auth.UserInfoId = infoRow.Id
+		authRow := row.ToUserAuth(auth)
+		if _, err := session.Insert(&authRow); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "auth.create_auth", err)
 		}
 		return nil
@@ -136,8 +137,8 @@ func (u *MyUserAuthRepo) CreateUser(ctx context.Context, info entity.TUserInfo, 
 }
 
 func (u *MyUserAuthRepo) UpdatePassword(ctx context.Context, username, password string) error {
-	return ormInit.WithEngineTx(u.engine, ctx, func(session *xorm.Session) error {
-		if _, err := session.Where("username = ?", username).Cols("password").Update(&entity.TUserAuth{Password: password}); err != nil {
+	return repoTx(u.engine, ctx, "auth.update_password", func(session *xorm.Session) error {
+		if _, err := session.Where("username = ?", username).Cols("password").Update(&row.TUserAuth{Password: password}); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "auth.update_password", err)
 		}
 		return nil
@@ -145,17 +146,18 @@ func (u *MyUserAuthRepo) UpdatePassword(ctx context.Context, username, password 
 }
 
 func (u *MyUserAuthRepo) UpdatePasswordByID(ctx context.Context, id int, password string) error {
-	return ormInit.WithEngineTx(u.engine, ctx, func(session *xorm.Session) error {
-		if _, err := session.ID(id).Cols("password").Update(&entity.TUserAuth{Password: password}); err != nil {
+	return repoTx(u.engine, ctx, "auth.update_admin_password", func(session *xorm.Session) error {
+		if _, err := session.ID(id).Cols("password").Update(&row.TUserAuth{Password: password}); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "auth.update_admin_password", err)
 		}
 		return nil
 	})
 }
 
-func (u *MyUserAuthRepo) UpdateLoginMetadata(ctx context.Context, user entity.TUserAuth) error {
-	return ormInit.WithEngineTx(u.engine, ctx, func(session *xorm.Session) error {
-		if _, err := session.ID(user.Id).MustCols("ip_source", "ip_address", "last_login_time").Update(&user); err != nil {
+func (u *MyUserAuthRepo) UpdateLoginMetadata(ctx context.Context, user port.TUserAuth) error {
+	return repoTx(u.engine, ctx, "auth.update_login_metadata", func(session *xorm.Session) error {
+		userRow := row.ToUserAuth(user)
+		if _, err := session.ID(user.Id).MustCols("ip_source", "ip_address", "last_login_time").Update(&userRow); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "auth.update_login_metadata", err)
 		}
 		return nil

@@ -1,0 +1,92 @@
+{
+    auto_https off
+}
+
+:80 {
+    handle_path /api {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle_path /api/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle {
+        root * /srv/vue/blog
+        try_files {path} {path}/ /index.html
+        file_server
+        encode gzip zstd
+    }
+}
+
+:8008 {
+    handle_path /api {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle_path /api/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle {
+        root * /srv/vue/admin
+        try_files {path} {path}/ /index.html
+        file_server
+        encode gzip zstd
+    }
+}
+
+:8018 {
+    handle_path /api {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle_path /api/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle {
+        root * /srv/vue/admin-next
+        try_files {path} {path}/ /index.html
+        file_server
+        encode gzip zstd
+    }
+}
+
+# The Companion bridge has its own listener so it is not mixed into the public
+# blog/admin handlers. The bearer token is still verified by the Go backend.
+:8028 {
+    handle /internal/space/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    respond 404
+}

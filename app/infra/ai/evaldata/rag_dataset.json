@@ -1,0 +1,32 @@
+[
+  {
+    "id": "rag-grounded-001",
+    "query": "Gin 中间件鉴权",
+    "mode": "keyword",
+    "expectedArticleIds": [101]
+  },
+  {
+    "id": "rag-grounded-002",
+    "query": "xorm PostgreSQL 事务",
+    "mode": "keyword",
+    "expectedArticleIds": [102]
+  },
+  {
+    "id": "rag-grounded-003",
+    "query": "Eino 混合检索",
+    "mode": "keyword",
+    "expectedArticleIds": [104]
+  },
+  {
+    "id": "rag-refusal-001",
+    "query": "不存在的量子咖啡协议",
+    "mode": "keyword",
+    "expectRefusal": true
+  },
+  {
+    "id": "rag-refusal-002",
+    "query": "蓝色月球数据库",
+    "mode": "keyword",
+    "expectRefusal": true
+  }
+]

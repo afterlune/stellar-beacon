@@ -1,9 +1,6 @@
 package port
 
-import (
-	"benetnasch/app/domain/entity"
-	"context"
-)
+import "context"
 
 type TagRepository interface {
 	List(ctx context.Context) ([]*Tag, error)
@@ -12,6 +9,6 @@ type TagRepository interface {
 	CountAdmin(ctx context.Context, filter TagFilter) (int64, error)
 	ListAdmin(ctx context.Context, current, size int, filter TagFilter) ([]*TagAdmin, error)
 	Search(ctx context.Context, keywords string) ([]*TagAdmin, error)
-	SaveOrUpdate(ctx context.Context, tag entity.TTag) error
+	SaveOrUpdate(ctx context.Context, tag TTag) error
 	Delete(ctx context.Context, ids []int) error
 }

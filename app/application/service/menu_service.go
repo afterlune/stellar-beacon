@@ -2,27 +2,23 @@ package service
 
 import (
 	"benetnasch/app/application/support"
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/facade/model"
 	"context"
 	"sort"
 	"strconv"
-
-	"github.com/gin-gonic/gin"
 )
 
 type MenuService interface {
-	ListMenus(c *gin.Context) model.ResultVO
-	SaveOrUpdateMenu(c *gin.Context) model.ResultVO
-	UpdateMenuIsHidden(c *gin.Context) model.ResultVO
-	DeleteMenu(c *gin.Context) model.ResultVO
-	ListMenuOptions() model.ResultVO
-	ListUserMenus(userInfoId int) model.ResultVO
-	listCatalogs(menus []entity.TMenu) []entity.TMenu
-	getMenuMap(menus []entity.TMenu) map[int][]entity.TMenu
-	convertUserMenuList(catalogs []entity.TMenu, hm map[int][]entity.TMenu) []model.UserMenuDTO
+	ListMenus(c port.Request) port.ResultVO
+	SaveOrUpdateMenu(c port.Request) port.ResultVO
+	UpdateMenuIsHidden(c port.Request) port.ResultVO
+	DeleteMenu(c port.Request) port.ResultVO
+	ListMenuOptions(ctx context.Context) port.ResultVO
+	ListUserMenus(ctx context.Context, userInfoId int) port.ResultVO
+	listCatalogs(menus []port.TMenu) []port.TMenu
+	getMenuMap(menus []port.TMenu) map[int][]port.TMenu
+	convertUserMenuList(catalogs []port.TMenu, hm map[int][]port.TMenu) []port.UserMenuDTO
 }
 
 type MyMenuSService struct{ repo port.MenuRepository }
@@ -36,85 +32,85 @@ func (m *MyMenuSService) menuRepository() port.MenuRepository {
 	return menuRepo
 }
 
-func (m *MyMenuSService) ListMenus(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (m *MyMenuSService) ListMenus(c port.Request) port.ResultVO {
+	var vo port.ConditionVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	menus, err := m.menuRepository().List(c.Request.Context(), vo.Keywords)
+	menus, err := m.menuRepository().List(c.Context(), vo.Keywords)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(m.menuDTOs(menus))
+	return port.ResultOkWithData(m.menuDTOs(menus))
 }
 
-func (m *MyMenuSService) SaveOrUpdateMenu(c *gin.Context) model.ResultVO {
-	var vo model.MenuVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (m *MyMenuSService) SaveOrUpdateMenu(c port.Request) port.ResultVO {
+	var vo port.MenuVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	menu := entity.TMenu{Id: vo.Id, Name: vo.Name, Path: vo.Path, Component: vo.Component, Icon: vo.Icon, OrderNum: vo.OrderNum, ParentId: vo.ParentId, IsHidden: vo.IsHidden}
-	if err := m.menuRepository().SaveOrUpdate(c.Request.Context(), menu); err != nil {
-		return model.ResultFromError(err)
+	menu := port.TMenu{Id: vo.Id, Name: vo.Name, Path: vo.Path, Component: vo.Component, Icon: vo.Icon, OrderNum: vo.OrderNum, ParentId: vo.ParentId, IsHidden: vo.IsHidden}
+	if err := m.menuRepository().SaveOrUpdate(c.Context(), menu); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (m *MyMenuSService) UpdateMenuIsHidden(c *gin.Context) model.ResultVO {
-	var vo model.IsHiddenVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (m *MyMenuSService) UpdateMenuIsHidden(c port.Request) port.ResultVO {
+	var vo port.IsHiddenVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := m.menuRepository().UpdateHidden(c.Request.Context(), vo.Id, vo.IsHidden); err != nil {
-		return model.ResultFromError(err)
+	if err := m.menuRepository().UpdateHidden(c.Context(), vo.Id, vo.IsHidden); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (m *MyMenuSService) DeleteMenu(c *gin.Context) model.ResultVO {
+func (m *MyMenuSService) DeleteMenu(c port.Request) port.ResultVO {
 	id, err := strconv.Atoi(c.Param("menuId"))
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := m.menuRepository().Delete(c.Request.Context(), id); err != nil {
+	if err := m.menuRepository().Delete(c.Context(), id); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
-			return model.ResultFailWithMessage("菜单下有角色关联")
+			return port.ResultFailWithMessage("菜单下有角色关联")
 		}
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (m *MyMenuSService) ListMenuOptions() model.ResultVO {
-	menus, err := m.menuRepository().ListOptions(context.Background())
+func (m *MyMenuSService) ListMenuOptions(ctx context.Context) port.ResultVO {
+	menus, err := m.menuRepository().ListOptions(ctx)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	catalogs := m.listCatalogs(menus)
 	children := m.getMenuMap(menus)
-	options := make([]model.LabelOptionDTO, 0, len(catalogs))
+	options := make([]port.LabelOptionDTO, 0, len(catalogs))
 	for _, catalog := range catalogs {
 		items := children[catalog.Id]
 		sort.Slice(items, func(i, j int) bool { return items[i].OrderNum < items[j].OrderNum })
-		childrenDTO := make([]model.LabelOptionDTO, 0, len(items))
+		childrenDTO := make([]port.LabelOptionDTO, 0, len(items))
 		for _, item := range items {
-			childrenDTO = append(childrenDTO, model.LabelOptionDTO{Id: item.Id, Label: item.Name})
+			childrenDTO = append(childrenDTO, port.LabelOptionDTO{Id: item.Id, Label: item.Name})
 		}
-		options = append(options, model.LabelOptionDTO{Id: catalog.Id, Label: catalog.Name, Children: childrenDTO})
+		options = append(options, port.LabelOptionDTO{Id: catalog.Id, Label: catalog.Name, Children: childrenDTO})
 	}
-	return model.ResultOkWithData(options)
+	return port.ResultOkWithData(options)
 }
 
-func (m *MyMenuSService) ListUserMenus(userInfoID int) model.ResultVO {
-	menus, err := m.menuRepository().ListByUserInfoID(context.Background(), userInfoID)
+func (m *MyMenuSService) ListUserMenus(ctx context.Context, userInfoID int) port.ResultVO {
+	menus, err := m.menuRepository().ListByUserInfoID(ctx, userInfoID)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(m.convertUserMenuList(m.listCatalogs(menus), m.getMenuMap(menus)))
+	return port.ResultOkWithData(m.convertUserMenuList(m.listCatalogs(menus), m.getMenuMap(menus)))
 }
 
-func (m *MyMenuSService) listCatalogs(menus []entity.TMenu) []entity.TMenu {
-	result := make([]entity.TMenu, 0)
+func (m *MyMenuSService) listCatalogs(menus []port.TMenu) []port.TMenu {
+	result := make([]port.TMenu, 0)
 	for _, menu := range menus {
 		if menu.ParentId == 0 {
 			result = append(result, menu)
@@ -124,8 +120,8 @@ func (m *MyMenuSService) listCatalogs(menus []entity.TMenu) []entity.TMenu {
 	return result
 }
 
-func (m *MyMenuSService) getMenuMap(menus []entity.TMenu) map[int][]entity.TMenu {
-	result := make(map[int][]entity.TMenu)
+func (m *MyMenuSService) getMenuMap(menus []port.TMenu) map[int][]port.TMenu {
+	result := make(map[int][]port.TMenu)
 	for _, menu := range menus {
 		if menu.ParentId != 0 {
 			result[menu.ParentId] = append(result[menu.ParentId], menu)
@@ -134,14 +130,14 @@ func (m *MyMenuSService) getMenuMap(menus []entity.TMenu) map[int][]entity.TMenu
 	return result
 }
 
-func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
+func (m *MyMenuSService) menuDTOs(menus []port.TMenu) []port.MenuDTO {
 	catalogs := m.listCatalogs(menus)
 	children := m.getMenuMap(menus)
-	result := make([]model.MenuDTO, 0, len(catalogs))
+	result := make([]port.MenuDTO, 0, len(catalogs))
 	for _, catalog := range catalogs {
-		var dto model.MenuDTO
+		var dto port.MenuDTO
 		support.StructCopy(catalog, &dto)
-		var childDTOs []model.MenuDTO
+		var childDTOs []port.MenuDTO
 		support.StructCopy(children[catalog.Id], &childDTOs)
 		sort.Slice(childDTOs, func(i, j int) bool { return childDTOs[i].OrderNum < childDTOs[j].OrderNum })
 		dto.Children = childDTOs
@@ -150,7 +146,7 @@ func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
 	}
 	if len(children) > 0 {
 		for _, childList := range children {
-			var dtos []model.MenuDTO
+			var dtos []port.MenuDTO
 			support.StructCopy(childList, &dtos)
 			result = append(result, dtos...)
 		}
@@ -159,11 +155,11 @@ func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
 	return result
 }
 
-func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int][]entity.TMenu) []model.UserMenuDTO {
-	result := make([]model.UserMenuDTO, 0, len(catalogs))
+func (m *MyMenuSService) convertUserMenuList(catalogs []port.TMenu, hm map[int][]port.TMenu) []port.UserMenuDTO {
+	result := make([]port.UserMenuDTO, 0, len(catalogs))
 	for _, catalog := range catalogs {
 		children := hm[catalog.Id]
-		dto := model.UserMenuDTO{
+		dto := port.UserMenuDTO{
 			Name:   catalog.Name,
 			Path:   catalog.Path,
 			Icon:   catalog.Icon,
@@ -171,7 +167,7 @@ func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int
 		}
 		if len(children) == 0 {
 			dto.Component = support.Component
-			dto.Children = []model.UserMenuDTO{{
+			dto.Children = []port.UserMenuDTO{{
 				Name:      catalog.Name,
 				Icon:      catalog.Icon,
 				Component: catalog.Component,
@@ -180,7 +176,7 @@ func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int
 		} else {
 			sort.Slice(children, func(i, j int) bool { return children[i].OrderNum < children[j].OrderNum })
 			for _, child := range children {
-				dto.Children = append(dto.Children, model.UserMenuDTO{Name: child.Name, Path: child.Path, Icon: child.Icon, Component: child.Component, Hidden: child.IsHidden == support.True})
+				dto.Children = append(dto.Children, port.UserMenuDTO{Name: child.Name, Path: child.Path, Icon: child.Icon, Component: child.Component, Hidden: child.IsHidden == support.True})
 			}
 		}
 		result = append(result, dto)

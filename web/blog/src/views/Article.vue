@@ -167,6 +167,7 @@ import api from '@/api/api'
 import markdownToHtml from '@/utils/markdown'
 import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 import { pageCount, pageRecords } from '@/utils/page'
+import MarkdownIt from 'markdown-it'
 
 export default defineComponent({
   name: 'Article',
@@ -180,7 +181,7 @@ export default defineComponent({
     const { t } = useI18n()
     const loading = ref(true)
     const articleRef = ref()
-    let md = require('markdown-it')()
+    const md = new MarkdownIt()
     const reactiveData = reactive({
       articleId: '' as any,
       article: '' as any,
@@ -248,7 +249,13 @@ export default defineComponent({
       v3ImgPreviewFn({ images: reactiveData.images, index: reactiveData.images.indexOf(index) })
     }
     const initTocbot = () => {
-      let nodes = articleRef.value.children
+      const article = articleRef.value
+      // Article data may resolve after a route change. The v-if content is
+      // then unmounted and the template ref is null, so fail closed instead
+      // of throwing from the late async callback.
+      if (!article) return
+
+      let nodes = article.children
       if (nodes.length) {
         for (let i = 0; i < nodes.length; i++) {
           let node = nodes[i]
@@ -266,7 +273,7 @@ export default defineComponent({
           e.preventDefault()
         }
       })
-      const imgs = articleRef.value.getElementsByTagName('img')
+      const imgs = article.getElementsByTagName('img')
       for (var i = 0; i < imgs.length; i++) {
         reactiveData.images.push(imgs[i].src)
         imgs[i].addEventListener('click', function (e: any) {

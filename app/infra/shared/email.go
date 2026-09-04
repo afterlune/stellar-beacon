@@ -1,7 +1,7 @@
 package shared
 
 import (
-	"benetnasch/app/facade/model"
+	"benetnasch/app/domain/port"
 	"benetnasch/app/infra/config"
 	"fmt"
 	"github.com/wneessen/go-mail"
@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-func SendHtmlEmail(dto model.EmailDTO) error {
+func SendHtmlEmail(dto port.EmailDTO) error {
 	cfg := new(config.Email).Email()
 
 	m := mail.NewMsg()

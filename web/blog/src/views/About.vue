@@ -116,7 +116,13 @@ export default defineComponent({
       v3ImgPreviewFn({ images: reactiveData.images, index: reactiveData.images.indexOf(index) })
     }
     const initTocbot = () => {
-      let nodes = postRef.value.children
+      const post = postRef.value
+      // The about request can resolve after the route has already been
+      // unmounted. In that case the v-if content is gone and the template ref
+      // is null; do not let a late response crash the whole blog shell.
+      if (!post) return
+
+      let nodes = post.children
       if (nodes.length) {
         for (let i = 0; i < nodes.length; i++) {
           let node = nodes[i]
@@ -134,7 +140,7 @@ export default defineComponent({
           e.preventDefault()
         }
       })
-      const imgs = postRef.value.getElementsByTagName('img')
+      const imgs = post.getElementsByTagName('img')
       for (var i = 0; i < imgs.length; i++) {
         reactiveData.images.push(imgs[i].src)
         imgs[i].addEventListener('click', function (e: any) {

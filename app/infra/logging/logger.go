@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -22,6 +23,24 @@ type Config struct {
 	MaxBackups   int
 	MaxAge       int
 	Compress     bool
+}
+
+const RedactedValue = "[REDACTED]"
+
+var sensitiveValuePattern = regexp.MustCompile(`(?i)((?:password|secret|token|api[_-]?key|authorization)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)`)
+
+// Redact removes a value from an attribute while retaining a stable marker in
+// structured logs. Callers should use it for prompts, visitor text and model
+// output even when an attribute key is not one of the automatic filters.
+func Redact(value string) string {
+	if value == "" {
+		return ""
+	}
+	return RedactedValue
+}
+
+func redactText(value string) string {
+	return sensitiveValuePattern.ReplaceAllString(value, "${1}"+RedactedValue)
 }
 
 // Init installs the process-wide slog logger and returns an idempotent close
@@ -130,10 +149,20 @@ func redactSensitiveAttr(groups []string, attr slog.Attr) slog.Attr {
 		"authorization",
 		"api_key",
 		"apikey",
+		"private_key",
+		"access_key",
+		"prompt",
+		"messages",
+		"visitor_content",
+		"request_body",
+		"response_body",
 	} {
 		if strings.Contains(key, sensitive) {
-			return slog.String(attr.Key, "[REDACTED]")
+			return slog.String(attr.Key, RedactedValue)
 		}
+	}
+	if attr.Value.Kind() == slog.KindString {
+		return slog.String(attr.Key, redactText(attr.Value.String()))
 	}
 	return attr
 }

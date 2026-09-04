@@ -1,140 +1,36 @@
 package model
 
-import (
-	apperrors "benetnasch/app/domain/errors"
-	"log/slog"
-	"strconv"
-)
+import "benetnasch/app/domain/port"
 
-type ResultVO struct {
-	Flag    bool        `json:"flag"`
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
-}
+type ResultVO = port.ResultVO
 
 const (
-	SUCCESS = iota
-	NO_LOGIN
-	AUTHORIZED
-	SYSTEM_ERROR
-	FAIL
-	VALID_ERROR
-	USERNAME_EXIST
-	USERNAME_NOT_EXIST
-	ARTICLE_ACCESS_FAIL
+	SUCCESS             = port.SUCCESS
+	NO_LOGIN            = port.NO_LOGIN
+	AUTHORIZED          = port.AUTHORIZED
+	SYSTEM_ERROR        = port.SYSTEM_ERROR
+	FAIL                = port.FAIL
+	VALID_ERROR         = port.VALID_ERROR
+	USERNAME_EXIST      = port.USERNAME_EXIST
+	USERNAME_NOT_EXIST  = port.USERNAME_NOT_EXIST
+	ARTICLE_ACCESS_FAIL = port.ARTICLE_ACCESS_FAIL
 )
 
-func ResultInfo(num int) map[string]string {
-	var reInfo = map[int]map[string]string{
-		0: {"code": "20000", "desc": "操作成功"},
-		1: {"code": "40001", "desc": "用户未登录"},
-		2: {"code": "40300", "desc": "没有操作权限"},
-		3: {"code": "50000", "desc": "系统异常"},
-		4: {"code": "51000", "desc": "操作失败"},
-		5: {"code": "52000", "desc": "参数格式不正确"},
-		6: {"code": "52001", "desc": "用户名已存在"},
-		7: {"code": "52002", "desc": "用户名不存在"},
-		8: {"code": "52003", "desc": "文章密码认证未通过"},
-	}
-	return reInfo[num]
-}
-func ResultOk() ResultVO {
-	info := ResultInfo(SUCCESS)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Flag: true, Code: code, Message: info["desc"]}
-}
-func ResultOkWithData(data interface{}) ResultVO {
-	info := ResultInfo(SUCCESS)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Flag: true, Code: code, Message: info["desc"], Data: data}
-}
+func ResultInfo(num int) map[string]string       { return port.ResultInfo(num) }
+func ResultOk() ResultVO                         { return port.ResultOk() }
+func ResultOkWithData(data interface{}) ResultVO { return port.ResultOkWithData(data) }
 func ResultOkWithDataAndMessage(data interface{}, message string) ResultVO {
-	info := ResultInfo(SUCCESS)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Flag: true, Code: code, Message: message, Data: data}
+	return port.ResultOkWithDataAndMessage(data, message)
 }
-func ResultFail() ResultVO {
-	info := ResultInfo(FAIL)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Flag: false, Code: code, Message: info["desc"]}
-}
-func ResultFailWithStatus(num int) ResultVO {
-	info := ResultInfo(num)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Flag: false, Code: code, Message: info["desc"]}
-}
-func ResultFailWithMessage(message string) ResultVO {
-	info := ResultInfo(FAIL)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Code: code, Flag: false, Message: message}
-}
-func ResultFailWithData(data interface{}) ResultVO {
-	info := ResultInfo(FAIL)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Flag: false, Code: code, Message: info["desc"], Data: data}
-}
+func ResultFail() ResultVO                          { return port.ResultFail() }
+func ResultFailWithStatus(num int) ResultVO         { return port.ResultFailWithStatus(num) }
+func ResultFailWithMessage(message string) ResultVO { return port.ResultFailWithMessage(message) }
+func ResultFailWithData(data interface{}) ResultVO  { return port.ResultFailWithData(data) }
 func ResultFailWithDataAndMessage(data interface{}, message string) ResultVO {
-	info := ResultInfo(FAIL)
-	code, err := strconv.Atoi(info["code"])
-	if err != nil {
-		slog.Error("parse result code failed", "error", err)
-	}
-	return ResultVO{Flag: false, Code: code, Message: message, Data: data}
+	return port.ResultFailWithDataAndMessage(data, message)
 }
 func ResultFailWithCodeAndMessage(code int, message string) ResultVO {
-	return ResultVO{Flag: false, Code: code, Message: message}
+	return port.ResultFailWithCodeAndMessage(code, message)
 }
-
-func ResultFailWithCode(code int) ResultVO {
-	return ResultVO{Flag: false, Code: code}
-}
-
-// ResultFromError keeps the existing response contract while preventing
-// infrastructure error details from reaching API clients.
-func ResultFromError(err error) ResultVO {
-	if err == nil {
-		return ResultOk()
-	}
-	// Keep the public boundary diagnostic free of database, credential, and
-	// request details. Lower layers retain the original error for debugging.
-	slog.Error("application operation failed",
-		"kind", string(apperrors.KindOf(err)),
-		"op", apperrors.Op(err),
-	)
-	switch apperrors.KindOf(err) {
-	case apperrors.KindValidation:
-		return ResultFailWithMessage("参数格式不正确")
-	case apperrors.KindNotFound:
-		return ResultFailWithMessage("数据不存在")
-	case apperrors.KindUnauthorized:
-		return ResultFailWithStatus(NO_LOGIN)
-	case apperrors.KindForbidden:
-		return ResultFailWithStatus(AUTHORIZED)
-	case apperrors.KindConflict:
-		return ResultFail()
-	default:
-		return ResultFailWithMessage("系统繁忙，请稍后再试")
-	}
-}
+func ResultFailWithCode(code int) ResultVO { return port.ResultFailWithCode(code) }
+func ResultFromError(err error) ResultVO   { return port.ResultFromError(err) }

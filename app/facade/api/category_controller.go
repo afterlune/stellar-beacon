@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /categories/all [GET]
 func ListCategories(c *gin.Context) {
-	c.JSON(http.StatusOK, categoryService.ListCategories())
+	c.JSON(http.StatusOK, categoryService.ListCategories(c.Request.Context()))
 }
 
 // ListCategoriesAdmin
@@ -20,7 +20,7 @@ func ListCategories(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories [GET]
 func ListCategoriesAdmin(c *gin.Context) {
-	c.JSON(http.StatusOK, categoryService.ListCategoriesAdmin(c))
+	c.JSON(http.StatusOK, categoryService.ListCategoriesAdmin(applicationRequest(c)))
 }
 
 // ListCategoriesAdminBySearch
@@ -29,7 +29,7 @@ func ListCategoriesAdmin(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories/search [GET]
 func ListCategoriesAdminBySearch(c *gin.Context) {
-	c.JSON(http.StatusOK, categoryService.ListCategoriesAdminBySearch(c))
+	c.JSON(http.StatusOK, categoryService.ListCategoriesAdminBySearch(applicationRequest(c)))
 }
 
 // DeleteCategories
@@ -38,7 +38,7 @@ func ListCategoriesAdminBySearch(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories [DELETE]
 func DeleteCategories(c *gin.Context) {
-	c.JSON(http.StatusOK, categoryService.DeleteCategories(c))
+	c.JSON(http.StatusOK, categoryService.DeleteCategories(applicationRequest(c)))
 }
 
 // SaveOrUpdateCategory
@@ -47,5 +47,5 @@ func DeleteCategories(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/categories [POST]
 func SaveOrUpdateCategory(c *gin.Context) {
-	c.JSON(http.StatusOK, categoryService.SaveOrUpdateCategory(c))
+	c.JSON(http.StatusOK, categoryService.SaveOrUpdateCategory(applicationRequest(c)))
 }

@@ -1,11 +1,10 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"context"
 	"strings"
 
@@ -41,16 +40,32 @@ func intArgs(values []int) []interface{} {
 	return args
 }
 
+func publicCommentTargetFilter(commentType int) string {
+	switch commentType {
+	case 1:
+		return " AND EXISTS (SELECT 1 FROM t_article a_public WHERE a_public.id = c.topic_id AND a_public.is_delete = 0 AND a_public.status = 1)"
+	case 5:
+		return " AND EXISTS (SELECT 1 FROM t_talk t_public WHERE t_public.id = c.topic_id AND t_public.status = 1)"
+	default:
+		return ""
+	}
+}
+
+const publicParentCommentTargetFilter = " AND (parent.type IN (2, 3, 4) OR (parent.type = 1 AND EXISTS (SELECT 1 FROM t_article a_public WHERE a_public.id = parent.topic_id AND a_public.is_delete = 0 AND a_public.status = 1)) OR (parent.type = 5 AND EXISTS (SELECT 1 FROM t_talk t_public WHERE t_public.id = parent.topic_id AND t_public.status = 1)))"
+
 func (c *MyCommentRepo) ListComments(ctx context.Context, filter port.CommentFilter) ([]*port.Comment, int, error) {
 	session, err := c.commentSession(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 	limit, offset := pgsql.Page(filter.Current, filter.Size)
-	query := "SELECT c.id, c.user_id, u.nickname, u.avatar, u.website, c.comment_content, c.create_time FROM t_comment c JOIN t_user_info u ON c.user_id = u.id WHERE c.type = ? AND c.is_review = 1 AND c.parent_id = 0"
+	query := "SELECT c.id, c.user_id, u.nickname, u.avatar, u.website, c.comment_content, c.create_time FROM t_comment c JOIN t_user_info u ON c.user_id = u.id WHERE c.type = ? AND c.is_review = 1 AND c.is_delete = 0 AND c.parent_id = 0"
 	args := []interface{}{filter.Type}
-	countQuery := "SELECT count(0) FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND c.parent_id = 0"
+	countQuery := "SELECT count(0) FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND c.is_delete = 0 AND c.parent_id = 0"
 	countArgs := []interface{}{filter.Type}
+	targetFilter := publicCommentTargetFilter(filter.Type)
+	query += targetFilter
+	countQuery += targetFilter
 	if filter.TopicID != nil {
 		query += " AND c.topic_id = ?"
 		args = append(args, *filter.TopicID)
@@ -78,7 +93,7 @@ func (c *MyCommentRepo) ListReplies(ctx context.Context, commentIDs []int) ([]*p
 	if err != nil {
 		return nil, err
 	}
-	query := "SELECT * FROM (SELECT c.id, c.parent_id, c.user_id, u.nickname, u.avatar, u.website, c.reply_user_id, r.nickname AS reply_nickname, r.website AS reply_website, c.comment_content, c.create_time, row_number() OVER (PARTITION BY parent_id ORDER BY c.create_time ASC) row_num FROM t_comment c JOIN t_user_info u ON c.user_id = u.id JOIN t_user_info r ON c.reply_user_id = r.id WHERE c.is_review = 1 AND parent_id IN (" + placeholders(len(commentIDs)) + ") ORDER BY c.create_time DESC) t"
+	query := "SELECT * FROM (SELECT c.id, c.parent_id, c.user_id, u.nickname, u.avatar, u.website, c.reply_user_id, r.nickname AS reply_nickname, r.website AS reply_website, c.comment_content, c.create_time, row_number() OVER (PARTITION BY c.parent_id ORDER BY c.create_time ASC) row_num FROM t_comment c JOIN t_comment parent ON parent.id = c.parent_id JOIN t_user_info u ON c.user_id = u.id JOIN t_user_info r ON c.reply_user_id = r.id WHERE c.is_review = 1 AND c.is_delete = 0 AND parent.is_review = 1 AND parent.is_delete = 0 AND parent.parent_id = 0 AND c.type = parent.type AND parent.id IN (" + placeholders(len(commentIDs)) + ")" + publicParentCommentTargetFilter + " ORDER BY c.create_time DESC) t"
 	var replies []*port.Reply
 	if err := session.SQL(query, intArgs(commentIDs)...).Find(&replies); err != nil {
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "comment.replies", err)
@@ -153,7 +168,7 @@ func (c *MyCommentRepo) ListCommentCountsByTypeAndTopicIDs(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	query := "SELECT topic_id AS id, COUNT(1) AS comment_count FROM t_comment WHERE type = ? AND topic_id IN (" + placeholders(len(topicIDs)) + ") GROUP BY topic_id"
+	query := "SELECT c.topic_id AS id, COUNT(1) AS comment_count FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND c.is_delete = 0 AND c.topic_id IN (" + placeholders(len(topicIDs)) + ")" + publicCommentTargetFilter(commentType) + " GROUP BY c.topic_id"
 	args := []interface{}{commentType}
 	args = append(args, intArgs(topicIDs)...)
 	var counts []*port.CommentCount
@@ -168,7 +183,7 @@ func (c *MyCommentRepo) ListCommentCountByTypeAndTopicID(ctx context.Context, co
 	if err != nil {
 		return port.CommentCount{}, err
 	}
-	query := "SELECT topic_id AS id, COUNT(1) AS comment_count FROM t_comment WHERE type = ? AND topic_id = ? GROUP BY topic_id"
+	query := "SELECT c.topic_id AS id, COUNT(1) AS comment_count FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND c.is_delete = 0 AND c.topic_id = ?" + publicCommentTargetFilter(commentType) + " GROUP BY c.topic_id"
 	var count port.CommentCount
 	found, err := session.SQL(query, commentType, topicID).Get(&count)
 	if err != nil {
@@ -188,9 +203,9 @@ func (c *MyCommentRepo) ValidateTarget(ctx context.Context, commentType, topicID
 	query := ""
 	switch commentType {
 	case 1:
-		query = "SELECT id FROM t_article WHERE id = ?"
+		query = "SELECT id FROM t_article WHERE id = ? AND is_delete = 0 AND status = 1"
 	case 5:
-		query = "SELECT id FROM t_talk WHERE id = ?"
+		query = "SELECT id FROM t_talk WHERE id = ? AND status = 1"
 	default:
 		return nil
 	}
@@ -210,15 +225,20 @@ func (c *MyCommentRepo) ValidateReply(ctx context.Context, commentType, parentID
 	if err != nil {
 		return err
 	}
-	var parent entity.TComment
-	found, err := session.SQL("SELECT id, parent_id, type FROM t_comment WHERE id = ?", parentID).Get(&parent)
+	var parent row.TComment
+	found, err := session.SQL("SELECT id, parent_id, topic_id, type, is_delete, is_review FROM t_comment WHERE id = ?", parentID).Get(&parent)
 	if err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "comment.validate_parent", err)
 	}
-	if !found || parent.ParentId != 0 || parent.Type != commentType {
+	if !found || parent.ParentId != 0 || parent.Type != commentType || parent.IsDelete != 0 || parent.IsReview != 1 {
 		return apperrors.Invalid("comment.validate_parent", "invalid parent comment")
 	}
-	var user entity.TUserInfo
+	if commentType == 1 || commentType == 5 {
+		if err := c.ValidateTarget(ctx, commentType, parent.TopicId); err != nil {
+			return err
+		}
+	}
+	var user row.TUserInfo
 	found, err = session.SQL("SELECT id FROM t_user_info WHERE id = ?", replyUserID).Get(&user)
 	if err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "comment.validate_reply_user", err)
@@ -229,9 +249,10 @@ func (c *MyCommentRepo) ValidateReply(ctx context.Context, commentType, parentID
 	return nil
 }
 
-func (c *MyCommentRepo) Create(ctx context.Context, comment entity.TComment) error {
-	return ormInit.WithEngineTx(c.engine, ctx, func(session *xorm.Session) error {
-		if _, err := session.Insert(&comment); err != nil {
+func (c *MyCommentRepo) Create(ctx context.Context, comment port.TComment) error {
+	return repoTx(c.engine, ctx, "comment.create", func(session *xorm.Session) error {
+		commentRow := row.ToComment(comment)
+		if _, err := session.Insert(&commentRow); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "comment.create", err)
 		}
 		return nil
@@ -239,9 +260,9 @@ func (c *MyCommentRepo) Create(ctx context.Context, comment entity.TComment) err
 }
 
 func (c *MyCommentRepo) Review(ctx context.Context, ids []int, review int) error {
-	return ormInit.WithEngineTx(c.engine, ctx, func(session *xorm.Session) error {
+	return repoTx(c.engine, ctx, "comment.review", func(session *xorm.Session) error {
 		for _, id := range ids {
-			comment := entity.TComment{Id: id, IsReview: review}
+			comment := row.TComment{Id: id, IsReview: review}
 			if _, err := session.ID(id).MustCols("is_review").Update(&comment); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "comment.review", err)
 			}
@@ -258,7 +279,7 @@ func (c *MyCommentRepo) Delete(ctx context.Context, ids []int) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	if _, err := session.In("id", ids).Delete(&entity.TComment{}); err != nil {
+	if _, err := session.In("id", ids).Delete(&row.TComment{}); err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "comment.delete", err)
 	}
 	return nil

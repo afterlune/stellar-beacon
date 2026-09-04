@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"context"
 	"strings"
 
@@ -19,76 +19,80 @@ type MyMenuRepo struct{ engine *xorm.Engine }
 
 func NewMenuRepo(engine *xorm.Engine) *MyMenuRepo { return &MyMenuRepo{engine: engine} }
 
-func (r *MyMenuRepo) List(ctx context.Context, keywords string) ([]entity.TMenu, error) {
+func (r *MyMenuRepo) List(ctx context.Context, keywords string) ([]port.TMenu, error) {
 	session, err := repoSession(r.engine, ctx, "menu.list")
 	if err != nil {
 		return nil, err
 	}
 	where, args := containsFilter("name", keywords)
-	var menus []entity.TMenu
+	var menus []row.TMenu
 	if err := session.SQL("SELECT * FROM t_menu"+where+" ORDER BY order_num, id", args...).Find(&menus); err != nil {
 		return nil, apperrors.Unavailable("menu.list", err)
 	}
-	return menus, nil
+	return row.FromMenus(menus), nil
 }
 
-func (r *MyMenuRepo) ListOptions(ctx context.Context) ([]entity.TMenu, error) {
+func (r *MyMenuRepo) ListOptions(ctx context.Context) ([]port.TMenu, error) {
 	session, err := repoSession(r.engine, ctx, "menu.options")
 	if err != nil {
 		return nil, err
 	}
-	var menus []entity.TMenu
+	var menus []row.TMenu
 	if err := session.Select("id, name, parent_id, order_num, path, component, icon, is_hidden").OrderBy("order_num, id").Find(&menus); err != nil {
 		return nil, apperrors.Unavailable("menu.options", err)
 	}
-	return menus, nil
+	return row.FromMenus(menus), nil
 }
 
-func (r *MyMenuRepo) ListByUserInfoID(ctx context.Context, userInfoID int) ([]entity.TMenu, error) {
+func (r *MyMenuRepo) ListByUserInfoID(ctx context.Context, userInfoID int) ([]port.TMenu, error) {
 	session, err := repoSession(r.engine, ctx, "menu.user")
 	if err != nil {
 		return nil, err
 	}
-	var menus []entity.TMenu
+	var menus []row.TMenu
 	if err := session.SQL(pgsql.ListMenusByUserInfoId, userInfoID).Find(&menus); err != nil {
 		return nil, apperrors.Unavailable("menu.user", err)
 	}
-	return menus, nil
+	return row.FromMenus(menus), nil
 }
 
-func (r *MyMenuRepo) SaveOrUpdate(ctx context.Context, menu entity.TMenu) error {
+func (r *MyMenuRepo) SaveOrUpdate(ctx context.Context, menu port.TMenu) error {
 	return repoTx(r.engine, ctx, "menu.save", func(session *xorm.Session) error {
+		menuRow := row.ToMenu(menu)
 		if menu.Id == 0 {
-			_, err := session.Insert(&menu)
+			_, err := session.Insert(&menuRow)
 			return err
 		}
-		_, err := session.ID(menu.Id).Update(&menu)
+		_, err := session.ID(menu.Id).Update(&menuRow)
 		return err
 	})
 }
 
 func (r *MyMenuRepo) UpdateHidden(ctx context.Context, id, hidden int) error {
 	return repoTx(r.engine, ctx, "menu.hidden", func(session *xorm.Session) error {
-		_, err := session.ID(id).MustCols("is_hidden").Update(&entity.TMenu{Id: id, IsHidden: hidden})
+		_, err := session.ID(id).MustCols("is_hidden").Update(&row.TMenu{Id: id, IsHidden: hidden})
 		return err
 	})
 }
 
 func (r *MyMenuRepo) Delete(ctx context.Context, id int) error {
 	return repoTx(r.engine, ctx, "menu.delete", func(session *xorm.Session) error {
-		var roleCount int64
-		if _, err := session.Where("menu_id = ?", id).Count(&roleCount); err != nil {
+		roleCount, err := session.Where("menu_id = ?", id).Count(&row.TRoleMenu{})
+		if err != nil {
 			return err
 		}
 		if roleCount > 0 {
 			return apperrors.Conflict("menu.delete", "menu has role associations")
 		}
-		var childIDs []int
-		if err := session.Table("t_menu").Select("id").Where("parent_id = ?", id).Find(&childIDs); err != nil {
+		var children []row.TMenu
+		if err := session.Table("t_menu").Select("id").Where("parent_id = ?", id).Find(&children); err != nil {
 			return err
 		}
-		childIDs = append(childIDs, id)
-		_, err := session.In("id", childIDs).Delete(&entity.TMenu{})
+		childIDs := []int{id}
+		for _, child := range children {
+			childIDs = append(childIDs, child.Id)
+		}
+		_, err = session.In("id", childIDs).Delete(&row.TMenu{})
 		return err
 	})
 }
@@ -97,57 +101,61 @@ type MyResourceRepo struct{ engine *xorm.Engine }
 
 func NewResourceRepo(engine *xorm.Engine) *MyResourceRepo { return &MyResourceRepo{engine: engine} }
 
-func (r *MyResourceRepo) List(ctx context.Context, keywords string) ([]entity.TResource, error) {
+func (r *MyResourceRepo) List(ctx context.Context, keywords string) ([]port.TResource, error) {
 	session, err := repoSession(r.engine, ctx, "resource.list")
 	if err != nil {
 		return nil, err
 	}
 	where, args := containsFilter("resource_name", keywords)
-	var resources []entity.TResource
+	var resources []row.TResource
 	if err := session.SQL("SELECT * FROM t_resource"+where+" ORDER BY id", args...).Find(&resources); err != nil {
 		return nil, apperrors.Unavailable("resource.list", err)
 	}
-	return resources, nil
+	return row.FromResources(resources), nil
 }
 
-func (r *MyResourceRepo) ListOptions(ctx context.Context) ([]entity.TResource, error) {
+func (r *MyResourceRepo) ListOptions(ctx context.Context) ([]port.TResource, error) {
 	session, err := repoSession(r.engine, ctx, "resource.options")
 	if err != nil {
 		return nil, err
 	}
-	var resources []entity.TResource
+	var resources []row.TResource
 	if err := session.Select("id, resource_name, parent_id").Where("is_anonymous = ?", 0).OrderBy("id").Find(&resources); err != nil {
 		return nil, apperrors.Unavailable("resource.options", err)
 	}
-	return resources, nil
+	return row.FromResources(resources), nil
 }
 
-func (r *MyResourceRepo) SaveOrUpdate(ctx context.Context, resource entity.TResource) error {
+func (r *MyResourceRepo) SaveOrUpdate(ctx context.Context, resource port.TResource) error {
 	return repoTx(r.engine, ctx, "resource.save", func(session *xorm.Session) error {
+		resourceRow := row.ToResource(resource)
 		if resource.Id == 0 {
-			_, err := session.Insert(&resource)
+			_, err := session.Insert(&resourceRow)
 			return err
 		}
-		_, err := session.ID(resource.Id).Update(&resource)
+		_, err := session.ID(resource.Id).Update(&resourceRow)
 		return err
 	})
 }
 
 func (r *MyResourceRepo) Delete(ctx context.Context, id int) error {
 	return repoTx(r.engine, ctx, "resource.delete", func(session *xorm.Session) error {
-		var count int64
-		if _, err := session.Where("resource_id = ?", id).Count(&count); err != nil {
+		count, err := session.Where("resource_id = ?", id).Count(&row.TRoleResource{})
+		if err != nil {
 			return err
 		}
 		if count > 0 {
 			return apperrors.Conflict("resource.delete", "resource has role associations")
 		}
-		var childIDs []int
-		if err := session.Table("t_resource").Select("id").Where("parent_id = ?", id).Find(&childIDs); err != nil {
+		var children []row.TResource
+		if err := session.Table("t_resource").Select("id").Where("parent_id = ?", id).Find(&children); err != nil {
 			return err
 		}
-		childIDs = append(childIDs, id)
-		_, err := session.In("id", childIDs).Delete(&entity.TResource{})
+		childIDs := []int{id}
+		for _, child := range children {
+			childIDs = append(childIDs, child.Id)
+		}
+		_, err = session.In("id", childIDs).Delete(&row.TResource{})
 		return err
 	})
 }
@@ -158,16 +166,16 @@ func NewRoleRepository(engine *xorm.Engine) *MyRoleRepository {
 	return &MyRoleRepository{engine: engine}
 }
 
-func (r *MyRoleRepository) ListUserRoles(ctx context.Context) ([]entity.TRole, error) {
+func (r *MyRoleRepository) ListUserRoles(ctx context.Context) ([]port.TRole, error) {
 	session, err := repoSession(r.engine, ctx, "role.user_options")
 	if err != nil {
 		return nil, err
 	}
-	var roles []entity.TRole
+	var roles []row.TRole
 	if err := session.Select("id, role_name, is_disable").OrderBy("id").Find(&roles); err != nil {
 		return nil, apperrors.Unavailable("role.user_options", err)
 	}
-	return roles, nil
+	return row.FromRoles(roles), nil
 }
 
 func (r *MyRoleRepository) Count(ctx context.Context, keywords string) (int64, error) {
@@ -206,49 +214,51 @@ func (r *MyRoleRepository) List(ctx context.Context, current, size int, keywords
 	return roles, nil
 }
 
-func (r *MyRoleRepository) FindByName(ctx context.Context, name string) (entity.TRole, error) {
+func (r *MyRoleRepository) FindByName(ctx context.Context, name string) (port.TRole, error) {
 	session, err := repoSession(r.engine, ctx, "role.find_name")
 	if err != nil {
-		return entity.TRole{}, err
+		return port.TRole{}, err
 	}
-	var role entity.TRole
+	var role row.TRole
 	found, err := session.Where("role_name = ?", name).Get(&role)
 	if err != nil {
-		return entity.TRole{}, apperrors.Unavailable("role.find_name", err)
+		return port.TRole{}, apperrors.Unavailable("role.find_name", err)
 	}
 	if !found {
-		return entity.TRole{}, nil
+		return port.TRole{}, nil
 	}
-	return role, nil
+	return row.FromRole(role), nil
 }
 
-func (r *MyRoleRepository) SaveOrUpdate(ctx context.Context, role entity.TRole, resourceIDs, menuIDs []int) error {
+func (r *MyRoleRepository) SaveOrUpdate(ctx context.Context, role port.TRole, resourceIDs, menuIDs []int) error {
 	return repoTx(r.engine, ctx, "role.save", func(session *xorm.Session) error {
+		roleRow := row.ToRole(role)
 		if role.Id == 0 {
-			if _, err := session.Insert(&role); err != nil {
+			if _, err := session.Insert(&roleRow); err != nil {
 				return err
 			}
-		} else if _, err := session.ID(role.Id).Update(&role); err != nil {
+			role.Id = roleRow.Id
+		} else if _, err := session.ID(role.Id).Update(&roleRow); err != nil {
 			return err
 		}
-		if _, err := session.Where("role_id = ?", role.Id).Delete(&entity.TRoleResource{}); err != nil {
+		if _, err := session.Where("role_id = ?", role.Id).Delete(&row.TRoleResource{}); err != nil {
 			return err
 		}
-		if _, err := session.Where("role_id = ?", role.Id).Delete(&entity.TRoleMenu{}); err != nil {
+		if _, err := session.Where("role_id = ?", role.Id).Delete(&row.TRoleMenu{}); err != nil {
 			return err
 		}
-		resources := make([]entity.TRoleResource, 0, len(resourceIDs))
+		resources := make([]row.TRoleResource, 0, len(resourceIDs))
 		for _, id := range resourceIDs {
-			resources = append(resources, entity.TRoleResource{RoleId: role.Id, ResourceId: id})
+			resources = append(resources, row.TRoleResource{RoleId: role.Id, ResourceId: id})
 		}
 		if len(resources) > 0 {
 			if _, err := session.Insert(&resources); err != nil {
 				return err
 			}
 		}
-		menus := make([]entity.TRoleMenu, 0, len(menuIDs))
+		menus := make([]row.TRoleMenu, 0, len(menuIDs))
 		for _, id := range menuIDs {
-			menus = append(menus, entity.TRoleMenu{RoleId: role.Id, MenuId: id})
+			menus = append(menus, row.TRoleMenu{RoleId: role.Id, MenuId: id})
 		}
 		if len(menus) > 0 {
 			_, err := session.Insert(&menus)
@@ -263,14 +273,14 @@ func (r *MyRoleRepository) Delete(ctx context.Context, ids []int) error {
 		return nil
 	}
 	return repoTx(r.engine, ctx, "role.delete", func(session *xorm.Session) error {
-		var count int64
-		if _, err := session.In("role_id", ids).Count(&entity.TUserRole{}); err != nil {
+		count, err := session.In("role_id", ids).Count(&row.TUserRole{})
+		if err != nil {
 			return err
 		}
 		if count > 0 {
 			return apperrors.Conflict("role.delete", "role has users")
 		}
-		_, err := session.In("id", ids).Delete(&entity.TRole{})
+		_, err = session.In("id", ids).Delete(&row.TRole{})
 		return err
 	})
 }

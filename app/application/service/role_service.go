@@ -2,21 +2,19 @@ package service
 
 import (
 	"benetnasch/app/application/support"
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/facade/model"
 	"container/list"
 	"context"
-
-	"github.com/gin-gonic/gin"
+	"strings"
+	"unicode/utf8"
 )
 
 type RoleService interface {
-	ListUserRoles() model.ResultVO
-	ListRoles(c *gin.Context) model.ResultVO
-	SaveOrUpdateRole(c *gin.Context) model.ResultVO
-	DeleteRoles(c *gin.Context) model.ResultVO
+	ListUserRoles(ctx context.Context) port.ResultVO
+	ListRoles(c port.Request) port.ResultVO
+	SaveOrUpdateRole(c port.Request) port.ResultVO
+	DeleteRoles(c port.Request) port.ResultVO
 }
 
 type MyRoleService struct{ repo port.RoleRepository }
@@ -30,67 +28,71 @@ func (r *MyRoleService) roleRepository() port.RoleRepository {
 	return roleRepo
 }
 
-func (r *MyRoleService) ListUserRoles() model.ResultVO {
-	roles, err := r.roleRepository().ListUserRoles(context.Background())
+func (r *MyRoleService) ListUserRoles(ctx context.Context) port.ResultVO {
+	roles, err := r.roleRepository().ListUserRoles(ctx)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	var dtos []model.UserRoleDTO
+	var dtos []port.UserRoleDTO
 	support.StructCopy(roles, &dtos)
-	return model.ResultOkWithData(dtos)
+	return port.ResultOkWithData(dtos)
 }
 
-func (r *MyRoleService) ListRoles(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (r *MyRoleService) ListRoles(c port.Request) port.ResultVO {
+	var vo port.ConditionVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	count, err := r.roleRepository().Count(c.Request.Context(), vo.Keywords)
+	count, err := r.roleRepository().Count(c.Context(), vo.Keywords)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		return port.ResultOkWithData(port.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	data, err := r.roleRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
+	data, err := r.roleRepository().List(c.Context(), vo.Current, vo.Size, vo.Keywords)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
+	return port.ResultOkWithData(port.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func (r *MyRoleService) SaveOrUpdateRole(c *gin.Context) model.ResultVO {
-	var vo model.RoleVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (r *MyRoleService) SaveOrUpdateRole(c port.Request) port.ResultVO {
+	var vo port.RoleVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	existing, err := r.roleRepository().FindByName(c.Request.Context(), vo.RoleName)
+	roleName := strings.TrimSpace(vo.RoleName)
+	if roleName == "" || utf8.RuneCountInString(roleName) > 20 {
+		return port.ResultFailWithMessage("角色名长度必须为1到20个字符")
+	}
+	existing, err := r.roleRepository().FindByName(c.Context(), roleName)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if existing.Id != 0 && existing.Id != vo.Id {
-		return model.ResultFailWithMessage("该角色存在")
+		return port.ResultFailWithMessage("该角色存在")
 	}
-	role := entity.TRole{Id: vo.Id, RoleName: vo.RoleName, IsDisable: support.False}
-	if err := r.roleRepository().SaveOrUpdate(c.Request.Context(), role, vo.ResourceIds, vo.MenuIds); err != nil {
+	role := port.TRole{Id: vo.Id, RoleName: roleName, IsDisable: support.False}
+	if err := r.roleRepository().SaveOrUpdate(c.Context(), role, vo.ResourceIds, vo.MenuIds); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
-			return model.ResultFailWithMessage("该角色存在")
+			return port.ResultFailWithMessage("该角色存在")
 		}
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (r *MyRoleService) DeleteRoles(c *gin.Context) model.ResultVO {
+func (r *MyRoleService) DeleteRoles(c port.Request) port.ResultVO {
 	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+	if err := c.Bind(&ids); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := r.roleRepository().Delete(c.Request.Context(), ids); err != nil {
+	if err := r.roleRepository().Delete(c.Context(), ids); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
-			return model.ResultFailWithMessage("该角色下存在用户")
+			return port.ResultFailWithMessage("该角色下存在用户")
 		}
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }

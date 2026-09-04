@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/info [PUT]
 func UpdateUserInfo(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.UpdateUserInfo(c))
+	c.JSON(http.StatusOK, userInfoService.UpdateUserInfo(applicationRequest(c)))
 }
 
 // UpdateUserAvatar
@@ -20,7 +20,7 @@ func UpdateUserInfo(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/avatar [POST]
 func UpdateUserAvatar(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.UpdateUserAvatar(c))
+	c.JSON(http.StatusOK, userInfoService.UpdateUserAvatar(applicationRequest(c)))
 }
 
 // SaveUserEmail
@@ -29,7 +29,7 @@ func UpdateUserAvatar(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/email [PUT]
 func SaveUserEmail(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.SaveUserEmail(c))
+	c.JSON(http.StatusOK, userInfoService.SaveUserEmail(applicationRequest(c)))
 }
 
 // UpdateUserSubscribe 修改用户的订阅状态
@@ -38,7 +38,7 @@ func SaveUserEmail(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/subscribe [PUT]
 func UpdateUserSubscribe(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.UpdateUserSubscribe(c))
+	c.JSON(http.StatusOK, userInfoService.UpdateUserSubscribe(applicationRequest(c)))
 }
 
 // UpdateUserRole
@@ -47,7 +47,7 @@ func UpdateUserSubscribe(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/role [PUT]
 func UpdateUserRole(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.UpdateUserRole(c))
+	c.JSON(http.StatusOK, userInfoService.UpdateUserRole(applicationRequest(c)))
 }
 
 // UpdateUserDisable
@@ -56,7 +56,7 @@ func UpdateUserRole(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/disable [PUT]
 func UpdateUserDisable(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.UpdateUserRole(c))
+	c.JSON(http.StatusOK, userInfoService.UpdateUserDisable(applicationRequest(c)))
 }
 
 // ListOnlineUsers
@@ -65,7 +65,7 @@ func UpdateUserDisable(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/online [GET]
 func ListOnlineUsers(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.ListOnlineUsers(c))
+	c.JSON(http.StatusOK, userInfoService.ListOnlineUsers(applicationRequest(c)))
 }
 
 // RemoveOnlineUser
@@ -74,7 +74,7 @@ func ListOnlineUsers(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/:userInfoId/online [DELETE]
 func RemoveOnlineUser(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.RemoveOnlineUser(c))
+	c.JSON(http.StatusOK, userInfoService.RemoveOnlineUser(applicationRequest(c)))
 }
 
 // GetUserInfoById
@@ -83,5 +83,5 @@ func RemoveOnlineUser(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/info/:userInfoId [GET]
 func GetUserInfoById(c *gin.Context) {
-	c.JSON(http.StatusOK, userInfoService.GetUserInfoById(c))
+	c.JSON(http.StatusOK, userInfoService.GetUserInfoById(applicationRequest(c)))
 }

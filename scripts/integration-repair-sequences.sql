@@ -6,6 +6,7 @@ DECLARE
     sequence_name text;
     max_id bigint;
     last_value bigint;
+    is_called boolean;
 BEGIN
     FOR identity_column IN
         SELECT table_schema, table_name, column_name
@@ -27,9 +28,10 @@ BEGIN
             identity_column.table_schema,
             identity_column.table_name
         ) INTO max_id;
-        EXECUTE format('SELECT last_value FROM %s', sequence_name) INTO last_value;
+        EXECUTE format('SELECT last_value, is_called FROM %s', sequence_name)
+            INTO last_value, is_called;
 
-        IF max_id > last_value THEN
+        IF max_id > last_value OR (max_id = last_value AND NOT is_called) THEN
             PERFORM setval(sequence_name::regclass, max_id, true);
         END IF;
     END LOOP;

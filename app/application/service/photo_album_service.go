@@ -2,24 +2,20 @@ package service
 
 import (
 	"benetnasch/app/application/support"
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/facade/model"
 	"context"
 	"strconv"
-
-	"github.com/gin-gonic/gin"
 )
 
 type PhotoAlbumService interface {
-	ListPhotoAlbums() model.ResultVO
-	SavePhotoAlbumCover(c *gin.Context) model.ResultVO
-	SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO
-	ListPhotoAlbumBacks(c *gin.Context) model.ResultVO
-	ListPhotoAlbumBackInfos() model.ResultVO
-	GetPhotoAlbumBackById(c *gin.Context) model.ResultVO
-	DeletePhotoAlbumById(c *gin.Context) model.ResultVO
+	ListPhotoAlbums(ctx context.Context) port.ResultVO
+	SavePhotoAlbumCover(c port.Request) port.ResultVO
+	SaveOrUpdatePhotoAlbum(c port.Request) port.ResultVO
+	ListPhotoAlbumBacks(c port.Request) port.ResultVO
+	ListPhotoAlbumBackInfos(ctx context.Context) port.ResultVO
+	GetPhotoAlbumBackById(c port.Request) port.ResultVO
+	DeletePhotoAlbumById(c port.Request) port.ResultVO
 }
 
 type MyPhotoAlbumService struct {
@@ -43,103 +39,103 @@ func (p *MyPhotoAlbumService) photoRepository() port.PhotoRepository {
 	return p.photos
 }
 
-func (p *MyPhotoAlbumService) ListPhotoAlbums() model.ResultVO {
-	albums, err := p.photoAlbumRepository().ListPublic(context.Background())
+func (p *MyPhotoAlbumService) ListPhotoAlbums(ctx context.Context) port.ResultVO {
+	albums, err := p.photoAlbumRepository().ListPublic(ctx)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	var dtos []model.PhotoAlbumDTO
+	var dtos []port.PhotoAlbumDTO
 	support.StructCopy(albums, &dtos)
-	return model.ResultOkWithData(dtos)
+	return port.ResultOkWithData(dtos)
 }
 
-func (p *MyPhotoAlbumService) SavePhotoAlbumCover(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) SavePhotoAlbumCover(c port.Request) port.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	ref, err := uploadMultipart(c.Request.Context(), p.storage, file, "photos/")
+	ref, err := uploadMultipart(c.Context(), p.storage, file, "photos/")
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(ref.URL)
+	return port.ResultOkWithData(ref.URL)
 }
 
-func (p *MyPhotoAlbumService) SaveOrUpdatePhotoAlbum(c *gin.Context) model.ResultVO {
-	var vo model.PhotoAlbumVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (p *MyPhotoAlbumService) SaveOrUpdatePhotoAlbum(c port.Request) port.ResultVO {
+	var vo port.PhotoAlbumVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	duplicate, err := p.photoAlbumRepository().FindByName(c.Request.Context(), vo.AlbumName)
+	duplicate, err := p.photoAlbumRepository().FindByName(c.Context(), vo.AlbumName)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if duplicate.Id != 0 && duplicate.Id != vo.Id {
-		return model.ResultFailWithMessage("相册名已存在")
+		return port.ResultFailWithMessage("相册名已存在")
 	}
-	album := entity.TPhotoAlbum{Id: vo.Id, AlbumName: vo.AlbumName, AlbumDesc: vo.AlbumDesc, AlbumCover: vo.AlbumCover, Status: vo.Status}
-	if err := p.photoAlbumRepository().SaveOrUpdate(c.Request.Context(), album); err != nil {
-		return model.ResultFromError(err)
+	album := port.TPhotoAlbum{Id: vo.Id, AlbumName: vo.AlbumName, AlbumDesc: vo.AlbumDesc, AlbumCover: vo.AlbumCover, Status: vo.Status}
+	if err := p.photoAlbumRepository().SaveOrUpdate(c.Context(), album); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (p *MyPhotoAlbumService) ListPhotoAlbumBacks(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (p *MyPhotoAlbumService) ListPhotoAlbumBacks(c port.Request) port.ResultVO {
+	var vo port.ConditionVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	albums, count, err := p.photoAlbumRepository().ListAdmin(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
+	albums, count, err := p.photoAlbumRepository().ListAdmin(c.Context(), vo.Current, vo.Size, vo.Keywords)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{})
+		return port.ResultOkWithData(port.PageResultDTO{})
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: albums, Count: int(count)})
+	return port.ResultOkWithData(port.PageResultDTO{Records: albums, Count: int(count)})
 }
 
-func (p *MyPhotoAlbumService) ListPhotoAlbumBackInfos() model.ResultVO {
-	albums, err := p.photoAlbumRepository().ListOptions(context.Background())
+func (p *MyPhotoAlbumService) ListPhotoAlbumBackInfos(ctx context.Context) port.ResultVO {
+	albums, err := p.photoAlbumRepository().ListOptions(ctx)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	var dtos []model.PhotoAlbumDTO
+	var dtos []port.PhotoAlbumDTO
 	support.StructCopy(albums, &dtos)
-	return model.ResultOkWithData(dtos)
+	return port.ResultOkWithData(dtos)
 }
 
-func (p *MyPhotoAlbumService) GetPhotoAlbumBackById(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) GetPhotoAlbumBackById(c port.Request) port.ResultVO {
 	id, err := strconv.Atoi(c.Param("albumId"))
 	if err != nil {
-		return model.ResultFailWithMessage("相册不存在")
+		return port.ResultFailWithMessage("相册不存在")
 	}
-	album, err := p.photoAlbumRepository().Get(c.Request.Context(), id)
+	album, err := p.photoAlbumRepository().Get(c.Context(), id)
 	if err != nil {
 		if apperrors.IsKind(err, apperrors.KindNotFound) {
-			return model.ResultFailWithMessage("相册不存在")
+			return port.ResultFailWithMessage("相册不存在")
 		}
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, support.False)
+	_, count, err := p.photoRepository().List(c.Context(), 1, 1, id, support.False)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	var dto model.PhotoAlbumAdminDTO
+	var dto port.PhotoAlbumAdminDTO
 	support.StructCopy(album, &dto)
 	dto.PhotoCount = int(count)
-	return model.ResultOkWithData(dto)
+	return port.ResultOkWithData(dto)
 }
 
-func (p *MyPhotoAlbumService) DeletePhotoAlbumById(c *gin.Context) model.ResultVO {
+func (p *MyPhotoAlbumService) DeletePhotoAlbumById(c port.Request) port.ResultVO {
 	id, err := strconv.Atoi(c.Param("albumId"))
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := p.photoAlbumRepository().Delete(c.Request.Context(), id); err != nil {
-		return model.ResultFromError(err)
+	if err := p.photoAlbumRepository().Delete(c.Context(), id); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
 var _ PhotoAlbumService = (*MyPhotoAlbumService)(nil)

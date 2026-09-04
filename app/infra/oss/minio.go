@@ -57,10 +57,10 @@ func (s *MinioStorage) Put(ctx context.Context, key string, body io.Reader) (por
 	if _, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{}); err == nil {
 		return s.ref(key), nil
 	} else if !isMissingObject(err) {
-		return port.ObjectRef{}, errors.Unavailable("minio.stat", err)
+		return port.ObjectRef{}, errors.WrapUnavailable("minio.stat", err)
 	}
 	if _, err := s.client.PutObject(ctx, s.bucket, key, body, -1, minio.PutObjectOptions{}); err != nil {
-		return port.ObjectRef{}, errors.Unavailable("minio.put", err)
+		return port.ObjectRef{}, errors.WrapUnavailable("minio.put", err)
 	}
 	return s.ref(key), nil
 }
@@ -68,7 +68,7 @@ func (s *MinioStorage) Put(ctx context.Context, key string, body io.Reader) (por
 func (s *MinioStorage) ensureBucket(ctx context.Context) error {
 	exists, err := s.client.BucketExists(ctx, s.bucket)
 	if err != nil {
-		return errors.Unavailable("minio.bucket", err)
+		return errors.WrapUnavailable("minio.bucket", err)
 	}
 	if exists {
 		return s.setPublicReadPolicy(ctx)
@@ -77,7 +77,7 @@ func (s *MinioStorage) ensureBucket(ctx context.Context) error {
 		if exists, checkErr := s.client.BucketExists(ctx, s.bucket); checkErr == nil && exists {
 			return nil
 		}
-		return errors.Unavailable("minio.bucket", err)
+		return errors.WrapUnavailable("minio.bucket", err)
 	}
 	return s.setPublicReadPolicy(ctx)
 }
@@ -88,7 +88,7 @@ func (s *MinioStorage) setPublicReadPolicy(ctx context.Context) error {
 	}
 	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, s.bucket)
 	if err := s.client.SetBucketPolicy(ctx, s.bucket, policy); err != nil {
-		return errors.Unavailable("minio.policy", err)
+		return errors.WrapUnavailable("minio.policy", err)
 	}
 	return nil
 }

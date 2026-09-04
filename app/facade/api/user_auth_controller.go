@@ -1,6 +1,7 @@
 package api
 
 import (
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/code [GET]
 func SendCode(c *gin.Context) {
-	c.JSON(http.StatusOK, userAuthService.SendCode(c))
+	c.JSON(http.StatusOK, userAuthService.SendCode(applicationRequest(c)))
 }
 
 // ListUserAreas
@@ -21,7 +22,7 @@ func SendCode(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/area [GET]
 func ListUserAreas(c *gin.Context) {
-	c.JSON(http.StatusOK, userAuthService.ListUserAreas(c))
+	c.JSON(http.StatusOK, userAuthService.ListUserAreas(applicationRequest(c)))
 }
 
 // ListUsers
@@ -30,7 +31,7 @@ func ListUserAreas(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users [GET]
 func ListUsers(c *gin.Context) {
-	c.JSON(http.StatusOK, userAuthService.ListUsers(c))
+	c.JSON(http.StatusOK, userAuthService.ListUsers(applicationRequest(c)))
 }
 
 // Register
@@ -39,7 +40,7 @@ func ListUsers(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/register [POST]
 func Register(c *gin.Context) {
-	c.JSON(http.StatusOK, userAuthService.Register(c))
+	c.JSON(http.StatusOK, userAuthService.Register(applicationRequest(c)))
 }
 
 // UpdatePassword
@@ -48,7 +49,7 @@ func Register(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /users/password [PUT]
 func UpdatePassword(c *gin.Context) {
-	c.JSON(http.StatusOK, userAuthService.UpdatePassword(c))
+	c.JSON(http.StatusOK, userAuthService.UpdatePassword(applicationRequest(c)))
 }
 
 // UpdateAdminPassword
@@ -57,7 +58,7 @@ func UpdatePassword(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/password [PUT]
 func UpdateAdminPassword(c *gin.Context) {
-	c.JSON(http.StatusOK, userAuthService.UpdateAdminPassword(c))
+	c.JSON(http.StatusOK, userAuthService.UpdateAdminPassword(applicationRequest(c)))
 }
 
 // Logout
@@ -75,7 +76,7 @@ func Logout(c *gin.Context) {
 		})
 		return
 	}
-	dto, ok := value.(model.UserDetailsDTO)
+	dto, ok := value.(port.UserDetailsDTO)
 	if !ok {
 		c.JSON(http.StatusOK, model.ResultVO{
 			Code:    500,

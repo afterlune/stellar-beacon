@@ -1,6 +1,7 @@
 package main
 
 import (
+	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/cmd"
 	"log/slog"
 	"os"
@@ -16,7 +17,7 @@ import (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		slog.Error("command failed", "error", err)
+		slog.Error("command failed", "error_code", apperrors.SafeCode(err))
 		os.Exit(1)
 	}
 }

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Benetnasch 个人博客" />
+    <link rel="icon" href="/favicon.ico" />
+    <!-- Math rendering is non-critical: preload it without blocking the first screen. -->
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.css" crossorigin="anonymous" />
+    <link rel="preload" as="script" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.js" crossorigin="anonymous" />
+    <script>
+      window.addEventListener('load', function () {
+        var katexStyles = document.createElement('link')
+        katexStyles.rel = 'stylesheet'
+        katexStyles.href = 'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.css'
+        katexStyles.crossOrigin = 'anonymous'
+        document.head.appendChild(katexStyles)
+
+        var katexScript = document.createElement('script')
+        katexScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.js'
+        katexScript.async = true
+        katexScript.crossOrigin = 'anonymous'
+        document.head.appendChild(katexScript)
+      }, { once: true })
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -71,7 +71,61 @@ func main() {
 			fail("seed %s: %v", seed.email, err)
 		}
 	}
-	fmt.Println("integration users are ready")
+	if err := ensureArticleVisibilityFixtures(ctx, db); err != nil {
+		fail("seed article visibility fixtures: %v", err)
+	}
+	fmt.Println("integration users and article visibility fixtures are ready")
+}
+
+type articleVisibilityFixture struct {
+	id       int
+	title    string
+	content  string
+	isDelete int
+	status   int
+}
+
+// These rows deliberately contain unique sentinel terms. They make the
+// integration retrieval gate prove that private and deleted source rows are
+// not projected into the public article_chunks index. The IDs are outside the
+// normal fixture range and the operation is idempotent.
+func ensureArticleVisibilityFixtures(ctx context.Context, db *sql.DB) error {
+	fixtures := []articleVisibilityFixture{
+		{
+			id:       1000001,
+			title:    "integration private index sentinel",
+			content:  "q9z7private20260901xk",
+			isDelete: 0,
+			status:   2,
+		},
+		{
+			id:       1000002,
+			title:    "integration deleted index sentinel",
+			content:  "q9z7deleted20260901xk",
+			isDelete: 1,
+			status:   1,
+		},
+	}
+
+	for _, fixture := range fixtures {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO t_article
+				(id, user_id, category_id, article_cover, article_title, article_content,
+				 is_top, is_featured, is_delete, status, type, password, original_url,
+				 create_time, update_time)
+			VALUES ($1, 1, NULL, '', $2, $3, 0, 0, $4, $5, 1, NULL, NULL, NOW(), NOW())
+			ON CONFLICT (id) DO UPDATE SET
+				article_title = EXCLUDED.article_title,
+				article_content = EXCLUDED.article_content,
+				is_delete = EXCLUDED.is_delete,
+				status = EXCLUDED.status,
+				update_time = NOW()`,
+			fixture.id, fixture.title, fixture.content, fixture.isDelete, fixture.status)
+		if err != nil {
+			return fmt.Errorf("upsert article %d: %w", fixture.id, err)
+		}
+	}
+	return nil
 }
 
 func ensureUser(ctx context.Context, db *sql.DB, seed userSeed) error {

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Benetnasch dream placeholder</title>
+  <desc id="desc">A quiet night sky with a crescent moon.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#111d3d"/>
+      <stop offset="1" stop-color="#3b315e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" rx="28" fill="url(#sky)"/>
+  <circle cx="840" cy="210" r="92" fill="#f3e8c8"/>
+  <circle cx="880" cy="180" r="92" fill="#20264a"/>
+  <g fill="#f3e8c8" opacity=".8">
+    <circle cx="180" cy="150" r="4"/><circle cx="290" cy="280" r="3"/><circle cx="1020" cy="370" r="4"/>
+    <circle cx="680" cy="100" r="3"/><circle cx="470" cy="190" r="4"/><circle cx="970" cy="120" r="2"/>
+  </g>
+  <path d="M0 510c170-90 300-65 450 0 180 78 325 76 510-2 90-38 165-45 240-20v142H0z" fill="#13172d" opacity=".9"/>
+  <text x="80" y="545" fill="#f3e8c8" font-family="sans-serif" font-size="34" letter-spacing="5">BENETNASCH · DREAM</text>
+</svg>

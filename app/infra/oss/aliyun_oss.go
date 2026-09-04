@@ -48,7 +48,7 @@ func (s *AliyunStorage) Put(ctx context.Context, key string, body io.Reader) (po
 	} else {
 		var serviceErr *aliyunoss.ServiceError
 		if !stdErrors.As(err, &serviceErr) || serviceErr.HttpStatusCode() != 404 {
-			return port.ObjectRef{}, errors.Unavailable("oss.head", err)
+			return port.ObjectRef{}, errors.WrapUnavailable("oss.head", err)
 		}
 	}
 	_, err := s.client.PutObject(ctx, &aliyunoss.PutObjectRequest{
@@ -58,7 +58,7 @@ func (s *AliyunStorage) Put(ctx context.Context, key string, body io.Reader) (po
 		ForbidOverwrite: aliyunoss.Ptr("true"),
 	})
 	if err != nil {
-		return port.ObjectRef{}, errors.Unavailable("oss.put", err)
+		return port.ObjectRef{}, errors.WrapUnavailable("oss.put", err)
 	}
 	return s.ref(key), nil
 }

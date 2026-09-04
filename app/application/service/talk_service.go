@@ -1,26 +1,25 @@
 package service
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/facade/model"
 	"container/list"
+	"context"
 	"log/slog"
 	"strconv"
+	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 )
 
 type TalkService interface {
-	ListTalks(c *gin.Context) model.ResultVO
-	GetTalkById(c *gin.Context) model.ResultVO
-	SaveTalkImages(c *gin.Context) model.ResultVO
-	SaveOrUpdateTalk(c *gin.Context) model.ResultVO
-	DeleteTalks(c *gin.Context) model.ResultVO
-	ListBackTalks(c *gin.Context) model.ResultVO
-	GetBackTalkById(c *gin.Context) model.ResultVO
+	ListTalks(c port.Request) port.ResultVO
+	GetTalkById(c port.Request) port.ResultVO
+	SaveTalkImages(c port.Request) port.ResultVO
+	SaveOrUpdateTalk(c port.Request) port.ResultVO
+	DeleteTalks(c port.Request) port.ResultVO
+	ListBackTalks(c port.Request) port.ResultVO
+	GetBackTalkById(c port.Request) port.ResultVO
 }
 
 type MyTalkService struct {
@@ -44,26 +43,26 @@ func (t *MyTalkService) commentRepository() port.CommentRepository {
 	return t.comments
 }
 
-func (t *MyTalkService) ListTalks(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) ListTalks(c port.Request) port.ResultVO {
 	current, err := strconv.Atoi(c.Query("current"))
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	ctx := c.Request.Context()
+	ctx := c.Context()
 	count, err := t.talkRepository().Count(ctx, port.TalkFilter{Status: 1})
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		return port.ResultOkWithData(port.PageResultDTO{Records: list.New(), Count: 0})
 	}
 	talks, err := t.talkRepository().List(ctx, current, size)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	talkIDs := make([]int, 0, len(talks))
 	for _, talk := range talks {
@@ -71,7 +70,7 @@ func (t *MyTalkService) ListTalks(c *gin.Context) model.ResultVO {
 	}
 	comments, err := t.commentRepository().ListCommentCountsByTypeAndTopicIDs(ctx, 5, talkIDs)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	commentCounts := make(map[int]int, len(comments))
 	for _, comment := range comments {
@@ -82,139 +81,149 @@ func (t *MyTalkService) ListTalks(c *gin.Context) model.ResultVO {
 		if talk.Images != "" {
 			var images []string
 			if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
-				slog.Error("decode talk images failed", "error", err)
-				return model.ResultFailWithMessage("说说图片格式不正确")
+				slog.Error("decode talk images failed", "error_code", apperrors.SafeCode(err))
+				return port.ResultFailWithMessage("说说图片格式不正确")
 			}
 			talk.Imgs = images
 		}
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: talks, Count: count})
+	return port.ResultOkWithData(port.PageResultDTO{Records: talks, Count: count})
 }
 
-func (t *MyTalkService) GetTalkById(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) GetTalkById(c port.Request) port.ResultVO {
 	id, err := strconv.Atoi(c.Param("talkId"))
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	talk, err := t.talkRepository().Get(c.Request.Context(), id)
+	talk, err := t.talkRepository().Get(c.Context(), id)
 	if err != nil {
 		if apperrors.IsKind(err, apperrors.KindNotFound) {
-			return model.ResultFailWithMessage("说说不存在")
+			return port.ResultFailWithMessage("说说不存在")
 		}
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if talk.Images != "" {
 		var images []string
 		if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
-			return model.ResultFailWithMessage("说说图片格式不正确")
+			return port.ResultFailWithMessage("说说图片格式不正确")
 		}
 		talk.Imgs = images
 	}
-	commentCount, err := t.commentRepository().ListCommentCountByTypeAndTopicID(c.Request.Context(), 5, id)
+	commentCount, err := t.commentRepository().ListCommentCountByTypeAndTopicID(c.Context(), 5, id)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	talk.CommentCount = commentCount.CommentCount
-	return model.ResultOkWithData(talk)
+	return port.ResultOkWithData(talk)
 }
 
-func (t *MyTalkService) SaveTalkImages(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) SaveTalkImages(c port.Request) port.ResultVO {
 	file, err := c.FormFile("file")
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	ref, err := uploadMultipart(c.Request.Context(), t.storage, file, "talks/")
+	ref, err := uploadMultipart(c.Context(), t.storage, file, "talks/")
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(ref.URL)
+	return port.ResultOkWithData(ref.URL)
 }
 
-func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
-	var vo model.TalkVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (t *MyTalkService) SaveOrUpdateTalk(c port.Request) port.ResultVO {
+	var vo port.TalkVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
 	value, ok := c.Get("userInfo")
 	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
+		return port.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
 	}
-	dto, ok := value.(model.UserDetailsDTO)
+	dto, ok := value.(port.UserDetailsDTO)
 	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
+		return port.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
 	}
-	talk := entity.TTalk{Id: vo.Id, Content: vo.Content, Images: vo.Images, IsTop: vo.IsTop, Status: vo.Status, UserId: dto.UserInfoId}
-	if err := t.talkRepository().SaveOrUpdate(c.Request.Context(), talk); err != nil {
-		return model.ResultFromError(err)
+	talk := port.TTalk{Id: vo.Id, Content: vo.Content, Images: vo.Images, IsTop: vo.IsTop, Status: vo.Status, UserId: dto.UserInfoId}
+	if err := t.talkRepository().SaveOrUpdate(c.Context(), talk); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (t *MyTalkService) DeleteTalks(c *gin.Context) model.ResultVO {
-	var values []string
-	if err := c.ShouldBind(&values); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+// PublishAgentTalk is the context-native application use case used after a
+// human approves an autonomous candidate. It creates a public, non-pinned
+// talk without exposing an HTTP or model dependency.
+func (t *MyTalkService) PublishAgentTalk(ctx context.Context, userID int, content string) (int, error) {
+	if t == nil || t.repo == nil {
+		return 0, apperrors.Unavailable("talk.agent_publish", nil)
 	}
-	ids := make([]int, 0, len(values))
-	for _, value := range values {
-		id, err := strconv.Atoi(value)
-		if err != nil {
-			return model.ResultFailWithMessage("参数格式不正确")
-		}
-		ids = append(ids, id)
+	content = strings.TrimSpace(content)
+	if userID <= 0 || content == "" || len([]rune(content)) > 100_000 {
+		return 0, apperrors.Invalid("talk.agent_publish", "agent talk input is invalid")
 	}
-	if err := t.talkRepository().Delete(c.Request.Context(), ids); err != nil {
-		return model.ResultFromError(err)
+	talk := port.TTalk{UserId: userID, Content: content, IsTop: 0, Status: 1}
+	if err := t.repo.SaveOrUpdate(ctx, talk); err != nil {
+		return 0, err
 	}
-	return model.ResultOk()
+	return talk.Id, nil
 }
 
-func (t *MyTalkService) ListBackTalks(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (t *MyTalkService) DeleteTalks(c port.Request) port.ResultVO {
+	var ids []int
+	if err := c.Bind(&ids); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
+	}
+	if err := t.talkRepository().Delete(c.Context(), ids); err != nil {
+		return port.ResultFromError(err)
+	}
+	return port.ResultOk()
+}
+
+func (t *MyTalkService) ListBackTalks(c port.Request) port.ResultVO {
+	var vo port.ConditionVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
 	filter := port.TalkFilter{Status: vo.Status}
-	count, err := t.talkRepository().Count(c.Request.Context(), filter)
+	count, err := t.talkRepository().Count(c.Context(), filter)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		return port.ResultOkWithData(port.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	talks, err := t.talkRepository().ListAdmin(c.Request.Context(), vo.Current, vo.Size, filter)
+	talks, err := t.talkRepository().ListAdmin(c.Context(), vo.Current, vo.Size, filter)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	for _, talk := range talks {
 		if talk.Images != "" {
 			var images []string
 			if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
-				return model.ResultFailWithMessage("说说图片格式不正确")
+				return port.ResultFailWithMessage("说说图片格式不正确")
 			}
 			talk.Imgs = images
 		}
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: talks, Count: count})
+	return port.ResultOkWithData(port.PageResultDTO{Records: talks, Count: count})
 }
 
-func (t *MyTalkService) GetBackTalkById(c *gin.Context) model.ResultVO {
+func (t *MyTalkService) GetBackTalkById(c port.Request) port.ResultVO {
 	id, err := strconv.Atoi(c.Param("talkId"))
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	talk, err := t.talkRepository().GetAdmin(c.Request.Context(), id)
+	talk, err := t.talkRepository().GetAdmin(c.Context(), id)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if talk.Images != "" {
 		var images []string
 		if err := json.Unmarshal([]byte(talk.Images), &images); err != nil {
-			return model.ResultFailWithMessage("说说图片格式不正确")
+			return port.ResultFailWithMessage("说说图片格式不正确")
 		}
 		talk.Imgs = images
 	}
-	return model.ResultOkWithData(talk)
+	return port.ResultOkWithData(talk)
 }
 
 var _ TalkService = (*MyTalkService)(nil)

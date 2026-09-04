@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobLogs [GET]
 func ListJobLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, jobLogService.ListJobLogs(c))
+	c.JSON(http.StatusOK, jobLogService.ListJobLogs(applicationRequest(c)))
 }
 
 // DeleteJobLogs
@@ -20,7 +20,7 @@ func ListJobLogs(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobLogs [DELETE]
 func DeleteJobLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, jobLogService.DeleteJobLogs(c))
+	c.JSON(http.StatusOK, jobLogService.DeleteJobLogs(applicationRequest(c)))
 }
 
 // CleanJobLogs
@@ -29,7 +29,7 @@ func DeleteJobLogs(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobLogs/clean [DELETE]
 func CleanJobLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, jobLogService.CleanJobLogs())
+	c.JSON(http.StatusOK, jobLogService.CleanJobLogs(c.Request.Context()))
 }
 
 // ListJobLogGroups
@@ -38,5 +38,5 @@ func CleanJobLogs(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/jobLogs/jobGroups [GET]
 func ListJobLogGroups(c *gin.Context) {
-	c.JSON(http.StatusOK, jobLogService.CleanJobLogs())
+	c.JSON(http.StatusOK, jobLogService.ListJobLogGroups(c.Request.Context()))
 }

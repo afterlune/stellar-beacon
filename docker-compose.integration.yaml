@@ -8,8 +8,9 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
       TZ: Asia/Shanghai
     volumes:
-      - integration-postgres-data:/var/lib/postgresql/data
-      - ./docs/benetnasch.sql:/docker-entrypoint-initdb.d/001-benetnasch.sql:ro
+      # The suffix is a data-volume epoch.  The previous integration volume was
+      # initialized by PostgreSQL 14 and must remain untouched for rollback.
+      - integration-postgres-data-v16:/var/lib/postgresql/data
       - ./scripts/integration-repair-sequences.sql:/docker-entrypoint-initdb.d/002-repair-sequences.sql:ro
     ports:
       - "15432:5432"
@@ -45,7 +46,9 @@ services:
     ports:
       - "17700:7700"
     volumes:
-      - integration-meili-data:/meili_data
+      # Meilisearch 1.1 data is not opened in-place by the 1.53 engine.  Keep
+      # the old integration volume and use a fresh versioned volume instead.
+      - integration-meili-data-v153:/meili_data
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
@@ -73,6 +76,31 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD is required}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.deepseek.com}
+      OPENAI_MODEL: ${OPENAI_MODEL:-deepseek-v4-flash-vision-exp}
+      ALIBAILIAN_API_KEY: ${ALIBAILIAN_API_KEY:-}
+      ALIBAILIAN_BASE_URL: ${ALIBAILIAN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      ALIBAILIAN_MODEL: ${ALIBAILIAN_MODEL:-qwen3.7-text-embedding}
+      ALIBAILIAN_MODEL2: ${ALIBAILIAN_MODEL2:-qwen3.7-text-embedding-flash}
+      SGLANG_API_KEY: ${SGLANG_API_KEY:-}
+      SGLANG_BASE_URL: ${SGLANG_BASE_URL:-}
+      SGLANG_MODEL: ${SGLANG_MODEL:-}
+      SGLANG_MODEL_ID: ${SGLANG_MODEL_ID:-}
+      BENETNASCH_AI_ENABLED: ${BENETNASCH_AI_ENABLED:-false}
+      BENETNASCH_AI_OBSERVABILITY: ${BENETNASCH_AI_OBSERVABILITY:-false}
+      BENETNASCH_AI_PROVIDER_PROBE: ${BENETNASCH_AI_PROVIDER_PROBE:-false}
+      BENETNASCH_AI_LOCAL_EMBEDDING: ${BENETNASCH_AI_LOCAL_EMBEDDING:-false}
+      BENETNASCH_AI_LOCAL_EMBEDDING_MODEL_VERSION: ${BENETNASCH_AI_LOCAL_EMBEDDING_MODEL_VERSION:-}
+      BENETNASCH_AI_LOCAL_EMBEDDING_INDEX_VERSION: ${BENETNASCH_AI_LOCAL_EMBEDDING_INDEX_VERSION:-}
+      BENETNASCH_AI_LOCAL_EMBEDDING_BATCH_SIZE: ${BENETNASCH_AI_LOCAL_EMBEDDING_BATCH_SIZE:-1}
+      BENETNASCH_AI_VISION: ${BENETNASCH_AI_VISION:-false}
+      BENETNASCH_AI_ARTICLE_INDEXING: ${BENETNASCH_AI_ARTICLE_INDEXING:-false}
+      BENETNASCH_AI_SPACE_COMPANION: ${BENETNASCH_AI_SPACE_COMPANION:-false}
+      BENETNASCH_AI_SPACE_COMPANION_PUBLISH: ${BENETNASCH_AI_SPACE_COMPANION_PUBLISH:-false}
+      BENETNASCH_SPACE_COMPANION_READ_TOKEN: ${BENETNASCH_SPACE_COMPANION_READ_TOKEN:-}
+      BENETNASCH_SPACE_COMPANION_PUBLISH_TOKEN: ${BENETNASCH_SPACE_COMPANION_PUBLISH_TOKEN:-}
+      BENETNASCH_SPACE_COMPANION_AGENT_ID: ${BENETNASCH_SPACE_COMPANION_AGENT_ID:-moonfei}
       TZ: Asia/Shanghai
     ports:
       - "17777:7777"
@@ -91,16 +119,19 @@ services:
     ports:
       - "18080:80"
       - "18008:8008"
+      - "18018:8018"
+      - "18028:8028"
     volumes:
       - ./deploy/integration/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./web/blog/dist:/srv/vue/blog:ro
       - ./web/admin/dist:/srv/vue/admin:ro
+      - ./web/admin-next/dist:/srv/vue/admin-next:ro
     depends_on:
       backend:
         condition: service_started
 
 volumes:
-  integration-postgres-data:
+  integration-postgres-data-v16:
   integration-redis-data:
-  integration-meili-data:
+  integration-meili-data-v153:
   integration-minio-data:

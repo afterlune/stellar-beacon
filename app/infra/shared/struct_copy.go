@@ -1,6 +1,7 @@
 package shared
 
 import (
+	apperrors "benetnasch/app/domain/errors"
 	"fmt"
 	"log/slog"
 
@@ -10,12 +11,12 @@ import (
 func StructCopy(old, new interface{}) {
 	marshal, err := json.Marshal(old)
 	if err != nil {
-		slog.Error("marshal value for struct copy failed", "error", err)
+		slog.Error("marshal value for struct copy failed", "error_code", apperrors.SafeCode(err))
 		return
 	}
 	err = json.Unmarshal(marshal, new)
 	if err != nil {
-		slog.Error("unmarshal value for struct copy failed", "error", err)
+		slog.Error("unmarshal value for struct copy failed", "error_code", apperrors.SafeCode(err))
 		return
 	}
 }

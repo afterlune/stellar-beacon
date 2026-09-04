@@ -79,6 +79,310 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/agent/emergency": {
+            "put": {
+                "description": "暂停或恢复公开 Agent 能力及自主行为 worker",
+                "summary": "Agent 紧急开关",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/memory/assertions": {
+            "get": {
+                "description": "查询带来源、版本、有效期和状态的长期记忆断言",
+                "summary": "Agent 记忆断言",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/memory/assertions/{id}": {
+            "delete": {
+                "description": "撤回一条长期记忆断言并保留审计历史",
+                "summary": "撤回 Agent 记忆",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/memory/assertions/{id}/history": {
+            "get": {
+                "description": "查询单条长期记忆断言的不可变修订历史",
+                "summary": "Agent 记忆历史",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/memory/conflicts": {
+            "get": {
+                "description": "查询需要人工处理的长期记忆冲突及其成员",
+                "summary": "Agent 记忆冲突",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/memory/conflicts/{id}/reject": {
+            "post": {
+                "description": "驳回冲突集合中的全部断言并保留审计历史",
+                "summary": "驳回 Agent 记忆冲突",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/memory/conflicts/{id}/resolve": {
+            "post": {
+                "description": "显式选择冲突赢家，其他成员转为 stale",
+                "summary": "解决 Agent 记忆冲突",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/observability": {
+            "get": {
+                "description": "返回可供外部监控聚合的脱敏 Provider 与索引指标",
+                "summary": "AI/搜索运行时观测",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/profile": {
+            "get": {
+                "description": "获取当前版本化人设配置",
+                "summary": "Agent 人设配置",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "局部更新人设配置；不接受任何 Provider 密钥",
+                "summary": "Agent 人设配置",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/providers/test": {
+            "post": {
+                "description": "测试已配置模型连接，不保存或返回 Provider 凭据",
+                "summary": "AI Provider 烟测",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/review-policy": {
+            "get": {
+                "description": "获取版本化审核安全策略；人工审核开关始终为必选",
+                "summary": "Agent 审核策略",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "局部更新审核安全策略，使用版本号防止覆盖并发修改",
+                "summary": "Agent 审核策略",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/reviews": {
+            "get": {
+                "description": "查询 AI 生成物审核记录",
+                "summary": "AI 审核",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/reviews/{id}": {
+            "get": {
+                "description": "查询单条 AI 生成物审核记录",
+                "summary": "AI 审核详情",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/reviews/{id}/approve": {
+            "post": {
+                "description": "接受 AI 生成物",
+                "summary": "AI 审核",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/reviews/{id}/expire": {
+            "post": {
+                "description": "将待审核记录标记为过期",
+                "summary": "AI 审核过期",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/reviews/{id}/partial": {
+            "post": {
+                "description": "部分接受 AI 生成物",
+                "summary": "AI 审核",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/reviews/{id}/regenerate": {
+            "post": {
+                "description": "记录重新生成操作",
+                "summary": "AI 审核",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/reviews/{id}/reject": {
+            "post": {
+                "description": "拒绝 AI 生成物",
+                "summary": "AI 审核",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/vision/preview": {
+            "post": {
+                "description": "根据图片生成视觉理解预览，结果进入待审核队列",
+                "summary": "AI 视觉理解",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ai/writing/preview": {
+            "post": {
+                "description": "生成写作预览，不自动保存文章",
+                "summary": "AI Studio",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/articles": {
             "get": {
                 "description": "获取后台文章",
@@ -1135,6 +1439,75 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/videos/external": {
+            "post": {
+                "description": "添加 HTTPS 白名单外链，不在服务端抓取远程内容",
+                "consumes": [
+                    "application/json"
+                ],
+                "summary": "添加外链视频",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/videos/upload": {
+            "post": {
+                "description": "上传不超过 500MB 的视频文件",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "summary": "上传视频",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "video file",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "title",
+                        "name": "title",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "description",
+                        "name": "description",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/videos/{id}": {
+            "delete": {
+                "description": "软删除视频元数据",
+                "summary": "删除视频",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/website/config": {
             "get": {
                 "description": "获取网站配置",
@@ -1151,6 +1524,132 @@ const docTemplate = `{
             "put": {
                 "description": "更新网站配置",
                 "summary": "benetnasch信息",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/agent/chat": {
+            "post": {
+                "description": "以 SSE 返回公开 Agent 的人格化对话事件；不会接受客户端身份、权限、工具或 Provider 字段",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "summary": "Agent 公开对话",
+                "parameters": [
+                    {
+                        "description": "公开对话请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.agentChatHTTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/agent/features": {
+            "get": {
+                "description": "返回公开、非敏感的 Agent rollout flags",
+                "summary": "Agent 功能开关",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/agent/sessions/{id}": {
+            "delete": {
+                "description": "只删除当前调用者范围内的短期匿名会话及可回放事件；不存在的会话按幂等成功处理",
+                "summary": "删除 Agent 会话",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/agent/sessions/{id}/events": {
+            "get": {
+                "description": "按 afterSeq 回放当前 turn 的短期公开 SSE 事件",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "summary": "恢复 Agent 会话事件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "仅回放序号大于该值的事件",
+                        "name": "afterSeq",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "限制为当前 turn",
+                        "name": "turnId",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/agent/vitals": {
+            "get": {
+                "description": "返回公开聚合状态，不包含访客身份信息",
+                "summary": "Agent 生命体征",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1249,6 +1748,56 @@ const docTemplate = `{
             "get": {
                 "description": "搜索文章",
                 "summary": "文章模块",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "关键词",
+                        "name": "keywords",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索模式：keyword、hybrid、semantic",
+                        "name": "mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分类名",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签名，可重复传入",
+                        "name": "tag",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "逗号分隔的标签名",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "发表年份",
+                        "name": "year",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "起始时间，RFC3339 或 YYYY-MM-DD",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束时间（半开区间），RFC3339 或 YYYY-MM-DD",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1277,6 +1826,48 @@ const docTemplate = `{
             "get": {
                 "description": "获取置顶和推荐文章",
                 "summary": "文章模块",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/capsules": {
+            "post": {
+                "description": "创建只绑定稳定用户 ID 的私密时间胶囊草稿",
+                "summary": "创建时间胶囊",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/capsules/{id}": {
+            "get": {
+                "description": "仅允许所有者查询，封存内容在到期前不会返回",
+                "summary": "查询时间胶囊",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/capsules/{id}/seal": {
+            "post": {
+                "description": "封存后内容不可编辑，只有到期后所有者可以读取",
+                "summary": "封存时间胶囊",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1357,6 +1948,34 @@ const docTemplate = `{
                 }
             }
         },
+        "/dreams": {
+            "get": {
+                "description": "返回已通过人工审核的梦境内容",
+                "summary": "Benetnasch 梦境",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/galaxy": {
+            "get": {
+                "description": "返回公开文章的二维坐标和生命阶段",
+                "summary": "星河内容投影",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
         "/links": {
             "get": {
                 "description": "查看友链列表",
@@ -1375,6 +1994,20 @@ const docTemplate = `{
             "get": {
                 "description": "获取相册列表",
                 "summary": "相册模块",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
+        },
+        "/radio": {
+            "get": {
+                "description": "返回当前节律下的文本节目",
+                "summary": "Benetnasch 电台",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1580,9 +2213,45 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/videos": {
+            "get": {
+                "description": "返回本地视频和白名单外链视频",
+                "summary": "视频列表",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResultVO"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "api.agentChatHTTPRequest": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "timeRange": {
+                    "type": "object",
+                    "properties": {
+                        "from": {
+                            "type": "string"
+                        },
+                        "to": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "model.ResultVO": {
             "type": "object",
             "properties": {

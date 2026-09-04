@@ -41,6 +41,43 @@ func TestLogQueueRetriesAndDrainsOnStop(t *testing.T) {
 	}
 }
 
+func TestLogQueueDrainsAfterParentContextCancellation(t *testing.T) {
+	parentCtx, cancelParent := context.WithCancel(context.Background())
+	defer cancelParent()
+
+	persisted := make(chan struct{}, 1)
+	queue := newLogQueue(
+		parentCtx,
+		func(ctx context.Context, _ entity.TOperationLog) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			persisted <- struct{}{}
+			return nil
+		},
+		func(context.Context, entity.TExceptionLog) error { return nil },
+	)
+	queue.wg.Add(logQueueWorkers)
+	for i := 0; i < logQueueWorkers; i++ {
+		go queue.worker()
+	}
+
+	cancelParent()
+	if !queue.enqueueOpt(entity.TOperationLog{OptUri: "/after-cancel"}) {
+		t.Fatal("enqueueOpt() unexpectedly dropped the event")
+	}
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelShutdown()
+	if err := queue.Stop(shutdownCtx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-persisted:
+	default:
+		t.Fatal("queued operation log was not drained after parent cancellation")
+	}
+}
+
 func TestLogQueueDoesNotRetryPermanentDatabaseErrors(t *testing.T) {
 	attempts := 0
 	queue := newLogQueue(

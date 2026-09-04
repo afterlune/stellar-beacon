@@ -38,7 +38,7 @@ func GetBlogBackInfo(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/website/config [PUT]
 func UpdateWebsiteConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, benetnaschService.UpdateWebsiteConfig(c))
+	c.JSON(http.StatusOK, benetnaschService.UpdateWebsiteConfig(applicationRequest(c)))
 }
 
 // GetWebsiteConfig
@@ -65,7 +65,7 @@ func GetAbout(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/about [PUT]
 func UpdateAbout(c *gin.Context) {
-	c.JSON(http.StatusOK, benetnaschService.UpdateAbout(c))
+	c.JSON(http.StatusOK, benetnaschService.UpdateAbout(applicationRequest(c)))
 }
 
 // SaveBlogPhotoAlbumCover
@@ -74,5 +74,5 @@ func UpdateAbout(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/config/images [POST]
 func SaveBlogPhotoAlbumCover(c *gin.Context) {
-	c.JSON(http.StatusOK, benetnaschService.SaveBlogPhotoAlbumCover(c))
+	c.JSON(http.StatusOK, benetnaschService.SaveBlogPhotoAlbumCover(applicationRequest(c)))
 }

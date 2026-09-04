@@ -54,6 +54,7 @@ import { useI18n } from 'vue-i18n'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import Paginator from '@/components/Paginator.vue'
 import api from '@/api/api'
+import MarkdownIt from 'markdown-it'
 
 export default defineComponent({
   name: 'Archives',
@@ -62,7 +63,7 @@ export default defineComponent({
     const commonStore = useCommonStore()
     const articleStore = useArticleStore()
     const { t } = useI18n()
-    let md = require('markdown-it')()
+    const md = new MarkdownIt()
     const pagination = reactive({
       current: 1,
       total: 0,

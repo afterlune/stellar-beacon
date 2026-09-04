@@ -1,6 +1,7 @@
 package api
 
 import (
+	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus [GET]
 func ListMenus(c *gin.Context) {
-	c.JSON(http.StatusOK, menuService.ListMenus(c))
+	c.JSON(http.StatusOK, menuService.ListMenus(applicationRequest(c)))
 }
 
 // SaveOrUpdateMenu
@@ -21,7 +22,7 @@ func ListMenus(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus [POST]
 func SaveOrUpdateMenu(c *gin.Context) {
-	c.JSON(http.StatusOK, menuService.SaveOrUpdateMenu(c))
+	c.JSON(http.StatusOK, menuService.SaveOrUpdateMenu(applicationRequest(c)))
 }
 
 // UpdateMenuIsHidden
@@ -30,7 +31,7 @@ func SaveOrUpdateMenu(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus/isHidden [PUT]
 func UpdateMenuIsHidden(c *gin.Context) {
-	c.JSON(http.StatusOK, menuService.UpdateMenuIsHidden(c))
+	c.JSON(http.StatusOK, menuService.UpdateMenuIsHidden(applicationRequest(c)))
 }
 
 // DeleteMenu
@@ -39,7 +40,7 @@ func UpdateMenuIsHidden(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/menus/:menuId [DELETE]
 func DeleteMenu(c *gin.Context) {
-	c.JSON(http.StatusOK, menuService.DeleteMenu(c))
+	c.JSON(http.StatusOK, menuService.DeleteMenu(applicationRequest(c)))
 }
 
 // ListMenuOptions
@@ -48,7 +49,7 @@ func DeleteMenu(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/role/menus [GET]
 func ListMenuOptions(c *gin.Context) {
-	c.JSON(http.StatusOK, menuService.ListMenuOptions())
+	c.JSON(http.StatusOK, menuService.ListMenuOptions(c.Request.Context()))
 }
 
 // ListUserMenus
@@ -57,8 +58,12 @@ func ListMenuOptions(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/user/menus [GET]
 func ListUserMenus(c *gin.Context) {
-	value, _ := c.Get("userInfo")
-	dto := value.(model.UserDetailsDTO)
+	value, ok := c.Get("userInfo")
+	dto, ok := value.(port.UserDetailsDTO)
+	if !ok || dto.UserInfoId <= 0 {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithStatus(model.NO_LOGIN))
+		return
+	}
 
-	c.JSON(http.StatusOK, menuService.ListUserMenus(dto.UserInfoId))
+	c.JSON(http.StatusOK, menuService.ListUserMenus(c.Request.Context(), dto.UserInfoId))
 }

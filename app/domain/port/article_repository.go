@@ -1,9 +1,6 @@
 package port
 
-import (
-	"benetnasch/app/domain/entity"
-	"context"
-)
+import "context"
 
 // ArticleRepository is the application-facing contract for article reads.
 // It owns domain read models and propagates persistence failures instead of
@@ -22,11 +19,11 @@ type ArticleRepository interface {
 	CountArticleAdmins(ctx context.Context, filter ArticleFilter) (int, error)
 	ListArticlesAdmin(ctx context.Context, filter ArticleFilter) ([]*ArticleAdmin, error)
 	ListArticleStatistics(ctx context.Context) ([]ArticleStatistics, error)
-	GetArticleRecord(ctx context.Context, articleID int) (entity.TArticle, error)
-	SaveOrUpdate(ctx context.Context, article entity.TArticle, categoryName string, tagNames []string) (entity.TArticle, error)
-	UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (entity.TArticle, error)
+	GetArticleRecord(ctx context.Context, articleID int) (TArticle, error)
+	SaveOrUpdate(ctx context.Context, article TArticle, categoryName string, tagNames []string) (TArticle, error)
+	UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (TArticle, error)
 	UpdateDelete(ctx context.Context, ids []int, isDelete int) error
 	Delete(ctx context.Context, ids []int) error
-	GetAdminArticle(ctx context.Context, articleID int) (entity.TArticle, string, []string, error)
-	Export(ctx context.Context, ids []int) ([]entity.TArticle, error)
+	GetAdminArticle(ctx context.Context, articleID int) (TArticle, string, []string, error)
+	Export(ctx context.Context, ids []int) ([]TArticle, error)
 }

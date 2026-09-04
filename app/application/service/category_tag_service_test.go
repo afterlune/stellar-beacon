@@ -52,11 +52,11 @@ func (f *fakeTagRepository) Search(context.Context, string) ([]*port.TagAdmin, e
 func (f *fakeTagRepository) SaveOrUpdate(context.Context, entity.TTag) error { return f.err }
 func (f *fakeTagRepository) Delete(context.Context, []int) error             { return f.err }
 
-func categoryTagTestContext(method, path string) *gin.Context {
+func categoryTagTestContext(method, path string) serviceTestRequest {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(method, path, nil)
-	return c
+	return serviceTestRequest{ginContextForServiceTest: c}
 }
 
 func TestCategoryServicePreservesConflictMessage(t *testing.T) {

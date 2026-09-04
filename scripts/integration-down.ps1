@@ -1,6 +1,13 @@
 param(
+    [switch]$AllowContainerChanges,
     [switch]$RemoveVolumes
 )
+
+$ErrorActionPreference = 'Stop'
+
+if (-not $AllowContainerChanges) {
+    throw 'Refusing to stop or remove the isolated Compose project. Re-run with -AllowContainerChanges during an approved integration window.'
+}
 
 . (Join-Path $PSScriptRoot 'integration-common.ps1')
 Import-IntegrationEnv

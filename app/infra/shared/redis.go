@@ -1,6 +1,7 @@
 package shared
 
 import (
+	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/infra/config"
 	"context"
 	"errors"
@@ -317,5 +318,5 @@ func IncrExpire(key string, ttl time.Duration) int64 {
 }
 
 func logRedisError(operation string, err error) {
-	slog.Error("redis operation failed", "operation", operation, "error", err)
+	slog.Error("redis operation failed", "operation", operation, "error_code", apperrors.SafeCode(err))
 }

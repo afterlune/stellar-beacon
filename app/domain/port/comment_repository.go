@@ -1,9 +1,6 @@
 package port
 
-import (
-	"benetnasch/app/domain/entity"
-	"context"
-)
+import "context"
 
 type CommentRepository interface {
 	ListComments(ctx context.Context, filter CommentFilter) ([]*Comment, int, error)
@@ -15,7 +12,7 @@ type CommentRepository interface {
 	ListCommentCountByTypeAndTopicID(ctx context.Context, commentType, topicID int) (CommentCount, error)
 	ValidateTarget(ctx context.Context, commentType, topicID int) error
 	ValidateReply(ctx context.Context, commentType, parentID, replyUserID int) error
-	Create(ctx context.Context, comment entity.TComment) error
+	Create(ctx context.Context, comment TComment) error
 	Review(ctx context.Context, ids []int, review int) error
 	Delete(ctx context.Context, ids []int) error
 }

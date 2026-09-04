@@ -1,23 +1,19 @@
 package service
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/facade/model"
 	"container/list"
 	"context"
-
-	"github.com/gin-gonic/gin"
 )
 
 type TagService interface {
-	ListTags() model.ResultVO
-	ListTopTenTags() model.ResultVO
-	ListTagsAdmin(c *gin.Context) model.ResultVO
-	ListTagsAdminBySearch(c *gin.Context) model.ResultVO
-	SaveOrUpdateTag(c *gin.Context) model.ResultVO
-	DeleteTag(c *gin.Context) model.ResultVO
+	ListTags(ctx context.Context) port.ResultVO
+	ListTopTenTags(ctx context.Context) port.ResultVO
+	ListTagsAdmin(c port.Request) port.ResultVO
+	ListTagsAdminBySearch(c port.Request) port.ResultVO
+	SaveOrUpdateTag(c port.Request) port.ResultVO
+	DeleteTag(c port.Request) port.ResultVO
 }
 
 type MyTagService struct {
@@ -35,81 +31,81 @@ func (t *MyTagService) tagRepository() port.TagRepository {
 	return tagRepo
 }
 
-func (t *MyTagService) ListTags() model.ResultVO {
-	data, err := t.tagRepository().List(context.Background())
+func (t *MyTagService) ListTags(ctx context.Context) port.ResultVO {
+	data, err := t.tagRepository().List(ctx)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(data)
+	return port.ResultOkWithData(data)
 }
 
-func (t *MyTagService) ListTopTenTags() model.ResultVO {
-	data, err := t.tagRepository().ListTopTen(context.Background())
+func (t *MyTagService) ListTopTenTags(ctx context.Context) port.ResultVO {
+	data, err := t.tagRepository().ListTopTen(ctx)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(data)
+	return port.ResultOkWithData(data)
 }
 
-func (t *MyTagService) ListTagsAdmin(ctx *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := ctx.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (t *MyTagService) ListTagsAdmin(ctx port.Request) port.ResultVO {
+	var vo port.ConditionVO
+	if err := ctx.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
 	filter := port.TagFilter{Keywords: vo.Keywords}
-	count, err := t.tagRepository().CountAdmin(ctx.Request.Context(), filter)
+	count, err := t.tagRepository().CountAdmin(ctx.Context(), filter)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
 	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		return port.ResultOkWithData(port.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	data, err := t.tagRepository().ListAdmin(ctx.Request.Context(), vo.Current, vo.Size, filter)
+	data, err := t.tagRepository().ListAdmin(ctx.Context(), vo.Current, vo.Size, filter)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
+	return port.ResultOkWithData(port.PageResultDTO{Records: data, Count: int(count)})
 }
 
-func (t *MyTagService) ListTagsAdminBySearch(ctx *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := ctx.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (t *MyTagService) ListTagsAdminBySearch(ctx port.Request) port.ResultVO {
+	var vo port.ConditionVO
+	if err := ctx.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	data, err := t.tagRepository().Search(ctx.Request.Context(), vo.Keywords)
+	data, err := t.tagRepository().Search(ctx.Context(), vo.Keywords)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(data)
+	return port.ResultOkWithData(data)
 }
 
-func (t *MyTagService) SaveOrUpdateTag(ctx *gin.Context) model.ResultVO {
-	var vo model.TagVO
-	if err := ctx.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (t *MyTagService) SaveOrUpdateTag(ctx port.Request) port.ResultVO {
+	var vo port.TagVO
+	if err := ctx.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	tag := entity.TTag{Id: vo.Id, TagName: vo.TagName}
-	if err := t.tagRepository().SaveOrUpdate(ctx.Request.Context(), tag); err != nil {
+	tag := port.TTag{Id: vo.Id, TagName: vo.TagName}
+	if err := t.tagRepository().SaveOrUpdate(ctx.Context(), tag); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
-			return model.ResultFailWithMessage("标签名已存在")
+			return port.ResultFailWithMessage("标签名已存在")
 		}
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (t *MyTagService) DeleteTag(ctx *gin.Context) model.ResultVO {
+func (t *MyTagService) DeleteTag(ctx port.Request) port.ResultVO {
 	var ids []int
-	if err := ctx.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+	if err := ctx.Bind(&ids); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := t.tagRepository().Delete(ctx.Request.Context(), ids); err != nil {
+	if err := t.tagRepository().Delete(ctx.Context(), ids); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
-			return model.ResultFailWithMessage("删除失败，该标签下存在文章")
+			return port.ResultFailWithMessage("删除失败，该标签下存在文章")
 		}
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
 var _ TagService = (*MyTagService)(nil)

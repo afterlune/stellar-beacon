@@ -77,6 +77,11 @@
         </DropdownMenu>
       </Dropdown>
     </li>
+    <li v-if="agentEnabled" class="pb-2 cursor-pointer">
+      <div class="text-sm block px-1.5 py-0.5 rounded-md relative uppercase" @click="pushPage('/agent')">
+        <span class="relative z-50">Agent</span>
+      </div>
+    </li>
     <li>
       <Dropdown
         class="flex flex-col justify-center items-center nav-link text-sm block px-1.5 py-0.5 rounded-md relative uppercase">
@@ -151,6 +156,14 @@ export default defineComponent({
       talkCount: computed(() => appStore.talkCount),
       categoryCount: computed(() => appStore.categoryCount),
       tagCount: computed(() => appStore.tagCount),
+      agentEnabled: computed(() =>
+        appStore.agentFeatures.publicChat ||
+          appStore.agentFeatures.vitals ||
+          appStore.agentFeatures.galaxy ||
+          appStore.agentFeatures.dreams ||
+          appStore.agentFeatures.radio ||
+          appStore.agentFeatures.videos
+      ),
       t
     }
   }

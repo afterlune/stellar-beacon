@@ -1,6 +1,7 @@
 package visitor
 
 import (
+	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/infra/config"
 	"context"
@@ -9,9 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
-	"strings"
 
 	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 	"github.com/mssola/user_agent"
@@ -27,7 +26,7 @@ func (r *Resolver) Resolve(ctx context.Context, req *http.Request) (port.Visitor
 	if req == nil {
 		return port.VisitorIdentity{}, fmt.Errorf("request is nil")
 	}
-	ip := clientIP(ctx, req)
+	ip := config.ResolveClientIP(req)
 	ua := user_agent.New(req.Header.Get("User-Agent"))
 	browser, version := ua.Browser()
 	os := ua.OS()
@@ -41,41 +40,11 @@ func (r *Resolver) Resolve(ctx context.Context, req *http.Request) (port.Visitor
 	}
 	region, err := regionForIP(ip)
 	if err != nil {
-		slog.WarnContext(ctx, "resolve visitor region failed", "error", err)
+		slog.WarnContext(ctx, "resolve visitor region failed", "error_code", apperrors.SafeCode(err))
 	} else {
 		identity.Region = region
 	}
 	return identity, nil
-}
-
-func clientIP(ctx context.Context, req *http.Request) string {
-	for _, header := range []string{
-		"X-Real-IP",
-		"X-Forwarded-For",
-		"Proxy-Client-IP",
-		"WL-Proxy-Client-IP",
-		"HTTP_CLIENT_IP",
-		"HTTP_X_FORWARDED_FOR",
-	} {
-		value := req.Header.Get(header)
-		if value != "" && !strings.EqualFold(value, "unknown") {
-			return value
-		}
-	}
-	remote := req.RemoteAddr
-	if remote != "127.0.0.1" && remote != "0:0:0:0:0:0:0:1" {
-		return remote
-	}
-	dialer := net.Dialer{}
-	conn, err := dialer.DialContext(ctx, "udp", "8.8.8.8:53")
-	if err != nil {
-		return remote
-	}
-	defer conn.Close()
-	if address, ok := conn.LocalAddr().(*net.UDPAddr); ok {
-		return address.IP.String()
-	}
-	return remote
 }
 
 func regionForIP(ip string) (string, error) {

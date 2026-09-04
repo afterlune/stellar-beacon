@@ -97,7 +97,7 @@ export default defineComponent({
         size: pagination.size
       }
       api.getTalks(params).then(({ data }) => {
-        const page = data && data.data ? data.data : {}
+        const page = data.data || { records: [] as any[], count: 0 }
         const records = Array.isArray(page.records) ? page.records : []
         reactiveData.images = []
         records.forEach((item: any) => {

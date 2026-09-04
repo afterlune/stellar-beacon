@@ -5,6 +5,10 @@ function resolve(dir) {
 }
 const apiTarget = process.env.VUE_APP_API_TARGET || 'https://localhost:7777'
 module.exports = defineConfig({
+  // Keep the rollback build separate from the canonical Vite dist directory.
+  // Running the legacy build must not replace the artifact used by Caddy or
+  // make the Vite performance budget report a different application.
+  outputDir: 'dist-legacy',
   transpileDependencies: true,
   productionSourceMap: false,
   devServer: {
@@ -22,7 +26,8 @@ module.exports = defineConfig({
   configureWebpack: {
     resolve: {
       alias: {
-        '@': resolve('src')
+        '@': resolve('src'),
+        '@shared': resolve('../shared')
       }
     }
   },

@@ -4,8 +4,13 @@ import (
 	"benetnasch/app/domain/errors"
 	"benetnasch/app/infra/config"
 	"context"
+	stderrors "errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 func TestMinioStorageRefBuildsPublicURL(t *testing.T) {
@@ -40,6 +45,23 @@ func TestMinioStoragePutRequiresConfiguredClient(t *testing.T) {
 	_, err := (&MinioStorage{}).Put(context.Background(), "test.txt", strings.NewReader("test"))
 	if !errors.IsKind(err, errors.KindUnavailable) {
 		t.Fatalf("Put() error kind = %v, want %v", errors.KindOf(err), errors.KindUnavailable)
+	}
+}
+
+func TestMinioStoragePreservesContextErrors(t *testing.T) {
+	server := httptest.NewServer(nil)
+	defer server.Close()
+	client, err := minio.New(server.Listener.Addr().String(), &minio.Options{
+		Creds: credentials.NewStaticV4("access", "secret", ""),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	storage := &MinioStorage{client: client, bucket: "bucket"}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := storage.Put(ctx, "test.txt", strings.NewReader("test")); !stderrors.Is(err, context.Canceled) {
+		t.Fatalf("Put() error = %v, want context canceled", err)
 	}
 }
 

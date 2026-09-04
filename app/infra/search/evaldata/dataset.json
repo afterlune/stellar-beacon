@@ -1,0 +1,52 @@
+[
+  {
+    "id": "search-zh-001",
+    "query": "Gin 中间件鉴权",
+    "mode": "keyword",
+    "expected": ["article-101-chunk-0"]
+  },
+  {
+    "id": "search-zh-002",
+    "query": "xorm PostgreSQL 事务",
+    "mode": "keyword",
+    "expected": ["article-102-chunk-0"]
+  },
+  {
+    "id": "search-zh-003",
+    "query": "Redis 缓存过期",
+    "mode": "keyword",
+    "expected": ["article-103-chunk-0"]
+  },
+  {
+    "id": "search-zh-004",
+    "query": "Eino 混合检索",
+    "mode": "keyword",
+    "expected": ["article-104-chunk-0"]
+  },
+  {
+    "id": "search-zh-005",
+    "query": "Caddy 前端反向代理",
+    "mode": "keyword",
+    "expected": ["article-105-chunk-0"]
+  },
+  {
+    "id": "search-zh-006",
+    "query": "JWT 私钥日志",
+    "mode": "keyword",
+    "expected": ["article-106-chunk-0"]
+  },
+  {
+    "id": "search-zh-noresult-001",
+    "query": "不存在的量子咖啡协议",
+    "mode": "keyword",
+    "expected": [],
+    "expectNoResult": true
+  },
+  {
+    "id": "search-zh-noresult-002",
+    "query": "蓝色月球数据库",
+    "mode": "keyword",
+    "expected": [],
+    "expectNoResult": true
+  }
+]

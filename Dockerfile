@@ -4,13 +4,14 @@ ENV GO111MODULE=on \
     CGO_ENABLED=0 \
     GOOS=linux \
     GOARCH=amd64 \
+    GOMAXPROCS=1 \
     GOPROXY=https://goproxy.cn,direct
 
 WORKDIR /build
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags '-w -s' -trimpath -a -o benetnasch
+RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux GOMAXPROCS=1 go build -p 1 -ldflags '-w -s' -trimpath -a -o benetnasch
 
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS final
 

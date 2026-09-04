@@ -18,6 +18,7 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import infiniteScroll from 'vue3-infinite-scroll-better'
 import v3ImgPreview from 'v3-img-preview'
 import api from './api/api'
+import defaultCover from '@/assets/default-cover.jpg'
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
@@ -29,8 +30,8 @@ export const app = createApp(App)
   .use(infiniteScroll)
   .use(v3ImgPreview, {})
   .use(lazyPlugin, {
-    loading: require('@/assets/default-cover.jpg'),
-    error: require('@/assets/default-cover.jpg')
+    loading: defaultCover,
+    error: defaultCover
   })
 components.forEach((component) => {
   app.component(component.name, component)

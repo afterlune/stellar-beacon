@@ -6,8 +6,10 @@ import (
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"context"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -60,6 +62,77 @@ func TestUserAuthServiceTreatsMissingUserAsBadCredentials(t *testing.T) {
 	dto, err := service.Authenticate(context.Background(), modelUser("missing@example.com", "password"))
 	if err != nil || dto != nil {
 		t.Fatalf("missing user should be a credential failure: dto=%+v err=%v", dto, err)
+	}
+}
+
+type userAreaCacheStub struct {
+	fakeServiceCache
+	areas       map[string]string
+	userArea    string
+	userAreaErr error
+}
+
+func (f userAreaCacheStub) Get(context.Context, string) (string, error) {
+	return f.userArea, f.userAreaErr
+}
+
+func (f userAreaCacheStub) HGetAll(context.Context, string) (map[string]string, error) {
+	return f.areas, nil
+}
+
+func TestUserAuthServiceSkipsMalformedVisitorAreas(t *testing.T) {
+	cache := userAreaCacheStub{areas: map[string]string{
+		"0|0|北京|北京": "3",
+		"malformed": "9",
+		"0|0|上海|上海": "not-a-number",
+	}}
+	service, err := NewUserAuthService(UserAuthServiceDeps{
+		Repo:    &fakeAuthRepository{},
+		Website: fakeBenetnaschInfoService{},
+		Cache:   cache,
+		Mailer:  fakeServiceMailer{},
+		Visitor: fakeServiceVisitor{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/user/areas?type=2", nil)
+	ginContext, _ := gin.CreateTestContext(ctx)
+	ginContext.Request = req
+	result := service.ListUserAreas(serviceTestRequest{ginContextForServiceTest: ginContext})
+	if !result.Flag {
+		t.Fatalf("expected successful response, got %+v", result)
+	}
+	areas, ok := result.Data.([]model.UserAreaDTO)
+	if !ok {
+		t.Fatalf("unexpected response data type: %T", result.Data)
+	}
+	if len(areas) != 1 || areas[0].Name != "北京" || areas[0].Value != 3 {
+		t.Fatalf("unexpected areas: %+v", areas)
+	}
+}
+
+func TestUserAuthServiceRejectsMalformedUserAreaCache(t *testing.T) {
+	service, err := NewUserAuthService(UserAuthServiceDeps{
+		Repo:    &fakeAuthRepository{},
+		Website: fakeBenetnaschInfoService{},
+		Cache:   userAreaCacheStub{userArea: "not-json"},
+		Mailer:  fakeServiceMailer{},
+		Visitor: fakeServiceVisitor{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/user/areas?type=1", nil)
+	ginContext, _ := gin.CreateTestContext(recorder)
+	ginContext.Request = req
+	result := service.ListUserAreas(serviceTestRequest{ginContextForServiceTest: ginContext})
+	if result.Flag {
+		t.Fatalf("malformed cached user area should fail: %+v", result)
 	}
 }
 

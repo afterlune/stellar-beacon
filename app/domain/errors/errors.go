@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 )
@@ -63,6 +64,9 @@ func Wrap(kind Kind, op string, err error) error {
 	if err == nil {
 		return nil
 	}
+	if kind == KindUnavailable && isContextError(err) {
+		return err
+	}
 	return &Error{Kind: kind, Op: op, Err: err}
 }
 
@@ -98,9 +102,31 @@ func Conflict(op, message string) error {
 	return New(KindConflict, op, fmt.Errorf("%s", message))
 }
 
+func Unauthorized(op string) error {
+	return New(KindUnauthorized, op, errors.New("unauthorized"))
+}
+
+func Forbidden(op string) error {
+	return New(KindForbidden, op, errors.New("forbidden"))
+}
+
 func Unavailable(op string, err error) error {
 	if err == nil {
 		return New(KindUnavailable, op, errors.New("service unavailable"))
 	}
 	return Wrap(KindUnavailable, op, err)
+}
+
+// WrapUnavailable classifies an infrastructure failure while preserving
+// request cancellation and deadline errors for callers that need to stop
+// work promptly. Context errors are control flow, not service health.
+func WrapUnavailable(op string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return Wrap(KindUnavailable, op, err)
+}
+
+func isContextError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

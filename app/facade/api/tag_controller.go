@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /tags/all [GET]
 func GetAllTags(c *gin.Context) {
-	c.JSON(http.StatusOK, tagService.ListTags())
+	c.JSON(http.StatusOK, tagService.ListTags(c.Request.Context()))
 }
 
 // GetTopTenTags
@@ -20,7 +20,7 @@ func GetAllTags(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /tags/topTen [GET]
 func GetTopTenTags(c *gin.Context) {
-	c.JSON(http.StatusOK, tagService.ListTopTenTags())
+	c.JSON(http.StatusOK, tagService.ListTopTenTags(c.Request.Context()))
 }
 
 // ListTagsAdmin
@@ -29,7 +29,7 @@ func GetTopTenTags(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags [GET]
 func ListTagsAdmin(c *gin.Context) {
-	c.JSON(http.StatusOK, tagService.ListTagsAdmin(c))
+	c.JSON(http.StatusOK, tagService.ListTagsAdmin(applicationRequest(c)))
 }
 
 // ListTagsAdminBySearch
@@ -38,7 +38,7 @@ func ListTagsAdmin(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags/search [GET]
 func ListTagsAdminBySearch(c *gin.Context) {
-	c.JSON(http.StatusOK, tagService.ListTagsAdminBySearch(c))
+	c.JSON(http.StatusOK, tagService.ListTagsAdminBySearch(applicationRequest(c)))
 }
 
 // SaveOrUpdateTag
@@ -47,7 +47,7 @@ func ListTagsAdminBySearch(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags [POST]
 func SaveOrUpdateTag(c *gin.Context) {
-	c.JSON(http.StatusOK, tagService.SaveOrUpdateTag(c))
+	c.JSON(http.StatusOK, tagService.SaveOrUpdateTag(applicationRequest(c)))
 }
 
 // DeleteTag
@@ -56,5 +56,5 @@ func SaveOrUpdateTag(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/tags [DELETE]
 func DeleteTag(c *gin.Context) {
-	c.JSON(http.StatusOK, tagService.DeleteTag(c))
+	c.JSON(http.StatusOK, tagService.DeleteTag(applicationRequest(c)))
 }

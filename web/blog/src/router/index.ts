@@ -57,6 +57,28 @@ const routes = [
     component: () => import('../views/Photos.vue')
   },
   {
+    path: '/agent',
+    name: 'AgentHome',
+    component: () => import('../views/AgentHome.vue')
+  },
+  {
+    path: '/agent/chat',
+    name: 'AgentChat',
+    component: () => import('../views/AgentChat.vue')
+  },
+  {
+    path: '/galaxy',
+    name: 'AgentGalaxy',
+    alias: '/agent/galaxy',
+    component: () => import('../views/AgentGalaxy.vue')
+  },
+  {
+    path: '/dreams',
+    name: 'AgentDreams',
+    alias: '/agent/dreams',
+    component: () => import('../views/AgentDreams.vue')
+  },
+  {
     path: '/404',
     name: '404',
     component: () => import('../views/404.vue')
@@ -69,7 +91,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(process.env.BASE_URL),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 

@@ -13,6 +13,14 @@ type ArticleServiceDeps struct {
 	Cache   port.Cache
 	Storage port.ObjectStorage
 	Search  port.ArticleSearcher
+	// AIJobs is optional while article indexing is feature-gated off. When it
+	// is configured, article mutations enqueue durable index work after the
+	// article transaction succeeds.
+	AIJobs port.AIJobRepository
+	// ContentUnderstandingJobs is optional and independently feature-gated.
+	// When configured, public article mutations enqueue metadata-only analysis
+	// jobs after the article transaction succeeds.
+	ContentUnderstandingJobs port.AIJobRepository
 }
 
 // BenetnaschInfoServiceDeps contains the site-information use-case ports.

@@ -4,10 +4,54 @@ $script:IntegrationRepoRoot = Split-Path -Parent $PSScriptRoot
 $script:IntegrationProject = 'benetnasch-integration'
 $script:IntegrationComposeFile = Join-Path $script:IntegrationRepoRoot 'docker-compose.integration.yaml'
 $script:IntegrationEnvFile = Join-Path $script:IntegrationRepoRoot '.env.integration'
+$script:IntegrationScopedEnvironmentNames = @(
+    # Credentials and provider configuration must come only from .env.integration.
+    'POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'MEILI_MASTER_KEY', 'SMTP_PASSWORD',
+    'MINIO_ROOT_USER', 'MINIO_ROOT_PASSWORD',
+    'E2E_USER_EMAIL', 'E2E_USER_PASSWORD', 'E2E_ADMIN_EMAIL', 'E2E_ADMIN_PASSWORD',
+    'E2E_ADMIN_TOKEN',
+    'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL',
+    'ALIBAILIAN_API_KEY', 'ALIBAILIAN_BASE_URL', 'ALIBAILIAN_MODEL', 'ALIBAILIAN_MODEL2',
+    'SGLANG_API_KEY', 'SGLANG_BASE_URL', 'SGLANG_MODEL', 'SGLANG_MODEL_ID',
+    # Rollout flags and browser target variables must not leak from the parent shell.
+    'BENETNASCH_AI_ENABLED', 'BENETNASCH_AI_OBSERVABILITY', 'BENETNASCH_AI_PROVIDER_PROBE',
+    'BENETNASCH_AI_LOCAL_EMBEDDING', 'BENETNASCH_AI_LOCAL_EMBEDDING_MODEL_VERSION',
+    'BENETNASCH_AI_LOCAL_EMBEDDING_INDEX_VERSION', 'BENETNASCH_AI_LOCAL_EMBEDDING_BATCH_SIZE',
+    'BENETNASCH_AI_VISION', 'BENETNASCH_AI_ARTICLE_INDEXING',
+    'BENETNASCH_AI_SPACE_COMPANION', 'BENETNASCH_AI_SPACE_COMPANION_PUBLISH',
+    'BENETNASCH_SPACE_COMPANION_READ_TOKEN', 'BENETNASCH_SPACE_COMPANION_PUBLISH_TOKEN',
+    'BENETNASCH_SPACE_COMPANION_AGENT_ID',
+    'E2E_BASE_URL', 'E2E_REAL_INTEGRATION', 'E2E_ADMIN_ALLOW_LOGIN',
+    'E2E_REQUIRE_AGENT_ROUTES', 'VITE_ADMIN_API_TARGET',
+    'VITE_ADMIN_API_PRESERVE_API_PREFIX'
+)
+$script:IntegrationIgnoredEnvironmentNames = @(
+    # These names can remain in a local file copied from the old deployment
+    # template.  They are not part of the isolated Compose contract and must
+    # be cleared without ever being forwarded to a child process.
+    'ALIYUN_OSS_ACCESS_KEY_ID', 'ALIYUN_OSS_ACCESS_KEY_SECRET',
+    'JWT_PRIVATE_KEY', 'JWT_PUBLIC_KEY', 'JWT_ALLOW_EPHEMERAL',
+    'BENETNASCH_TRUSTED_PROXIES'
+)
+$script:IntegrationAllowedEnvironmentNames = @(
+    $script:IntegrationScopedEnvironmentNames + 'INTEGRATION_COMPOSE_OVERRIDE'
+)
 
 function Import-IntegrationEnv {
     if (-not (Test-Path -LiteralPath $script:IntegrationEnvFile)) {
         throw "Missing $script:IntegrationEnvFile. Copy .env.integration.example to .env.integration first."
+    }
+
+    foreach ($name in ($script:IntegrationScopedEnvironmentNames + $script:IntegrationIgnoredEnvironmentNames)) {
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+
+    # A local override may point at a stale prebuilt binary.  An explicit
+    # source-compose request must win over that local convenience setting so
+    # integration verification exercises the current repository contents.
+    $useBaseCompose = $env:INTEGRATION_USE_BASE_COMPOSE -eq '1'
+    if ($useBaseCompose) {
+        Remove-Item Env:INTEGRATION_COMPOSE_OVERRIDE -ErrorAction SilentlyContinue
     }
 
     foreach ($line in Get-Content -LiteralPath $script:IntegrationEnvFile) {
@@ -20,6 +64,15 @@ function Import-IntegrationEnv {
             continue
         }
         $name = $parts[0].Trim()
+        if ($name -in $script:IntegrationIgnoredEnvironmentNames) {
+            continue
+        }
+        if ($name -notin $script:IntegrationAllowedEnvironmentNames) {
+            throw "Unsupported environment variable '$name' in .env.integration; use the documented integration allowlist."
+        }
+        if ($useBaseCompose -and $name -eq 'INTEGRATION_COMPOSE_OVERRIDE') {
+            continue
+        }
         $value = $parts[1].Trim()
         if (($value.StartsWith('"') -and $value.EndsWith('"')) -or
             ($value.StartsWith("'") -and $value.EndsWith("'"))) {
@@ -46,6 +99,15 @@ function Get-IntegrationComposeArgs {
     return $composeArgs
 }
 
+function Set-IntegrationLocalDatabaseTarget {
+    # Host-run read-only commands must use the published integration port. The
+    # explicit loopback override is guarded again inside the Go config package
+    # and is never read from a user-provided remote target.
+    $env:BENETNASCH_ENV = 'integration'
+    $env:BENETNASCH_DATABASE_HOST = '127.0.0.1'
+    $env:BENETNASCH_DATABASE_PORT = '15432'
+}
+
 function Invoke-IntegrationCompose {
     param(
         [Parameter(Mandatory = $true)]
@@ -56,6 +118,18 @@ function Invoke-IntegrationCompose {
     & docker @dockerArgs
     if ($LASTEXITCODE -ne 0) {
         throw "docker compose failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Assert-IntegrationMigrationStatusCommand {
+    $dockerArgs = @(Get-IntegrationComposeArgs) + @(
+        'exec', '-T', 'backend',
+        '/app/benetnasch', 'migrate', '--help'
+    )
+    $helpOutput = (& docker @dockerArgs 2>&1 | Out-String)
+    $helpExitCode = $LASTEXITCODE
+    if ($helpExitCode -ne 0 -or $helpOutput -notmatch '(?m)^\s+status\s+inspect migration state') {
+        throw 'the running isolated backend image does not expose the read-only migrate status command; deploy the current image before inspecting or applying migrations.'
     }
 }
 

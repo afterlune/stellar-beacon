@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"context"
 
 	"xorm.io/xorm"
@@ -18,19 +18,19 @@ func NewFriendLinkRepo(engine *xorm.Engine) *MyFriendLinkRepo {
 	return &MyFriendLinkRepo{engine: engine}
 }
 
-func (r *MyFriendLinkRepo) ListPublic(ctx context.Context) ([]entity.TFriendLink, error) {
+func (r *MyFriendLinkRepo) ListPublic(ctx context.Context) ([]port.TFriendLink, error) {
 	session, err := repoSession(r.engine, ctx, "friend_link.public")
 	if err != nil {
 		return nil, err
 	}
-	var links []entity.TFriendLink
+	var links []row.TFriendLink
 	if err := session.OrderBy("id DESC").Find(&links); err != nil {
 		return nil, apperrors.Unavailable("friend_link.public", err)
 	}
-	return links, nil
+	return row.FromFriendLinks(links), nil
 }
 
-func (r *MyFriendLinkRepo) ListAdmin(ctx context.Context, current, size int, keywords string) ([]entity.TFriendLink, int64, error) {
+func (r *MyFriendLinkRepo) ListAdmin(ctx context.Context, current, size int, keywords string) ([]port.TFriendLink, int64, error) {
 	session, err := repoSession(r.engine, ctx, "friend_link.admin")
 	if err != nil {
 		return nil, 0, err
@@ -47,20 +47,21 @@ func (r *MyFriendLinkRepo) ListAdmin(ctx context.Context, current, size int, key
 	}
 	limit, offset := pgsql.Page(current, size)
 	args = append(args, limit, offset)
-	var links []entity.TFriendLink
+	var links []row.TFriendLink
 	if err := session.SQL("SELECT * FROM t_friend_link"+where+" ORDER BY id DESC LIMIT ? OFFSET ?", args...).Find(&links); err != nil {
 		return nil, 0, apperrors.Unavailable("friend_link.admin", err)
 	}
-	return links, count, nil
+	return row.FromFriendLinks(links), count, nil
 }
 
-func (r *MyFriendLinkRepo) SaveOrUpdate(ctx context.Context, link entity.TFriendLink) error {
+func (r *MyFriendLinkRepo) SaveOrUpdate(ctx context.Context, link port.TFriendLink) error {
 	return repoTx(r.engine, ctx, "friend_link.save", func(session *xorm.Session) error {
+		linkRow := row.ToFriendLink(link)
 		if link.Id == 0 {
-			_, err := session.Insert(&link)
+			_, err := session.Insert(&linkRow)
 			return err
 		}
-		_, err := session.ID(link.Id).Update(&link)
+		_, err := session.ID(link.Id).Update(&linkRow)
 		return err
 	})
 }
@@ -70,7 +71,7 @@ func (r *MyFriendLinkRepo) Delete(ctx context.Context, ids []int) error {
 		return nil
 	}
 	return repoTx(r.engine, ctx, "friend_link.delete", func(session *xorm.Session) error {
-		_, err := session.In("id", ids).Delete(&entity.TFriendLink{})
+		_, err := session.In("id", ids).Delete(&row.TFriendLink{})
 		return err
 	})
 }

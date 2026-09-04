@@ -42,11 +42,11 @@ func (f *fakeTalkRepository) GetAdmin(context.Context, int) (port.TalkAdmin, err
 func (f *fakeTalkRepository) SaveOrUpdate(context.Context, entity.TTalk) error { return nil }
 func (f *fakeTalkRepository) Delete(context.Context, []int) error              { return nil }
 
-func talkTestContext(path string) *gin.Context {
+func talkTestContext(path string) serviceTestRequest {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, path, nil)
-	return c
+	return serviceTestRequest{ginContextForServiceTest: c}
 }
 
 func TestTalkServiceMapsRepositoryFailure(t *testing.T) {

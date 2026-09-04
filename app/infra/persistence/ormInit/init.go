@@ -1,6 +1,7 @@
 package ormInit
 
 import (
+	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/infra/config"
 	_ "github.com/lib/pq"
 	"log/slog"
@@ -19,14 +20,18 @@ func GetEngine() *xorm.Engine {
 		dataBase := new(config.Database).DataBase()
 		engine, err = xorm.NewEngine(dataBase.DriverName, dataBase.URL)
 		if err != nil {
-			slog.Error("initialize database engine failed", "error", err)
+			slog.Error("initialize database engine failed", "error_code", apperrors.SafeCode(err))
 			engine = nil
 			return
 		}
-		// 打印sql
-		engine.ShowSQL(true)
-		// 日志
-		engine.Logger().SetLevel(log.LOG_DEBUG)
+		xormLogger := newSlogXORMLogger(slog.Default())
+		engine.SetLogger(xormLogger)
+		engine.ShowSQL(dataBase.ShowSQL)
+		if dataBase.ShowSQL {
+			xormLogger.SetLevel(log.LOG_INFO)
+		} else {
+			xormLogger.SetLevel(log.LOG_WARNING)
+		}
 		// 连接池
 		engine.SetMaxIdleConns(10)
 		engine.SetMaxOpenConns(100)

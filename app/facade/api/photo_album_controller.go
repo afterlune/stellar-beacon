@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/albums/upload [POST]
 func SavePhotoAlbumCover(c *gin.Context) {
-	c.JSON(http.StatusOK, photoAlbumService.SavePhotoAlbumCover(c))
+	c.JSON(http.StatusOK, photoAlbumService.SavePhotoAlbumCover(applicationRequest(c)))
 }
 
 // SaveOrUpdatePhotoAlbum
@@ -20,7 +20,7 @@ func SavePhotoAlbumCover(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/albums [POST]
 func SaveOrUpdatePhotoAlbum(c *gin.Context) {
-	c.JSON(http.StatusOK, photoAlbumService.SaveOrUpdatePhotoAlbum(c))
+	c.JSON(http.StatusOK, photoAlbumService.SaveOrUpdatePhotoAlbum(applicationRequest(c)))
 }
 
 // ListPhotoAlbumBacks
@@ -29,7 +29,7 @@ func SaveOrUpdatePhotoAlbum(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/albums [GET]
 func ListPhotoAlbumBacks(c *gin.Context) {
-	c.JSON(http.StatusOK, photoAlbumService.ListPhotoAlbumBacks(c))
+	c.JSON(http.StatusOK, photoAlbumService.ListPhotoAlbumBacks(applicationRequest(c)))
 }
 
 // ListPhotoAlbumBackInfos
@@ -38,7 +38,7 @@ func ListPhotoAlbumBacks(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/albums/info [GET]
 func ListPhotoAlbumBackInfos(c *gin.Context) {
-	c.JSON(http.StatusOK, photoAlbumService.ListPhotoAlbumBackInfos())
+	c.JSON(http.StatusOK, photoAlbumService.ListPhotoAlbumBackInfos(c.Request.Context()))
 }
 
 // GetPhotoAlbumBackById
@@ -47,7 +47,7 @@ func ListPhotoAlbumBackInfos(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/albums/:albumId/info [GET]
 func GetPhotoAlbumBackById(c *gin.Context) {
-	c.JSON(http.StatusOK, photoAlbumService.GetPhotoAlbumBackById(c))
+	c.JSON(http.StatusOK, photoAlbumService.GetPhotoAlbumBackById(applicationRequest(c)))
 }
 
 // DeletePhotoAlbumById
@@ -56,7 +56,7 @@ func GetPhotoAlbumBackById(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/photos/albums/:albumId [GET]
 func DeletePhotoAlbumById(c *gin.Context) {
-	c.JSON(http.StatusOK, photoAlbumService.DeletePhotoAlbumById(c))
+	c.JSON(http.StatusOK, photoAlbumService.DeletePhotoAlbumById(applicationRequest(c)))
 }
 
 // ListPhotoAlbums
@@ -65,5 +65,5 @@ func DeletePhotoAlbumById(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /photos/albums [GET]
 func ListPhotoAlbums(c *gin.Context) {
-	c.JSON(http.StatusOK, photoAlbumService.ListPhotoAlbums())
+	c.JSON(http.StatusOK, photoAlbumService.ListPhotoAlbums(c.Request.Context()))
 }

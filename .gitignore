@@ -31,6 +31,9 @@ resource/config-*.local.yaml
 .integration/
 docker-compose.integration.env
 
+# Local third-party evaluation state
+.codebuddy/
+
 # Runtime logs
 *.log
 resource/log/
@@ -38,5 +41,8 @@ resource/log/
 # Frontend dependencies, local env files, and build output
 web/**/node_modules/
 web/**/dist/
+web/**/dist-legacy/
 web/**/.env.local
 web/**/.env.*.local
+web/**/test-results/
+web/**/playwright-report/

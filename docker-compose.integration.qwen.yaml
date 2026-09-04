@@ -1,0 +1,111 @@
+# Optional, isolated Qwen3-Embedding smoke service.
+#
+# This file is intentionally not included by the normal integration Compose
+# command. Use it only with an explicit, approved integration smoke window:
+#
+#   $env:QWEN_MODEL_PATH = 'D:/Models/Qwen3-Embedding-0.6B'
+#   docker compose -p benetnasch-integration `
+#     --env-file .env.integration `
+#     --profile qwen-low-memory `
+#     -f docker-compose.integration.yaml `
+#     -f docker-compose.integration.qwen.yaml `
+#     up -d --no-deps qwen-embedding
+#
+# To exercise the backend Provider probe through the isolated Caddy route,
+# explicitly include both services:
+#
+#   docker compose -p benetnasch-integration `
+#     --env-file .env.integration `
+#     --profile qwen-low-memory `
+#     -f docker-compose.integration.yaml `
+#     -f docker-compose.integration.qwen.yaml `
+#     up -d --no-deps --force-recreate qwen-embedding backend
+#
+# The model mount is read-only. Selecting only qwen-embedding has no dependency
+# on the existing PostgreSQL, Redis, Meilisearch, MinIO, backend, or Caddy
+# services. Selecting backend applies the explicit local-only Provider probe
+# environment below; article indexing remains disabled.
+services:
+  qwen-embedding:
+    image: lmsysorg/sglang:v0.5.15@sha256:655d004115e384b56b73ad6869bb04b29cce7ba3e597ce8f92eeeb49e2acb0af
+    # This optional service must fail closed under Docker Desktop/WSL memory
+    # pressure. It is never part of the default integration or production
+    # Compose project.
+    profiles:
+      - qwen-low-memory
+    restart: "no"
+    init: true
+    # Keep model loading/runtime buffers from consuming the remaining
+    # Docker Desktop/WSL memory when the host is already under pressure.
+    mem_limit: 4g
+    memswap_limit: 4g
+    cpus: "2.0"
+    pids_limit: 256
+    stop_grace_period: 30s
+    command:
+      - python3
+      - -m
+      - sglang.launch_server
+      - --model-path
+      - /models
+      - --served-model-name
+      - Qwen/Qwen3-Embedding-0.6B
+      - --is-embedding
+      - --host
+      - 0.0.0.0
+      - --port
+      - "30000"
+      - --tokenizer-worker-num
+      - "1"
+      # Conservative settings for an 8 GiB laptop GPU / Docker Desktop VM.
+      # This service is for one-request local smoke tests, not benchmarking.
+      - --mem-fraction-static
+      - "0.25"
+      - --context-length
+      - "4096"
+      - --max-total-tokens
+      - "2048"
+      - --chunked-prefill-size
+      - "512"
+      - --max-prefill-tokens
+      - "2048"
+      - --max-running-requests
+      - "1"
+      - --disable-radix-cache
+      - --cuda-graph-backend-decode
+      - disabled
+      - --cuda-graph-backend-prefill
+      - disabled
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      CUDA_MODULE_LOADING: LAZY
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      TZ: Asia/Shanghai
+    gpus: all
+    ports:
+      - "30000:30000"
+    volumes:
+      - type: bind
+        source: ${QWEN_MODEL_PATH:?QWEN_MODEL_PATH is required}
+        target: /models
+        read_only: true
+
+  backend:
+    environment:
+      # Explicit local smoke settings. These values are only merged when this
+      # optional overlay is selected; the normal integration Compose remains
+      # AI-disabled and AliBailian-routed.
+      BENETNASCH_AI_ENABLED: "true"
+      BENETNASCH_AI_PROVIDER_PROBE: "true"
+      BENETNASCH_AI_LOCAL_EMBEDDING: "true"
+      BENETNASCH_AI_ARTICLE_INDEXING: "false"
+      BENETNASCH_AI_VISION: "false"
+      SGLANG_BASE_URL: "http://qwen-embedding:30000/v1"
+      SGLANG_MODEL: "Qwen/Qwen3-Embedding-0.6B"
+      BENETNASCH_AI_LOCAL_EMBEDDING_MODEL_VERSION: "qwen3-embedding-0.6b"
+      BENETNASCH_AI_LOCAL_EMBEDDING_INDEX_VERSION: "qwen3_0_6b_v1"
+      BENETNASCH_AI_LOCAL_EMBEDDING_BATCH_SIZE: "1"

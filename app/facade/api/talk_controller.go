@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /talks [GET]
 func ListTalks(c *gin.Context) {
-	c.JSON(http.StatusOK, talkService.ListTalks(c))
+	c.JSON(http.StatusOK, talkService.ListTalks(applicationRequest(c)))
 }
 
 // GetTalkById
@@ -20,7 +20,7 @@ func ListTalks(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /talks/:talkId [GET]
 func GetTalkById(c *gin.Context) {
-	c.JSON(http.StatusOK, talkService.GetTalkById(c))
+	c.JSON(http.StatusOK, talkService.GetTalkById(applicationRequest(c)))
 }
 
 // SaveTalkImages
@@ -29,7 +29,7 @@ func GetTalkById(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/talks/images [POST]
 func SaveTalkImages(c *gin.Context) {
-	c.JSON(http.StatusOK, talkService.SaveTalkImages(c))
+	c.JSON(http.StatusOK, talkService.SaveTalkImages(applicationRequest(c)))
 }
 
 // SaveOrUpdateTalk
@@ -38,7 +38,7 @@ func SaveTalkImages(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/talks [POST]
 func SaveOrUpdateTalk(c *gin.Context) {
-	c.JSON(http.StatusOK, talkService.SaveOrUpdateTalk(c))
+	c.JSON(http.StatusOK, talkService.SaveOrUpdateTalk(applicationRequest(c)))
 }
 
 // DeleteTalks
@@ -47,7 +47,7 @@ func SaveOrUpdateTalk(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/talks [DELETE]
 func DeleteTalks(c *gin.Context) {
-	c.JSON(http.StatusOK, talkService.DeleteTalks(c))
+	c.JSON(http.StatusOK, talkService.DeleteTalks(applicationRequest(c)))
 }
 
 // ListBackTalks
@@ -56,7 +56,7 @@ func DeleteTalks(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/talks [GET]
 func ListBackTalks(c *gin.Context) {
-	c.JSON(http.StatusOK, talkService.ListBackTalks(c))
+	c.JSON(http.StatusOK, talkService.ListBackTalks(applicationRequest(c)))
 }
 
 // GetBackTalkById
@@ -65,5 +65,5 @@ func ListBackTalks(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/talks/:talkId [GET]
 func GetBackTalkById(c *gin.Context) {
-	c.JSON(http.StatusOK, talkService.GetBackTalkById(c))
+	c.JSON(http.StatusOK, talkService.GetBackTalkById(applicationRequest(c)))
 }

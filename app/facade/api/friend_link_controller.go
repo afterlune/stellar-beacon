@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /links [GET]
 func ListFriendLinks(c *gin.Context) {
-	c.JSON(http.StatusOK, friendLinkService.ListFriendLinks())
+	c.JSON(http.StatusOK, friendLinkService.ListFriendLinks(c.Request.Context()))
 }
 
 // ListFriendLinkDTO
@@ -20,7 +20,7 @@ func ListFriendLinks(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/links [GET]
 func ListFriendLinkDTO(c *gin.Context) {
-	c.JSON(http.StatusOK, friendLinkService.ListFriendLinkDTO(c))
+	c.JSON(http.StatusOK, friendLinkService.ListFriendLinkDTO(applicationRequest(c)))
 }
 
 // SaveOrUpdateFriendLink
@@ -29,7 +29,7 @@ func ListFriendLinkDTO(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/links [POST]
 func SaveOrUpdateFriendLink(c *gin.Context) {
-	c.JSON(http.StatusOK, friendLinkService.SaveOrUpdateFriendLink(c))
+	c.JSON(http.StatusOK, friendLinkService.SaveOrUpdateFriendLink(applicationRequest(c)))
 }
 
 // DeleteFriendLink
@@ -38,5 +38,5 @@ func SaveOrUpdateFriendLink(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/links [DELETE]
 func DeleteFriendLink(c *gin.Context) {
-	c.JSON(http.StatusOK, friendLinkService.DeleteFriendLink(c))
+	c.JSON(http.StatusOK, friendLinkService.DeleteFriendLink(applicationRequest(c)))
 }

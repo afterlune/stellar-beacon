@@ -3,15 +3,12 @@ package service
 import (
 	"benetnasch/app/application/support"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/facade/model"
 	"container/list"
-
-	"github.com/gin-gonic/gin"
 )
 
 type OperationLogService interface {
-	ListOperationLogs(c *gin.Context) model.ResultVO
-	DeleteOperationLogs(c *gin.Context) model.ResultVO
+	ListOperationLogs(c port.Request) port.ResultVO
+	DeleteOperationLogs(c port.Request) port.ResultVO
 }
 
 type MyOperationLogService struct{ repo port.OperationLogRepository }
@@ -27,30 +24,30 @@ func (o *MyOperationLogService) operationLogRepository() port.OperationLogReposi
 	return operationLogRepo
 }
 
-func (o *MyOperationLogService) ListOperationLogs(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (o *MyOperationLogService) ListOperationLogs(c port.Request) port.ResultVO {
+	var vo port.ConditionVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	logs, count, err := o.operationLogRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
+	logs, count, err := o.operationLogRepository().List(c.Context(), vo.Current, vo.Size, vo.Keywords)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	var dtos []model.OperationLogDTO
+	var dtos []port.OperationLogDTO
 	support.StructCopy(logs, &dtos)
 	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		return port.ResultOkWithData(port.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
+	return port.ResultOkWithData(port.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
-func (o *MyOperationLogService) DeleteOperationLogs(c *gin.Context) model.ResultVO {
+func (o *MyOperationLogService) DeleteOperationLogs(c port.Request) port.ResultVO {
 	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+	if err := c.Bind(&ids); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := o.operationLogRepository().Delete(c.Request.Context(), ids); err != nil {
-		return model.ResultFromError(err)
+	if err := o.operationLogRepository().Delete(c.Context(), ids); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }

@@ -24,15 +24,19 @@ func TestErrorLogServiceReturnsUnavailableForRepositoryFailure(t *testing.T) {
 	service := NewErrorLogService(&fakeErrorLogRepository{err: apperrors.Unavailable("error_log.list", context.Canceled)})
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest("GET", "/admin/exception/logs?current=1&size=10", nil)
-	result := service.ListErrorLogs(c)
+	result := service.ListErrorLogs(serviceTestRequest{ginContextForServiceTest: c})
 	if result.Flag || result.Message != "系统繁忙，请稍后再试" {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 
-type fakeFriendLinkRepository struct{ links []entity.TFriendLink }
+type fakeFriendLinkRepository struct {
+	links []entity.TFriendLink
+	seen  context.Context
+}
 
-func (f *fakeFriendLinkRepository) ListPublic(context.Context) ([]entity.TFriendLink, error) {
+func (f *fakeFriendLinkRepository) ListPublic(ctx context.Context) ([]entity.TFriendLink, error) {
+	f.seen = ctx
 	return f.links, nil
 }
 func (f *fakeFriendLinkRepository) ListAdmin(context.Context, int, int, string) ([]entity.TFriendLink, int64, error) {
@@ -44,11 +48,26 @@ func (f *fakeFriendLinkRepository) SaveOrUpdate(context.Context, entity.TFriendL
 func (f *fakeFriendLinkRepository) Delete(context.Context, []int) error { return nil }
 
 func TestFriendLinkServiceMapsDomainRecordsToPublicDTO(t *testing.T) {
-	service := NewFriendLinkService(&fakeFriendLinkRepository{links: []entity.TFriendLink{{Id: 7, LinkName: "example"}}})
-	result := service.ListFriendLinks()
+	repository := &fakeFriendLinkRepository{links: []entity.TFriendLink{{Id: 7, LinkName: "example"}}}
+	service := NewFriendLinkService(repository)
+	result := service.ListFriendLinks(context.Background())
 	links, ok := result.Data.([]model.FriendLinkDTO)
 	if !ok || len(links) != 1 || links[0].Id != 7 || links[0].LinkName != "example" {
 		t.Fatalf("unexpected links: %#v", result.Data)
+	}
+}
+
+func TestFriendLinkServiceForwardsContextToRepository(t *testing.T) {
+	repository := &fakeFriendLinkRepository{}
+	service := NewFriendLinkService(repository)
+	ctx := context.WithValue(context.Background(), struct{ name string }{name: "request"}, "request-value")
+
+	result := service.ListFriendLinks(ctx)
+	if !result.Flag {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if repository.seen != ctx || repository.seen.Value(struct{ name string }{name: "request"}) != "request-value" {
+		t.Fatal("request context was not forwarded to the repository")
 	}
 }
 
@@ -74,7 +93,7 @@ func TestMenuServiceBuildsStableTreeFromPortRecords(t *testing.T) {
 	}})
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest("GET", "/admin/menus", nil)
-	result := service.ListMenus(c)
+	result := service.ListMenus(serviceTestRequest{ginContextForServiceTest: c})
 	menus, ok := result.Data.([]model.MenuDTO)
 	if !ok || len(menus) != 1 || menus[0].Id != 1 || len(menus[0].Children) != 1 || menus[0].Children[0].Id != 2 {
 		t.Fatalf("unexpected menu tree: %#v", result.Data)
@@ -88,7 +107,7 @@ func TestMenuServicePreservesUserMenuPaths(t *testing.T) {
 		{Id: 3, Name: "article list", Path: "/article-list", Component: "/article/ArticleList.vue", ParentId: 2, OrderNum: 1},
 	}})
 
-	result := service.ListUserMenus(1)
+	result := service.ListUserMenus(context.Background(), 1)
 	menus, ok := result.Data.([]model.UserMenuDTO)
 	if !ok || len(menus) != 2 {
 		t.Fatalf("unexpected user menus: %#v", result.Data)
@@ -127,7 +146,7 @@ func TestRoleServiceRejectsDuplicateRoleName(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest("POST", "/admin/role", strings.NewReader(`{"id":4,"roleName":"admin"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
-	result := service.SaveOrUpdateRole(c)
+	result := service.SaveOrUpdateRole(serviceTestRequest{ginContextForServiceTest: c})
 	if result.Flag || result.Message != "该角色存在" {
 		t.Fatalf("unexpected result: %+v", result)
 	}

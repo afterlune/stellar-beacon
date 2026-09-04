@@ -1,11 +1,12 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"context"
+	"time"
 
 	"xorm.io/xorm"
 )
@@ -33,7 +34,7 @@ func (s *MySiteInfoRepo) count(ctx context.Context, op, query string, args ...in
 }
 
 func (s *MySiteInfoRepo) CountArticles(ctx context.Context) (int64, error) {
-	return s.count(ctx, "site.count_articles", "SELECT count(0) FROM t_article WHERE is_delete = 0")
+	return s.count(ctx, "site.count_articles", pgsql.CountPublicArticles)
 }
 
 func (s *MySiteInfoRepo) CountCategories(ctx context.Context) (int64, error) {
@@ -45,7 +46,14 @@ func (s *MySiteInfoRepo) CountTags(ctx context.Context) (int64, error) {
 }
 
 func (s *MySiteInfoRepo) CountTalks(ctx context.Context) (int64, error) {
-	return s.count(ctx, "site.count_talks", "SELECT count(0) FROM t_talk")
+	return s.count(ctx, "site.count_talks", pgsql.CountPublicTalks)
+}
+
+func (s *MySiteInfoRepo) CountRecentContent(ctx context.Context, since time.Time) (int64, error) {
+	return s.count(ctx, "site.count_recent_content", `SELECT
+		(SELECT count(0) FROM t_article WHERE is_delete = 0 AND status = 1 AND COALESCE(update_time, create_time) >= ?)
+		+
+		(SELECT count(0) FROM t_talk WHERE status = 1 AND COALESCE(update_time, create_time) >= ?)`, since, since)
 }
 
 func (s *MySiteInfoRepo) CountComments(ctx context.Context, commentType int) (int64, error) {
@@ -88,11 +96,11 @@ func (s *MySiteInfoRepo) GetWebsiteConfig(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var row entity.TWebsiteConfig
-	if _, err := session.ID(1).Get(&row); err != nil {
+	var configRow row.TWebsiteConfig
+	if _, err := session.ID(1).Get(&configRow); err != nil {
 		return "", apperrors.Unavailable("site.website_config.get", err)
 	}
-	return row.Config, nil
+	return configRow.Config, nil
 }
 
 func (s *MySiteInfoRepo) UpdateWebsiteConfig(ctx context.Context, config string) error {
@@ -107,11 +115,11 @@ func (s *MySiteInfoRepo) GetAbout(ctx context.Context, id int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var row entity.TAbout
-	if _, err := session.ID(id).Get(&row); err != nil {
+	var aboutRow row.TAbout
+	if _, err := session.ID(id).Get(&aboutRow); err != nil {
 		return "", apperrors.Unavailable("site.about.get", err)
 	}
-	return row.Content, nil
+	return aboutRow.Content, nil
 }
 
 func (s *MySiteInfoRepo) UpdateAbout(ctx context.Context, id int, content string) error {

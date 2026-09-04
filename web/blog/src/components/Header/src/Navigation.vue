@@ -44,6 +44,14 @@
         </Dropdown>
       </li>
       <li
+        v-if="agentEnabled"
+        class="not-italic font-medium text-xs h-full relative flex flex-col items-center justify-center cursor-pointer text-center py-4 px-2"
+        data-menu="Agent">
+        <div class="nav-link text-sm block px-1.5 py-0.5 rounded-md relative uppercase" @click="pushPage('/agent')">
+          <span class="relative z-50">Agent</span>
+        </div>
+      </li>
+      <li
         class="not-italic font-medium text-xs h-full relative flex flex-col items-center justify-center cursor-pointer text-center py-4 px-2"
         data-menu="PhotoAlbums">
         <Dropdown hover class="nav-link text-sm block px-1.5 py-0.5 rounded-md relative uppercase">
@@ -64,18 +72,20 @@
 
 <script lang="ts">
 // @ts-nocheck
-import { defineComponent, onMounted, reactive, toRef, toRefs } from 'vue'
+import { computed, defineComponent, onMounted, reactive, toRef, toRefs } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Dropdown, DropdownMenu, DropdownItem } from '@/components/Dropdown'
 import { isExternal } from '@/utils/validate'
 import config from '@/config/config'
 import api from '@/api/api'
+import { useAppStore } from '@/stores/app'
 
 export default defineComponent({
   name: 'Navigation',
   components: { Dropdown, DropdownMenu, DropdownItem },
   setup() {
+    const appStore = useAppStore()
     const { t, te } = useI18n()
     const router = useRouter()
     const pushPage = (path: string): void => {
@@ -104,6 +114,14 @@ export default defineComponent({
       routes: config.routes,
       pushPage,
       openPhotoAlbum,
+      agentEnabled: computed(() =>
+        appStore.agentFeatures.publicChat ||
+          appStore.agentFeatures.vitals ||
+          appStore.agentFeatures.galaxy ||
+          appStore.agentFeatures.dreams ||
+          appStore.agentFeatures.radio ||
+          appStore.agentFeatures.videos
+      ),
       te,
       t
     }

@@ -31,6 +31,13 @@ func TestBackofficeRepositoriesRequireInjectedEngine(t *testing.T) {
 		{name: "tag", call: func() error { _, err := NewTagRepo(nil).List(ctx); return err }},
 		{name: "talk", call: func() error { _, err := NewTalkRepo(nil).Count(ctx, port.TalkFilter{}); return err }},
 		{name: "auth", call: func() error { _, err := NewUserAuthRepo(nil).FindByUsername(ctx, "missing"); return err }},
+		{name: "ai job", call: func() error {
+			return NewAIJobRepository(nil).Enqueue(ctx, port.AIJob{Kind: "test", IdempotencyKey: "test", Payload: []byte(`{}`)})
+		}},
+		{name: "agent profile", call: func() error {
+			_, err := NewAgentProfileRepository(nil).Get(ctx, port.DefaultAgentProfileID)
+			return err
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

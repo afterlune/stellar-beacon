@@ -1,3 +1,13 @@
+param(
+    [switch]$AllowWrites
+)
+
+$ErrorActionPreference = 'Stop'
+
+if (-not $AllowWrites) {
+    throw 'Refusing to write isolated database or Meilisearch data. Re-run with -AllowWrites during an approved integration window.'
+}
+
 . (Join-Path $PSScriptRoot 'integration-common.ps1')
 Import-IntegrationEnv
 

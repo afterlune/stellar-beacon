@@ -1,36 +1,44 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
-	"benetnasch/app/infra/persistence/ormInit"
+	apperrors "benetnasch/app/domain/errors"
+	"benetnasch/app/domain/port"
+	"benetnasch/app/infra/persistence/row"
 	"context"
-	"fmt"
+
+	"xorm.io/xorm"
 )
 
-func SaveOptLog(ctx context.Context, optLog entity.TOperationLog) (err error) {
-	if ctx == nil {
-		ctx = context.Background()
+func saveOptLog(engine *xorm.Engine, ctx context.Context, optLog port.TOperationLog) (err error) {
+	session, err := repoSession(engine, ctx, "operation_log.save")
+	if err != nil {
+		return err
 	}
-	session := ormInit.GetEngine().NewSession().Context(ctx)
 	defer func() {
 		if closeErr := session.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("close operation log session: %w", closeErr)
+			err = apperrors.Unavailable("operation_log.close", closeErr)
 		}
 	}()
-	_, err = session.Insert(&optLog)
-	return err
+	optLogRow := row.ToOperationLog(optLog)
+	if _, err = session.Insert(&optLogRow); err != nil {
+		return apperrors.Unavailable("operation_log.save", err)
+	}
+	return nil
 }
 
-func SaveExLog(ctx context.Context, exLog entity.TExceptionLog) (err error) {
-	if ctx == nil {
-		ctx = context.Background()
+func saveExLog(engine *xorm.Engine, ctx context.Context, exLog port.TExceptionLog) (err error) {
+	session, err := repoSession(engine, ctx, "exception_log.save")
+	if err != nil {
+		return err
 	}
-	session := ormInit.GetEngine().NewSession().Context(ctx)
 	defer func() {
 		if closeErr := session.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("close exception log session: %w", closeErr)
+			err = apperrors.Unavailable("exception_log.close", closeErr)
 		}
 	}()
-	_, err = session.Insert(&exLog)
-	return err
+	exLogRow := row.ToExceptionLog(exLog)
+	if _, err = session.Insert(&exLogRow); err != nil {
+		return apperrors.Unavailable("exception_log.save", err)
+	}
+	return nil
 }

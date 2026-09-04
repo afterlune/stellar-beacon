@@ -94,29 +94,52 @@
 
 ## 4.隔离前后端联调
 
-联调使用独立的 Compose 项目 `benetnasch-integration`，包含 PostgreSQL、Redis、Meilisearch、MinIO、后端和临时 Caddy。它不会修改现有容器、现有 Caddy 配置或现有数据卷。
+联调使用独立的 Compose 项目 `benetnasch-integration`，包含 PostgreSQL、Redis、Meilisearch、MinIO、后端和临时 Caddy。博客入口为 `18080`，旧管理端为 `18008`，新 `admin-next` 预览入口为 `18018`，Companion 空间桥接入口为 `18028`。它不会修改现有容器、现有 Caddy 配置或现有数据卷。
 
-隔离联调期间请访问 `http://127.0.0.1:18080`（博客）和 `http://127.0.0.1:18008`（管理端）。主 Caddy 的 `80/8008` 端口属于另一套生产链路，不用于隔离联调。
+隔离联调期间请访问 `http://127.0.0.1:18080`（博客）、`http://127.0.0.1:18008`（旧管理端）和 `http://127.0.0.1:18018`（新管理端预览）。主 Caddy 的 `80/8008` 端口属于另一套生产链路，不用于隔离联调。
 
 一键构建、同步、初始化并验收：
 
 ```powershell
 Copy-Item .env.integration.example .env.integration
-pwsh ./scripts/integration-deploy.ps1
+pwsh ./scripts/integration-deploy.ps1 -AllowContainerChanges -AllowWrites
 ```
 
 如需分步执行，端口为 `18080`（博客）、`18008`（管理端）、`17777`（后端）、`17700`（Meili）和 `19000/19001`（MinIO）。
 
+Windows + Docker Desktop 主机内存紧张时，后端可以先使用宿主机 Go 交叉编译，避免把 Go
+编译过程交给 Docker Desktop/WSL：
+
 ```powershell
-pwsh ./scripts/integration-up.ps1
-pwsh ./scripts/integration-seed.ps1
-pwsh ./scripts/integration-smoke.ps1
+pwsh ./scripts/build-linux-amd64.ps1
+```
+
+脚本会确认当前 Go 工具链的 `GOHOSTOS=windows`，默认把 Linux/amd64 ELF 产物写入系统
+临时目录，只编译当前仓库，不启动或修改任何容器、数据库、Meilisearch、MinIO 或 Caddy。
+Dockerfile 的镜像构建仍是另一条发布路径，且 builder 自身也限制为单并行度以降低
+Docker Desktop/WSL 峰值；该脚本不会自动把产物注入正在运行的容器。
+
+若只在获批的隔离窗口更新现有 integration backend，可显式使用原生产物入口；它会先备份
+容器内旧二进制和配置，只操作 `benetnasch-integration` 的 backend：
+
+```powershell
+pwsh ./scripts/integration-native-backend.ps1 -Build -AllowContainerChanges
+```
+
+该入口不会执行迁移、seed、Meilisearch/MinIO 写入或生产操作；`-Build` 之外也可传入已经
+校验过且位于仓库外的 `-BinaryPath`。回滚备份保留在系统临时目录，容器重建后需重新按授权流程部署。
+
+```powershell
+pwsh ./scripts/integration-up.ps1 -AllowContainerChanges
+pwsh ./scripts/integration-migrate.ps1 -AllowWrites
+pwsh ./scripts/integration-seed.ps1 -AllowWrites
+pwsh ./scripts/integration-smoke.ps1 -AllowWrites
 ```
 
 联调结束后只清理这个临时项目：
 
 ```powershell
-pwsh ./scripts/integration-down.ps1 -RemoveVolumes
+pwsh ./scripts/integration-down.ps1 -AllowContainerChanges -RemoveVolumes
 ```
 
 ## 5.部署
@@ -132,3 +155,15 @@ pwsh ./scripts/integration-down.ps1 -RemoveVolumes
 4.数据库导入数据库表
 
 5.重启所有容器
+
+## 6.数字空间计划
+
+- [项目文档中心](docs/README.md)
+- [数字空间当前计划](docs/digital-space-plan.md)
+- [数字空间与 Companion 居民 ADR](docs/adr/0004-digital-space-resident-architecture.md)
+
+数据库迁移通过显式命令执行，服务启动不会自动改表：
+
+```bash
+go run . migrate --allow-writes
+```

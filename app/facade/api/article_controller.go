@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/topAndFeatured [GET]
 func ListTopAndFeaturedArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListTopAndFeaturedArticles(c))
+	c.JSON(http.StatusOK, articleService.ListTopAndFeaturedArticles(applicationRequest(c)))
 }
 
 // ListArticles
@@ -20,7 +20,7 @@ func ListTopAndFeaturedArticles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/all [GET]
 func ListArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListArticles(c))
+	c.JSON(http.StatusOK, articleService.ListArticles(applicationRequest(c)))
 }
 
 // GetArticlesByCategoryId
@@ -29,7 +29,7 @@ func ListArticles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/categoryId [GET]
 func GetArticlesByCategoryId(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListArticlesByCategoryId(c))
+	c.JSON(http.StatusOK, articleService.ListArticlesByCategoryId(applicationRequest(c)))
 }
 
 // GetArticleById
@@ -38,7 +38,7 @@ func GetArticlesByCategoryId(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/:articleId [GET]
 func GetArticleById(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.GetArticleById(c))
+	c.JSON(http.StatusOK, articleService.GetArticleById(applicationRequest(c)))
 }
 
 // AccessArticle
@@ -47,7 +47,7 @@ func GetArticleById(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/access [POST]
 func AccessArticle(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.AccessArticle(c))
+	c.JSON(http.StatusOK, articleService.AccessArticle(applicationRequest(c)))
 }
 
 // ListArticlesByTagId
@@ -56,7 +56,7 @@ func AccessArticle(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/tagId [GET]
 func ListArticlesByTagId(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListArticlesByTagId(c))
+	c.JSON(http.StatusOK, articleService.ListArticlesByTagId(applicationRequest(c)))
 }
 
 // ListArchives
@@ -65,7 +65,7 @@ func ListArticlesByTagId(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /archives/all [GET]
 func ListArchives(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListArchives(c))
+	c.JSON(http.StatusOK, articleService.ListArchives(applicationRequest(c)))
 }
 
 // ListArticlesAdmin
@@ -74,7 +74,7 @@ func ListArchives(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles [GET]
 func ListArticlesAdmin(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListArticlesAdmin(c))
+	c.JSON(http.StatusOK, articleService.ListArticlesAdmin(applicationRequest(c)))
 }
 
 // SaveOrUpdateArticle
@@ -83,7 +83,7 @@ func ListArticlesAdmin(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles [POST]
 func SaveOrUpdateArticle(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.SaveOrUpdateArticle(c))
+	c.JSON(http.StatusOK, articleService.SaveOrUpdateArticle(applicationRequest(c)))
 }
 
 // UpdateArticleTopAndFeatured
@@ -92,7 +92,7 @@ func SaveOrUpdateArticle(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles/topAndFeatured [PUT]
 func UpdateArticleTopAndFeatured(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.UpdateArticleTopAndFeatured(c))
+	c.JSON(http.StatusOK, articleService.UpdateArticleTopAndFeatured(applicationRequest(c)))
 }
 
 // UpdateArticleDelete
@@ -101,7 +101,7 @@ func UpdateArticleTopAndFeatured(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles [PUT]
 func UpdateArticleDelete(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.UpdateArticleDelete(c))
+	c.JSON(http.StatusOK, articleService.UpdateArticleDelete(applicationRequest(c)))
 }
 
 // DeleteArticles
@@ -110,7 +110,7 @@ func UpdateArticleDelete(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles/delete [DELETE]
 func DeleteArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.DeleteArticles(c))
+	c.JSON(http.StatusOK, articleService.DeleteArticles(applicationRequest(c)))
 }
 
 // SaveArticleImages
@@ -119,7 +119,7 @@ func DeleteArticles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles/images [POST]
 func SaveArticleImages(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.SaveArticleImages(c))
+	c.JSON(http.StatusOK, articleService.SaveArticleImages(applicationRequest(c)))
 }
 
 // GetArticleBackById
@@ -128,7 +128,7 @@ func SaveArticleImages(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles/:articleId [GET]
 func GetArticleBackById(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.GetArticleBackById(c))
+	c.JSON(http.StatusOK, articleService.GetArticleBackById(applicationRequest(c)))
 }
 
 // ImportArticles
@@ -137,7 +137,7 @@ func GetArticleBackById(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles/import [POST]
 func ImportArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ImportArticles(c))
+	c.JSON(http.StatusOK, articleService.ImportArticles(applicationRequest(c)))
 }
 
 // ExportArticles
@@ -146,14 +146,22 @@ func ImportArticles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/articles/export [POST]
 func ExportArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ExportArticles(c))
+	c.JSON(http.StatusOK, articleService.ExportArticles(applicationRequest(c)))
 }
 
 // ListArticlesBySearch
 // @Summary		 文章模块
 // @Description 搜索文章
+// @Param        keywords query string false "关键词"
+// @Param        mode query string false "搜索模式：keyword、hybrid、semantic"
+// @Param        category query string false "分类名"
+// @Param        tag query string false "标签名，可重复传入"
+// @Param        tags query string false "逗号分隔的标签名"
+// @Param        year query int false "发表年份"
+// @Param        from query string false "起始时间，RFC3339 或 YYYY-MM-DD"
+// @Param        to query string false "结束时间（半开区间），RFC3339 或 YYYY-MM-DD"
 // @Success		 200	{object} model.ResultVO
 // @Router       /articles/search [GET]
 func ListArticlesBySearch(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListArticlesBySearch(c))
+	c.JSON(http.StatusOK, articleService.ListArticlesBySearch(applicationRequest(c)))
 }

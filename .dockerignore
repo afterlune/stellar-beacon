@@ -1,0 +1,13 @@
+.git
+.github
+.codebuddy
+.integration
+web
+scripts
+deploy
+**/node_modules
+**/dist
+*.log
+error_*.log
+.env
+.env.*

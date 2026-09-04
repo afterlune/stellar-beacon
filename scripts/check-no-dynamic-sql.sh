@@ -14,7 +14,7 @@ if rg -n --glob '*.go' \
 fi
 
 if rg -n --glob '*.go' \
-  '"[^"]*"[[:space:]]*\+[[:space:]]*(vo\.|filter\.|keywords|Keywords|username|Username|nickname|Nickname|topic|Topic)' \
+  '"[^"]*(SELECT|INSERT|UPDATE|DELETE|WHERE|LIKE|ORDER[[:space:]]+BY|GROUP[[:space:]]+BY)[^"]*"[[:space:]]*\+[[:space:]]*(vo\.|filter\.|keywords|Keywords|username|Username|nickname|Nickname|topic|Topic)' \
   app; then
   echo "request data must not be concatenated into SQL fragments" >&2
   exit 1

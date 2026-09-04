@@ -9,33 +9,12 @@
     }
 }
 # oss反向代理地址
-https://example.com {
+https://oss.example.com {
     reverse_proxy example-oss.com
 }
 
 # Configuration for HTTPS server on port 443
 https://example.com {
-    @options_preflight {
-        method OPTIONS
-    }
-    handle @options_preflight {
-        respond * 204 {
-            close
-        }
-        header Access-Control-Allow-Origin "*"
-        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        header Access-Control-Allow-Headers "*"
-        header Access-Control-Expose-Headers "*"
-        header Access-Control-Allow-Credentials "true"
-    }
-	
-	handle {
-		root * /srv/vue/blog
-		file_server
-		try_files {path} {path}/ /index.html
-		encode gzip zstd
-	}
-
     handle_path /api {
         reverse_proxy https://172.17.0.1:7777 {
             transport http {
@@ -44,7 +23,6 @@ https://example.com {
             }
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
         }
     }
 	
@@ -56,42 +34,19 @@ https://example.com {
 			}
 			header_up Host {host}
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
 		}
 	}
 
-    header {
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "*"
-        Access-Control-Expose-Headers "*"
-        Access-Control-Allow-Credentials "true"
-    }
+	handle {
+		root * /srv/vue/blog
+		try_files {path} {path}/ /index.html
+		file_server
+		encode gzip zstd
+	}
 }
 
 # Configuration for HTTP server on port 8008
 https://example.com:8008 {
-    @options_preflight {
-        method OPTIONS
-    }
-    handle @options_preflight {
-        respond * 204 {
-            close
-        }
-        header Access-Control-Allow-Origin "*"
-        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        header Access-Control-Allow-Headers "*"
-        header Access-Control-Expose-Headers "*"
-        header Access-Control-Allow-Credentials "true"
-    }
-
-	handle {
-		root * /srv/vue/admin
-		file_server
-		try_files {path} {path}/ /index.html
-		encode gzip zstd
-	}
-	
 	handle_path /api/* {
 		reverse_proxy https://172.17.0.1:7777 {
 			transport http {
@@ -100,15 +55,13 @@ https://example.com:8008 {
 			}
 			header_up Host {host}
 			header_up X-Real-IP {remote_host}
-			header_up X-Forwarded-For {remote_host}
 		}
 	}
 
-    header {
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "*"
-        Access-Control-Expose-Headers "*"
-        Access-Control-Allow-Credentials "true"
-    }
+	handle {
+		root * /srv/vue/admin
+		try_files {path} {path}/ /index.html
+		file_server
+		encode gzip zstd
+	}
 }

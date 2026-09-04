@@ -1,11 +1,23 @@
+param(
+    [switch]$AllowWrites
+)
+
+$ErrorActionPreference = 'Stop'
+
+if (-not $AllowWrites) {
+    throw 'Refusing to write isolated database, operation logs, or MinIO data. Re-run with -AllowWrites during an approved integration window.'
+}
+
 . (Join-Path $PSScriptRoot 'integration-common.ps1')
 Import-IntegrationEnv
 
 $blogBase = 'http://127.0.0.1:18080'
 $adminBase = 'http://127.0.0.1:18008'
+$adminNextBase = 'http://127.0.0.1:18018'
 
 Wait-IntegrationHttp -Uri "$blogBase/"
 Wait-IntegrationHttp -Uri "$adminBase/"
+Wait-IntegrationHttp -Uri "$adminNextBase/"
 
 $blog = Invoke-IntegrationRequest -Uri "$blogBase/"
 Assert-IntegrationStatus -Response $blog -Expected 200 -Name 'blog frontend'
@@ -19,6 +31,13 @@ Assert-IntegrationStatus -Response $admin -Expected 200 -Name 'admin frontend'
 if ($admin.Content -notmatch 'id="app"') { throw 'admin frontend HTML does not contain the Vue mount point' }
 if ($admin.Content -match 'TencentCaptcha|TCaptcha\.js|captcha\.qq\.com|TENCENT_CAPTCHA') {
     throw 'admin frontend still references Tencent CAPTCHA'
+}
+
+$adminNext = Invoke-IntegrationRequest -Uri "$adminNextBase/"
+Assert-IntegrationStatus -Response $adminNext -Expected 200 -Name 'admin-next preview frontend'
+if ($adminNext.Content -notmatch 'id="app"') { throw 'admin-next preview HTML does not contain the Vue mount point' }
+if ($adminNext.Content -match 'TencentCaptcha|TCaptcha\.js|captcha\.qq\.com|TENCENT_CAPTCHA') {
+    throw 'admin-next preview still references Tencent CAPTCHA'
 }
 
 $cors = Invoke-IntegrationRequest -Uri "$blogBase/api/" -Method OPTIONS -Headers @{
@@ -42,6 +61,19 @@ $publicApi = @(
 foreach ($item in $publicApi) {
     $response = Invoke-IntegrationRequest -Uri $item.Uri
     [void](Assert-IntegrationApiSuccess -Response $response -Name $item.Name)
+}
+
+$agentFeaturesResponse = Invoke-IntegrationRequest -Uri "$blogBase/api/agent/features"
+$agentFeaturesPayload = Assert-IntegrationApiSuccess -Response $agentFeaturesResponse -Name 'public Agent feature flags'
+$requiredAgentFlags = @('publicChat', 'vitals', 'galaxy', 'dreams', 'capsules', 'radio', 'videos', 'ttsEnabled')
+foreach ($flagName in $requiredAgentFlags) {
+    $flagProperty = $agentFeaturesPayload.data.PSObject.Properties[$flagName]
+    if ($null -eq $flagProperty -or $flagProperty.Value -isnot [bool]) {
+        throw "public Agent feature flags missing boolean '$flagName'. Body: $($agentFeaturesResponse.Content)"
+    }
+}
+if ($agentFeaturesResponse.Content -match '(?i)api.?key|password|system.?prompt|secret') {
+    throw 'public Agent feature flags leaked a secret-looking field'
 }
 
 $loginBody = 'username=' + [uri]::EscapeDataString($env:E2E_ADMIN_EMAIL) + '&password=' + [uri]::EscapeDataString($env:E2E_ADMIN_PASSWORD)

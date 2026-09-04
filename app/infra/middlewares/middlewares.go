@@ -2,7 +2,7 @@ package middlewares
 
 import (
 	"benetnasch/app/application/service"
-	"benetnasch/app/domain/entity"
+	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
 	"benetnasch/app/facade/model"
 	"benetnasch/app/infra/config"
@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/casbin/casbin/v2"
 	model2 "github.com/casbin/casbin/v2/model"
+	casbinutil "github.com/casbin/casbin/v2/util"
 	xormadapter "github.com/casbin/xorm-adapter/v2"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
@@ -34,13 +36,64 @@ import (
 
 type bodyLog struct {
 	gin.ResponseWriter
-	body *bytes.Buffer
+	body         *bytes.Buffer
+	captureLimit int
+}
+
+type requestBodyCapture struct {
+	data    []byte
+	omitted bool
+}
+
+// replayReadCloser restores the bytes consumed for bounded request logging
+// and closes the original body when the handler/server is done with it.
+type replayReadCloser struct {
+	io.Reader
+	closer io.Closer
+}
+
+func (r replayReadCloser) Close() error {
+	if r.closer == nil {
+		return nil
+	}
+	return r.closer.Close()
 }
 
 const (
 	operationLogRequestParamLimit = 2000
 	operationLogResponseLimit     = 10000
+	requestBodyCaptureLimit       = 64 * 1024
 )
+
+func captureRequestBody(req *http.Request) (requestBodyCapture, error) {
+	if req == nil || req.Body == nil {
+		return requestBodyCapture{}, nil
+	}
+	if req.ContentLength == 0 || req.ContentLength > requestBodyCaptureLimit || isBinaryContentType(req.Header.Get("Content-Type")) {
+		return requestBodyCapture{omitted: req.ContentLength != 0}, nil
+	}
+
+	original := req.Body
+	data, err := io.ReadAll(io.LimitReader(original, requestBodyCaptureLimit+1))
+	// The bounded prefix must be replayed before the unread remainder, so
+	// handlers receive the same body even when it exceeds the log capture cap.
+	remainder := io.MultiReader(bytes.NewReader(data), original)
+	req.Body = replayReadCloser{Reader: remainder, closer: original}
+	if err != nil {
+		return requestBodyCapture{omitted: true}, err
+	}
+	if len(data) > requestBodyCaptureLimit {
+		return requestBodyCapture{omitted: true}, nil
+	}
+	return requestBodyCapture{data: data}, nil
+}
+
+func requestBodyLogPayload(req *http.Request, capture requestBodyCapture) string {
+	if capture.omitted {
+		return "[request body omitted: binary or larger than capture limit]"
+	}
+	return requestLogPayload(req, capture.data)
+}
 
 func requestLogPayload(req *http.Request, body []byte) string {
 	if len(body) == 0 {
@@ -92,8 +145,28 @@ func truncateLogText(value string, limit int) string {
 	return value[:cut] + suffix
 }
 
+func responseCodeFromBody(body []byte) (int, bool) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return 0, false
+	}
+	var envelope struct {
+		Code int `json:"code"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return 0, false
+	}
+	return envelope.Code, true
+}
+
 func (w bodyLog) Write(b []byte) (int, error) {
-	w.body.Write(b)
+	if w.body != nil && w.captureLimit > w.body.Len() {
+		remaining := w.captureLimit - w.body.Len()
+		if len(b) > remaining {
+			_, _ = w.body.Write(b[:remaining])
+		} else {
+			_, _ = w.body.Write(b)
+		}
+	}
 	return w.ResponseWriter.Write(b)
 }
 
@@ -110,20 +183,20 @@ func init() {
 	swaggerCache = make(map[string]interface{})
 	open, err := os.Open(SwaggerFilePath)
 	if err != nil {
-		slog.Error("failed to open swagger.json", "error", err)
+		slog.Error("failed to open swagger.json", "error_code", apperrors.SafeCode(err))
 		return
 	}
 	defer open.Close()
 
 	bys, err := io.ReadAll(open)
 	if err != nil {
-		slog.Error("failed to read swagger.json", "error", err)
+		slog.Error("failed to read swagger.json", "error_code", apperrors.SafeCode(err))
 		return
 	}
 
 	err = json.Unmarshal(bys, &swaggerCache)
 	if err != nil {
-		slog.Error("failed to unmarshal swagger.json", "error", err)
+		slog.Error("failed to unmarshal swagger.json", "error_code", apperrors.SafeCode(err))
 		return
 	}
 	slog.Info("swagger cache initialized successfully")
@@ -144,15 +217,18 @@ func getSwaggerInfo(reqURI, reqMethod string) (module, desc string) {
 		return "Unknown", "Unknown"
 	}
 
-	pathData, ok := apis[reqURI].(map[string]interface{})
+	pathData, ok := findSwaggerPath(apis, reqURI)
 	if !ok {
-		slog.Error("invalid swagger format: path not found")
+		// A route can be valid without having generated Swagger metadata (for
+		// example an optional integration-only endpoint).  This is not a
+		// malformed request and must not pollute the error log.
+		slog.Debug("swagger metadata not found")
 		return "Unknown", "Unknown"
 	}
 
 	reqMethodData, ok := pathData[strings.ToLower(reqMethod)].(map[string]interface{})
 	if !ok {
-		slog.Error("invalid swagger format: method not found")
+		slog.Debug("swagger method metadata not found")
 		return "Unknown", "Unknown"
 	}
 
@@ -169,41 +245,92 @@ func getSwaggerInfo(reqURI, reqMethod string) (module, desc string) {
 	return module, desc
 }
 
-func Log() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		blw := &bodyLog{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
-		c.Writer = blw
-		// 创建一个缓冲区
-		var buf bytes.Buffer
+func findSwaggerPath(apis map[string]interface{}, reqURI string) (map[string]interface{}, bool) {
+	if pathData, ok := apis[reqURI].(map[string]interface{}); ok {
+		return pathData, true
+	}
 
-		// 拷贝数据到缓冲区
-		_, err := io.Copy(&buf, c.Request.Body)
-		if err != nil {
-			slog.Error("read request body failed", "error", err)
+	requestSegments := splitPathSegments(reqURI)
+	bestScore := -1
+	var best map[string]interface{}
+	for pattern, rawPathData := range apis {
+		pathData, ok := rawPathData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		patternSegments := splitPathSegments(pattern)
+		if len(patternSegments) != len(requestSegments) {
+			continue
 		}
 
-		// 获取缓冲区中的数据
-		reqData := buf.Bytes()
+		score := 0
+		matched := true
+		for index, patternSegment := range patternSegments {
+			if isSwaggerPathParameter(patternSegment) {
+				continue
+			}
+			if patternSegment != requestSegments[index] {
+				matched = false
+				break
+			}
+			score++
+		}
+		if matched && score > bestScore {
+			bestScore = score
+			best = pathData
+		}
+	}
+	return best, bestScore >= 0
+}
 
-		// 创建一个新的io.ReadCloser
-		c.Request.Body = io.NopCloser(bytes.NewReader(reqData))
+func splitPathSegments(value string) []string {
+	trimmed := strings.Trim(value, "/")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
+}
+
+func isSwaggerPathParameter(segment string) bool {
+	return strings.HasPrefix(segment, ":") ||
+		(strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}"))
+}
+
+func Log() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		reqURI := strings.Split(c.Request.RequestURI, "?")[0]
+		// Public Agent prompts and streamed answers may contain visitor content;
+		// they are intentionally excluded from the generic operation-log sink.
+		// Agent prompts and time-capsule bodies may contain private user
+		// content. Keep them out of the generic operation-log payload while
+		// still allowing the request to flow through the normal middleware.
+		captureResponse := reqURI != "/agent/chat" && !isTimeCapsulePath(reqURI) && !isSpaceCompanionPath(reqURI)
+		blw := &bodyLog{body: bytes.NewBufferString(""), captureLimit: operationLogResponseLimit, ResponseWriter: c.Writer}
+		if !captureResponse {
+			blw.captureLimit = 0
+		}
+		c.Writer = blw
+		capture := requestBodyCapture{}
+		var err error
+		if captureResponse {
+			capture, err = captureRequestBody(c.Request)
+		}
+		if err != nil {
+			slog.Error("read request body failed", "error_code", apperrors.SafeCode(err))
+		}
 
 		c.Next()
-		if c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodDelete {
-			reqURI := strings.Split(c.Request.RequestURI, "?")[0]
+		if (c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodDelete) && captureResponse {
 			reqMethod := c.Request.Method
 			ip := shared.GetIpAddress(c.Request)
 			ipSource := shared.GetIpSource(ip)
 
-			value, ok := c.Get("userInfo")
-			var dto model.UserDetailsDTO
-			if !ok {
-				dto = model.UserDetailsDTO{
+			dto, authenticated := userDetailsFromContext(c)
+			if !authenticated {
+				dto = port.UserDetailsDTO{
 					Nickname:   "访客",
 					UserInfoId: -1,
 				}
-			} else {
-				dto = value.(model.UserDetailsDTO)
 			}
 			nickname := dto.Nickname
 			userId := dto.UserInfoId
@@ -221,9 +348,9 @@ func Log() gin.HandlerFunc {
 			} else {
 				optType = "删除"
 			}
-			requestParam := requestLogPayload(c.Request, reqData)
+			requestParam := requestBodyLogPayload(c.Request, capture)
 			resData := truncateLogText(blw.body.String(), operationLogResponseLimit)
-			optLog := entity.TOperationLog{
+			optLog := port.TOperationLog{
 				OptModule:     module,
 				OptType:       optType,
 				OptUri:        reqURI,
@@ -239,10 +366,8 @@ func Log() gin.HandlerFunc {
 			}
 			repository.EnqueueOptLog(optLog)
 		}
-		resData := make(map[string]interface{})
-		json.Unmarshal(blw.body.Bytes(), &resData)
-		if resData["code"] == 51000 {
-			reqURI := strings.Split(c.Request.RequestURI, "?")[0]
+		responseCode, responseDecoded := responseCodeFromBody(blw.body.Bytes())
+		if captureResponse && responseDecoded && responseCode == 51000 {
 			reqMethod := c.Request.Method
 			ip := shared.GetIpAddress(c.Request)
 			ipSource := shared.GetIpSource(ip)
@@ -251,11 +376,11 @@ func Log() gin.HandlerFunc {
 			// 获取 swagger 信息
 			_, desc := getSwaggerInfo(reqURI, reqMethod)
 
-			exLog := entity.TExceptionLog{
+			exLog := port.TExceptionLog{
 				OptUri:        reqURI,
 				OptMethod:     optFunc,
 				RequestMethod: reqMethod,
-				RequestParam:  requestLogPayload(c.Request, reqData),
+				RequestParam:  requestBodyLogPayload(c.Request, capture),
 				OptDesc:       desc,
 				ExceptionInfo: "",
 				IpAddress:     ip,
@@ -314,10 +439,10 @@ func LoginFilter() gin.HandlerFunc {
 }
 
 func Users(c *gin.Context) model.ResultVO {
-	var userVO model.UserVO
+	var userVO port.UserVO
 	err := c.ShouldBind(&userVO)
 	if err != nil {
-		slog.Error("bind login request failed", "error", err)
+		slog.Error("bind login request failed", "error_code", apperrors.SafeCode(err))
 		return model.ResultFailWithMessage("登录失败，请联系管理员")
 	}
 	if !shared.CheckEmail(userVO.Username) {
@@ -327,7 +452,7 @@ func Users(c *gin.Context) model.ResultVO {
 	ipAddress := shared.GetIpAddress(c.Request)
 	allowed, err := loginAttemptAllowed(ctx, userVO.Username, ipAddress)
 	if err != nil {
-		slog.Error("login rate limiter failed", "error", err)
+		slog.Error("login rate limiter failed", "error_code", apperrors.SafeCode(err))
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	}
 	if !allowed {
@@ -335,27 +460,27 @@ func Users(c *gin.Context) model.ResultVO {
 	}
 	userDetailsDTO, err := userAuthService.Authenticate(ctx, userVO)
 	if err != nil {
-		slog.Error("authenticate user failed", "error", err)
+		slog.Error("authenticate user failed", "error_code", apperrors.SafeCode(err))
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	}
 	if userDetailsDTO == nil {
 		if err := recordLoginFailure(ctx, userVO.Username, ipAddress); err != nil {
-			slog.Error("record login failure", "error", err)
+			slog.Error("record login failure", "error_code", apperrors.SafeCode(err))
 		}
 		return model.ResultFailWithMessage("账号或密码不正确！")
 	}
 	if err := clearLoginFailures(ctx, userVO.Username, ipAddress); err != nil {
-		slog.Error("clear login failures", "error", err)
+		slog.Error("clear login failures", "error_code", apperrors.SafeCode(err))
 	}
 	region := shared.GetIpSource(ipAddress)
-	userAuth := entity.TUserAuth{
+	userAuth := port.TUserAuth{
 		Id:            userDetailsDTO.Id,
 		IpAddress:     ipAddress,
 		IpSource:      region,
 		LastLoginTime: time.Now(),
 	}
 	if err := userAuthService.UpdateUserIp(ctx, userAuth); err != nil {
-		slog.Error("update login metadata failed", "error", err)
+		slog.Error("update login metadata failed", "error_code", apperrors.SafeCode(err))
 		return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 	}
 
@@ -373,22 +498,35 @@ func Users(c *gin.Context) model.ResultVO {
 
 	accessToken, _, err := shared.CreateTokenCtx(ctx, userDetailsDTO)
 	if err != nil {
-		slog.Error("failed to create token", "error", err)
+		slog.Error("failed to create token", "error_code", apperrors.SafeCode(err))
 		return model.ResultFailWithMessage("登录失败")
 	}
-	var userInfoDTO model.UserInfoDTO
-	marshal, err := json.Marshal(userDetailsDTO)
-	if err != nil {
-		slog.Error("marshal login user failed", "error", err)
-	}
-
-	err = json.Unmarshal(marshal, &userInfoDTO)
-	if err != nil {
-		slog.Error("decode login user failed", "error", err)
-	}
-	userInfoDTO.Token = accessToken
+	userInfoDTO := projectUserInfoDTO(*userDetailsDTO, accessToken)
 
 	return model.ResultOkWithData(userInfoDTO)
+}
+
+// projectUserInfoDTO explicitly selects the fields safe for the login
+// response. Keeping this projection typed avoids a JSON round trip and makes
+// it impossible for password, roles, or future private fields to leak by
+// accident.
+func projectUserInfoDTO(details port.UserDetailsDTO, token string) model.UserInfoDTO {
+	return model.UserInfoDTO{
+		Id:            details.Id,
+		UserInfoId:    details.UserInfoId,
+		Email:         details.Email,
+		LoginType:     details.LoginType,
+		Username:      details.Username,
+		Nickname:      details.Nickname,
+		Avatar:        details.Avatar,
+		Intro:         details.Intro,
+		Website:       details.Website,
+		IpAddress:     details.IpAddress,
+		IpSource:      details.IpSource,
+		IsSubscribe:   details.IsSubscribe,
+		LastLoginTime: details.LastLoginTime,
+		Token:         token,
+	}
 }
 
 const (
@@ -457,8 +595,9 @@ func clearLoginFailures(ctx context.Context, username, ip string) error {
 
 func AuthorizationFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 后台接口和登出接口需要认证；其余前台接口保持公开。
-		if !isAdminPath(c.Request.URL.Path) && c.Request.URL.Path != "/users/logout" {
+		// 后台接口、需要用户身份的个人资料接口、胶囊接口和登出接口需要认证；
+		// 注册、找回密码和公开用户资料接口保持公开。
+		if !isAdminPath(c.Request.URL.Path) && !isProtectedUserPath(c.Request.URL.Path, c.Request.Method) && c.Request.URL.Path != "/users/logout" && !isTimeCapsulePath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -473,7 +612,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 		hm, err := shared.TokenParseCtx(c.Request.Context(), token)
 		if err != nil || hm == nil {
 			if err != nil {
-				slog.Error("token validation failed", "error", err)
+				slog.Error("token validation failed", "error_code", apperrors.SafeCode(err))
 			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
 			return
@@ -483,10 +622,10 @@ func AuthorizationFilter() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithMessage("非法操作"))
 			return
 		}
-		var userDetailsDTO model.UserDetailsDTO
+		var userDetailsDTO port.UserDetailsDTO
 		dto, err := shared.HGetCtx(c.Request.Context(), shared.LOGIN_USER, userAuthID)
 		if err != nil {
-			slog.Error("load login user failed", "error", err)
+			slog.Error("load login user failed", "error_code", apperrors.SafeCode(err))
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, model.ResultFailWithMessage("服务暂不可用"))
 			return
 		}
@@ -495,7 +634,7 @@ func AuthorizationFilter() gin.HandlerFunc {
 			return
 		}
 		if err = json.Unmarshal([]byte(dto), &userDetailsDTO); err != nil {
-			slog.Error("decode cached login user failed", "error", err)
+			slog.Error("decode cached login user failed", "error_code", apperrors.SafeCode(err))
 			c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("server error"))
 			return
 		}
@@ -509,38 +648,92 @@ func isAdminPath(path string) bool {
 	return path == "/admin" || strings.HasPrefix(path, "/admin/")
 }
 
-// getRolesByUserInfoId 获取用户角色，优先从缓存中获取
-func getRolesByUserInfoId(ctx context.Context, userInfoId int) []string {
-	cacheKey := fmt.Sprintf("roles:%d", userInfoId)
-	cachedRoles, err := shared.HGetCtx(ctx, "user_roles", cacheKey)
-	if err != nil {
-		slog.Warn("load cached roles failed", "error", err)
+func isTimeCapsulePath(path string) bool {
+	return path == "/capsules" || strings.HasPrefix(path, "/capsules/")
+}
+
+func isSpaceCompanionPath(path string) bool {
+	return path == "/internal/space" || strings.HasPrefix(path, "/internal/space/")
+}
+
+func isProtectedUserPath(path, method string) bool {
+	switch {
+	case path == "/users/info" && method == http.MethodPut:
+		return true
+	case path == "/users/avatar" && method == http.MethodPost:
+		return true
+	case path == "/users/email" && method == http.MethodPut:
+		return true
+	case path == "/users/subscribe" && method == http.MethodPut:
+		return true
+	default:
+		return false
 	}
-	if cachedRoles != "" {
-		var roles []string
-		if err := json.Unmarshal([]byte(cachedRoles), &roles); err == nil {
-			return roles
+}
+
+// userDetailsFromContext is the single boundary for middleware identity
+// values. Middleware order and test doubles must not be able to turn a bad
+// context value into a process-level panic.
+func userDetailsFromContext(c *gin.Context) (port.UserDetailsDTO, bool) {
+	if c == nil {
+		return port.UserDetailsDTO{}, false
+	}
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return port.UserDetailsDTO{}, false
+	}
+	dto, ok := value.(port.UserDetailsDTO)
+	if !ok || dto.UserInfoId <= 0 {
+		return port.UserDetailsDTO{}, false
+	}
+	return dto, true
+}
+
+// getRolesByUserInfoId 获取用户角色，优先从缓存中获取。
+// Cache failures are soft and fall back to the repository; repository and
+// configuration failures are returned so authorization can distinguish an
+// unavailable permission system from a user with no roles.
+func getRolesByUserInfoId(ctx context.Context, userInfoId int) ([]string, error) {
+	cacheKey := fmt.Sprintf("roles:%d", userInfoId)
+	if roleCache != nil {
+		cachedRoles, err := roleCache.HGet(ctx, "user_roles", cacheKey)
+		if err != nil && !errors.Is(err, port.ErrCacheMiss) {
+			slog.WarnContext(ctx, "load cached roles failed", "error_code", apperrors.SafeCode(err))
+		}
+		if cachedRoles != "" {
+			var roles []string
+			if err := json.Unmarshal([]byte(cachedRoles), &roles); err == nil {
+				return roles, nil
+			}
+			slog.WarnContext(ctx, "discard invalid cached roles", "reason", "invalid_json")
 		}
 	}
 
 	if roleRepo == nil {
-		slog.Error("role repository is not configured")
-		return nil
+		return nil, errors.New("role repository is not configured")
 	}
 	roles, err := roleRepo.ListRolesByUserInfoID(ctx, userInfoId)
 	if err != nil {
-		slog.Error("load user roles failed", "error", err)
-		return nil
+		return nil, err
 	}
-	rolesJson, _ := json.Marshal(roles)
-	if err := shared.HSetCtx(ctx, "user_roles", cacheKey, rolesJson, 1*time.Hour); err != nil {
-		slog.Warn("cache user roles failed", "error", err)
+	if roleCache != nil {
+		rolesJSON, err := json.Marshal(roles)
+		if err != nil {
+			return nil, err
+		}
+		if err := roleCache.HSet(ctx, "user_roles", cacheKey, rolesJSON, 1*time.Hour); err != nil {
+			slog.WarnContext(ctx, "cache user roles failed", "error_code", apperrors.SafeCode(err))
+		}
 	}
-	return roles
+	return roles, nil
 }
 
-// checkPermission 检查用户是否有权限访问资源
-func checkPermission(roles []string, uri, method string) (bool, string, error) {
+// checkPermission checks the legacy Casbin policy first and then falls back to
+// the resource/role tables used by the admin UI. Older installations keep
+// their policies in casbin_rule, while newer migrations seed t_resource and
+// t_role_resource. Checking both keeps existing deployments compatible and
+// makes newly configured resources effective at runtime.
+func checkPermission(ctx context.Context, roles []string, uri, method string) (bool, string, error) {
 	enforcer, err := casbinEnforcer()
 	if err != nil {
 		return false, "", err
@@ -548,29 +741,72 @@ func checkPermission(roles []string, uri, method string) (bool, string, error) {
 	for _, role := range roles {
 		ok, err := enforcer.Enforce(role, uri, method)
 		if err != nil {
-			slog.Error("permission check failed", "error", err)
+			slog.ErrorContext(ctx, "permission check failed", "error_code", apperrors.SafeCode(err))
 			return false, "", err
 		}
 		if ok {
 			return true, "", nil
 		}
 	}
+
+	if roleRepo != nil {
+		resources, err := roleRepo.ListResourceRoles(ctx)
+		if err != nil {
+			return false, "", err
+		}
+		if resourcePermissionGranted(roles, resources, uri, method) {
+			return true, "", nil
+		}
+	}
+
 	return false, fmt.Sprintf("用户角色 %v 没有权限访问 %s %s", roles, method, uri), nil
+}
+
+// resourcePermissionGranted is deliberately kept pure so the authorization
+// semantics can be tested without a database or a Casbin singleton. Resource
+// URLs use Casbin's segment-aware KeyMatch2 semantics. This preserves the
+// existing trailing `/*` resource format while preventing a resource such as
+// `/reviews/*/approve` from accidentally authorizing `/reviews/42/reject`.
+func resourcePermissionGranted(roles []string, resources []port.ResourceRoleView, uri, method string) bool {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	uri = strings.TrimSpace(uri)
+	if uri == "" || method == "" {
+		return false
+	}
+	for _, resource := range resources {
+		if !strings.EqualFold(strings.TrimSpace(resource.RequestMethod), method) ||
+			!casbinutil.KeyMatch2(uri, strings.TrimSpace(resource.Url)) {
+			continue
+		}
+		for _, resourceRole := range resource.RoleList {
+			resourceRole = strings.TrimSpace(resourceRole)
+			for _, role := range roles {
+				if resourceRole != "" && resourceRole == strings.TrimSpace(role) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func CasbinResourceFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if isAdminPath(c.Request.URL.Path) {
-			value, ok := c.Get("userInfo")
+			dto, ok := userDetailsFromContext(c)
 			if !ok {
-				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
+				c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithStatus(model.NO_LOGIN))
 				return
 			}
-			dto := value.(model.UserDetailsDTO)
-			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
-			ok, deniedMessage, err := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
+			roles, err := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
 			if err != nil {
-				slog.Error("authorization check failed", "error", err)
+				slog.ErrorContext(c.Request.Context(), "load roles for authorization failed", "error_code", apperrors.SafeCode(err))
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, model.ResultFailWithMessage("权限服务暂不可用"))
+				return
+			}
+			ok, deniedMessage, err := checkPermission(c.Request.Context(), roles, c.Request.URL.Path, c.Request.Method)
+			if err != nil {
+				slog.Error("authorization check failed", "error_code", apperrors.SafeCode(err))
 				c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("权限检查失败"))
 				return
 			}
@@ -597,11 +833,19 @@ var (
 	ipLimiter       = make(map[string]*rate.Limiter)
 	mutex           sync.Mutex
 	roleRepo        port.RoleRepository
+	roleCache       port.Cache
 	userAuthService service.UserAuthService = new(service.MyUserAuthService)
 )
 
 func ConfigureRoleRepository(repo port.RoleRepository) {
 	roleRepo = repo
+}
+
+// ConfigureRoleCache injects the application-facing cache into middleware.
+// It keeps role lookups testable and prevents this package from silently
+// constructing a second global Redis client.
+func ConfigureRoleCache(cache port.Cache) {
+	roleCache = cache
 }
 
 // ConfigureUserAuthService injects the application authentication service
@@ -615,20 +859,6 @@ func ConfigureUserAuthService(auth service.UserAuthService) {
 
 func AccessLimiter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		value, ok := c.Get("userInfo")
-		if ok {
-			dto := value.(model.UserDetailsDTO)
-			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
-			ok, _, err := checkPermission(roles, c.Request.URL.Path, c.Request.Method)
-			if err != nil {
-				slog.Error("permission check failed in access limiter", "error", err)
-				// 权限检查失败，继续进行速率限制
-			} else if ok {
-				c.Next()
-				return
-			}
-		}
-
 		ip := shared.GetIpAddress(c.Request)
 		mutex.Lock()
 		limiter, ok := ipLimiter[ip]

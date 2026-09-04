@@ -3,12 +3,18 @@ import { i18n } from '@/locales/index'
 import cookies from 'js-cookie'
 import nProgress from 'nprogress'
 import 'nprogress/nprogress.css'
+import type { AgentFeatureFlags } from '@shared/api-contract'
+
+export type { AgentFeatureFlags }
 
 nProgress.configure({
   showSpinner: false,
   trickleSpeed: 100,
   parent: '#loading-bar-wrapper'
 })
+
+const hasProgressParent = () =>
+  typeof document !== 'undefined' && document.querySelector('#loading-bar-wrapper') !== null
 
 const setTheme = (theme: string) => {
   if (theme === 'theme-dark') {
@@ -50,13 +56,24 @@ export const useAppStore = defineStore('appStore', {
       tagCount: 0,
       NPTimeout: -1,
       loadingTimeout: -1,
-      aurora_bot_enable: true
+      aurora_bot_enable: true,
+      agentFeaturesReady: false,
+      agentFeatures: {
+        publicChat: false,
+        vitals: false,
+        galaxy: false,
+        dreams: false,
+        capsules: false,
+        radio: false,
+        videos: false,
+        ttsEnabled: false
+      } as AgentFeatureFlags
     }
   },
   actions: {
     changeLocale(locale: string) {
       cookies.set('locale', locale, { expires: 7 })
-      i18n.global.locale = locale
+      i18n.global.locale.value = locale
     },
     initializeTheme(mode: string) {
       setTheme(mode)
@@ -71,17 +88,32 @@ export const useAppStore = defineStore('appStore', {
       if (this.appLoading === true) return
       if (this.NPTimeout !== -1) clearTimeout(this.NPTimeout)
       if (this.loadingTimeout !== -1) clearTimeout(this.loadingTimeout)
-      nProgress.start()
+      // The router's first navigation can run before App.vue has mounted the
+      // progress wrapper. Avoid asking NProgress to render into a null parent.
+      if (hasProgressParent()) nProgress.start()
       this.appLoading = true
     },
     endLoading() {
       this.NPTimeout = <any>setTimeout(() => {
-        nProgress.done()
+        if (hasProgressParent()) nProgress.done()
       }, 100)
 
       this.loadingTimeout = <any>setTimeout(() => {
         this.appLoading = false
       }, 300)
+    },
+    setAgentFeatures(flags: Partial<AgentFeatureFlags> | null | undefined) {
+      this.agentFeaturesReady = true
+      this.agentFeatures = {
+        publicChat: flags?.publicChat === true,
+        vitals: flags?.vitals === true,
+        galaxy: flags?.galaxy === true,
+        dreams: flags?.dreams === true,
+        capsules: flags?.capsules === true,
+        radio: flags?.radio === true,
+        videos: flags?.videos === true,
+        ttsEnabled: flags?.ttsEnabled === true
+      }
     }
   }
 })

@@ -1,0 +1,83 @@
+[
+  {
+    "id": "integration-search-137",
+    "query": "Python 贪吃蛇",
+    "mode": "keyword",
+    "expected": ["article-137-chunk-0"]
+  },
+  {
+    "id": "integration-search-138",
+    "query": "编程语言 创造",
+    "mode": "keyword",
+    "expected": ["article-138-chunk-0"]
+  },
+  {
+    "id": "integration-search-139",
+    "query": "Java 高并发",
+    "mode": "keyword",
+    "expected": ["article-139-chunk-0"]
+  },
+  {
+    "id": "integration-search-144",
+    "query": "时间复杂度",
+    "mode": "keyword",
+    "expected": ["article-144-chunk-0"]
+  },
+  {
+    "id": "integration-search-146",
+    "query": "项目 带崩",
+    "mode": "keyword",
+    "expected": ["article-146-chunk-0"]
+  },
+  {
+    "id": "integration-search-147",
+    "query": "程序 bug",
+    "mode": "keyword",
+    "expected": ["article-147-chunk-0"]
+  },
+  {
+    "id": "integration-search-150",
+    "query": "Java 虚拟机 JVM",
+    "mode": "keyword",
+    "expected": ["article-150-chunk-0"]
+  },
+  {
+    "id": "integration-search-151",
+    "query": "MySQL 数据库",
+    "mode": "keyword",
+    "expected": ["article-151-chunk-0"]
+  },
+  {
+    "id": "integration-search-152",
+    "query": "Nginx 跨域 CORS",
+    "mode": "keyword",
+    "expected": ["article-152-chunk-0"]
+  },
+  {
+    "id": "integration-search-158",
+    "query": "scrapy 爬取图片",
+    "mode": "keyword",
+    "expected": ["article-158-chunk-0"]
+  },
+  {
+    "id": "integration-search-private-noresult",
+    "query": "q9z7private20260901xk",
+    "mode": "keyword",
+    "expected": [],
+    "expectNoResult": true
+  },
+  {
+    "id": "integration-search-deleted-noresult",
+    "query": "q9z7deleted20260901xk",
+    "mode": "keyword",
+    "expected": [],
+    "expectNoResult": true
+  },
+  {
+    "id": "integration-search-noresult",
+    "query": "zzqv_9f2c1b7e_nohit",
+    "mode": "keyword",
+    "expected": [],
+    "expectNoResult": true
+  }
+]

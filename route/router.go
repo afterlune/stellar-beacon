@@ -2,11 +2,20 @@ package route
 
 import (
 	"benetnasch/app/facade/api"
+	"benetnasch/app/infra/middlewares"
 
 	"github.com/gin-gonic/gin"
 )
 
 func RouterSetup(router *gin.Engine) {
+	space := router.Group("/internal/space/v1")
+	{
+		space.GET("/capabilities", middlewares.SpaceCompanionReadAuth(), api.GetSpaceCapabilities)
+		space.POST("/search", middlewares.SpaceCompanionReadAuth(), api.SearchSpaceContent)
+		space.GET("/content/:type/:id", middlewares.SpaceCompanionReadAuth(), api.GetSpaceContent)
+		space.POST("/publications", middlewares.SpaceCompanionPublishAuth(), api.PublishSpaceContent)
+	}
+
 	article := router.Group("/articles")
 	{
 		// article
@@ -19,6 +28,12 @@ func RouterSetup(router *gin.Engine) {
 		article.GET("/search", api.ListArticlesBySearch)
 	}
 	router.GET("/archives/all", api.ListArchives)
+	router.GET("/dreams", api.GetDreams)
+	router.GET("/radio", api.GetRadio)
+	router.GET("/videos", api.GetVideos)
+	router.POST("/capsules", api.CreateTimeCapsule)
+	router.GET("/capsules/:id", api.GetTimeCapsule)
+	router.POST("/capsules/:id/seal", api.SealTimeCapsule)
 
 	admin := router.Group("/admin")
 	{
@@ -32,6 +47,33 @@ func RouterSetup(router *gin.Engine) {
 		admin.GET("/articles/:articleId", api.GetArticleBackById)
 		admin.POST("/articles/import", api.ImportArticles)
 		admin.POST("/articles/export", api.ExportArticles)
+		// AI Studio
+		admin.POST("/ai/providers/test", api.TestAIProvider)
+		admin.GET("/ai/observability", api.GetAIOperationalMetrics)
+		admin.POST("/ai/writing/preview", api.PreviewWriting)
+		admin.POST("/ai/vision/preview", api.PreviewVision)
+		admin.GET("/ai/reviews", api.ListAIReviews)
+		admin.GET("/ai/profile", api.GetAgentProfile)
+		admin.PATCH("/ai/profile", api.UpdateAgentProfile)
+		admin.GET("/ai/review-policy", api.GetAgentReviewPolicy)
+		admin.PATCH("/ai/review-policy", api.UpdateAgentReviewPolicy)
+		admin.GET("/ai/memory/assertions", api.ListAgentMemoryAssertions)
+		admin.GET("/ai/memory/assertions/:id/history", api.ListAgentMemoryHistory)
+		admin.DELETE("/ai/memory/assertions/:id", api.RevokeAgentMemoryAssertion)
+		admin.GET("/ai/memory/conflicts", api.ListAgentMemoryConflicts)
+		admin.POST("/ai/memory/conflicts/:id/resolve", api.ResolveAgentMemoryConflict)
+		admin.POST("/ai/memory/conflicts/:id/reject", api.RejectAgentMemoryConflict)
+		admin.GET("/ai/reviews/:id", api.GetAIReview)
+		admin.POST("/ai/reviews/:id/approve", api.AcceptAIReview)
+		admin.POST("/ai/reviews/:id/partial", api.PartiallyAcceptAIReview)
+		admin.POST("/ai/reviews/:id/reject", api.RejectAIReview)
+		admin.POST("/ai/reviews/:id/regenerate", api.RegenerateAIReview)
+		admin.POST("/ai/reviews/:id/expire", api.ExpireAIReview)
+		admin.PUT("/agent/emergency", api.SetAgentEmergency)
+		// Agent media
+		admin.POST("/videos/upload", api.UploadVideo)
+		admin.POST("/videos/external", api.CreateExternalVideo)
+		admin.DELETE("/videos/:id", api.DeleteVideo)
 		// BenetnaschInfo
 		admin.GET("", api.GetBlogBackInfo)
 		admin.PUT("/website/config", api.UpdateWebsiteConfig)
@@ -125,6 +167,12 @@ func RouterSetup(router *gin.Engine) {
 		admin.DELETE("/users/:userInfoId/online", api.RemoveOnlineUser)
 	}
 	// BenetnaschInfo
+	router.GET("/agent/features", api.GetAgentFeatures)
+	router.GET("/agent/vitals", api.GetAgentVitals)
+	router.GET("/galaxy", api.GetGalaxy)
+	router.POST("/agent/chat", api.AgentChat)
+	router.GET("/agent/sessions/:id/events", api.ReplayAgentSession)
+	router.DELETE("/agent/sessions/:id", api.DeleteAgentSession)
 	router.POST("/report", api.Report)
 	router.GET("/", api.GetBlogHomeInfo)
 	router.GET("/about", api.GetAbout)

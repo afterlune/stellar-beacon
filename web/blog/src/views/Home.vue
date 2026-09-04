@@ -1,5 +1,9 @@
 <template>
   <div class="block">
+    <AgentGalaxy v-if="agentGalaxyEnabled" />
+    <AgentVitals v-if="agentVitalsEnabled" />
+    <AgentRadio v-if="agentRadioEnabled" />
+    <AgentVideos v-if="agentVideosEnabled" />
     <Feature v-if="themeConfig.feature">
       <FeatureList />
     </Feature>
@@ -80,7 +84,12 @@ import { useArticleStore } from '@/stores/article'
 import { useCategoryStore } from '@/stores/Category'
 import { useI18n } from 'vue-i18n'
 import Paginator from '@/components/Paginator.vue'
+import AgentVitals from '@/components/AgentVitals.vue'
+import AgentGalaxy from '@/components/AgentGalaxy.vue'
+import AgentRadio from '@/components/AgentRadio.vue'
+import AgentVideos from '@/components/AgentVideos.vue'
 import api from '@/api/api'
+import MarkdownIt from 'markdown-it'
 
 export default defineComponent({
   name: 'Home',
@@ -96,7 +105,11 @@ export default defineComponent({
     RecentComment,
     TagBox,
     Notice,
-    WebsiteInfo
+    WebsiteInfo,
+    AgentVitals,
+    AgentGalaxy,
+    AgentRadio,
+    AgentVideos
   },
   setup() {
     const appStore = useAppStore()
@@ -123,7 +136,7 @@ export default defineComponent({
       current: 1
     })
     let nowCategoryId = 0
-    let md = require('markdown-it')()
+    const md = new MarkdownIt()
     onMounted(() => {
       fetchTopAndFeatured()
       fetchCategories()
@@ -250,6 +263,10 @@ export default defineComponent({
         return { background: appStore.themeConfig.header_gradient_css }
       }),
       themeConfig: computed(() => appStore.themeConfig),
+      agentVitalsEnabled: computed(() => appStore.agentFeatures.vitals),
+      agentGalaxyEnabled: computed(() => appStore.agentFeatures.galaxy),
+      agentRadioEnabled: computed(() => appStore.agentFeatures.radio),
+      agentVideosEnabled: computed(() => appStore.agentFeatures.videos),
       expanderClass,
       tabClass,
       expandHandler,

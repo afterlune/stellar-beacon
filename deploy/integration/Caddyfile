@@ -51,3 +51,42 @@
         encode gzip zstd
     }
 }
+
+:8018 {
+    handle_path /api {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle_path /api/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle {
+        root * /srv/vue/admin-next
+        try_files {path} {path}/ /index.html
+        file_server
+        encode gzip zstd
+    }
+}
+
+# Isolated Companion bridge listener. Keep the internal protocol separate from
+# the public and admin static sites; the backend remains the auth boundary.
+:8028 {
+    handle /internal/space/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    respond 404
+}

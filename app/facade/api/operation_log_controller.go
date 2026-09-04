@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/operation/logs [GET]
 func ListOperationLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, operationLogService.ListOperationLogs(c))
+	c.JSON(http.StatusOK, operationLogService.ListOperationLogs(applicationRequest(c)))
 }
 
 // DeleteOperationLogs
@@ -20,5 +20,5 @@ func ListOperationLogs(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/operation/logs [DELETE]
 func DeleteOperationLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, operationLogService.DeleteOperationLogs(c))
+	c.JSON(http.StatusOK, operationLogService.DeleteOperationLogs(applicationRequest(c)))
 }

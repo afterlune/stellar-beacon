@@ -28,6 +28,7 @@
   <AuroraNavigator />
   <Dia v-if="!isMobile" />
   <UserCenter />
+  <AgentWidget v-if="agentChatEnabled" />
   <teleport to="head">
     <title>{{ title }}</title>
   </teleport>
@@ -44,7 +45,9 @@ import MobileMenu from '@/components/MobileMenu.vue'
 import Dia from '@/components/Dia.vue'
 import AuroraNavigator from '@/components/AuroraNavigator.vue'
 import UserCenter from '@/components/UserCenter.vue'
+import AgentWidget from '@/components/AgentWidget.vue'
 import api from './api/api'
+import defaultCover from '@/assets/default-cover.jpg'
 export default defineComponent({
   name: 'App',
   components: {
@@ -53,7 +56,8 @@ export default defineComponent({
     Dia,
     AuroraNavigator,
     MobileMenu,
-    UserCenter
+    UserCenter,
+    AgentWidget
   },
   setup() {
     const appStore = useAppStore()
@@ -80,6 +84,7 @@ export default defineComponent({
       intialCopy()
       initWindowOnload()
       fetchWebsiteConfig()
+      fetchAgentFeatures()
       let wrapperHeight = screen.height
       const footerEl = document.getElementById('footer')
       const footerHeight = footerEl?.getBoundingClientRect().height
@@ -100,6 +105,16 @@ export default defineComponent({
         appStore.tagCount = data.data.tagCount
         appStore.websiteConfig = data.data.websiteConfigDTO
       })
+    }
+    const fetchAgentFeatures = () => {
+      api
+        .getAgentFeatures()
+        .then(({ data }) => {
+          appStore.setAgentFeatures(data?.flag ? data.data : null)
+        })
+        .catch(() => {
+          appStore.setAgentFeatures(null)
+        })
     }
     const copyEventHandler = (event: any) => {
       if (document.getSelection() instanceof Selection) {
@@ -135,7 +150,7 @@ export default defineComponent({
       theme: computed(() => appStore.themeConfig.theme),
       headerImage: computed(() => {
         return {
-          backgroundImage: `url(${commonStore.headerImage}), url(${require('@/assets/default-cover.jpg')})`,
+          backgroundImage: `url(${commonStore.headerImage}), url(${defaultCover})`,
           opacity: commonStore.headerImage !== '' ? 1 : 0
         }
       }),
@@ -148,6 +163,7 @@ export default defineComponent({
       wrapperStyle: computed(() => wrapperStyle.value),
 
       isMobile: computed(() => commonStore.isMobile),
+      agentChatEnabled: computed(() => appStore.agentFeatures.publicChat),
       cssVariables: computed(() => {
         if (appStore.themeConfig.theme === 'theme-dark') {
           return `

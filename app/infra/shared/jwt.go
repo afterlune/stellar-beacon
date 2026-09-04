@@ -1,7 +1,7 @@
 package shared
 
 import (
-	"benetnasch/app/facade/model"
+	"benetnasch/app/domain/port"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -67,11 +67,11 @@ func loadOrGenerateKeys() error {
 	return nil
 }
 
-func CreateToken(dto *model.UserDetailsDTO) (string, string, error) {
+func CreateToken(dto *port.UserDetailsDTO) (string, string, error) {
 	return CreateTokenCtx(context.Background(), dto)
 }
 
-func CreateTokenCtx(ctx context.Context, dto *model.UserDetailsDTO) (string, string, error) {
+func CreateTokenCtx(ctx context.Context, dto *port.UserDetailsDTO) (string, string, error) {
 	if keyLoadErr != nil {
 		return "", "", keyLoadErr
 	}
@@ -115,7 +115,7 @@ func signToken(claims jwt2.RegisteredClaims) (string, error) {
 	return token.SignedString(ed25519PrivateKey)
 }
 
-func refreshTokenCtx(ctx context.Context, dto *model.UserDetailsDTO) error {
+func refreshTokenCtx(ctx context.Context, dto *port.UserDetailsDTO) error {
 	dto.ExpireTime = time.Now().Add(EXPIRE_TIME)
 	dto.LastLoginTime = time.Now()
 	data, err := json.Marshal(dto)
@@ -219,7 +219,7 @@ func RefreshTokenCtx(ctx context.Context, refreshTokenStr string) (string, strin
 	if err != nil || dtoStr == "" {
 		return "", "", errors.New("user not found")
 	}
-	var dto model.UserDetailsDTO
+	var dto port.UserDetailsDTO
 	if err := json.Unmarshal([]byte(dtoStr), &dto); err != nil {
 		return "", "", fmt.Errorf("unmarshal user details: %w", err)
 	}

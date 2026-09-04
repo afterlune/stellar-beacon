@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/users/role [GET]
 func ListUserRoles(c *gin.Context) {
-	c.JSON(http.StatusOK, roleService.ListUserRoles())
+	c.JSON(http.StatusOK, roleService.ListUserRoles(c.Request.Context()))
 }
 
 // ListRoles
@@ -20,7 +20,7 @@ func ListUserRoles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/roles [GET]
 func ListRoles(c *gin.Context) {
-	c.JSON(http.StatusOK, roleService.ListRoles(c))
+	c.JSON(http.StatusOK, roleService.ListRoles(applicationRequest(c)))
 }
 
 // SaveOrUpdateRole
@@ -29,7 +29,7 @@ func ListRoles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/role [POST]
 func SaveOrUpdateRole(c *gin.Context) {
-	c.JSON(http.StatusOK, roleService.SaveOrUpdateRole(c))
+	c.JSON(http.StatusOK, roleService.SaveOrUpdateRole(applicationRequest(c)))
 }
 
 // DeleteRoles
@@ -38,5 +38,5 @@ func SaveOrUpdateRole(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/roles [DELETE]
 func DeleteRoles(c *gin.Context) {
-	c.JSON(http.StatusOK, roleService.DeleteRoles(c))
+	c.JSON(http.StatusOK, roleService.DeleteRoles(applicationRequest(c)))
 }

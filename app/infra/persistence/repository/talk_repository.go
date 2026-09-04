@@ -1,11 +1,10 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"context"
 
 	"xorm.io/xorm"
@@ -109,15 +108,16 @@ func (t *MyTalkRepo) GetAdmin(ctx context.Context, id int) (port.TalkAdmin, erro
 	return talk, nil
 }
 
-func (t *MyTalkRepo) SaveOrUpdate(ctx context.Context, talk entity.TTalk) error {
-	return ormInit.WithEngineTx(t.engine, ctx, func(session *xorm.Session) error {
+func (t *MyTalkRepo) SaveOrUpdate(ctx context.Context, talk port.TTalk) error {
+	return repoTx(t.engine, ctx, "talk.save", func(session *xorm.Session) error {
+		talkRow := row.ToTalk(talk)
 		if talk.Id != 0 {
-			if _, err := session.ID(talk.Id).MustCols("is_top", "status").Update(&talk); err != nil {
+			if _, err := session.ID(talk.Id).MustCols("is_top", "status").Update(&talkRow); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "talk.update", err)
 			}
 			return nil
 		}
-		if _, err := session.Insert(&talk); err != nil {
+		if _, err := session.Insert(&talkRow); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "talk.create", err)
 		}
 		return nil
@@ -132,7 +132,7 @@ func (t *MyTalkRepo) Delete(ctx context.Context, ids []int) error {
 	if err != nil {
 		return err
 	}
-	if _, err := session.In("id", ids).Delete(&entity.TTalk{}); err != nil {
+	if _, err := session.In("id", ids).Delete(&row.TTalk{}); err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "talk.delete", err)
 	}
 	return nil

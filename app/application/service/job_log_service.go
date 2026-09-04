@@ -3,19 +3,16 @@ package service
 import (
 	"benetnasch/app/application/support"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/facade/model"
 	"container/list"
 	"context"
 	"strconv"
-
-	"github.com/gin-gonic/gin"
 )
 
 type JobLogService interface {
-	ListJobLogs(c *gin.Context) model.ResultVO
-	DeleteJobLogs(c *gin.Context) model.ResultVO
-	CleanJobLogs() model.ResultVO
-	ListJobLogGroups() model.ResultVO
+	ListJobLogs(c port.Request) port.ResultVO
+	DeleteJobLogs(c port.Request) port.ResultVO
+	CleanJobLogs(ctx context.Context) port.ResultVO
+	ListJobLogGroups(ctx context.Context) port.ResultVO
 }
 
 type MyJobLogService struct{ repo port.JobLogRepository }
@@ -31,40 +28,36 @@ func (j *MyJobLogService) jobLogRepository() port.JobLogRepository {
 	return jobLogRepo
 }
 
-func (j *MyJobLogService) ListJobLogs(c *gin.Context) model.ResultVO {
-	current, err := strconv.Atoi(c.Query("current"))
-	if err != nil {
-		current = 1
+func (j *MyJobLogService) ListJobLogs(c port.Request) port.ResultVO {
+	current, size, ok := parsePageQuery(c.Query("current"), c.Query("size"), 1, 10)
+	if !ok {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	size, err := strconv.Atoi(c.Query("size"))
-	if err != nil {
-		size = 10
-	}
-	var vo model.JobLogSearchVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+	var vo port.JobLogSearchVO
+	if err := c.Bind(&vo); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
 	var status *int
 	if vo.Status != nil {
 		value, ok := jobLogStatus(vo.Status)
 		if !ok {
-			return model.ResultFailWithMessage("状态参数无效")
+			return port.ResultFailWithMessage("状态参数无效")
 		}
 		status = &value
 	}
-	logs, count, err := j.jobLogRepository().List(c.Request.Context(), current, size, port.JobLogFilter{
+	logs, count, err := j.jobLogRepository().List(c.Context(), current, size, port.JobLogFilter{
 		JobId: vo.JobId, JobName: vo.JobName, JobGroup: vo.JobGroup,
 		Status: status, StartTime: vo.StartTime, EndTime: vo.EndTime,
 	})
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	var dtos []model.JobLogDTO
+	var dtos []port.JobLogDTO
 	support.StructCopy(logs, &dtos)
 	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		return port.ResultOkWithData(port.PageResultDTO{Records: list.New(), Count: 0})
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
+	return port.ResultOkWithData(port.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
 func jobLogStatus(value any) (int, bool) {
@@ -91,28 +84,28 @@ func jobLogStatus(value any) (int, bool) {
 	}
 }
 
-func (j *MyJobLogService) DeleteJobLogs(c *gin.Context) model.ResultVO {
+func (j *MyJobLogService) DeleteJobLogs(c port.Request) port.ResultVO {
 	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+	if err := c.Bind(&ids); err != nil {
+		return port.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := j.jobLogRepository().Delete(c.Request.Context(), ids); err != nil {
-		return model.ResultFromError(err)
+	if err := j.jobLogRepository().Delete(c.Context(), ids); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (j *MyJobLogService) CleanJobLogs() model.ResultVO {
-	if err := j.jobLogRepository().Clean(context.Background()); err != nil {
-		return model.ResultFromError(err)
+func (j *MyJobLogService) CleanJobLogs(ctx context.Context) port.ResultVO {
+	if err := j.jobLogRepository().Clean(ctx); err != nil {
+		return port.ResultFromError(err)
 	}
-	return model.ResultOk()
+	return port.ResultOk()
 }
 
-func (j *MyJobLogService) ListJobLogGroups() model.ResultVO {
-	groups, err := j.jobLogRepository().ListGroups(context.Background())
+func (j *MyJobLogService) ListJobLogGroups(ctx context.Context) port.ResultVO {
+	groups, err := j.jobLogRepository().ListGroups(ctx)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ResultFromError(err)
 	}
-	return model.ResultOkWithData(groups)
+	return port.ResultOkWithData(groups)
 }

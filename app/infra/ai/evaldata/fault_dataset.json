@@ -1,0 +1,50 @@
+[
+  {
+    "id": "session-provider-timeout",
+    "kind": "session_recovery",
+    "trigger": "provider request times out after the session has already been persisted",
+    "invariants": ["session_reloaded", "turn_not_duplicated", "owner_scope_preserved"]
+  },
+  {
+    "id": "session-expiry-boundary",
+    "kind": "session_recovery",
+    "trigger": "anonymous session reaches its configured TTL while a client reconnects",
+    "invariants": ["session_ttl_bounded", "owner_scope_preserved"]
+  },
+  {
+    "id": "replay-current-turn",
+    "kind": "event_replay",
+    "trigger": "client reconnects with an afterSeq cursor during the current turn",
+    "invariants": ["current_turn_only", "after_sequence_exclusive", "replay_flag_set"]
+  },
+  {
+    "id": "replay-cross-owner",
+    "kind": "event_replay",
+    "trigger": "a second owner guesses an existing session and event cursor",
+    "invariants": ["cross_owner_empty", "provider_not_called"]
+  },
+  {
+    "id": "approval-duplicate-action",
+    "kind": "approval_replay",
+    "trigger": "the same approval request is delivered twice with one idempotency key",
+    "invariants": ["one_action_persisted", "idempotent_result"]
+  },
+  {
+    "id": "approval-stale-content",
+    "kind": "approval_replay",
+    "trigger": "an approval request reuses a target with a changed content digest",
+    "invariants": ["digest_binding_rejected", "provider_not_called"]
+  },
+  {
+    "id": "memory-contradictory-assertions",
+    "kind": "memory_conflict",
+    "trigger": "two durable user assertions disagree on the same predicate",
+    "invariants": ["conflict_retained", "prior_assertion_preserved"]
+  },
+  {
+    "id": "memory-anonymous-write",
+    "kind": "memory_conflict",
+    "trigger": "an anonymous session attempts to write a long-term memory assertion",
+    "invariants": ["anonymous_write_rejected", "durable_user_required"]
+  }
+]

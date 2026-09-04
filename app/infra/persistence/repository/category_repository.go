@@ -1,11 +1,10 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"context"
 
 	"xorm.io/xorm"
@@ -85,12 +84,12 @@ func (c *MyCategoryRepo) Search(ctx context.Context, keywords string) ([]port.Ca
 	return categories, nil
 }
 
-func (c *MyCategoryRepo) SaveOrUpdate(ctx context.Context, category entity.TCategory) error {
+func (c *MyCategoryRepo) SaveOrUpdate(ctx context.Context, category port.TCategory) error {
 	session, err := c.categorySession(ctx)
 	if err != nil {
 		return err
 	}
-	var existing entity.TCategory
+	var existing row.TCategory
 	found, err := session.Select("id").Where("category_name = ?", category.CategoryName).Get(&existing)
 	if err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "category.check_name", err)
@@ -98,12 +97,13 @@ func (c *MyCategoryRepo) SaveOrUpdate(ctx context.Context, category entity.TCate
 	if found && existing.Id != category.Id {
 		return apperrors.Conflict("category.save", "category name already exists")
 	}
-	return ormInit.WithEngineTx(c.engine, ctx, func(tx *xorm.Session) error {
+	return repoTx(c.engine, ctx, "category.save", func(tx *xorm.Session) error {
 		var err error
+		categoryRow := row.ToCategory(category)
 		if category.Id != 0 {
-			_, err = tx.ID(category.Id).Update(&category)
+			_, err = tx.ID(category.Id).Update(&categoryRow)
 		} else {
-			_, err = tx.Insert(&category)
+			_, err = tx.Insert(&categoryRow)
 		}
 		if err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "category.save", err)
@@ -121,13 +121,13 @@ func (c *MyCategoryRepo) Delete(ctx context.Context, ids []int) error {
 		return err
 	}
 	var count int64
-	if count, err = session.In("category_id", ids).Count(&entity.TArticle{}); err != nil {
+	if count, err = session.In("category_id", ids).Count(&row.TArticle{}); err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "category.check_delete", err)
 	}
 	if count > 0 {
 		return apperrors.Conflict("category.delete", "category has articles")
 	}
-	if _, err := session.In("id", ids).Delete(&entity.TCategory{}); err != nil {
+	if _, err := session.In("id", ids).Delete(&row.TCategory{}); err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "category.delete", err)
 	}
 	return nil

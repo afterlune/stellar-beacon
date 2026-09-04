@@ -1,7 +1,6 @@
 package port
 
 import (
-	"benetnasch/app/domain/entity"
 	"context"
 	"time"
 )
@@ -14,6 +13,7 @@ type SiteInfoRepository interface {
 	CountCategories(ctx context.Context) (int64, error)
 	CountTags(ctx context.Context) (int64, error)
 	CountTalks(ctx context.Context) (int64, error)
+	CountRecentContent(ctx context.Context, since time.Time) (int64, error)
 	CountComments(ctx context.Context, commentType int) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	ListUniqueViews(ctx context.Context, startTime, endTime string) ([]UniqueView, error)
@@ -36,9 +36,9 @@ type ArticleRank struct {
 }
 
 type FriendLinkRepository interface {
-	ListPublic(ctx context.Context) ([]entity.TFriendLink, error)
-	ListAdmin(ctx context.Context, current, size int, keywords string) ([]entity.TFriendLink, int64, error)
-	SaveOrUpdate(ctx context.Context, link entity.TFriendLink) error
+	ListPublic(ctx context.Context) ([]TFriendLink, error)
+	ListAdmin(ctx context.Context, current, size int, keywords string) ([]TFriendLink, int64, error)
+	SaveOrUpdate(ctx context.Context, link TFriendLink) error
 	Delete(ctx context.Context, ids []int) error
 }
 
@@ -49,9 +49,13 @@ type JobFilter struct {
 }
 
 type JobRepository interface {
-	Get(ctx context.Context, id int) (entity.TJob, error)
-	List(ctx context.Context, current, size int, filter JobFilter) ([]entity.TJob, int, error)
+	Get(ctx context.Context, id int) (TJob, error)
+	List(ctx context.Context, current, size int, filter JobFilter) ([]TJob, int, error)
 	ListGroups(ctx context.Context) ([]string, error)
+	Save(ctx context.Context, job TJob) error
+	Update(ctx context.Context, job TJob) error
+	Delete(ctx context.Context, ids []int) error
+	UpdateStatus(ctx context.Context, id, status int) error
 }
 
 type JobLogFilter struct {
@@ -64,35 +68,35 @@ type JobLogFilter struct {
 }
 
 type JobLogRepository interface {
-	List(ctx context.Context, current, size int, filter JobLogFilter) ([]entity.TJobLog, int64, error)
+	List(ctx context.Context, current, size int, filter JobLogFilter) ([]TJobLog, int64, error)
 	Delete(ctx context.Context, ids []int) error
 	Clean(ctx context.Context) error
 	ListGroups(ctx context.Context) (string, error)
 }
 
 type ErrorLogRepository interface {
-	List(ctx context.Context, current, size int, keywords string) ([]entity.TExceptionLog, int64, error)
+	List(ctx context.Context, current, size int, keywords string) ([]TExceptionLog, int64, error)
 	Delete(ctx context.Context, ids []int) error
 }
 
 type OperationLogRepository interface {
-	List(ctx context.Context, current, size int, keywords string) ([]entity.TOperationLog, int64, error)
+	List(ctx context.Context, current, size int, keywords string) ([]TOperationLog, int64, error)
 	Delete(ctx context.Context, ids []int) error
 }
 
 type MenuRepository interface {
-	List(ctx context.Context, keywords string) ([]entity.TMenu, error)
-	ListOptions(ctx context.Context) ([]entity.TMenu, error)
-	ListByUserInfoID(ctx context.Context, userInfoID int) ([]entity.TMenu, error)
-	SaveOrUpdate(ctx context.Context, menu entity.TMenu) error
+	List(ctx context.Context, keywords string) ([]TMenu, error)
+	ListOptions(ctx context.Context) ([]TMenu, error)
+	ListByUserInfoID(ctx context.Context, userInfoID int) ([]TMenu, error)
+	SaveOrUpdate(ctx context.Context, menu TMenu) error
 	UpdateHidden(ctx context.Context, id, hidden int) error
 	Delete(ctx context.Context, id int) error
 }
 
 type ResourceRepository interface {
-	List(ctx context.Context, keywords string) ([]entity.TResource, error)
-	ListOptions(ctx context.Context) ([]entity.TResource, error)
-	SaveOrUpdate(ctx context.Context, resource entity.TResource) error
+	List(ctx context.Context, keywords string) ([]TResource, error)
+	ListOptions(ctx context.Context) ([]TResource, error)
+	SaveOrUpdate(ctx context.Context, resource TResource) error
 	Delete(ctx context.Context, id int) error
 }
 
@@ -113,11 +117,11 @@ type ResourceRoleView struct {
 }
 
 type RoleRepository interface {
-	ListUserRoles(ctx context.Context) ([]entity.TRole, error)
+	ListUserRoles(ctx context.Context) ([]TRole, error)
 	Count(ctx context.Context, keywords string) (int64, error)
 	List(ctx context.Context, current, size int, keywords string) ([]RoleView, error)
-	FindByName(ctx context.Context, name string) (entity.TRole, error)
-	SaveOrUpdate(ctx context.Context, role entity.TRole, resourceIDs, menuIDs []int) error
+	FindByName(ctx context.Context, name string) (TRole, error)
+	SaveOrUpdate(ctx context.Context, role TRole, resourceIDs, menuIDs []int) error
 	Delete(ctx context.Context, ids []int) error
 	ListResourceRoles(ctx context.Context) ([]ResourceRoleView, error)
 	ListRolesByUserInfoID(ctx context.Context, userInfoID int) ([]string, error)
@@ -133,32 +137,32 @@ type PhotoAlbumAdmin struct {
 }
 
 type PhotoAlbumRepository interface {
-	ListPublic(ctx context.Context) ([]entity.TPhotoAlbum, error)
-	FindByName(ctx context.Context, name string) (entity.TPhotoAlbum, error)
+	ListPublic(ctx context.Context) ([]TPhotoAlbum, error)
+	FindByName(ctx context.Context, name string) (TPhotoAlbum, error)
 	ListAdmin(ctx context.Context, current, size int, keywords string) ([]PhotoAlbumAdmin, int64, error)
-	ListOptions(ctx context.Context) ([]entity.TPhotoAlbum, error)
-	Get(ctx context.Context, id int) (entity.TPhotoAlbum, error)
-	SaveOrUpdate(ctx context.Context, album entity.TPhotoAlbum) error
+	ListOptions(ctx context.Context) ([]TPhotoAlbum, error)
+	Get(ctx context.Context, id int) (TPhotoAlbum, error)
+	SaveOrUpdate(ctx context.Context, album TPhotoAlbum) error
 	Delete(ctx context.Context, id int) error
 }
 
 type PhotoRepository interface {
-	List(ctx context.Context, current, size, albumID, isDelete int) ([]entity.TPhoto, int64, error)
-	Update(ctx context.Context, photo entity.TPhoto) error
-	InsertMany(ctx context.Context, photos []entity.TPhoto) error
+	List(ctx context.Context, current, size, albumID, isDelete int) ([]TPhoto, int64, error)
+	Update(ctx context.Context, photo TPhoto) error
+	InsertMany(ctx context.Context, photos []TPhoto) error
 	UpdateAlbum(ctx context.Context, ids []int, albumID int) error
 	UpdateDelete(ctx context.Context, ids []int, isDelete int) error
 	Delete(ctx context.Context, ids []int) error
-	ListPublicByAlbum(ctx context.Context, albumID, current, size int) ([]entity.TPhoto, error)
+	ListPublicByAlbum(ctx context.Context, albumID, current, size int) ([]TPhoto, error)
 }
 
 type UserInfoRepository interface {
 	UpdateProfile(ctx context.Context, id int, nickname, intro, website string) error
 	UpdateAvatar(ctx context.Context, id int, avatar string) error
-	GetByID(ctx context.Context, id int) (entity.TUserInfo, error)
+	GetByID(ctx context.Context, id int) (TUserInfo, error)
 	UpdateEmail(ctx context.Context, id int, email string) error
 	UpdateSubscribe(ctx context.Context, id, subscribe int) error
 	UpdateRole(ctx context.Context, userInfoID int, nickname string, roleIDs []int) error
 	UpdateDisable(ctx context.Context, id, disabled int) error
-	FindAuthByUserInfoID(ctx context.Context, id int) (entity.TUserAuth, error)
+	FindAuthByUserInfoID(ctx context.Context, id int) (TUserAuth, error)
 }

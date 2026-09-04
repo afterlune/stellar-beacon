@@ -1,4 +1,18 @@
 definitions:
+  api.agentChatHTTPRequest:
+    properties:
+      message:
+        type: string
+      sessionId:
+        type: string
+      timeRange:
+        properties:
+          from:
+            type: string
+          to:
+            type: string
+        type: object
+    type: object
   model.ResultVO:
     properties:
       code:
@@ -56,6 +70,202 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: benetnasch信息
+  /admin/agent/emergency:
+    put:
+      description: 暂停或恢复公开 Agent 能力及自主行为 worker
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 紧急开关
+  /admin/ai/memory/assertions:
+    get:
+      description: 查询带来源、版本、有效期和状态的长期记忆断言
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 记忆断言
+  /admin/ai/memory/assertions/{id}:
+    delete:
+      description: 撤回一条长期记忆断言并保留审计历史
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 撤回 Agent 记忆
+  /admin/ai/memory/assertions/{id}/history:
+    get:
+      description: 查询单条长期记忆断言的不可变修订历史
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 记忆历史
+  /admin/ai/memory/conflicts:
+    get:
+      description: 查询需要人工处理的长期记忆冲突及其成员
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 记忆冲突
+  /admin/ai/memory/conflicts/{id}/reject:
+    post:
+      description: 驳回冲突集合中的全部断言并保留审计历史
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 驳回 Agent 记忆冲突
+  /admin/ai/memory/conflicts/{id}/resolve:
+    post:
+      description: 显式选择冲突赢家，其他成员转为 stale
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 解决 Agent 记忆冲突
+  /admin/ai/observability:
+    get:
+      description: 返回可供外部监控聚合的脱敏 Provider 与索引指标
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI/搜索运行时观测
+  /admin/ai/profile:
+    get:
+      description: 获取当前版本化人设配置
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 人设配置
+    patch:
+      description: 局部更新人设配置；不接受任何 Provider 密钥
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 人设配置
+  /admin/ai/providers/test:
+    post:
+      description: 测试已配置模型连接，不保存或返回 Provider 凭据
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI Provider 烟测
+  /admin/ai/review-policy:
+    get:
+      description: 获取版本化审核安全策略；人工审核开关始终为必选
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 审核策略
+    patch:
+      description: 局部更新审核安全策略，使用版本号防止覆盖并发修改
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 审核策略
+  /admin/ai/reviews:
+    get:
+      description: 查询 AI 生成物审核记录
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 审核
+  /admin/ai/reviews/{id}:
+    get:
+      description: 查询单条 AI 生成物审核记录
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 审核详情
+  /admin/ai/reviews/{id}/approve:
+    post:
+      description: 接受 AI 生成物
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 审核
+  /admin/ai/reviews/{id}/expire:
+    post:
+      description: 将待审核记录标记为过期
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 审核过期
+  /admin/ai/reviews/{id}/partial:
+    post:
+      description: 部分接受 AI 生成物
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 审核
+  /admin/ai/reviews/{id}/regenerate:
+    post:
+      description: 记录重新生成操作
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 审核
+  /admin/ai/reviews/{id}/reject:
+    post:
+      description: 拒绝 AI 生成物
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 审核
+  /admin/ai/vision/preview:
+    post:
+      description: 根据图片生成视觉理解预览，结果进入待审核队列
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI 视觉理解
+  /admin/ai/writing/preview:
+    post:
+      description: 生成写作预览，不自动保存文章
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: AI Studio
   /admin/articles:
     get:
       description: 获取后台文章
@@ -742,6 +952,51 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: 用户信息模块
+  /admin/videos/{id}:
+    delete:
+      description: 软删除视频元数据
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 删除视频
+  /admin/videos/external:
+    post:
+      consumes:
+      - application/json
+      description: 添加 HTTPS 白名单外链，不在服务端抓取远程内容
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 添加外链视频
+  /admin/videos/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传不超过 500MB 的视频文件
+      parameters:
+      - description: video file
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: title
+        in: formData
+        name: title
+        type: string
+      - description: description
+        in: formData
+        name: description
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 上传视频
   /admin/website/config:
     get:
       description: 获取网站配置
@@ -759,6 +1014,88 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: benetnasch信息
+  /agent/chat:
+    post:
+      consumes:
+      - application/json
+      description: 以 SSE 返回公开 Agent 的人格化对话事件；不会接受客户端身份、权限、工具或 Provider 字段
+      parameters:
+      - description: 公开对话请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.agentChatHTTPRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 公开对话
+  /agent/features:
+    get:
+      description: 返回公开、非敏感的 Agent rollout flags
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 功能开关
+  /agent/sessions/{id}:
+    delete:
+      description: 只删除当前调用者范围内的短期匿名会话及可回放事件；不存在的会话按幂等成功处理
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 删除 Agent 会话
+  /agent/sessions/{id}/events:
+    get:
+      description: 按 afterSeq 回放当前 turn 的短期公开 SSE 事件
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 仅回放序号大于该值的事件
+        in: query
+        name: afterSeq
+        type: integer
+      - description: 限制为当前 turn
+        in: query
+        name: turnId
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: 恢复 Agent 会话事件
+  /agent/vitals:
+    get:
+      description: 返回公开聚合状态，不包含访客身份信息
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Agent 生命体征
   /albums/:albumId/photos:
     get:
       description: 根据相册id查看照片列表
@@ -816,6 +1153,39 @@ paths:
   /articles/search:
     get:
       description: 搜索文章
+      parameters:
+      - description: 关键词
+        in: query
+        name: keywords
+        type: string
+      - description: 搜索模式：keyword、hybrid、semantic
+        in: query
+        name: mode
+        type: string
+      - description: 分类名
+        in: query
+        name: category
+        type: string
+      - description: 标签名，可重复传入
+        in: query
+        name: tag
+        type: string
+      - description: 逗号分隔的标签名
+        in: query
+        name: tags
+        type: string
+      - description: 发表年份
+        in: query
+        name: year
+        type: integer
+      - description: 起始时间，RFC3339 或 YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: 结束时间（半开区间），RFC3339 或 YYYY-MM-DD
+        in: query
+        name: to
+        type: string
       responses:
         "200":
           description: OK
@@ -840,6 +1210,33 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: 文章模块
+  /capsules:
+    post:
+      description: 创建只绑定稳定用户 ID 的私密时间胶囊草稿
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 创建时间胶囊
+  /capsules/{id}:
+    get:
+      description: 仅允许所有者查询，封存内容在到期前不会返回
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 查询时间胶囊
+  /capsules/{id}/seal:
+    post:
+      description: 封存后内容不可编辑，只有到期后所有者可以读取
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 封存时间胶囊
   /categories/all:
     get:
       description: 获取所有分类
@@ -885,6 +1282,24 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: 评论模块
+  /dreams:
+    get:
+      description: 返回已通过人工审核的梦境内容
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Benetnasch 梦境
+  /galaxy:
+    get:
+      description: 返回公开文章的二维坐标和生命阶段
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 星河内容投影
   /links:
     get:
       description: 查看友链列表
@@ -903,6 +1318,15 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: 相册模块
+  /radio:
+    get:
+      description: 返回当前节律下的文本节目
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: Benetnasch 电台
   /report:
     post:
       description: 上报访客信息
@@ -1029,4 +1453,13 @@ paths:
           schema:
             $ref: '#/definitions/model.ResultVO'
       summary: 用户信息模块
+  /videos:
+    get:
+      description: 返回本地视频和白名单外链视频
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.ResultVO'
+      summary: 视频列表
 swagger: "2.0"

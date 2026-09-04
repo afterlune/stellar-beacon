@@ -1,18 +1,18 @@
-@import './theme-variables.scss';
+@use './theme-variables.scss';
 
 /* Base css */
-@import 'tailwindcss/base';
+@use 'tailwindcss/base';
 
 /* Components css */
-@import 'tailwindcss/components';
-@import './components/article.scss';
-@import './components/sidebar-box.scss';
-@import './components/search-modal.scss';
+@use 'tailwindcss/components';
+@use './components/article.scss';
+@use './components/sidebar-box.scss';
+@use './components/search-modal.scss';
 
 /* Utilities css */
-@import 'tailwindcss/utilities';
+@use 'tailwindcss/utilities';
 
-@import './transitions.scss';
+@use './transitions.scss';
 
 .stroke-ob-bright {
   stroke: var(--text-bright) !important;
@@ -71,4 +71,19 @@ div::-webkit-scrollbar-track {
 
 .is-collapsed {
   max-height: 0;
+}
+
+// Respect the browser accessibility preference globally. Agent UI itself has
+// no audio or typewriter animation; this guard also covers the existing
+// mascot, page transitions, skeletons and theme effects.
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
 }

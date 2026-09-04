@@ -1,18 +1,19 @@
 package repository
 
 import (
-	"benetnasch/app/domain/entity"
 	apperrors "benetnasch/app/domain/errors"
 	"benetnasch/app/domain/port"
-	"benetnasch/app/infra/persistence/ormInit"
 	"benetnasch/app/infra/persistence/pgsql"
+	"benetnasch/app/infra/persistence/row"
 	"container/list"
 	"context"
+	"time"
 
 	"xorm.io/xorm"
 )
 
 var _ port.ArticleRepository = (*MyArticleRepo)(nil)
+var _ port.ArticleIndexSourceRepository = (*MyArticleRepo)(nil)
 
 type MyArticleRepo struct {
 	engine *xorm.Engine
@@ -66,7 +67,7 @@ func (a *MyArticleRepo) ListArticles(ctx context.Context, current, size int) ([]
 		return nil, 0, err
 	}
 	var count int
-	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE is_delete = 0 AND status IN (1, 2)").Get(&count); err != nil {
+	if _, err := session.SQL(pgsql.CountPublicArticles).Get(&count); err != nil {
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count", err)
 	}
 	var articles []*port.ArticleCard
@@ -89,7 +90,7 @@ func (a *MyArticleRepo) GetArticlesByCategoryID(ctx context.Context, current, si
 		return nil, 0, err
 	}
 	var count int
-	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE category_id = ? AND is_delete = 0 AND status IN (1, 2)", categoryID).Get(&count); err != nil {
+	if _, err := session.SQL(pgsql.CountPublicArticlesByCategoryID, categoryID).Get(&count); err != nil {
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count_by_category", err)
 	}
 	var articles []*port.ArticleCard
@@ -180,7 +181,7 @@ func (a *MyArticleRepo) ListArticlesByTagID(ctx context.Context, current, size, 
 		return nil, 0, err
 	}
 	var count int
-	if _, err := session.SQL("SELECT count(DISTINCT a.id) FROM t_article a JOIN t_article_tag at ON a.id = at.article_id WHERE at.tag_id = ? AND a.is_delete = 0 AND a.status IN (1, 2)", tagID).Get(&count); err != nil {
+	if _, err := session.SQL(pgsql.CountPublicArticlesByTagID, tagID).Get(&count); err != nil {
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count_by_tag", err)
 	}
 	var articles []*port.ArticleCard
@@ -275,6 +276,69 @@ func (a *MyArticleRepo) ListArticlesAdmin(ctx context.Context, filter port.Artic
 	return articles, nil
 }
 
+type articleIndexSourceRow struct {
+	ID             int       `xorm:"id"`
+	ArticleTitle   string    `xorm:"article_title"`
+	ArticleContent string    `xorm:"article_content"`
+	IsTop          int       `xorm:"is_top"`
+	IsFeatured     int       `xorm:"is_featured"`
+	IsDelete       int       `xorm:"is_delete"`
+	Status         int       `xorm:"status"`
+	Type           int       `xorm:"type"`
+	OriginalURL    string    `xorm:"original_url"`
+	CreateTime     time.Time `xorm:"create_time"`
+	UpdateTime     time.Time `xorm:"update_time"`
+	CategoryName   string    `xorm:"category_name"`
+}
+
+// ListPublicArticleIndexSources returns complete public article records using
+// an exclusive ID cursor. Full content is intentionally not reused from the
+// admin list DTO: a backfill must never index a truncated preview.
+func (a *MyArticleRepo) ListPublicArticleIndexSources(ctx context.Context, afterArticleID, limit int) ([]port.ArticleIndexSource, error) {
+	if afterArticleID < 0 {
+		return nil, apperrors.Invalid("article.index_sources", "after article id cannot be negative")
+	}
+	if limit <= 0 || limit > 500 {
+		return nil, apperrors.Invalid("article.index_sources", "limit must be between 1 and 500")
+	}
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var rows []articleIndexSourceRow
+	if err := session.SQL(pgsql.ListPublicArticlesForIndex, afterArticleID, limit).Find(&rows); err != nil {
+		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.index_sources", err)
+	}
+	sources := make([]port.ArticleIndexSource, 0, len(rows))
+	for _, row := range rows {
+		if !port.IsPublicArticle(row.Status, row.IsDelete) {
+			return nil, apperrors.Conflict("article.index_sources.visibility", "public index query returned a non-public article")
+		}
+		var tags []string
+		if err := session.SQL(pgsql.ArticleTags, row.ID).Find(&tags); err != nil {
+			return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.index_source_tags", err)
+		}
+		sources = append(sources, port.ArticleIndexSource{
+			Article: port.TArticle{
+				Id:             row.ID,
+				ArticleTitle:   row.ArticleTitle,
+				ArticleContent: row.ArticleContent,
+				IsTop:          row.IsTop,
+				IsFeatured:     row.IsFeatured,
+				IsDelete:       row.IsDelete,
+				Status:         row.Status,
+				Type:           row.Type,
+				OriginalUrl:    row.OriginalURL,
+				CreateTime:     row.CreateTime,
+				UpdateTime:     row.UpdateTime,
+			},
+			CategoryName: row.CategoryName,
+			Tags:         append([]string(nil), tags...),
+		})
+	}
+	return sources, nil
+}
+
 func (a *MyArticleRepo) ListArticleStatistics(ctx context.Context) ([]port.ArticleStatistics, error) {
 	session, err := a.articleSession(ctx)
 	if err != nil {
@@ -287,25 +351,25 @@ func (a *MyArticleRepo) ListArticleStatistics(ctx context.Context) ([]port.Artic
 	return statistics, nil
 }
 
-func (a *MyArticleRepo) GetArticleRecord(ctx context.Context, articleID int) (entity.TArticle, error) {
+func (a *MyArticleRepo) GetArticleRecord(ctx context.Context, articleID int) (port.TArticle, error) {
 	session, err := a.articleSession(ctx)
 	if err != nil {
-		return entity.TArticle{}, err
+		return port.TArticle{}, err
 	}
-	var article entity.TArticle
+	var article row.TArticle
 	found, err := session.ID(articleID).Get(&article)
 	if err != nil {
-		return entity.TArticle{}, apperrors.Wrap(apperrors.KindUnavailable, "article.get_record", err)
+		return port.TArticle{}, apperrors.Wrap(apperrors.KindUnavailable, "article.get_record", err)
 	}
 	if !found {
-		return entity.TArticle{}, apperrors.NotFound("article.get_record")
+		return port.TArticle{}, apperrors.NotFound("article.get_record")
 	}
-	return article, nil
+	return row.FromArticle(article), nil
 }
 
-func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticle, categoryName string, tagNames []string) (entity.TArticle, error) {
-	err := ormInit.WithEngineTx(a.engine, ctx, func(session *xorm.Session) error {
-		var category entity.TCategory
+func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article port.TArticle, categoryName string, tagNames []string) (port.TArticle, error) {
+	err := repoTx(a.engine, ctx, "article.save", func(session *xorm.Session) error {
+		var category row.TCategory
 		if _, err := session.SQL("SELECT * FROM t_category WHERE category_name = ?", categoryName).Get(&category); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "article.category", err)
 		}
@@ -318,20 +382,24 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 		if category.Id != 0 {
 			article.CategoryId = category.Id
 		}
+		articleRow := row.ToArticle(article)
 		if article.Id != 0 {
-			if _, err := session.ID(article.Id).Update(&article); err != nil {
+			if _, err := session.ID(article.Id).Update(&articleRow); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.update", err)
 			}
-		} else if _, err := session.Insert(&article); err != nil {
-			return apperrors.Wrap(apperrors.KindUnavailable, "article.create", err)
+		} else {
+			if _, err := session.Insert(&articleRow); err != nil {
+				return apperrors.Wrap(apperrors.KindUnavailable, "article.create", err)
+			}
+			article.Id = articleRow.Id
 		}
 		if article.Id != 0 {
-			if _, err := session.Where("article_id = ?", article.Id).Delete(&entity.TArticleTag{}); err != nil {
+			if _, err := session.Where("article_id = ?", article.Id).Delete(&row.TArticleTag{}); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.delete_tags", err)
 			}
 		}
 		if len(tagNames) > 0 {
-			var existing []entity.TTag
+			var existing []row.TTag
 			if err := session.In("tag_name", tagNames).Find(&existing); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.find_tags", err)
 			}
@@ -345,7 +413,7 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 				if _, ok := existingNames[name]; ok {
 					continue
 				}
-				tag := entity.TTag{TagName: name}
+				tag := row.TTag{TagName: name}
 				if _, err := session.Insert(&tag); err != nil {
 					return apperrors.Wrap(apperrors.KindUnavailable, "article.create_tag", err)
 				}
@@ -353,7 +421,7 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 				existingNames[name] = struct{}{}
 			}
 			for _, tagID := range tagIDs {
-				if _, err := session.Insert(&entity.TArticleTag{ArticleId: article.Id, TagId: tagID}); err != nil {
+				if _, err := session.Insert(&row.TArticleTag{ArticleId: article.Id, TagId: tagID}); err != nil {
 					return apperrors.Wrap(apperrors.KindUnavailable, "article.link_tag", err)
 				}
 			}
@@ -361,28 +429,28 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 		return nil
 	})
 	if err != nil {
-		return entity.TArticle{}, err
+		return port.TArticle{}, err
 	}
 	return a.GetArticleRecord(ctx, article.Id)
 }
 
-func (a *MyArticleRepo) UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (entity.TArticle, error) {
-	err := ormInit.WithEngineTx(a.engine, ctx, func(session *xorm.Session) error {
+func (a *MyArticleRepo) UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (port.TArticle, error) {
+	err := repoTx(a.engine, ctx, "article.update_featured", func(session *xorm.Session) error {
 		if _, err := session.Exec("UPDATE t_article SET is_top = ?, is_featured = ? WHERE id = ?", isTop, isFeatured, articleID); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "article.update_featured", err)
 		}
 		return nil
 	})
 	if err != nil {
-		return entity.TArticle{}, err
+		return port.TArticle{}, err
 	}
 	return a.GetArticleRecord(ctx, articleID)
 }
 
 func (a *MyArticleRepo) UpdateDelete(ctx context.Context, ids []int, isDelete int) error {
-	return ormInit.WithEngineTx(a.engine, ctx, func(session *xorm.Session) error {
+	return repoTx(a.engine, ctx, "article.update_delete", func(session *xorm.Session) error {
 		for _, id := range ids {
-			article := entity.TArticle{Id: id, IsDelete: isDelete}
+			article := row.TArticle{Id: id, IsDelete: isDelete}
 			if _, err := session.MustCols("is_delete").ID(id).Update(&article); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.update_delete", err)
 			}
@@ -392,12 +460,12 @@ func (a *MyArticleRepo) UpdateDelete(ctx context.Context, ids []int, isDelete in
 }
 
 func (a *MyArticleRepo) Delete(ctx context.Context, ids []int) error {
-	return ormInit.WithEngineTx(a.engine, ctx, func(session *xorm.Session) error {
+	return repoTx(a.engine, ctx, "article.delete", func(session *xorm.Session) error {
 		for _, id := range ids {
 			if _, err := session.Exec("DELETE FROM t_article WHERE id = ?", id); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.delete", err)
 			}
-			if _, err := session.Where("article_id = ?", id).Delete(&entity.TArticleTag{}); err != nil {
+			if _, err := session.Where("article_id = ?", id).Delete(&row.TArticleTag{}); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.delete_tags", err)
 			}
 		}
@@ -405,41 +473,41 @@ func (a *MyArticleRepo) Delete(ctx context.Context, ids []int) error {
 	})
 }
 
-func (a *MyArticleRepo) GetAdminArticle(ctx context.Context, articleID int) (entity.TArticle, string, []string, error) {
+func (a *MyArticleRepo) GetAdminArticle(ctx context.Context, articleID int) (port.TArticle, string, []string, error) {
 	session, err := a.articleSession(ctx)
 	if err != nil {
-		return entity.TArticle{}, "", nil, err
+		return port.TArticle{}, "", nil, err
 	}
-	var article entity.TArticle
+	var article row.TArticle
 	found, err := session.ID(articleID).Get(&article)
 	if err != nil {
-		return entity.TArticle{}, "", nil, apperrors.Wrap(apperrors.KindUnavailable, "article.get_admin", err)
+		return port.TArticle{}, "", nil, apperrors.Wrap(apperrors.KindUnavailable, "article.get_admin", err)
 	}
 	if !found {
-		return entity.TArticle{}, "", nil, apperrors.NotFound("article.get_admin")
+		return port.TArticle{}, "", nil, apperrors.NotFound("article.get_admin")
 	}
-	var category entity.TCategory
+	var category row.TCategory
 	if _, err := session.ID(article.CategoryId).Get(&category); err != nil {
-		return entity.TArticle{}, "", nil, apperrors.Wrap(apperrors.KindUnavailable, "article.get_admin_category", err)
+		return port.TArticle{}, "", nil, apperrors.Wrap(apperrors.KindUnavailable, "article.get_admin_category", err)
 	}
 	var tags []string
 	if err := session.SQL(pgsql.ArticleTags, articleID).Find(&tags); err != nil {
-		return entity.TArticle{}, "", nil, apperrors.Wrap(apperrors.KindUnavailable, "article.get_admin_tags", err)
+		return port.TArticle{}, "", nil, apperrors.Wrap(apperrors.KindUnavailable, "article.get_admin_tags", err)
 	}
-	return article, category.CategoryName, tags, nil
+	return row.FromArticle(article), category.CategoryName, tags, nil
 }
 
-func (a *MyArticleRepo) Export(ctx context.Context, ids []int) ([]entity.TArticle, error) {
+func (a *MyArticleRepo) Export(ctx context.Context, ids []int) ([]port.TArticle, error) {
 	session, err := a.articleSession(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if len(ids) == 0 {
-		return []entity.TArticle{}, nil
+		return []port.TArticle{}, nil
 	}
-	var articles []entity.TArticle
+	var articles []row.TArticle
 	if err := session.Select("article_title, article_content").In("id", ids).Find(&articles); err != nil {
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.export", err)
 	}
-	return articles, nil
+	return row.FromArticles(articles), nil
 }

@@ -11,7 +11,7 @@ import (
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/exception/logs [GET]
 func ListErrorLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, errorLogService.ListErrorLogs(c))
+	c.JSON(http.StatusOK, errorLogService.ListErrorLogs(applicationRequest(c)))
 }
 
 // DeleteErrorLogs
@@ -20,5 +20,5 @@ func ListErrorLogs(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/exception/logs [DELETE]
 func DeleteErrorLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, errorLogService.DeleteErrorLogs(c))
+	c.JSON(http.StatusOK, errorLogService.DeleteErrorLogs(applicationRequest(c)))
 }

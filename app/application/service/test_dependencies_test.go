@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeServiceCache struct{}
@@ -94,16 +92,16 @@ func (fakeBenetnaschInfoService) GetWebsiteConfig(context.Context) model.ResultV
 func (fakeBenetnaschInfoService) GetBlogBackInfo(context.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) UpdateWebsiteConfig(*gin.Context) model.ResultVO {
+func (fakeBenetnaschInfoService) UpdateWebsiteConfig(port.Request) model.ResultVO {
 	return model.ResultOk()
 }
 func (fakeBenetnaschInfoService) GetAbout(context.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) UpdateAbout(*gin.Context) model.ResultVO {
+func (fakeBenetnaschInfoService) UpdateAbout(port.Request) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) SaveBlogPhotoAlbumCover(*gin.Context) model.ResultVO {
+func (fakeBenetnaschInfoService) SaveBlogPhotoAlbumCover(port.Request) model.ResultVO {
 	return model.ResultOk()
 }
 func (fakeBenetnaschInfoService) listArticleRank(context.Context, map[string]float64) ([]model.ArticleRankDTO, error) {
@@ -112,12 +110,20 @@ func (fakeBenetnaschInfoService) listArticleRank(context.Context, map[string]flo
 
 func mustArticleService(t *testing.T, repo port.ArticleRepository, searcher port.ArticleSearcher) *MyArticleService {
 	t.Helper()
+	return mustArticleServiceWithCache(t, repo, searcher, fakeServiceCache{})
+}
+
+func mustArticleServiceWithCache(t *testing.T, repo port.ArticleRepository, searcher port.ArticleSearcher, cache port.Cache) *MyArticleService {
+	t.Helper()
 	if searcher == nil {
 		searcher = &fakeArticleSearcher{}
 	}
+	if cache == nil {
+		cache = fakeServiceCache{}
+	}
 	service, err := NewArticleService(ArticleServiceDeps{
 		Repo:    repo,
-		Cache:   fakeServiceCache{},
+		Cache:   cache,
 		Storage: fakeServiceStorage{},
 		Search:  searcher,
 	})

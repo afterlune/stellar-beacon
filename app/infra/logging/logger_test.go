@@ -58,3 +58,12 @@ func TestInitRejectsEmptyFilePath(t *testing.T) {
 		t.Fatal("expected empty file path to be rejected")
 	}
 }
+
+func TestRedactRemovesPromptAndCredentialValues(t *testing.T) {
+	if got := Redact("a visitor prompt"); got != RedactedValue {
+		t.Fatalf("Redact() = %q, want %q", got, RedactedValue)
+	}
+	if got := redactText("provider password=secret token=abc"); strings.Contains(got, "secret") || strings.Contains(got, "abc") {
+		t.Fatalf("credential values were not redacted: %s", got)
+	}
+}

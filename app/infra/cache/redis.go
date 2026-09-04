@@ -61,6 +61,38 @@ func (r *RedisCache) SetNX(ctx context.Context, key string, value any, ttl time.
 	return r.client.SetNX(cacheContext(ctx), key, value, ttl).Result()
 }
 
+// CompareAndDelete removes a key only when it still contains value. It is
+// used by short-lived distributed leases so an expired owner cannot delete a
+// newer owner's lock.
+func (r *RedisCache) CompareAndDelete(ctx context.Context, key, value string) (bool, error) {
+	script := redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`)
+	result, err := script.Run(cacheContext(ctx), r.client, []string{key}, value).Int64()
+	return result == 1, err
+}
+
+// CompareAndExpire refreshes a lease only when the key still belongs to the
+// caller. PEXPIRE keeps the operation correct for short TTLs used by tests and
+// makes renewal and ownership verification one atomic Redis operation.
+func (r *RedisCache) CompareAndExpire(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	milliseconds := ttl.Milliseconds()
+	if milliseconds < 1 {
+		milliseconds = 1
+	}
+	script := redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+`)
+	result, err := script.Run(cacheContext(ctx), r.client, []string{key}, value, milliseconds).Int64()
+	return result == 1, err
+}
+
 func (r *RedisCache) IncrementWithExpiry(ctx context.Context, key string, ttl time.Duration) (int64, error) {
 	seconds := int64(ttl / time.Second)
 	if seconds < 1 {
