@@ -119,7 +119,7 @@ export default defineComponent({
       const post = postRef.value
       // The about request can resolve after the route has already been
       // unmounted. In that case the v-if content is gone and the template ref
-      // is null; do not let a late response crash the whole blog shell.
+      // is null; do not let a late response crash the whole public-space shell.
       if (!post) return
 
       let nodes = post.children

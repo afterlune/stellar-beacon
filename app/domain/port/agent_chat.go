@@ -47,7 +47,7 @@ type AgentRhythm interface {
 }
 
 // AgentFeatureFlags is the public, non-secret rollout contract consumed by
-// the blog frontend. Every experience, including browser TTS, has its own
+// the public space frontend. Every experience, including browser TTS, has its own
 // rollout bit and is fail-closed when the feature endpoint cannot be read.
 type AgentFeatureFlags struct {
 	PublicChat bool `json:"publicChat"`

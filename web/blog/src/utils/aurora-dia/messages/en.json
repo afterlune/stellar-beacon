@@ -69,7 +69,7 @@
     },
     {
       "selector": "[data-dia='language']",
-      "text": "Master's blog supports multiple <span>languages.</span>"
+      "text": "Master's digital space supports multiple <span>languages.</span>"
     },
     {
       "selector": "[data-dia='light-switch']",

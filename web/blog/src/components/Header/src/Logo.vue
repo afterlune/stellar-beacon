@@ -6,7 +6,7 @@
       </span>
       <span v-else class="flex text-3xl animation-text">LOADING</span>
       <span class="font-extrabold text-xs uppercase">
-        {{ websiteConfig.englishName || 'BLOG' }}
+        {{ websiteConfig.englishName || 'BENETNASCH' }}
       </span>
     </div>
     <img class="logo-image" :src="websiteConfig.logo" alt="site-logo" />

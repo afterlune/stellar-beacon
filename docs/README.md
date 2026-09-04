@@ -1,54 +1,75 @@
 # Benetnasch 文档中心
 
-本目录是 Benetnasch 数字空间的长期技术上下文。它描述当前代码、配置、Agent 路线、Companion 居民边界和发布约束；实际行为以代码、配置和测试为准。
+本目录只记录当前数字空间的产品边界、技术决策、接口契约、验证方法和发布约束。代码、配置、测试和真实运行证据优先于文档；文档与实现冲突时，以实现为准并在同一变更中修正文档。
 
-## 项目概览
+## 当前产品模型
 
-Benetnasch 是基于 Gin、xorm、PostgreSQL、Redis 和 Casbin 的数字空间后端，并包含三个前端入口：
+Benetnasch 是数字空间，不以传统内容站点作为产品中心。空间保存公开内容和受控的 Agent 能力；Eino 是空间侧的通用 Agent 引擎，不是任何居民的人格引擎。
 
-- `web/blog`：Vue 3 数字空间前台（保留 blog 目录名以兼容现有构建）；
-- `web/admin`：迁移期间保留的稳定 Vue 2 管理后台；
-- `web/admin-next`：Vue 3 + Vite + Pinia + Arco Design 的新管理后台。
-
-空间侧 Agent 由 Go application/domain port 和 infra 中的 Eino Provider、RAG、持久任务、审核与体验模块组成。月社妃由独立的 Companion 项目提供生命运行时，通过受限空间 API 作为 Agent 居民访问 Benetnasch。LangChain 不进入生产 Go 服务，LangGraph 仍按 ADR-0003 延后。新能力默认关闭，生产容器、数据库迁移、Meilisearch 索引操作和 Caddy 静态目录切换都必须独立审批。
+月社妃由独立的 `D:\Git\companion` 项目提供生命运行时。她以 `agent/moonfei` 身份通过受限协议访问空间，拥有独立的入口、登录、Canon、私有记忆、语音和自主行为运行时。
 
 ## 快速入口
 
 | 目标 | 文档 |
 | --- | --- |
-| 当前产品目标、边界和实施计划 | [数字空间当前计划](digital-space-plan.md) |
-| Prompt 注入、工具越权、SSRF、隐私和成本威胁 | [Agent 威胁模型](agent-threat-model.md) |
-| Provider、RAG、审核和功能开关验收 | [Agent 评测标准](agent-evaluation-rubric.md) |
-| 白名单开放、回滚和发布窗口 | [Agent 发布手册](agent-rollout-runbook.md) |
-| Chunk 索引 provision、回填、swap 和回滚 | [搜索切换手册](agent-search-cutover-runbook.md) |
-| Caddy 静态目录切换、归档和保留周期 | [前端性能与发布资产门禁](frontend-performance-gates.md)、[Agent 发布手册](agent-rollout-runbook.md) |
-| 迁移前滚、checksum、备份恢复和失败处理 | [数据库迁移手册](agent-database-migration-runbook.md) |
-| Agent 路由与 Casbin 菜单/资源种子 | [Casbin 资源说明](agent-casbin-resources.md) |
-| 依赖漏洞与升级记录 | [安全依赖说明](security-dependencies.md) |
-| 架构边界与 Companion 借鉴决策 | [ADR-0001](adr/0001-ai-platform-boundaries.md)、[ADR-0002](adr/0002-companion-reliability-patterns.md) |
+| 唯一产品目标、当前状态和未完成项 | [数字空间当前计划](digital-space-plan.md) |
+| 总体架构、Provider 与 Eino 边界 | [ADR-0001](adr/0001-ai-platform-boundaries.md) |
+| Companion 可靠性模式借鉴 | [ADR-0002](adr/0002-companion-reliability-patterns.md) |
 | Eino 主线与 LangGraph 条件评估 | [ADR-0003](adr/0003-eino-langgraph-conditional-evaluation.md) |
-| 数字空间与 Companion 居民边界 | [ADR-0004](adr/0004-digital-space-resident-architecture.md) |
-| Companion 空间协议、令牌和开发入口 | [空间协议说明](space-companion-protocol.md) |
-| API 字段和 Swagger | [swagger.yaml](swagger.yaml)、[swagger.json](swagger.json) |
-| 本地生产数据开发副本 | [benetnasch-dev 运行手册](dev-clone-runbook.md) |
+| 数字空间与月社妃边界 | [ADR-0004](adr/0004-digital-space-resident-architecture.md) |
+| Companion HTTP 契约、令牌和限制 | [空间协议](space-companion-protocol.md) |
+| Agent 路由、后台资源和机器主体 | [Agent 资源说明](agent-casbin-resources.md) |
+| Prompt 注入、越权、SSRF、隐私和成本风险 | [Agent 威胁模型](agent-threat-model.md) |
+| Provider、审核、Vision 和写作质量检查 | [Agent 评测标准](agent-evaluation-rubric.md) |
+| Feature flag、灰度、回滚和生产窗口 | [Agent 发布手册](agent-rollout-runbook.md) |
+| 迁移、备份、恢复和失败处理 | [数据库运维手册](agent-database-migration-runbook.md) |
+| `article_chunks_<version>` 回填和切换 | [检索索引手册](agent-search-cutover-runbook.md) |
+| 隔离开发副本 `benetnasch-dev` | [开发副本手册](dev-clone-runbook.md) |
+| 前端构建、性能和发布资产 | [Web 说明](../web/README.md)、[性能门禁](frontend-performance-gates.md) |
+| Go/JavaScript/容器依赖安全 | [依赖安全基线](security-dependencies.md) |
+| 当前 HTTP API | [Swagger YAML](swagger.yaml)、[Swagger JSON](swagger.json) |
 
-## 本地验证
+## 系统边界
 
-默认安全前置检查：
+```text
+用户/居民
+   │
+   ├─ Web /api ───────────────┐
+   └─ Companion space API      │
+                               ▼
+                         Gin facade
+                               │
+                    application + domain port
+                       │       │       │
+                 PostgreSQL  Redis  Provider/Eino/Meili/Storage
+```
+
+- `app/application` 不能依赖 xorm、Provider SDK、Meilisearch、Redis 或对象存储类型。
+- 人类后台权限由 Casbin 和后台会话控制；Companion 机器主体由独立 token、数据库主体和 `space:*` 作用域控制。
+- 公开查询只返回已发布内容；草稿、账号、日志、凭据、Prompt 和后台数据不属于空间公开知识。
+- Agent 输出默认是待审核候选；模型不能扩大工具白名单、改变权限或直接发布受保护内容。
+
+## 安全运行规则
+
+- 新能力 feature flag 默认关闭，密钥只通过环境变量注入。
+- 服务启动不自动执行迁移、索引 provision、回填、swap 或对象存储写入。
+- 生产 PostgreSQL、Redis、Meilisearch、MinIO、Caddy 和现有 Compose 不由普通开发命令操作。
+- 真实外部服务验证必须在隔离 Compose 或明确批准的发布窗口执行，并记录目标、凭据来源、结果和回滚证据。
+- 日志使用标准库 `log/slog`，不得记录密钥、完整 Prompt、访客正文、Provider 参数或 SQL 参数。
+
+## 本地检查
 
 ```powershell
 pwsh ./scripts/safe-preflight.ps1
+go test -count=1 ./...
+go vet ./...
 ```
 
-该命令执行 Go 测试、`go vet`、SQL/分层/依赖边界扫描、旧日志检查、前端构建预算和
-admin-next 发布资产完整性检查；可选的浏览器基线也只使用本地 mock。它不会启动或停止
-容器、执行数据库迁移、写入 Meilisearch 或切换 Caddy 静态目录。
+前置检查不会启动或停止容器，不执行数据库迁移，不写入 Meilisearch/MinIO，也不切换生产 Caddy。Companion 的 Python 测试在 `D:\Git\companion` 内独立执行。
 
-前端构建、隔离联调和只读验收入口见 [web/README.md](../web/README.md)。需要真实 PostgreSQL、Redis、Caddy、Meilisearch 或 MinIO 数据的测试，必须在独立隔离环境或经过批准的发布窗口执行，并在结果中区分实际运行与跳过的门禁。
+## 文档维护
 
-## 文档维护规则
-
-1. 文档用于导航和记录边界，不能替代代码审查；文档与代码冲突时以代码为准，并在修复后更新文档。
-2. 接口、事件、配置、模块职责、依赖方向或启动方式变化时，在同一变更中更新相关文档和测试。
-3. 新的长期技术取舍写入 `docs/adr/`；普通修复不重复抄写 Git 历史。
-4. 不提交运行时数据库、备份、日志、密钥、证书、token 或前端 `dist` 产物。
+1. 只有长期技术取舍进入 `docs/adr/`；普通修复不复制 Git 历史。
+2. 接口、配置、事件、依赖方向、数据流或启动方式改变时，同步更新相关契约、测试和运行手册。
+3. 所有状态必须标记为代码完成、隔离验证、生产验证或明确延期，不能用 mock 结果代替真实证据。
+4. 不提交日志、数据库、备份、证书、token、密钥或前端构建产物。

@@ -12,8 +12,9 @@ import (
 // @contact.email  support@swagger.io
 // @license.name  Apache 2.0
 // @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
-// @Title benetnasch
-// @Version 1.0
+// @title Benetnasch 数字空间 API
+// @version 1.0
+// @description 面向数字空间公开内容、管理控制面和 Agent 能力的 HTTP API。Companion 机器协议另见 docs/space-companion-protocol.md。
 
 func main() {
 	if err := cmd.Execute(); err != nil {

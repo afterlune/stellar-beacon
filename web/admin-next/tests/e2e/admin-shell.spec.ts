@@ -18,7 +18,7 @@ let returnEmptyMenus = false
 
 const defaultWebsiteConfig = {
   name: 'Benetnasch',
-  englishName: 'Benetnasch Blog',
+  englishName: 'Benetnasch Digital Space',
   author: '测试作者',
   logo: 'https://example.com/logo.png',
   github: 'https://github.com/example',

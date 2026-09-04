@@ -599,7 +599,7 @@ const docTemplate = `{
         },
         "/admin/config/images": {
             "post": {
-                "description": "上传博客配置图片",
+                "description": "上传数字空间配置图片",
                 "summary": "benetnasch信息",
                 "responses": {
                     "200": {
@@ -2276,8 +2276,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "benetnasch",
-	Description:      "",
+	Title:            "Benetnasch 数字空间 API",
+	Description:      "面向数字空间公开内容、管理控制面和 Agent 能力的 HTTP API。Companion 机器协议另见 docs/space-companion-protocol.md。",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

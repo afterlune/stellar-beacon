@@ -1,77 +1,58 @@
-# Dependency security baseline
+# 依赖与供应链安全基线
 
-This project treats dependency security as a release concern. The checks below are
-intended to be reproducible locally and in CI without exposing credentials.
+依赖安全是数字空间发布门禁的一部分。版本升级必须结合 API 兼容性、镜像 digest、内存占用、回滚和真实环境验证，不能只看包管理器的可升级提示。
 
-## Go modules
+## Go 依赖
 
-- `go vet ./...`, `go test -race ./...`, and `govulncheck ./...` run in CI.
-- `golang.org/x/crypto` is required for bcrypt password hashing. The project does
-  not use `golang.org/x/crypto/openpgp`.
-- The Go vulnerability database currently reports `GO-2026-5932` for the
-  unmaintained `openpgp` package. It has no fixed upstream version, but it is not
-  reachable from this project because there is no OpenPGP import. The
-  `scripts/check-no-openpgp.sh` check prevents an accidental import from turning
-  this module-only advisory into an application vulnerability.
-- If OpenPGP becomes a product requirement, stop and select a maintained,
-  reviewed implementation instead of importing the legacy package.
+- CI 执行 `go test -race ./...`、`go vet ./...` 和 `govulncheck ./...`；
+- 密码使用 bcrypt；不引入 OpenPGP 或无人维护的加密实现；
+- Provider、Eino、Meilisearch、Redis、对象存储和 xorm 类型保持在 infra/bootstrap 边界；
+- JWT 使用单一当前版本，校验算法、issuer、密钥长度和公私钥匹配；
+- 升级依赖后必须复跑服务边界、SQL、日志脱敏和配置安全扫描。
 
-## JavaScript dependencies
+## JavaScript 依赖
 
-The two frontends are intentionally handled in phases:
+三套前端分别维护 lockfile：
 
-- Direct runtime dependencies with compatible security updates are kept current
-  in `package.json` and both lockfiles.
-- CI blocks on fixable high and critical vulnerabilities in the production
-  dependency graph with:
+- 公开空间入口使用 Vue 3/Vite；
+- 稳定管理入口保留 Vue 2/Vue CLI 兼容链；
+- admin-next 使用 Vue 3/Vite/Pinia/Arco Design。
 
-  ```sh
-  npm audit --omit=dev --audit-level=high
-  ```
+生产依赖图中的 high/critical 漏洞由 CI 阻断。升级时分别执行：
 
-- The admin console remains a Vue 2 application for this phase. Its full
-  development-tree audit can still report advisories in the archived Vue CLI 5,
-  Vue 2 compiler, and related build tooling. The blog's SVG sprite build chain
-  has the same kind of development-only transitive exposure. These are tracked
-  exceptions until the Vue 2/build-chain migration is implemented; `npm audit
-  fix --force` is not an accepted remediation.
-- Any new fixable high/critical issue in production dependencies must be fixed
-  before release, even when the full development-tree audit contains an existing
-  exception.
-
-## Container images
-
-- Base and infrastructure images are pinned by tag and immutable digest in the
-  Dockerfile and Compose manifests.
-- CI builds the application image and scans it. Fixable `HIGH` and `CRITICAL`
-  findings in that image fail CI; unfixed findings remain visible for
-  follow-up.
-- CI also scans every public service image referenced by the Compose manifests.
-  Those results are report-only because the remediation is an upstream image
-  release: the updated pinned digests reduce the old-image exposure, but still
-  contain vendor-image findings (including package updates and vulnerabilities
-  in bundled service binaries) until upstream publishes fully patched builds.
-  The workflow writes a warning to the job summary so a patched vendor digest
-  can be adopted without hiding the finding or weakening the application-image
-  gate.
-- Updating these manifests does not operate the deployment. Existing containers
-  and their data volumes must not be stopped, recreated, or migrated as part of
-  a source change.
-- Renovate is enabled for Go modules, npm lockfiles, Dockerfiles, and Compose
-  images, with digest pinning and manual merge approval for image updates.
-
-## Local checks
-
-From the repository root:
-
-```sh
-bash scripts/check-no-openpgp.sh
-go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
-go test -race ./...
-
-cd web/blog && npm ci --no-audit --no-fund && npm audit --omit=dev --audit-level=high
-cd ../admin && npm ci --no-audit --no-fund && npm audit --omit=dev --audit-level=high
+```powershell
+cd web/blog; npm ci --no-audit --no-fund; npm audit --omit=dev --audit-level=high
+cd ../admin; npm ci --no-audit --no-fund; npm audit --omit=dev --audit-level=high
+cd ../admin-next; npm ci --no-audit --no-fund; npm audit --omit=dev --audit-level=high
 ```
 
-Container scans are performed by the CI runner with Trivy; they do not require
-the local production containers to be running.
+不要为了压制告警直接删除 lockfile、降级运行时或把开发依赖打进生产静态资产。
+
+## 容器镜像
+
+Compose 使用固定版本和 digest，不使用 `latest`。PostgreSQL、Redis、Caddy、Meilisearch、MinIO 和 backend 的变更必须单独评估：
+
+- 数据格式和 migration 兼容性；
+- 内存/CPU 峰值，尤其是 WSL/Docker Desktop；
+- 健康检查、TLS、端口和卷隔离；
+- 备份、回滚和生产观察期。
+
+Qwen/SGLang 低内存实验使用独立 profile，不得混入普通隔离栈或生产 Compose。模型下载和缓存必须位于仓库外。
+
+## 密钥和运行数据
+
+- Provider key、数据库密码、Redis 密码、SMTP 凭据和 JWT 密钥只从环境变量或部署密钥系统注入；
+- `.env*`、本地配置、日志、证书、数据库 dump、对象和前端 `dist` 不进入 Git；
+- 日志不得记录 token、Prompt、访客正文、Provider 参数、SQL 参数或完整请求体；
+- CI secret 扫描失败时先轮换凭据，再处理提交历史和代码。
+
+## 本地门禁
+
+```powershell
+pwsh ./scripts/safe-preflight.ps1
+bash scripts/check-no-openpgp.sh
+go test -race ./...
+go vet ./...
+```
+
+CI 还执行镜像、配置、动态 SQL、分层、日志、Compose、发布脚本和漏洞扫描。容器扫描由 CI 使用临时环境完成，不要求也不修改本机生产容器。

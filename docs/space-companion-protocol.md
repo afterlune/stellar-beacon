@@ -1,12 +1,10 @@
 # Companion 空间协议
 
-这是 Benetnasch 数字空间与独立 Companion 之间的内部 HTTP 契约。它只提供已发布内容的
-有限公开投影和月社妃的追加式发布；不替代后台 API，也不允许 Companion 访问 PostgreSQL、
-Redis、Meilisearch、MinIO 或人类账号。
+这是 Benetnasch 数字空间与独立 Companion 之间的内部 HTTP 契约。协议只提供已发布内容的有限公开投影和月社妃的追加式发布，不替代人类管理 API。
 
-## 开关与令牌
+## 身份与令牌
 
-能力默认关闭。开启 dev/integration 时，使用两枚不同的随机令牌：
+能力默认关闭。启用隔离环境时注入两枚不同的随机令牌：
 
 ```dotenv
 BENETNASCH_AI_ENABLED=true
@@ -17,99 +15,124 @@ BENETNASCH_SPACE_COMPANION_READ_TOKEN=<至少 32 字节>
 BENETNASCH_SPACE_COMPANION_PUBLISH_TOKEN=<另一枚至少 32 字节>
 ```
 
-`AI_ENABLED` 是总开关；`SPACE_COMPANION` 控制读能力；`SPACE_COMPANION_PUBLISH` 控制写
-能力。令牌只从环境变量读取，不进入配置文件、响应、日志或模型上下文。发布令牌不能用于
-读取接口。当前固定主体是迁移 `0023_space_companion.sql` 创建的 `agent/moonfei`；请求还会
-校验该主体在数据库中的 `enabled` 状态和 `space:*` 作用域。人类后台会话仍由 Casbin
-校验，不能用 Companion 令牌访问 `/admin`。
+- read token 只允许读取；publish token 只允许发布。
+- 令牌只从环境变量读取，不进入配置文件、响应、日志或模型上下文。
+- 空间侧通过 `t_agent_principal` 校验 `agent/moonfei` 的 `enabled` 状态和 `space:*` 作用域。
+- 人类后台继续使用人类会话和 Casbin；Companion token 不能访问 `/admin`。
+- 客户端提交的 `actor_id` 不可信，实际身份来自认证上下文。
+
+## 公开内容词汇
+
+可读取类型：`article`、`photo`、`video`、`dream`、`radio`、`status`。
+
+可发布类型只有：`status`、`dream`、`radio`。
+
+草稿、账号、日志、凭据、配置、时间胶囊和后台数据不属于协议词汇，也不能通过类型参数绕过限制。
 
 ## 端点
 
-| 方法 | 路径 | 鉴权 | 说明 |
-| --- | --- | --- | --- |
-| GET | `/internal/space/v1/capabilities` | read token | 返回协议版本、主体和能力类型 |
-| POST | `/internal/space/v1/search` | read token | 查询已发布 article/photo/video/dream/radio/status |
-| GET | `/internal/space/v1/content/{type}/{id}` | read token | 返回单条有限公开投影 |
-| POST | `/internal/space/v1/publications` | publish token | 只追加 status/dream/radio |
+### 获取能力
 
-Bearer 令牌必须精确为两个字段的 `Authorization` 头，服务端使用定长摘要比较，不接受
-query/body 中的 token。关闭时读端点返回 404，写端点返回 403。所有响应带 `no-store`。
-普通全局限流也作用于这些端点；请求体上限为 256 KiB。
-
-### 搜索
-
-```json
-{
-  "query": "公开文章",
-  "types": ["article", "dream"],
-  "limit": 10
-}
+```http
+GET /internal/space/v1/capabilities
+Authorization: Bearer <read-token>
 ```
 
-成功响应：
+响应包含 `protocolVersion`、固定主体 `moonfei`、读写开关、可读类型和可发布类型。未启用或未完成主体迁移时，空间侧保持关闭或返回服务不可用，不信任配置单独放行。
+
+### 搜索公开内容
+
+```http
+POST /internal/space/v1/search
+Authorization: Bearer <read-token>
+Content-Type: application/json
+
+{"query":"关键词","types":["article","dream"],"limit":20}
+```
+
+请求限制：查询最多 256 个 Unicode 字符，`limit` 默认为 20、最大 50；类型为空时读取全部公开类型。响应只包含有限投影：
 
 ```json
 {
-  "items": [
-    {
-      "id": "123",
-      "type": "article",
-      "title": "标题",
-      "body": "有限正文投影",
-      "url": "/articles/123",
-      "publishedAt": "2026-09-04T00:00:00Z",
-      "metadata": {"category": "公开分类"}
-    }
-  ],
+  "items": [{
+    "id": "137",
+    "type": "article",
+    "title": "公开标题",
+    "body": "有限长度正文",
+    "url": "/articles/137",
+    "mediaUrl": "https://example.invalid/image.jpg",
+    "publishedAt": "2026-09-05T00:00:00Z",
+    "metadata": {"category": "分类"}
+  }],
   "count": 1
 }
 ```
 
-`count` 是过滤后结果总数，`items` 最多为请求的 `limit`（默认 20，最大 50）。文章只取
-已发布且未删除内容；梦境只取 approved；照片只取已发布相册中的非删除照片；视频必须
-published 且非 deleted；电台返回当前公开节目；status/dream/radio 也包含已写入的公开
-发布记录。正文是有限字符投影，内容本身仍是不可信资料。
+正文最多返回 4,000 个 Unicode 字符；响应不包含 Provider 参数、内部状态、账号或凭据。
 
-### 发布
+### 读取公开内容
 
-```json
+```http
+GET /internal/space/v1/content/{type}/{id}
+Authorization: Bearer <read-token>
+```
+
+`type` 必须属于公开内容词汇，`id` 最多 160 个字符且不能包含路径分隔符、换行或 NUL。未发布、删除或不存在的内容统一按不可访问处理。
+
+### 追加发布
+
+```http
+POST /internal/space/v1/publications
+Authorization: Bearer <publish-token>
+Content-Type: application/json
+
 {
   "type": "status",
-  "title": "今天的状态",
-  "body": "一段公开内容",
-  "mediaUrl": "https://cdn.example.test/image.png",
-  "sourceSessionId": "session-123",
-  "sourceRunId": "run-456",
-  "idempotencyKey": "run-456-status-1"
+  "title": "今日状态",
+  "body": "状态内容",
+  "mediaUrl": "https://example.invalid/image.jpg",
+  "sourceSessionId": "session-1",
+  "sourceRunId": "run-1",
+  "idempotencyKey": "status-2026-09-05-001"
 }
 ```
 
-服务端从令牌绑定 `agent/moonfei`，不信任请求体中的 actor。`type` 只能是 `status`、
-`dream`、`radio`；标题最多 160 个 Unicode 字符，正文最多 20,000 个 Unicode 字符，媒体
-地址如存在必须是 HTTPS，来源会话/运行 ID 和幂等键必填。发布记录保存主体、来源、摘要、
-发布时间和创建时间，作为可审计事实；通用操作日志不记录正文和响应。
+限制如下：
 
-相同幂等键和相同内容重复请求返回原 `publication` 并标记 `existing=true`；同一幂等键
-对应不同内容返回 409。没有更新、删除、文章/视频/评论/胶囊/账号/权限/配置等 Companion
-写接口。
+- 标题必填，最多 160 个 Unicode 字符；正文必填，最多 20,000 个 Unicode 字符；
+- 媒体 URL 只能是 HTTPS、无用户信息和 fragment，最长 2,048 个字符；服务端不抓取外链；
+- `sourceSessionId`、`sourceRunId` 最多 160 个字符且必填；幂等键最多 255 个字符且必填；
+- 空间侧从认证主体派生 `agentId` 和请求摘要，调用方不能伪造；
+- 重复幂等键且请求摘要一致时返回原发布结果；同键不同内容返回冲突；
+- 发布只新增 `t_space_publication` 记录，不提供 Companion 更新、删除文章或修改权限的能力。
 
-## 开发副本与 Caddy
+## 错误语义
 
-本仓库的 `docker-compose.dev.yaml` 和 `docker-compose.integration.yaml` 各增加了独立的
-Caddy `:8028` listener，分别映射宿主 `28028`、`18028`，只转发 `/internal/space/*` 到
-backend，其它路径返回 404。Companion 容器可通过 Windows/Docker Desktop 的
-`http://host.docker.internal:28028` 访问 dev listener；生产 Caddy 不在本协议的自动切换
-范围内。
+错误响应只返回稳定的通用信息，不返回 SQL、Provider、token 或内部路径：
 
-`0023_space_companion.sql` 已嵌入迁移 runner，但不会在服务启动时自动执行。必须在获得隔离
-环境授权后，以显式 migration 命令创建 `t_agent_principal` 和 `t_space_publication`；未迁移
-前保持功能关闭。不要为了验证协议改动现有 `benetnasch` 生产容器或数据库。
+| HTTP | 含义 |
+| --- | --- |
+| 400 | 请求格式、类型、大小或 URL 不合法 |
+| 401 | token 缺失/错误、主体不存在或作用域不足 |
+| 403 | 发布能力关闭或动作不允许 |
+| 404 | 能力关闭或公开内容不存在 |
+| 409 | 幂等键对应了不同请求 |
+| 503 | 空间依赖或主体存储不可用 |
+
+## Caddy 与隔离环境
+
+隔离 Caddy 只将 `/internal/space/*` 反向代理到隔离 backend：
+
+- `benetnasch-dev`：`http://127.0.0.1:28028`；
+- `benetnasch-integration`：`http://127.0.0.1:18028`；
+- Companion 容器通过 Docker Desktop 使用 `http://host.docker.internal:28028` 访问 dev listener；
+- 生产 Caddy 不属于本协议的自动切换范围。
+
+迁移 `0023_space_companion.sql` 嵌入 migration runner，但不会在服务启动时自动执行。迁移前保持协议关闭；迁移和真实联调必须只针对隔离 Compose 执行。
 
 ## 验证与安全边界
 
-- domain/application 测试覆盖主体、白名单、公开投影和幂等冲突；middleware 测试覆盖读写
-  令牌隔离、格式错误和关闭状态。
-- Companion 使用独立 read/publish client、无重定向 HTTP、超时和有限工具参数；远端错误
-  不把响应正文带回模型。
-- 真实 dev/integration migration、数据复制、Caddy/浏览器联调和发布写入是单独运维步骤，
-  不能用 fake transport 或单元测试冒充。
+- Go 单元测试覆盖主体、公开投影、白名单、幂等和错误映射；middleware 测试覆盖读写 token 隔离、格式错误和关闭状态。
+- Companion 使用独立 read/publish client、无重定向 HTTP、超时和有限工具参数；远端错误正文不返回给模型。
+- 真实隔离迁移、数据复制、Caddy/浏览器/Companion 工具联调是独立运维证据，不能用 fake transport、静态检查或 mock 浏览器冒充。
+- 生产数据库、缓存、搜索、对象存储和 Caddy 不属于普通协议测试目标。

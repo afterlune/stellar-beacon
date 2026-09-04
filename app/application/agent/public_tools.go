@@ -92,7 +92,7 @@ func (r *PublicToolRegistry) Definitions() []port.ToolDefinition {
 		},
 		{
 			Name:        port.PublicToolReadVitals,
-			Description: "读取博客公开的基础生命体征摘要，只读，不包含访客身份信息。",
+			Description: "读取数字空间公开的基础生命体征摘要，只读，不包含访客身份信息。",
 			Parameters:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 		},
 	}
@@ -195,7 +195,7 @@ func (r *PublicToolRegistry) searchArticles(ctx context.Context, raw json.RawMes
 		}
 		title := strings.TrimSpace(hit.ArticleTitle)
 		excerpt := truncateRunes(hit.ArticleContent, 1000)
-		// Public Agent citations must point to the canonical blog route. Search
+		// Public Agent citations must point to the canonical public-space route. Search
 		// providers may carry an article source URL from indexed or imported
 		// content; that value is not trusted presentation data and must not be
 		// returned directly to the browser.

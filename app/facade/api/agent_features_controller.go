@@ -96,7 +96,7 @@ func GetGalaxy(c *gin.Context) {
 // @Success      200 {object} model.ResultVO
 // @Router       /agent/vitals [GET]
 //
-// GetAgentVitals returns the read-only aggregate used by the public blog
+// GetAgentVitals returns the read-only aggregate used by the public space
 // widget. It is independently feature-gated from public chat.
 func GetAgentVitals(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")

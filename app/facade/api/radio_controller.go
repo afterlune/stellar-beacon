@@ -8,7 +8,7 @@ import (
 )
 
 // GetRadio returns one deterministic, text-only public episode. Browser TTS
-// remains an explicit user action in the blog and is never started here.
+// remains an explicit user action in the public space and is never started here.
 // @Summary      Benetnasch 电台
 // @Description  返回当前节律下的文本节目
 // @Success      200 {object} model.ResultVO

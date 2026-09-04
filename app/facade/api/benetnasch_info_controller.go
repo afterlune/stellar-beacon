@@ -70,7 +70,7 @@ func UpdateAbout(c *gin.Context) {
 
 // SaveBlogPhotoAlbumCover
 // @Summary		 benetnasch信息
-// @Description 上传博客配置图片
+// @Description 上传数字空间配置图片
 // @Success		 200	{object} model.ResultVO
 // @Router       /admin/config/images [POST]
 func SaveBlogPhotoAlbumCover(c *gin.Context) {

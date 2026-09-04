@@ -1,5 +1,5 @@
 /**
- * Frontend-facing API contracts shared by blog and the future Vue 3 admin.
+ * Frontend-facing API contracts shared by the public space and the Vue 3 admin.
  * The backend keeps this envelope stable so an endpoint can be migrated
  * without changing callers or silently turning an error into empty data.
  */

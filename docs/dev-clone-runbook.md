@@ -1,59 +1,74 @@
-# benetnasch-dev 本地开发副本
+# benetnasch-dev 隔离开发副本
 
-这是一套与生产 Compose 隔离的本地查看环境。项目名固定为
-`benetnasch-dev`，不得把下面的命令改成生产项目 `benetnasch`，也不要复用生产端口。
+`benetnasch-dev` 是用于查看数字空间、管理入口和 Companion bridge 的独立 Compose 项目。它必须与生产项目 `benetnasch` 使用不同的项目名、端口和命名卷。
 
 ## 入口
 
-| 入口 | 地址 |
+| 能力 | 地址 |
 | --- | --- |
-| 博客前台 | <http://127.0.0.1:28080> |
-| 旧管理后台 | <http://127.0.0.1:28008> |
-| admin-next | <http://127.0.0.1:28018> |
-| Companion 空间桥接（独立 Caddy） | <http://127.0.0.1:28028> |
-| 后端直连（自签名 HTTPS） | <https://127.0.0.1:28777> |
-| Meilisearch | <http://127.0.0.1:27700> |
-| MinIO 控制台 | <http://127.0.0.1:29001> |
-
-开发 Compose 的 PostgreSQL 和 Redis 端口分别是 `25432`、`26379`。Caddy
-负责三个前端入口、`/api` 反向代理和仅供 Companion 使用的 `/internal/space/*` 入口；
-前端不需要改 API 地址。
+| 数字空间公开入口 | `http://127.0.0.1:28080` |
+| 稳定管理入口 | `http://127.0.0.1:28008` |
+| admin-next | `http://127.0.0.1:28018` |
+| Companion bridge | `http://127.0.0.1:28028` |
+| 后端直连 | `https://127.0.0.1:28777` |
+| PostgreSQL | `127.0.0.1:25432` |
+| Redis | `127.0.0.1:26379` |
+| Meilisearch | `http://127.0.0.1:27700` |
+| MinIO API/控制台 | `http://127.0.0.1:29000` / `http://127.0.0.1:29001` |
 
 ## 启动
 
-后端使用 Windows 原生 Go 交叉编译，避免在 WSL/Docker 内编译造成额外内存压力。
-运行时二进制和 resource 副本放在系统临时目录，不加入仓库：
+`.env.integration` 必须是仓库外或被 `.gitignore` 忽略的本地文件，不能提交。后端使用 Windows 原生 Go 工具链交叉编译，避免在 WSL/Docker 内编译：
 
 ```powershell
-$cloneRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('benetnasch-dev-clone-' + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Force -Path $cloneRoot | Out-Null
-pwsh ./scripts/build-linux-amd64.ps1 -OutputPath (Join-Path $cloneRoot 'benetnasch')
-Copy-Item -LiteralPath ./resource -Destination (Join-Path $cloneRoot 'resource') -Recurse
-New-Item -ItemType Directory -Force -Path (Join-Path $cloneRoot 'resource/log') | Out-Null
-$env:DEV_RUNTIME_DIR = $cloneRoot
-$env:DEV_RESOURCE_DIR = Join-Path $cloneRoot 'resource'
+$runtimeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('benetnasch-dev-runtime-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+pwsh ./scripts/build-linux-amd64.ps1 -OutputPath (Join-Path $runtimeRoot 'benetnasch') -Parallelism 1
+Copy-Item -LiteralPath ./resource -Destination (Join-Path $runtimeRoot 'resource') -Recurse
+New-Item -ItemType Directory -Force -Path (Join-Path $runtimeRoot 'resource/log') | Out-Null
+$env:DEV_RUNTIME_DIR = $runtimeRoot
+$env:DEV_RESOURCE_DIR = Join-Path $runtimeRoot 'resource'
 docker compose -p benetnasch-dev --env-file .env.integration -f docker-compose.dev.yaml up -d
 ```
 
-如果副本已经初始化，只需重新准备当前二进制和 resource 副本后再次执行最后一条
-命令；不要加 `--build`。Compose 使用独立的 `benetnasch-dev-*` 命名卷。
+Compose 使用独立的 `benetnasch-dev-postgres-data`、`benetnasch-dev-redis-data`、`benetnasch-dev-meili-data` 和 `benetnasch-dev-minio-data` 卷，不加 `--build`，也不依赖生产容器。
+
+启动只负责服务和静态入口，不自动执行迁移、seed、索引 provision、回填、swap 或数据复制。
 
 ## 数据边界
 
-本次副本初始化采取以下数据策略：
+- PostgreSQL 数据复制只能写入 dev PostgreSQL；源数据读取、备份、恢复和行数校验必须在独立授权窗口完成。
+- Redis 不复制生产会话、缓存或 token，dev 实例从隔离数据开始。
+- Meilisearch 的索引复制或回填只能写入 dev Meilisearch，不能把 dev 目标误指向生产 UID。
+- MinIO 是 dev 新上传的对象存储；已有公开 URL 是否指向外部 OSS 由隔离数据决定。
+- 禁止将数据库备份、索引导出、对象、token、日志或运行时二进制放入仓库。
 
-- PostgreSQL：从现有生产容器 `pg` 执行只读 `pg_dump`，恢复到
-  `benetnasch-dev-postgresql-1`，不执行生产迁移；
-- Meilisearch：从生产 `meili` 只读复制 `articles` 索引的设置和文档到
-  `benetnasch-dev-meilisearch-1`；
-- Redis：不复制。它只保存缓存、会话和令牌，开发实例从空库开始；
-- MinIO：不复制生产对象。生产配置实际使用阿里云 OSS，数据库中已有的公开资源 URL
-  继续指向原资源；开发环境的新上传只写入开发 MinIO。
+迁移使用显式命令，且只允许在已授权的隔离项目中执行：
 
-生产 `pg`、`redis`、`meili`、`caddy` 容器不由这套 Compose 管理。禁止对生产数据库执行
-迁移、对生产 Meilisearch 写入、对生产 MinIO 写入，或切换生产 Caddy 静态目录。
+```powershell
+pwsh ./scripts/integration-migration-status.ps1
+pwsh ./scripts/integration-migrate.ps1 -AllowWrites
+```
 
-## 停止开发副本
+上述 integration 脚本默认针对 `benetnasch-integration`；dev 副本的迁移和数据复制应使用明确指向 `benetnasch-dev` 的经过复核命令，不得只依赖当前 shell 的默认 Compose 项目。
+
+## Companion bridge
+
+bridge 由 `BENETNASCH_AI_SPACE_COMPANION` 和 `BENETNASCH_AI_SPACE_COMPANION_PUBLISH` 控制，默认关闭。启用时必须提供不同的 read/publish token，并先执行 `0023_space_companion.sql` 到 dev 数据库。
+
+Companion 以 `http://host.docker.internal:28028` 访问宿主机 bridge；生产 Caddy、生产 backend 和生产数据不会被这套入口代理。
+
+## 验收
+
+只读启动检查：
+
+```powershell
+docker compose -p benetnasch-dev --env-file .env.integration -f docker-compose.dev.yaml ps
+```
+
+完整验收需要单独验证：公开入口、管理入口、菜单和刷新、空间能力、公开检索、公开内容读取、发布白名单、token 隔离、幂等冲突以及 Companion 工具调用。未执行的项目必须保留为“未验证”。
+
+## 停止
 
 只操作开发 Compose 项目：
 
@@ -61,5 +76,4 @@ docker compose -p benetnasch-dev --env-file .env.integration -f docker-compose.d
 docker compose -p benetnasch-dev --env-file .env.integration -f docker-compose.dev.yaml stop
 ```
 
-不要使用没有 `-p benetnasch-dev` 和 `-f docker-compose.dev.yaml` 的宽泛 `docker compose`
-命令，以免误选生产项目。
+不要使用没有 `-p benetnasch-dev` 和 `-f docker-compose.dev.yaml` 的宽泛命令；不要对生产项目执行 `down`、`rm`、`volume rm` 或重建。
