@@ -1,6 +1,7 @@
 <template>
-  <section>
-    <a-card title="网站配置">
+  <section class="admin-page">
+    <AdminPageHeader title="网站配置" description="集中维护博客的名称、介绍和对外链接。" />
+    <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert type="info" :closable="false">配置保存会沿用后端完整配置对象，未展示的字段会从当前读取结果原样保留。</a-alert>
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
       <a-form class="config-form" :model="form" layout="vertical" @submit-success="save">
@@ -13,7 +14,7 @@
           <a-form-item field="gitee" label="Gitee"><a-input v-model="form.gitee" /></a-form-item>
         </div>
         <a-form-item field="notice" label="公告"><a-textarea v-model="form.notice" :auto-size="{ minRows: 3, maxRows: 8 }" /></a-form-item>
-        <a-button type="primary" html-type="submit" :loading="saving">保存</a-button>
+        <div class="admin-form-actions"><a-button type="primary" html-type="submit" :loading="saving">保存</a-button></div>
       </a-form>
     </a-card>
   </section>
@@ -24,6 +25,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 
 import { apiErrorMessage, getWebsiteConfig, updateWebsiteConfig } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
 
 const form = reactive<Record<string, string | number>>({ name: '', englishName: '', author: '', logo: '', github: '', gitee: '', notice: '' })
 const saving = ref(false)

@@ -1,42 +1,46 @@
 <template>
-  <section>
-    <a-card title="用户管理">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader title="用户管理" description="查看用户、角色与最近一次登录状态。">
+      <template #actions>
         <a-space>
           <a-select v-model="loginType" allow-clear placeholder="登录方式" style="width: 130px" @change="reload">
             <a-option :value="1">邮箱</a-option>
             <a-option :value="2">QQ</a-option>
           </a-select>
-          <a-input-search v-model="keywords" placeholder="搜索昵称" allow-clear style="width: 220px" @search="reload" />
+          <a-input-search v-model="keywords" class="admin-filter-input" placeholder="搜索昵称" allow-clear @search="reload" />
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table
-        :data="users"
-        :columns="columns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="userInfoId"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #roles="{ record }">
-          <a-space wrap>
-            <a-tag v-for="role in roleNames(record)" :key="role" color="arcoblue">{{ role }}</a-tag>
-            <span v-if="roleNames(record).length === 0">—</span>
-          </a-space>
-        </template>
-        <template #loginType="{ record }">{{ loginTypeLabel(record.loginType) }}</template>
-        <template #disable="{ record }">
-          <a-switch
-            :model-value="Number(record.isDisable) === 1"
-            :loading="pendingDisableId === userId(record)"
-            @change="(value) => toggleDisable(record, value)" />
-        </template>
-        <template #actions="{ record }">
-          <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-        </template>
-        <template #empty><a-empty description="暂无用户" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          :data="users"
+          :columns="columns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="userInfoId"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #roles="{ record }">
+            <a-space wrap>
+              <a-tag v-for="role in roleNames(record)" :key="role" color="arcoblue">{{ role }}</a-tag>
+              <span v-if="roleNames(record).length === 0">—</span>
+            </a-space>
+          </template>
+          <template #loginType="{ record }">{{ loginTypeLabel(record.loginType) }}</template>
+          <template #disable="{ record }">
+            <a-switch
+              :model-value="Number(record.isDisable) === 1"
+              :loading="pendingDisableId === userId(record)"
+              @change="(value) => toggleDisable(record, value)" />
+          </template>
+          <template #actions="{ record }">
+            <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无用户" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="editorVisible" title="修改用户" :ok-loading="saving" @ok="saveEditor">
@@ -65,6 +69,8 @@ import {
   updateAdminUser,
   updateAdminUserDisable
 } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { tablePagination } from '@/utils/pagination'
 import type { AdminUser, UserRole } from '@shared/api-contract'
 
 const columns = [
@@ -91,14 +97,7 @@ const errorMessage = ref('')
 const editorVisible = ref(false)
 const editor = reactive({ userInfoId: 0, nickname: '', roleIds: [] as number[] })
 
-const pagination = computed(() => ({
-  current: current.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  showTotal: true,
-  showJumper: true,
-  showPageSize: true
-}))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => {
   void Promise.all([loadUsers(), loadRoles()])
@@ -219,9 +218,5 @@ function loginTypeLabel(value: unknown): string {
   return '其他'
 }
 
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'string' && value.includes('T')) return value.replace('T', ' ').replace(/\.\d+Z$/, '')
-  return String(value)
-}
+
 </script>

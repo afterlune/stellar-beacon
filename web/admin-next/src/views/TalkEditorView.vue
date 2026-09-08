@@ -1,11 +1,11 @@
 <template>
-  <section>
-    <a-card :title="isEditing ? '编辑说说' : '发布说说'">
+  <section class="admin-page">
+    <a-card class="admin-form-panel admin-form-card" :bordered="false" :title="isEditing ? '编辑说说' : '发布说说'">
       <a-alert type="info" :show-icon="true" :closable="false">说说内容按纯文本/已有 HTML 原样交给后端处理，图片只能通过后端对象存储接口上传。</a-alert>
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
       <a-form class="talk-form" :model="editor" layout="vertical" @submit-success="save">
         <a-form-item field="content" label="内容" :rules="[{ required: true, message: '内容不能为空' }]">
-          <a-textarea v-model="editor.content" :max-length="100000" show-word-limit :auto-size="{ minRows: 12, maxRows: 28 }" />
+          <a-textarea v-model="editor.content" class="talk-content-editor" :max-length="100000" show-word-limit :auto-size="{ minRows: 12, maxRows: 28 }" />
         </a-form-item>
         <a-form-item label="图片">
           <a-space direction="vertical" fill>
@@ -28,7 +28,7 @@
           </a-radio-group>
           <a-checkbox v-model="editor.isTop" :checked-value="1" :unchecked-value="0">置顶</a-checkbox>
         </a-space>
-        <a-space class="form-actions">
+        <a-space class="form-actions admin-form-actions">
           <a-button type="primary" html-type="submit" :loading="saving">保存</a-button>
           <a-button @click="router.push('/talk-list')">返回列表</a-button>
         </a-space>
@@ -127,7 +127,7 @@ function normalizeImages(images: unknown, serialized: unknown): string[] {
 </script>
 
 <style scoped>
-.talk-form { margin-top: 18px; }
-.field-hint { color: var(--color-text-3); font-size: 12px; }
+.talk-form { margin-top: 22px; }
+.field-hint { color: var(--admin-muted); font-size: 12px; }
 .form-actions { margin-top: 24px; }
 </style>

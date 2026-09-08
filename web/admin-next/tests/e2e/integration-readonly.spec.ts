@@ -12,7 +12,7 @@ interface MenuContract {
 }
 
 const visibleMenuContracts: MenuContract[] = [
-  { path: '/', marker: '这是 Vue 3 + Vite + Pinia + Arco Design 的新后台壳。' },
+  { path: '/', marker: '让每一次发布，都更从容。' },
   { path: '/articles', marker: '发布文章', contentSelector: '.article-form' },
   { path: '/article-list', marker: '文章列表', table: true },
   { path: '/categories', marker: '分类管理', table: true },

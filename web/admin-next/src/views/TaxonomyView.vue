@@ -1,26 +1,33 @@
 <template>
-  <section>
-    <a-card :title="config.title">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader :title="config.title" :description="config.description">
+      <template #actions>
         <a-space>
-          <a-input-search v-model="keywords" :placeholder="config.placeholder" allow-clear style="width: 220px" @search="reload" />
-          <a-button type="primary" @click="openCreate">新增</a-button>
+          <a-input-search v-model="keywords" class="admin-filter-input" :placeholder="config.placeholder" allow-clear @search="reload" />
+          <a-button type="primary" @click="openCreate">
+            <template #icon><IconPlus /></template>
+            新增
+          </a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table :data="records" :columns="columns" :loading="loading" :pagination="pagination" row-key="id" @page-change="changePage">
-        <template #articleCount="{ record }">{{ record.articleCount ?? 0 }}</template>
-        <template #createTime="{ record }">{{ formatTime(record.createTime) }}</template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="openEdit(record)">编辑</a-button>
-            <a-popconfirm content="确认删除这条记录吗？" @ok="remove(record.id)">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无数据" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table :data="records" :columns="columns" :loading="loading" :pagination="pagination" row-key="id" @page-change="changePage">
+          <template #articleCount="{ record }">{{ record.articleCount ?? 0 }}</template>
+          <template #createTime="{ record }">{{ formatTime(record.createTime) }}</template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="openEdit(record)">编辑</a-button>
+              <a-popconfirm content="确认删除这条记录吗？" @ok="remove(record.id)">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无数据" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="dialogVisible" :title="editing ? '编辑' : '新增'" @before-ok="save">
@@ -36,16 +43,20 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, deleteTaxonomy, listAdminPage, saveTaxonomy } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatTime } from '@/utils/format'
+import { tablePagination } from '@/utils/pagination'
 
 type Kind = 'categories' | 'tags'
 interface Row extends Record<string, unknown> { id: number; categoryName?: string; tagName?: string; articleCount?: number | string; createTime?: string }
 
 const props = defineProps<{ kind: Kind }>()
 const config = computed(() => props.kind === 'categories'
-  ? { title: '分类管理', placeholder: '搜索分类名', fieldLabel: '分类名', nameKey: 'categoryName' }
-  : { title: '标签管理', placeholder: '搜索标签名', fieldLabel: '标签名', nameKey: 'tagName' })
+  ? { title: '分类管理', description: '给文章一个容易被找到的位置。', placeholder: '搜索分类名', fieldLabel: '分类名', nameKey: 'categoryName' }
+  : { title: '标签管理', description: '用轻量的关键词连接文章之间的脉络。', placeholder: '搜索标签名', fieldLabel: '标签名', nameKey: 'tagName' })
 const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', width: 80 },
   { title: config.value.fieldLabel, dataIndex: config.value.nameKey },
@@ -63,7 +74,7 @@ const errorMessage = ref('')
 const dialogVisible = ref(false)
 const editing = ref(false)
 const form = reactive({ id: 0, name: '' })
-const pagination = computed(() => ({ current: current.value, pageSize: size.value, total: total.value, showTotal: true }))
+const pagination = computed(() => tablePagination(current.value, size.value, total.value))
 
 onMounted(() => void reload())
 
@@ -132,7 +143,5 @@ function changePage(page: number): void {
   void load()
 }
 
-function formatTime(value: unknown): string {
-  return typeof value === 'string' ? value.replace('T', ' ').replace(/\.\d+Z$/, '') : '—'
-}
+
 </script>

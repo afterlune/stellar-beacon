@@ -1,6 +1,7 @@
 <template>
-  <section>
-    <a-card title="Agent 人设配置">
+  <section class="admin-page">
+    <AdminPageHeader title="Agent 人设配置" description="调整博客助手的表达边界和昼夜节律提示。" />
+    <a-card class="admin-form-panel admin-form-card" :bordered="false" title="配置详情">
       <template #extra><a-tag color="orange">不包含 Provider 密钥</a-tag></template>
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
       <a-spin :loading="loading" style="display: block">
@@ -57,6 +58,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 
 import { apiErrorMessage, getAdminAgentProfile, updateAdminAgentProfile } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
 
 const loading = ref(false)
 const saving = ref(false)

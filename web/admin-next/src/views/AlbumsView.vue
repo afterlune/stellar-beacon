@@ -1,37 +1,44 @@
 <template>
-  <section>
-    <a-card title="相册管理">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader title="相册管理" description="用一个舒服的空间整理博客里的影像。">
+      <template #actions>
         <a-space>
-          <a-input-search v-model="keywords" placeholder="搜索相册名" allow-clear style="width: 220px" @search="reload" />
+          <a-input-search v-model="keywords" class="admin-filter-input" placeholder="搜索相册名" allow-clear @search="reload" />
           <a-button @click="router.push('/photos/delete')">回收站</a-button>
-          <a-button type="primary" @click="openEditor()">新增</a-button>
+          <a-button type="primary" @click="openEditor()">
+            <template #icon><IconPlus /></template>
+            新增
+          </a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table
-        :data="albums"
-        :columns="columns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #cover="{ record }">
-          <img v-if="isHttpUrl(record.albumCover)" class="album-cover" :src="record.albumCover" alt="相册封面" />
-          <span v-else>—</span>
-        </template>
-        <template #status="{ record }">{{ Number(record.status) === 1 ? '公开' : '私密' }}</template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-            <a-popconfirm content="确定删除该相册吗？" @ok="deleteAlbum(record.id)">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无相册" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          :data="albums"
+          :columns="columns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="id"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #cover="{ record }">
+            <img v-if="isHttpUrl(record.albumCover)" class="album-cover" :src="record.albumCover" alt="相册封面" />
+            <span v-else>—</span>
+          </template>
+          <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.status) === 1 ? 'green' : 'orange'">{{ Number(record.status) === 1 ? '公开' : '私密' }}</a-tag></template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+              <a-popconfirm content="确定删除该相册吗？" @ok="deleteAlbum(record.id)">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无相册" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="editorVisible" :title="editor.id ? '编辑相册' : '新增相册'" :ok-loading="saving" width="620px" @ok="saveEditor">
@@ -66,6 +73,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus } from '@arco-design/web-vue/es/icon'
 import { useRouter } from 'vue-router'
 
 import {
@@ -75,6 +83,8 @@ import {
   saveAdminAlbum,
   uploadAdminAlbumCover
 } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum } from '@shared/api-contract'
 
 const columns = [
@@ -100,14 +110,7 @@ const editorVisible = ref(false)
 const coverInput = ref<HTMLInputElement | null>(null)
 const editor = reactive({ id: 0, albumName: '', albumDesc: '', albumCover: '', status: 1 })
 
-const pagination = computed(() => ({
-  current: current.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  showTotal: true,
-  showJumper: true,
-  showPageSize: true
-}))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void load())
 

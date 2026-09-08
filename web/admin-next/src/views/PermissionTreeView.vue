@@ -1,31 +1,38 @@
 <template>
-  <section>
-    <a-card :title="title">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader :title="title" :description="description">
+      <template #actions>
         <a-space>
-          <a-input-search v-model="keywords" :placeholder="placeholder" allow-clear style="width: 240px" @search="load" />
-          <a-button type="primary" @click="openEditor()">新增</a-button>
+          <a-input-search v-model="keywords" class="admin-filter-input" :placeholder="placeholder" allow-clear @search="load" />
+          <a-button type="primary" @click="openEditor()">
+            <template #icon><IconPlus /></template>
+            新增
+          </a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table :data="rows" :columns="columns" :loading="loading" :pagination="false" row-key="id">
-        <template #name="{ record }">
-          <span :style="{ paddingLeft: `${record.depth * 20}px` }">{{ record.name }}</span>
-        </template>
-        <template #hidden="{ record }">
-          <a-switch :model-value="Number(record.isHidden) === 1" @change="(value) => toggleHidden(record, value)" />
-        </template>
-        <template #anonymous="{ record }">{{ Number(record.isAnonymous) === 1 ? '是' : '否' }}</template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-            <a-popconfirm :content="`确定删除${record.name}吗？`" @ok="deleteItem(record.id)">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty :description="`暂无${title}`" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table :data="rows" :columns="columns" :loading="loading" :pagination="false" row-key="id">
+          <template #name="{ record }">
+            <span :style="{ paddingLeft: `${record.depth * 20}px` }">{{ record.name }}</span>
+          </template>
+          <template #hidden="{ record }">
+            <a-switch :model-value="Number(record.isHidden) === 1" @change="(value) => toggleHidden(record, value)" />
+          </template>
+          <template #anonymous="{ record }"><a-tag class="admin-status-tag" :color="Number(record.isAnonymous) === 1 ? 'green' : 'gray'">{{ Number(record.isAnonymous) === 1 ? '是' : '否' }}</a-tag></template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+              <a-popconfirm :content="`确定删除${record.name}吗？`" @ok="deleteItem(record.id)">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty :description="`暂无${title}`" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="editorVisible" :title="form.id ? `编辑${title}` : `新增${title}`" :ok-loading="saving" width="640px" @ok="save">
@@ -66,6 +73,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus } from '@arco-design/web-vue/es/icon'
 
 import {
   apiErrorMessage,
@@ -77,6 +85,7 @@ import {
   saveAdminResource,
   updateAdminMenuHidden
 } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
 
 type PermissionMode = 'menus' | 'resources'
 interface PermissionNode {
@@ -99,6 +108,7 @@ interface PermissionNode {
 
 const props = defineProps<{ mode: PermissionMode }>()
 const title = computed(() => props.mode === 'menus' ? '菜单管理' : '接口资源管理')
+const description = computed(() => props.mode === 'menus' ? '维护页面入口、层级和可见性。' : '查看后台接口资源与访问边界。')
 const placeholder = computed(() => props.mode === 'menus' ? '搜索菜单名或路径' : '搜索资源名或 URL')
 const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 const columns = computed(() => props.mode === 'menus'

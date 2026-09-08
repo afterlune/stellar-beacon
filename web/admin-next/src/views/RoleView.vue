@@ -1,31 +1,40 @@
 <template>
-  <section>
-    <a-card title="角色管理">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader title="角色管理" description="用清晰的角色边界保护内容与后台操作。">
+      <template #actions>
         <a-space>
-          <a-input-search v-model="keywords" placeholder="搜索角色名" allow-clear style="width: 220px" @search="reload" />
-          <a-button type="primary" @click="openEditor()">新增</a-button>
+          <a-input-search v-model="keywords" class="admin-filter-input" placeholder="搜索角色名" allow-clear @search="reload" />
+          <a-button type="primary" @click="openEditor()">
+            <template #icon><IconPlus /></template>
+            新增
+          </a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table
-        :data="roles"
-        :columns="columns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="openEditor(record)">编辑权限</a-button>
-            <a-popconfirm content="确定删除该角色吗？" @ok="deleteRole(record.id)">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无角色" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          :data="roles"
+          :columns="columns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="id"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.isDisable) === 1 ? 'orange' : 'green'">{{ Number(record.isDisable) === 1 ? '禁用' : '启用' }}</a-tag></template>
+          <template #time="{ record }">{{ formatCell(record.createTime) }}</template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="openEditor(record)">编辑权限</a-button>
+              <a-popconfirm content="确定删除该角色吗？" @ok="deleteRole(record.id)">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无角色" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="editorVisible" :title="editor.id ? '编辑角色' : '新增角色'" :ok-loading="saving" width="720px" @ok="saveEditor">
@@ -53,6 +62,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus } from '@arco-design/web-vue/es/icon'
 
 import {
   apiErrorMessage,
@@ -62,6 +72,9 @@ import {
   listRoleResources,
   saveAdminRole
 } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatCell } from '@/utils/format'
+import { tablePagination } from '@/utils/pagination'
 import type { AdminRole } from '@shared/api-contract'
 
 interface PermissionOption {
@@ -73,7 +86,8 @@ interface PermissionOption {
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 90 },
   { title: '角色名', dataIndex: 'roleName' },
-  { title: '创建时间', dataIndex: 'createTime', width: 200 },
+  { title: '状态', dataIndex: 'isDisable', width: 90, slotName: 'status' },
+  { title: '创建时间', dataIndex: 'createTime', width: 200, slotName: 'time' },
   { title: '操作', dataIndex: 'actions', width: 170, slotName: 'actions' }
 ]
 
@@ -90,14 +104,7 @@ const editorVisible = ref(false)
 const errorMessage = ref('')
 const editor = reactive({ id: 0, roleName: '', menuIds: [] as number[], resourceIds: [] as number[] })
 
-const pagination = computed(() => ({
-  current: current.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  showTotal: true,
-  showJumper: true,
-  showPageSize: true
-}))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const menuChoices = computed(() => flattenOptions(menuOptions.value))
 const resourceChoices = computed(() => flattenOptions(resourceOptions.value))
 
@@ -214,11 +221,7 @@ function idsFrom(value: unknown): number[] {
     : []
 }
 
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'string' && value.includes('T')) return value.replace('T', ' ').replace(/\.\d+Z$/, '')
-  return String(value)
-}
+
 </script>
 
 <style scoped>

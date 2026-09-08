@@ -1,6 +1,7 @@
 <template>
-  <section class="review-policy">
-    <a-card title="Agent 审核策略">
+  <section class="admin-page review-policy">
+    <AdminPageHeader title="Agent 审核策略" description="把生成边界、过期时间和敏感内容拦截规则放在清晰的审核流程里。" />
+    <a-card class="admin-form-panel admin-form-card" :bordered="false" title="审核规则">
       <template #extra><a-tag color="green">人工审核强制开启</a-tag></template>
       <a-alert type="info" :show-icon="true" :closable="false">
         这里仅调整候选生成的边界和过期时间，模型不能通过配置直接发布内容。保存使用版本号防止覆盖其他管理员的修改。
@@ -61,6 +62,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 
 import { apiErrorMessage, getAdminAgentReviewPolicy, updateAdminAgentReviewPolicy } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
 
 const loading = ref(false)
 const saving = ref(false)

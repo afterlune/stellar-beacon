@@ -1,41 +1,48 @@
 <template>
-  <section>
-    <a-card :title="album.albumName ? `${album.albumName} · 照片` : '照片管理'">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader :title="pageTitle" description="上传、预览并维护相册里的照片。">
+      <template #actions>
         <a-space>
           <input ref="photoInput" type="file" accept="image/*" multiple hidden @change="selectPhotos" />
-          <a-button type="primary" :loading="uploading" @click="photoInput?.click()">上传照片</a-button>
+          <a-button type="primary" :loading="uploading" @click="photoInput?.click()">
+            <template #icon><IconUpload /></template>
+            上传照片
+          </a-button>
           <a-button @click="router.push('/albums')">返回相册</a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
       <a-descriptions v-if="album.albumName" :column="3" bordered style="margin-bottom: 16px">
         <a-descriptions-item label="相册">{{ album.albumName }}</a-descriptions-item>
         <a-descriptions-item label="照片数">{{ album.photoCount ?? 0 }}</a-descriptions-item>
         <a-descriptions-item label="状态">{{ Number(album.status) === 1 ? '公开' : '私密' }}</a-descriptions-item>
       </a-descriptions>
-      <a-table
-        :data="photos"
-        :columns="columns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #source="{ record }">
-          <img v-if="isHttpUrl(record.photoSrc)" class="photo-thumb" :src="record.photoSrc" alt="照片" />
-          <span v-else>—</span>
-        </template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-            <a-popconfirm content="确定移除这张照片吗？" @ok="removePhoto(record.id)">
-              <a-button type="text" status="danger" size="small">移除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无照片" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          :data="photos"
+          :columns="columns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="id"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #source="{ record }">
+            <img v-if="isHttpUrl(record.photoSrc)" class="photo-thumb" :src="record.photoSrc" alt="照片" />
+            <span v-else>—</span>
+          </template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+              <a-popconfirm content="确定移除这张照片吗？" @ok="removePhoto(record.id)">
+                <a-button type="text" status="danger" size="small">移除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无照片" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="editorVisible" title="编辑照片" :ok-loading="saving" @ok="saveEditor">
@@ -54,6 +61,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconUpload } from '@arco-design/web-vue/es/icon'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -65,11 +73,14 @@ import {
   updateAdminPhotoDelete,
   uploadAdminPhoto
 } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum, AdminPhoto } from '@shared/api-contract'
 
 const route = useRoute()
 const router = useRouter()
 const albumId = computed(() => Number(route.params.albumId || route.params.id || route.params.articleId || 0))
+const pageTitle = computed(() => album.value.albumName ? `${album.value.albumName} · 照片` : '照片管理')
 const album = ref<AdminAlbum>({ id: 0, albumName: '' })
 const photos = ref<AdminPhoto[]>([])
 const columns = [
@@ -89,14 +100,7 @@ const errorMessage = ref('')
 const photoInput = ref<HTMLInputElement | null>(null)
 const editor = reactive({ id: 0, photoName: '', photoDesc: '' })
 
-const pagination = computed(() => ({
-  current: current.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  showTotal: true,
-  showJumper: true,
-  showPageSize: true
-}))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void loadAll())
 

@@ -1,63 +1,89 @@
 <template>
-  <section>
-    <a-card :title="config.title">
-      <template #extra>
-        <a-input-search
-          v-model="keywords"
-          :placeholder="config.placeholder"
-          allow-clear
-          style="width: 260px"
-          @search="reload" />
+  <section class="admin-page">
+    <AdminPageHeader :title="config.title" :description="config.description">
+      <template #actions>
+        <a-space>
+          <a-button v-if="config.createPath" type="primary" @click="router.push(config.createPath)">
+            <template #icon><IconPlus /></template>
+            {{ config.createText || '新增' }}
+          </a-button>
+          <a-button :loading="loading" @click="load">
+            <template #icon><IconRefresh /></template>
+            刷新
+          </a-button>
+        </a-space>
       </template>
+    </AdminPageHeader>
+
+    <a-card class="admin-panel" :bordered="false">
+      <div class="admin-table-toolbar">
+        <div class="admin-table-toolbar-main">
+          <a-input-search
+            v-model="keywords"
+            class="admin-filter-input"
+            :placeholder="config.placeholder"
+            allow-clear
+            @search="reload" />
+          <span class="admin-toolbar-caption">共 {{ total }} 条记录</span>
+        </div>
+      </div>
+
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table
-        :data="records"
-        :columns="tableColumns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #empty>
-          <a-empty description="暂无数据" />
-        </template>
-        <template #formatted="{ record, column }">
-          {{ formatCell(record[column.dataIndex]) }}
-        </template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          :data="records"
+          :columns="tableColumns"
+          :loading="loading"
+          :pagination="pagination"
+          :row-key="config.rowKey"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #formatted="{ record, column }">
+            {{ formatCell(record[column.dataIndex]) }}
+          </template>
+          <template #empty>
+            <div class="admin-table-empty">
+              <a-empty description="还没有内容" />
+            </div>
+          </template>
+        </a-table>
+      </div>
     </a-card>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, listAdminPage } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatCell } from '@/utils/format'
+import { tablePagination } from '@/utils/pagination'
 
-type ListMode =
-  | 'articles'
-  | 'categories'
-  | 'tags'
-  | 'comments'
-  | 'users'
-  | 'onlineUsers'
-  | 'roles'
-  | 'operationLogs'
-  | 'exceptionLogs'
-  | 'jobLogs'
-  | 'jobs'
-  | 'albums'
-  | 'talks'
+type ListMode = 'onlineUsers'
+
 interface TableColumn {
   title: string
   dataIndex: string
-  slotName?: string
-  ellipsis?: boolean
-  tooltip?: boolean
+  width?: number
+}
+
+interface ListConfig {
+  title: string
+  description: string
+  placeholder: string
+  endpoint: string
+  rowKey: string
+  columns: TableColumn[]
+  createPath?: string
+  createText?: string
 }
 
 const props = defineProps<{ mode: ListMode }>()
+const router = useRouter()
 const keywords = ref('')
 const current = ref(1)
 const pageSize = ref(10)
@@ -66,173 +92,27 @@ const errorMessage = ref('')
 const records = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 
-const configs: Record<ListMode, { title: string; placeholder: string; endpoint: string; columns: TableColumn[] }> = {
-  articles: {
-    title: '文章列表',
-    placeholder: '搜索文章标题',
-    endpoint: 'admin/articles',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '标题', dataIndex: 'articleTitle', ellipsis: true, tooltip: true },
-      { title: '分类', dataIndex: 'categoryName' },
-      { title: '状态', dataIndex: 'status' },
-      { title: '浏览量', dataIndex: 'viewsCount' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  categories: {
-    title: '分类管理',
-    placeholder: '搜索分类名',
-    endpoint: 'admin/categories',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '分类名', dataIndex: 'categoryName' },
-      { title: '文章量', dataIndex: 'articleCount' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  tags: {
-    title: '标签管理',
-    placeholder: '搜索标签名',
-    endpoint: 'admin/tags',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '标签名', dataIndex: 'tagName' },
-      { title: '文章量', dataIndex: 'articleCount' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  comments: {
-    title: '评论管理',
-    placeholder: '搜索评论内容',
-    endpoint: 'admin/comments',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '用户', dataIndex: 'nickname' },
-      { title: '文章', dataIndex: 'articleTitle' },
-      { title: '内容', dataIndex: 'commentContent', ellipsis: true, tooltip: true },
-      { title: '审核状态', dataIndex: 'isReview' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  users: {
-    title: '用户管理',
-    placeholder: '搜索用户昵称',
-    endpoint: 'admin/users',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '昵称', dataIndex: 'nickname' },
-      { title: '登录类型', dataIndex: 'loginType' },
-      { title: 'IP', dataIndex: 'ipAddress' },
-      { title: '状态', dataIndex: 'isDisable' },
-      { title: '最后登录', dataIndex: 'lastLoginTime' }
-    ]
-  },
+const configs: Record<ListMode, ListConfig> = {
   onlineUsers: {
     title: '在线用户',
+    description: '了解当前仍在活动的登录会话。',
     placeholder: '搜索用户昵称',
     endpoint: 'admin/users/online',
+    rowKey: 'userInfoId',
     columns: [
       { title: '用户 ID', dataIndex: 'userInfoId', width: 100 },
       { title: '昵称', dataIndex: 'nickname' },
       { title: '浏览器', dataIndex: 'browser' },
       { title: '操作系统', dataIndex: 'os' },
       { title: 'IP', dataIndex: 'ipAddress' },
-      { title: '最后登录', dataIndex: 'lastLoginTime' }
-    ]
-  },
-  roles: {
-    title: '角色管理',
-    placeholder: '搜索角色名',
-    endpoint: 'admin/roles',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '角色名', dataIndex: 'roleName' },
-      { title: '状态', dataIndex: 'isDisable' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  operationLogs: {
-    title: '操作日志',
-    placeholder: '搜索操作模块',
-    endpoint: 'admin/operation/logs',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '模块', dataIndex: 'optModule' },
-      { title: '类型', dataIndex: 'optType' },
-      { title: 'URI', dataIndex: 'optUri' },
-      { title: '方法', dataIndex: 'optMethod' },
-      { title: '用户', dataIndex: 'nickname' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  exceptionLogs: {
-    title: '异常日志',
-    placeholder: '搜索请求 URI',
-    endpoint: 'admin/exception/logs',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: 'URI', dataIndex: 'optUri' },
-      { title: '方法', dataIndex: 'optMethod' },
-      { title: '描述', dataIndex: 'optDesc' },
-      { title: '异常', dataIndex: 'exceptionInfo', ellipsis: true, tooltip: true },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  jobLogs: {
-    title: '任务日志',
-    placeholder: '搜索任务名',
-    endpoint: 'admin/jobLogs',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '任务', dataIndex: 'jobName' },
-      { title: '任务组', dataIndex: 'jobGroup' },
-      { title: '状态', dataIndex: 'status' },
-      { title: '耗时', dataIndex: 'time' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  jobs: {
-    title: '定时任务',
-    placeholder: '搜索任务名',
-    endpoint: 'admin/jobs',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '任务', dataIndex: 'jobName' },
-      { title: '任务组', dataIndex: 'jobGroup' },
-      { title: 'Cron', dataIndex: 'cronExpression' },
-      { title: '状态', dataIndex: 'status' },
-      { title: '创建时间', dataIndex: 'createTime' }
-    ]
-  },
-  albums: {
-    title: '相册管理',
-    placeholder: '搜索相册名',
-    endpoint: 'admin/photos/albums',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '相册名', dataIndex: 'albumName' },
-      { title: '照片数', dataIndex: 'photoCount' },
-      { title: '状态', dataIndex: 'status' }
-    ]
-  },
-  talks: {
-    title: '说说管理',
-    placeholder: '搜索说说内容',
-    endpoint: 'admin/talks',
-    columns: [
-      { title: 'ID', dataIndex: 'id', width: 80 },
-      { title: '内容', dataIndex: 'content', ellipsis: true, tooltip: true },
-      { title: '评论数', dataIndex: 'commentCount' },
-      { title: '状态', dataIndex: 'status' },
-      { title: '创建时间', dataIndex: 'createTime' }
+      { title: '最后登录', dataIndex: 'lastLoginTime', width: 180 }
     ]
   }
 }
 
 const config = computed(() => configs[props.mode])
 const tableColumns = computed(() => config.value.columns.map((column) => ({ ...column, slotName: 'formatted' })))
-const pagination = computed(() => ({ current: current.value, pageSize: pageSize.value, total: total.value, showTotal: true, showJumper: true, showPageSize: true }))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void reload())
 
@@ -270,10 +150,11 @@ function changePageSize(size: number): void {
   current.value = 1
   void load()
 }
-
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'string' && value.includes('T')) return value.replace('T', ' ').replace(/\.\d+Z$/, '')
-  return String(value)
-}
 </script>
+
+<style scoped>
+.admin-toolbar-caption {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+</style>

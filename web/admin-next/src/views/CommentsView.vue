@@ -1,20 +1,26 @@
 <template>
-  <section>
-    <a-card title="评论管理">
-      <template #extra><a-input-search v-model="keywords" placeholder="搜索评论内容" allow-clear style="width: 260px" @search="reload" /></template>
+  <section class="admin-page">
+    <AdminPageHeader title="评论管理" description="保持交流友好，也让每一条反馈都有回应。">
+      <template #actions>
+        <a-input-search v-model="keywords" class="admin-filter-input" placeholder="搜索评论内容" allow-clear @search="reload" />
+      </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table :data="records" :columns="columns" :loading="loading" :pagination="pagination" row-key="id" @page-change="changePage">
-        <template #content="{ record }"><span class="comment-content">{{ record.commentContent || '—' }}</span></template>
-        <template #review="{ record }"><a-tag :color="Number(record.isReview) === 1 ? 'green' : 'orange'">{{ Number(record.isReview) === 1 ? '已审核' : '待审核' }}</a-tag></template>
-        <template #time="{ record }">{{ formatTime(record.createTime) }}</template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="toggleReview(record)">{{ Number(record.isReview) === 1 ? '取消审核' : '通过审核' }}</a-button>
-            <a-popconfirm content="确认删除这条评论吗？" @ok="remove(record.id)"><a-button type="text" status="danger" size="small">删除</a-button></a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无数据" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table :data="records" :columns="columns" :loading="loading" :pagination="pagination" row-key="id" @page-change="changePage">
+          <template #content="{ record }"><span class="comment-content">{{ record.commentContent || '—' }}</span></template>
+          <template #review="{ record }"><a-tag class="admin-status-tag" :color="Number(record.isReview) === 1 ? 'green' : 'orange'">{{ Number(record.isReview) === 1 ? '已审核' : '待审核' }}</a-tag></template>
+          <template #time="{ record }">{{ formatTime(record.createTime) }}</template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="toggleReview(record)">{{ Number(record.isReview) === 1 ? '取消审核' : '通过审核' }}</a-button>
+              <a-popconfirm content="确认删除这条评论吗？" @ok="remove(record.id)"><a-button type="text" status="danger" size="small">删除</a-button></a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无评论" /></div></template>
+        </a-table>
+      </div>
     </a-card>
   </section>
 </template>
@@ -24,6 +30,9 @@ import { computed, onMounted, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 
 import { apiErrorMessage, deleteComment, listAdminPage, reviewComment } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatTime } from '@/utils/format'
+import { tablePagination } from '@/utils/pagination'
 
 interface CommentRow extends Record<string, unknown> { id: number; isReview?: number; commentContent?: string; createTime?: string }
 const columns = [
@@ -42,7 +51,7 @@ const total = ref(0)
 const records = ref<CommentRow[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
-const pagination = computed(() => ({ current: current.value, pageSize: size.value, total: total.value, showTotal: true }))
+const pagination = computed(() => tablePagination(current.value, size.value, total.value))
 
 onMounted(() => void reload())
 async function reload(): Promise<void> { current.value = 1; await load() }
@@ -66,7 +75,6 @@ async function remove(id: number): Promise<void> {
   catch (error) { Message.error(apiErrorMessage(error, '删除失败')) }
 }
 function changePage(page: number): void { current.value = page; void load() }
-function formatTime(value: unknown): string { return typeof value === 'string' ? value.replace('T', ' ').replace(/\.\d+Z$/, '') : '—' }
 </script>
 
 <style scoped>

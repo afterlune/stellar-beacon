@@ -1,39 +1,46 @@
 <template>
-  <section>
-    <a-card title="说说管理">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader title="说说管理" description="记录那些不必写成文章的片刻。">
+      <template #actions>
         <a-space>
           <a-select v-model="status" allow-clear placeholder="发布状态" style="width: 130px" @change="reload">
             <a-option :value="1">公开</a-option>
             <a-option :value="2">私密</a-option>
           </a-select>
-          <a-button type="primary" @click="router.push('/talks')">新增</a-button>
+          <a-button type="primary" @click="router.push('/talks')">
+            <template #icon><IconPlus /></template>
+            新增
+          </a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table
-        :data="talks"
-        :columns="columns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #content="{ record }">
-          <span class="talk-content" :title="plainText(record.content)">{{ plainText(record.content) || '—' }}</span>
-        </template>
-        <template #status="{ record }">{{ Number(record.status) === 1 ? '公开' : '私密' }}</template>
-        <template #top="{ record }">{{ Number(record.isTop) === 1 ? '是' : '否' }}</template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="router.push(`/talks/${record.id}`)">编辑</a-button>
-            <a-popconfirm content="确定删除这条说说吗？" @ok="deleteTalk(record.id)">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无说说" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          :data="talks"
+          :columns="columns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="id"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #content="{ record }">
+            <span class="talk-content" :title="plainText(record.content)">{{ plainText(record.content) || '—' }}</span>
+          </template>
+          <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.status) === 1 ? 'green' : 'orange'">{{ Number(record.status) === 1 ? '公开' : '私密' }}</a-tag></template>
+          <template #top="{ record }"><a-tag class="admin-status-tag" :color="Number(record.isTop) === 1 ? 'arcoblue' : 'gray'">{{ Number(record.isTop) === 1 ? '是' : '否' }}</a-tag></template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="router.push(`/talks/${record.id}`)">编辑</a-button>
+              <a-popconfirm content="确定删除这条说说吗？" @ok="deleteTalk(record.id)">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无说说" /></div></template>
+        </a-table>
+      </div>
     </a-card>
   </section>
 </template>
@@ -41,9 +48,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus } from '@arco-design/web-vue/es/icon'
 import { useRouter } from 'vue-router'
 
 import { apiErrorMessage, deleteAdminTalks, listAdminTalks } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { tablePagination } from '@/utils/pagination'
 import type { AdminTalk } from '@shared/api-contract'
 
 const router = useRouter()
@@ -65,14 +75,7 @@ const total = ref(0)
 const loading = ref(false)
 const errorMessage = ref('')
 
-const pagination = computed(() => ({
-  current: current.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  showTotal: true,
-  showJumper: true,
-  showPageSize: true
-}))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void load())
 

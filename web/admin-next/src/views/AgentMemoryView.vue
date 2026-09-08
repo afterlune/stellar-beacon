@@ -1,12 +1,13 @@
 <template>
-  <section class="memory-page">
+  <section class="admin-page memory-page">
+    <AdminPageHeader title="Agent 记忆" description="仅由管理员审核长期记忆，所有撤回和冲突处理都会保留历史。" />
     <a-alert type="warning" :show-icon="true" :closable="false">
       长期记忆只面向管理员审核。撤回、解决和驳回都会保留不可变历史，公共 Agent 对话不会直接访问这里的数据。
     </a-alert>
 
     <a-tabs v-model:active-key="activeTab">
       <a-tab-pane key="assertions" title="记忆断言">
-        <a-card title="当前断言">
+        <a-card title="当前断言" class="admin-card">
           <template #extra>
             <a-button @click="loadAssertions">刷新</a-button>
           </template>
@@ -31,7 +32,7 @@
             row-key="id"
             @page-change="changeAssertionPage">
             <template #status="{ record }">
-              <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
+              <a-tag class="admin-status-tag" :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
             </template>
             <template #object="{ record }">
               <span class="object-cell">{{ record.object }}</span>
@@ -39,7 +40,7 @@
             <template #confidence="{ record }">{{ formatConfidence(record.confidence) }}</template>
             <template #time="{ record }">{{ formatTime(record.updatedAt) }}</template>
             <template #actions="{ record }">
-              <a-space>
+              <a-space class="admin-action-space">
                 <a-button type="text" size="small" @click="openHistory(record.id)">历史</a-button>
                 <a-popconfirm content="撤回后不能重新激活，确定继续吗？" @ok="revokeAssertion(record.id)">
                   <a-button type="text" status="danger" size="small" :disabled="record.status === 'retracted'">撤回</a-button>
@@ -52,7 +53,7 @@
       </a-tab-pane>
 
       <a-tab-pane key="conflicts" title="冲突审核">
-        <a-card title="记忆冲突">
+        <a-card title="记忆冲突" class="admin-card">
           <template #extra>
             <a-button @click="loadConflicts">刷新</a-button>
           </template>
@@ -76,7 +77,7 @@
             row-key="id"
             @page-change="changeConflictPage">
             <template #status="{ record }">
-              <a-tag :color="conflictStatusColor(record.status)">{{ conflictStatusLabel(record.status) }}</a-tag>
+              <a-tag class="admin-status-tag" :color="conflictStatusColor(record.status)">{{ conflictStatusLabel(record.status) }}</a-tag>
             </template>
             <template #members="{ record }">
               <a-space wrap>
@@ -87,7 +88,7 @@
             </template>
             <template #time="{ record }">{{ formatTime(record.updatedAt) }}</template>
             <template #actions="{ record }">
-              <a-space>
+              <a-space class="admin-action-space">
                 <a-button type="text" size="small" :disabled="record.status !== 'open' || record.members.length === 0" @click="openResolve(record)">选择赢家</a-button>
                 <a-popconfirm content="驳回后会撤回全部冲突断言，确定继续吗？" @ok="rejectConflict(record.id)">
                   <a-button type="text" status="danger" size="small" :disabled="record.status !== 'open'">驳回</a-button>
@@ -102,7 +103,7 @@
 
     <a-modal v-model:visible="historyVisible" title="断言修订历史" :footer="false" width="900px">
       <a-table :data="history" :columns="historyColumns" :pagination="false" row-key="revisionNo">
-        <template #status="{ record }"><a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag></template>
+        <template #status="{ record }"><a-tag class="admin-status-tag" :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag></template>
         <template #object="{ record }"><span class="object-cell">{{ record.object }}</span></template>
         <template #time="{ record }">{{ formatTime(record.changedAt) }}</template>
         <template #empty><a-empty description="暂无修订历史" /></template>
@@ -146,6 +147,8 @@ import {
   revokeAdminAgentMemoryAssertion
 } from '@/api/http'
 import type { AgentMemoryAssertion, AgentMemoryConflict, AgentMemoryAssertionRevision } from '@shared/api-contract'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatTime } from '@/utils/format'
 
 const activeTab = ref('assertions')
 const assertions = ref<AgentMemoryAssertion[]>([])
@@ -171,7 +174,7 @@ const resolveForm = reactive({ winnerAssertionId: '', resolution: '' })
 const assertionColumns = [
   { title: '主体', dataIndex: 'subjectKey', width: 130, ellipsis: true, tooltip: true },
   { title: '谓词', dataIndex: 'predicate', width: 120 },
-  { title: '对象', dataIndex: 'object', slotName: 'object', ellipsis: true, tooltip: true },
+  { title: '对象', dataIndex: 'object', slotName: 'object', width: 220, ellipsis: true, tooltip: true },
   { title: '来源', dataIndex: 'sourceType', width: 100 },
   { title: '版本', dataIndex: 'version', width: 70 },
   { title: '置信度', dataIndex: 'confidence', slotName: 'confidence', width: 90 },
@@ -329,9 +332,7 @@ function pagination(current: number, itemCount: number, hasMore: boolean) {
   return { current, pageSize, total, showTotal: false, showJumper: false, showPageSize: false }
 }
 
-function formatTime(value: unknown): string {
-  return typeof value === 'string' && value ? value.replace('T', ' ').replace(/\.\d+Z$/, '') : '—'
-}
+
 
 function formatConfidence(value: unknown): string {
   const number = Number(value)

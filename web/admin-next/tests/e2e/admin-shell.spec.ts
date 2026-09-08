@@ -726,10 +726,10 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await page.getByTestId('login-submit').click()
 
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByRole('main').getByText('这是 Vue 3 + Vite + Pinia + Arco Design 的新后台壳。')).toBeVisible()
-  await expect(page.getByText('内容管理')).toBeVisible()
+  await expect(page.getByRole('main').getByText('让每一次发布，都更从容。')).toBeVisible()
+  await expect(page.locator('.admin-sider').getByText('内容管理', { exact: true })).toBeVisible()
   await expect(page.getByText('无可见菜单', { exact: true })).toHaveCount(0)
-  await page.getByText('文章列表').click()
+  await page.locator('.admin-sider').getByText('文章列表', { exact: true }).click()
   await expect(page).toHaveURL(/\/article-list$/)
   await expect(page.getByRole('main').getByText('文章列表')).toBeVisible()
   await expect(page.getByText('Agent 路线')).toBeVisible()
@@ -881,7 +881,7 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await expect(page.getByRole('main').getByText('编辑说说')).toBeVisible()
   await page.getByText('菜单管理').click()
   await expect(page).toHaveURL(/\/menus$/)
-  await expect(page.getByText('文章列表', { exact: true })).toBeVisible()
+  await expect(page.getByRole('table').getByText('文章列表', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '新增' }).click()
   const menuDialog = page.locator('.arco-modal:visible')
   await menuDialog.locator('input[type="text"]').nth(0).fill('新菜单')
@@ -959,6 +959,12 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await settingMain.locator('input').nth(1).fill('https://example.com/admin-e2e')
   await settingMain.getByRole('button', { name: '保存', exact: true }).click()
   await expect.poll(() => profileUpdatedCalled).toBe(true)
+  // 等待前端把更新写回 sessionStorage 后再 reload，避免与 mock 响应之间的竞态
+  await expect.poll(() => page.evaluate(() => {
+    const raw = sessionStorage.getItem('benetnasch.admin.user')
+    if (!raw) return false
+    try { return (JSON.parse(raw) as { nickname?: string }).nickname === '测试管理员 E2E' } catch { return false }
+  })).toBe(true)
   await page.reload()
   await expect(page).toHaveURL(/\/setting$/)
   await expect(page.getByRole('main').locator('input').nth(0)).toHaveValue('测试管理员 E2E')
@@ -999,9 +1005,9 @@ test('all migrated routes keep their menu permission and survive a refresh', asy
   await page.getByTestId('login-password').locator('input').fill('password')
   await page.getByTestId('login-submit').click()
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByRole('main').getByText('这是 Vue 3 + Vite + Pinia + Arco Design 的新后台壳。')).toBeVisible()
+  await expect(page.getByRole('main').getByText('让每一次发布，都更从容。')).toBeVisible()
 
-  await expect(page.getByText('内容管理')).toBeVisible()
+  await expect(page.locator('.admin-sider').getByText('内容管理', { exact: true })).toBeVisible()
   await expect(page.getByText('隐藏页面', { exact: true })).toHaveCount(0)
   await expect(page.getByText('仅用于权限测试', { exact: true })).toHaveCount(0)
 

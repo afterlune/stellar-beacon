@@ -1,6 +1,6 @@
 # Benetnasch Admin Next
 
-`admin-next` 是数字空间控制台的 Vue 3 + Vite + Pinia + Arco Design 入口，与稳定管理入口并行运行。它负责空间内容、用户权限、任务、审核和 Agent 控制面的可视化操作；真正的权限判断始终在后端完成。
+`admin-next` 是 Benetnasch 唯一的 Vue 3 + Vite + Pinia + Arco Design 管理台。它负责博客内容、用户权限、任务、审核和 Agent 控制面的可视化操作；旧版 Vue 2 管理入口已淘汰，真正的权限判断始终在后端完成。
 
 当前已覆盖登录、Token 恢复、动态菜单、布局、403/404、文章、分类、标签、评论、用户、角色、日志、任务、相册、友链、网站配置、关于我、个人中心以及 AI Studio、审核、Agent 人设、审核策略和记忆审核入口。未迁移的复杂页面必须显示明确占位，不得根据后端路径任意加载组件。
 

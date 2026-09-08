@@ -1,29 +1,33 @@
 <template>
-  <section>
-    <a-card :title="config.title">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader :title="config.title" :description="description">
+      <template #actions>
         <a-space>
-          <a-input-search v-model="keywords" :placeholder="config.placeholder" allow-clear style="width: 240px" @search="reload" />
+          <a-input-search v-model="keywords" class="admin-filter-input" :placeholder="config.placeholder" allow-clear @search="reload" />
           <a-popconfirm v-if="mode === 'job'" content="确定清空全部任务日志吗？" @ok="clean">
             <a-button status="danger">清空任务日志</a-button>
           </a-popconfirm>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table :data="records" :columns="config.columns" :loading="loading" :pagination="pagination" row-key="id" @page-change="changePage" @page-size-change="changePageSize">
-        <template #method="{ record }">{{ formatCell(record.requestMethod || record.optMethod) }}</template>
-        <template #status="{ record }">{{ Number(record.status) === 1 ? '成功' : '失败' }}</template>
-        <template #content="{ record }"><span class="ellipsis" :title="String(record.exceptionInfo || record.jobMessage || '')">{{ formatCell(record.exceptionInfo || record.jobMessage) }}</span></template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="showDetail(record)">详情</a-button>
-            <a-popconfirm content="确定删除这条日志吗？" @ok="deleteLog(record.id)">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无日志" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table :data="records" :columns="config.columns" :loading="loading" :pagination="pagination" row-key="id" @page-change="changePage" @page-size-change="changePageSize">
+          <template #method="{ record }">{{ formatCell(record.requestMethod || record.optMethod) }}</template>
+          <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.status) === 1 ? 'red' : 'green'">{{ Number(record.status) === 1 ? '失败' : '成功' }}</a-tag></template>
+          <template #content="{ record }"><span class="ellipsis" :title="String(record.exceptionInfo || record.jobMessage || '')">{{ formatCell(record.exceptionInfo || record.jobMessage) }}</span></template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="showDetail(record)">详情</a-button>
+              <a-popconfirm content="确定删除这条日志吗？" @ok="deleteLog(record.id)">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无日志" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="detailVisible" title="日志详情" width="760px" :footer="false">
@@ -38,6 +42,9 @@ import { Message } from '@arco-design/web-vue'
 import { useRoute } from 'vue-router'
 
 import { apiErrorMessage, cleanAdminJobLogs, deleteAdminLogs, listAdminPage } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatCell } from '@/utils/format'
+import { tablePagination } from '@/utils/pagination'
 
 type LogMode = 'operation' | 'exception' | 'job'
 interface LogRecord {
@@ -51,6 +58,7 @@ const mode = computed(() => props.mode)
 const configs = {
   operation: {
     title: '操作日志',
+    description: '留下可追溯的后台操作记录。',
     placeholder: '搜索模块或描述',
     endpoint: 'admin/operation/logs',
     columns: [
@@ -65,6 +73,7 @@ const configs = {
   },
   exception: {
     title: '异常日志',
+    description: '把异常留在记录里，让问题更容易被定位。',
     placeholder: '搜索请求 URI 或描述',
     endpoint: 'admin/exception/logs',
     columns: [
@@ -78,6 +87,7 @@ const configs = {
   },
   job: {
     title: '任务日志',
+    description: '回看后台任务的执行结果与耗时。',
     placeholder: '搜索任务名',
     endpoint: 'admin/jobLogs',
     columns: [
@@ -92,6 +102,7 @@ const configs = {
 } as const
 
 const config = computed(() => configs[props.mode])
+const description = computed(() => config.value.description)
 const records = ref<LogRecord[]>([])
 const keywords = ref('')
 const current = ref(1)
@@ -102,7 +113,7 @@ const errorMessage = ref('')
 const detailVisible = ref(false)
 const detail = ref<LogRecord | null>(null)
 const detailText = computed(() => detail.value ? JSON.stringify(detail.value, null, 2) : '')
-const pagination = computed(() => ({ current: current.value, pageSize: pageSize.value, total: total.value, showTotal: true, showJumper: true, showPageSize: true }))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void load())
 watch(() => route.params.quartzId, () => {
@@ -177,11 +188,7 @@ async function clean(): Promise<void> {
   }
 }
 
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'string' && value.includes('T')) return value.replace('T', ' ').replace(/\.\d+Z$/, '')
-  return String(value)
-}
+
 </script>
 
 <style scoped>

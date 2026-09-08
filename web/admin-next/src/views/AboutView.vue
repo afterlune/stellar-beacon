@@ -1,10 +1,11 @@
 <template>
-  <section>
-    <a-card title="关于我">
+  <section class="admin-page">
+    <AdminPageHeader title="关于我" description="写下希望访客了解的你，保存后会同步到博客展示页。" />
+    <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-form layout="vertical" @submit-success="save">
+      <a-form class="config-form" layout="vertical" @submit-success="save">
         <a-form-item label="内容"><a-textarea v-model="content" :max-length="100000" show-word-limit :auto-size="{ minRows: 16, maxRows: 32 }" /></a-form-item>
-        <a-button type="primary" html-type="submit" :loading="saving">保存</a-button>
+        <div class="admin-form-actions"><a-button type="primary" html-type="submit" :loading="saving">保存</a-button></div>
       </a-form>
     </a-card>
   </section>
@@ -15,6 +16,7 @@ import { onMounted, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 
 import { apiErrorMessage, getAbout, updateAbout } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
 
 const content = ref('')
 const saving = ref(false)

@@ -1,6 +1,6 @@
 <template>
-  <section>
-    <a-card :title="isEditing ? '修改文章' : '发布文章'">
+  <section class="admin-page">
+    <a-card class="admin-form-panel admin-form-card" :bordered="false" :title="isEditing ? '修改文章' : '发布文章'">
       <a-alert type="info" :show-icon="true" :closable="false">保存操作沿用后端文章接口；AI 生成物必须先经过审核，不会在此处绕过审核发布。</a-alert>
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
       <a-form class="article-form" :model="form" layout="vertical" @submit-success="save">
@@ -25,6 +25,7 @@
             <a-select v-model="form.type">
               <a-option :value="1">原创</a-option>
               <a-option :value="2">转载</a-option>
+              <a-option :value="3">翻译</a-option>
             </a-select>
           </a-form-item>
         </div>
@@ -32,13 +33,13 @@
           <a-input v-model="form.articleCover" placeholder="可选" />
         </a-form-item>
         <a-form-item field="articleContent" label="正文" :rules="[{ required: true, message: '正文不能为空' }]">
-          <a-textarea v-model="form.articleContent" :max-length="100000" show-word-limit :auto-size="{ minRows: 16, maxRows: 32 }" />
+          <a-textarea v-model="form.articleContent" class="article-content-editor" :max-length="100000" show-word-limit :auto-size="{ minRows: 16, maxRows: 32 }" />
         </a-form-item>
         <a-space wrap>
           <a-checkbox v-model="form.isTop" :checked-value="1" :unchecked-value="0">置顶</a-checkbox>
           <a-checkbox v-model="form.isFeatured" :checked-value="1" :unchecked-value="0">精选</a-checkbox>
         </a-space>
-        <a-space>
+        <a-space class="admin-form-actions">
           <a-button type="primary" html-type="submit" :loading="saving">保存</a-button>
           <a-button @click="router.push('/article-list')">返回列表</a-button>
         </a-space>
@@ -108,7 +109,7 @@ function normalizeTags(value: unknown): string {
 </script>
 
 <style scoped>
-.article-form { margin-top: 18px; }
-.article-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.article-form { margin-top: 22px; }
+.article-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
 @media (max-width: 800px) { .article-form-grid { grid-template-columns: 1fr; } }
 </style>

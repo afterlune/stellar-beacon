@@ -1,49 +1,56 @@
 <template>
-  <section>
-    <a-card title="定时任务">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader title="定时任务" description="让重复的后台工作安静、可靠地运行。">
+      <template #actions>
         <a-space>
-          <a-input-search v-model="keywords" placeholder="搜索任务名" allow-clear style="width: 220px" @search="reload" />
-          <a-button type="primary" @click="openEditor()">新增</a-button>
+          <a-input-search v-model="keywords" class="admin-filter-input" placeholder="搜索任务名" allow-clear @search="reload" />
+          <a-button type="primary" @click="openEditor()">
+            <template #icon><IconPlus /></template>
+            新增
+          </a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table
-        :data="jobs"
-        :columns="columns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #group="{ record }"><a-tag>{{ record.jobGroup }}</a-tag></template>
-        <template #target="{ record }"><span class="ellipsis" :title="record.invokeTarget">{{ record.invokeTarget }}</span></template>
-        <template #status="{ record }">
-          <a-switch
-            :model-value="Number(record.status) === 1"
-            :checked-value="true"
-            :unchecked-value="false"
-            @change="changeStatus(record, $event)">
-            <template #checked>正常</template>
-            <template #unchecked>暂停</template>
-          </a-switch>
-        </template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-            <a-popconfirm v-if="record.canRunOnce" content="只处理一个已入队任务，确认执行吗？" @ok="runOnce(record)">
-              <a-button type="text" size="small">执行一次</a-button>
-            </a-popconfirm>
-            <a-tooltip v-else :content="record.runOnceReason || '该任务目标暂不支持手动执行'">
-              <a-button type="text" size="small" disabled>执行一次</a-button>
-            </a-tooltip>
-            <a-popconfirm content="确定删除该任务吗？" @ok="deleteJob(record.id)">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无任务" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          :data="jobs"
+          :columns="columns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="id"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #group="{ record }"><a-tag>{{ record.jobGroup }}</a-tag></template>
+          <template #target="{ record }"><span class="ellipsis" :title="record.invokeTarget">{{ record.invokeTarget }}</span></template>
+          <template #status="{ record }">
+            <a-switch
+              :model-value="Number(record.status) === 1"
+              :checked-value="true"
+              :unchecked-value="false"
+              @change="changeStatus(record, $event)">
+              <template #checked>正常</template>
+              <template #unchecked>暂停</template>
+            </a-switch>
+          </template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+              <a-popconfirm v-if="record.canRunOnce" content="只处理一个已入队任务，确认执行吗？" @ok="runOnce(record)">
+                <a-button type="text" size="small">执行一次</a-button>
+              </a-popconfirm>
+              <a-tooltip v-else :content="record.runOnceReason || '该任务目标暂不支持手动执行'">
+                <a-button type="text" size="small" disabled>执行一次</a-button>
+              </a-tooltip>
+              <a-popconfirm content="确定删除该任务吗？" @ok="deleteJob(record.id)">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无任务" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="editorVisible" :title="editor.id ? '编辑任务' : '新增任务'" :ok-loading="saving" width="700px" @ok="saveEditor">
@@ -62,7 +69,7 @@
           <a-grid-item :span="2">
             <a-form-item field="invokeTarget" label="调用目标" required>
               <a-input v-model="editor.invokeTarget" maxlength="500" show-word-limit />
-              <template #help>这里只保存目标标识；“执行一次”仅允许后端固定白名单中、且已启用 Worker 的目标。</template>
+              <template #help>这里只保存目标标识；"执行一次"仅允许后端固定白名单中、且已启用 Worker 的目标。</template>
             </a-form-item>
           </a-grid-item>
           <a-grid-item :span="2">
@@ -110,6 +117,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus } from '@arco-design/web-vue/es/icon'
 
 import {
   apiErrorMessage,
@@ -120,6 +128,8 @@ import {
   saveAdminJob,
   updateAdminJobStatus
 } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { tablePagination } from '@/utils/pagination'
 import type { AdminJob } from '@shared/api-contract'
 
 const columns = [
@@ -154,14 +164,7 @@ const editor = reactive<AdminJob>({
   remark: ''
 })
 
-const pagination = computed(() => ({
-  current: current.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  showTotal: true,
-  showJumper: true,
-  showPageSize: true
-}))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void load())
 

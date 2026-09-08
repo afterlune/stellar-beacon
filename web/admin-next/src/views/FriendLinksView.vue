@@ -1,50 +1,57 @@
 <template>
-  <section>
-    <a-card title="友链管理">
-      <template #extra>
+  <section class="admin-page">
+    <AdminPageHeader title="友链管理" description="维护博客与朋友们之间的温柔连接。">
+      <template #actions>
         <a-space>
-          <a-input-search v-model="keywords" placeholder="搜索友链名称" allow-clear style="width: 220px" @search="reload" />
+          <a-input-search v-model="keywords" class="admin-filter-input" placeholder="搜索友链名称" allow-clear @search="reload" />
           <a-popconfirm
             content="确定删除选中的友链吗？"
             :disabled="selectedIds.length === 0"
             @ok="deleteLinks(selectedIds)">
             <a-button status="danger" :disabled="selectedIds.length === 0">批量删除</a-button>
           </a-popconfirm>
-          <a-button type="primary" @click="openEditor()">新增</a-button>
+          <a-button type="primary" @click="openEditor()">
+            <template #icon><IconPlus /></template>
+            新增
+          </a-button>
         </a-space>
       </template>
+    </AdminPageHeader>
+    <a-card class="admin-panel" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-table
-        v-model:selected-keys="selectedKeys"
-        :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
-        :data="links"
-        :columns="columns"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @page-change="changePage"
-        @page-size-change="changePageSize">
-        <template #avatar="{ record }">
-          <img v-if="isHttpUrl(record.linkAvatar)" class="link-avatar" :src="record.linkAvatar" alt="友链头像" />
-          <span v-else>—</span>
-        </template>
-        <template #address="{ record }">
-          <span class="link-address" :title="record.linkAddress">{{ record.linkAddress || '—' }}</span>
-        </template>
-        <template #intro="{ record }">
-          <span class="link-intro" :title="record.linkIntro">{{ record.linkIntro || '—' }}</span>
-        </template>
-        <template #createTime="{ record }">{{ formatTime(record.createTime) }}</template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-            <a-popconfirm content="确定删除该友链吗？" @ok="deleteLinks([record.id])">
-              <a-button type="text" status="danger" size="small">删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-        <template #empty><a-empty description="暂无友链" /></template>
-      </a-table>
+      <div class="admin-table-shell">
+        <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
+          :data="links"
+          :columns="columns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="id"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #avatar="{ record }">
+            <img v-if="isHttpUrl(record.linkAvatar)" class="link-avatar" :src="record.linkAvatar" alt="友链头像" />
+            <span v-else>—</span>
+          </template>
+          <template #address="{ record }">
+            <span class="link-address" :title="record.linkAddress">{{ record.linkAddress || '—' }}</span>
+          </template>
+          <template #intro="{ record }">
+            <span class="link-intro" :title="record.linkIntro">{{ record.linkIntro || '—' }}</span>
+          </template>
+          <template #createTime="{ record }">{{ formatTime(record.createTime) }}</template>
+          <template #actions="{ record }">
+            <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+              <a-popconfirm content="确定删除该友链吗？" @ok="deleteLinks([record.id])">
+                <a-button type="text" status="danger" size="small">删除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+          <template #empty><div class="admin-table-empty"><a-empty description="暂无友链" /></div></template>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal
@@ -74,8 +81,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconPlus } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, deleteAdminFriendLinks, listAdminFriendLinks, saveAdminFriendLink } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatTime } from '@/utils/format'
+import { tablePagination } from '@/utils/pagination'
 import type { AdminFriendLink } from '@shared/api-contract'
 
 const columns = [
@@ -100,14 +111,7 @@ const editorVisible = ref(false)
 const editor = reactive({ id: 0, linkName: '', linkAvatar: '', linkAddress: '', linkIntro: '' })
 
 const selectedIds = computed(() => [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))])
-const pagination = computed(() => ({
-  current: current.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  showTotal: true,
-  showJumper: true,
-  showPageSize: true
-}))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void load())
 
@@ -197,9 +201,7 @@ function isHttpUrl(value: unknown): value is string {
   return typeof value === 'string' && /^https?:\/\//i.test(value)
 }
 
-function formatTime(value: unknown): string {
-  return typeof value === 'string' ? value.replace('T', ' ').replace(/\.\d+Z$/, '') : '—'
-}
+
 </script>
 
 <style scoped>

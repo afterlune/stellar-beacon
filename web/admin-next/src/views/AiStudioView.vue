@@ -1,9 +1,10 @@
 <template>
-  <section class="ai-studio">
+  <section class="admin-page ai-studio">
+    <AdminPageHeader title="AI 工作台" description="只生成可审阅的内容预览，最终发布仍由人工决定。" />
     <a-alert type="info" :show-icon="true" :closable="false">
       AI 只生成预览和审核记录，不会自动写入文章。发布前必须经过明确的人工审核动作。
     </a-alert>
-    <a-card title="AI 写作工作台" class="ai-card">
+    <a-card title="AI 写作工作台" class="ai-card admin-card">
       <a-form :model="form" layout="vertical" @submit-success="generate">
         <div class="ai-form-grid">
           <a-form-item field="operation" label="操作">
@@ -32,7 +33,7 @@
     </a-form>
     </a-card>
 
-    <a-card title="AI 视觉理解（默认关闭）" class="ai-card">
+    <a-card title="AI 视觉理解（默认关闭）" class="ai-card admin-card">
       <a-alert type="info" :show-icon="true" :closable="false">
         图片只用于本次理解请求，结果会进入审核队列，不会自动修改文章。图片 URL 与 base64 二选一。
       </a-alert>
@@ -71,13 +72,13 @@
       </a-form>
     </a-card>
 
-    <a-card v-if="visionReview" title="当前视觉预览" class="ai-card">
+    <a-card v-if="visionReview" title="当前视觉预览" class="ai-card admin-card">
       <template #extra><a-tag color="arcoblue">{{ visionReview.operation }} · {{ visionReview.runId }}</a-tag></template>
       <pre class="ai-preview vision-preview">{{ visionReview.preview }}</pre>
       <a-typography-text type="secondary">结果已进入审核队列，请在审核队列中执行人工操作。</a-typography-text>
     </a-card>
 
-    <a-card v-if="currentReview" title="当前预览" class="ai-card">
+    <a-card v-if="currentReview" title="当前预览" class="ai-card admin-card">
       <template #extra><a-tag color="arcoblue">{{ currentReview.operation }} · {{ currentReview.runId }}</a-tag></template>
       <div class="ai-preview-grid">
         <div>
@@ -97,16 +98,18 @@
       </a-space>
     </a-card>
 
-    <a-card title="审核队列" class="ai-card">
-      <a-table :data="reviews" :columns="reviewColumns" :loading="listLoading" :pagination="pagination" row-key="id" @page-change="changePage">
+    <a-card title="审核队列" class="ai-card admin-card">
+      <div class="admin-table-shell">
+        <a-table :data="reviews" :columns="reviewColumns" :loading="listLoading" :pagination="pagination" row-key="id" @page-change="changePage">
         <template #status="{ record }">
-          <a-tag :color="statusColor(record.status)">{{ record.status }}</a-tag>
+          <a-tag class="admin-status-tag" :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
         </template>
         <template #createdAt="{ record }">{{ formatTime(record.createdAt) }}</template>
         <template #operations="{ record }">
           <a-button type="text" size="small" @click="selectReview(record)">查看</a-button>
         </template>
-      </a-table>
+        </a-table>
+      </div>
     </a-card>
 
     <a-modal v-model:visible="partialDialog" title="部分接受" @before-ok="partialAccept">
@@ -123,6 +126,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 
 import { apiErrorMessage, listAIReviews, previewVision, previewWriting, reviewAction } from '@/api/http'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { formatTime } from '@/utils/format'
+import { tablePagination } from '@/utils/pagination'
 import type { AIReview, AIVisionPreview, AIWritingPreview } from '@shared/api-contract'
 
 const form = reactive({ operation: 'polish', articleId: '', title: '', content: '', instruction: '' })
@@ -150,7 +156,7 @@ const reviewColumns = [
   { title: '创建时间', dataIndex: 'createdAt', slotName: 'createdAt' },
   { title: '操作', slotName: 'operations' }
 ]
-const pagination = computed(() => ({ current: current.value, pageSize: size.value, total: total.value, showTotal: true }))
+const pagination = computed(() => tablePagination(current.value, size.value, total.value))
 
 onMounted(() => void loadReviews())
 
@@ -295,15 +301,17 @@ function changePage(page: number): void {
   void loadReviews()
 }
 
-function formatTime(value: unknown): string {
-  return typeof value === 'string' ? value.replace('T', ' ').replace(/\.\d+Z$/, '') : '—'
-}
+
 
 function statusColor(status: string): string {
   if (status === 'pending') return 'orange'
   if (status === 'approved' || status === 'partially_approved') return 'green'
   if (status === 'rejected' || status === 'expired') return 'red'
   return 'gray'
+}
+
+function statusLabel(status: string): string {
+  return ({ pending: '待审核', approved: '已通过', partially_approved: '部分通过', rejected: '已拒绝', expired: '已过期' } as Record<string, string>)[status] || status
 }
 </script>
 
@@ -331,8 +339,8 @@ function statusColor(status: string): string {
   border-radius: 8px;
 }
 
-.ai-preview { background: var(--color-fill-2); }
-.ai-diff { color: #e5e7eb; background: #111827; }
+.ai-preview { background: #f8faff; }
+.ai-diff { color: #8d5f50; background: #fff7f2; }
 .vision-preview { min-height: 140px; }
 .vision-file-name { margin-left: 12px; color: var(--color-text-2); }
 
