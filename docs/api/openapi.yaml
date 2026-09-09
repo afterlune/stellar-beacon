@@ -1,0 +1,252 @@
+openapi: 3.0.3
+info:
+  title: Benetnasch API
+  version: 1.0.0
+  description: Versioned HTTP contract for the Benetnasch blog and administration apps.
+servers:
+  - url: /api/v1
+tags:
+  - name: public
+  - name: auth
+  - name: admin
+paths:
+  /public/:
+    get: { tags: [public], summary: Get blog home information, operationId: getBlogHomeInfo, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/about:
+    get: { tags: [public], summary: Get about page, operationId: getAbout, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles:
+    get: { tags: [public], summary: List public articles, operationId: listArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/featured:
+    get: { tags: [public], summary: Get top and featured articles, operationId: listFeaturedArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/by-category:
+    get: { tags: [public], summary: List articles by category, operationId: listArticlesByCategory, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/by-tag:
+    get: { tags: [public], summary: List articles by tag, operationId: listArticlesByTag, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/search:
+    get: { tags: [public], summary: Search articles, operationId: searchArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/{articleId}:
+    get: { tags: [public], summary: Get article detail, operationId: getArticle, parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/{articleId}/access:
+    post: { tags: [public], summary: Verify article password, operationId: accessArticle, parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/archives:
+    get: { tags: [public], summary: List article archives, operationId: listArchives, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/categories:
+    get: { tags: [public], summary: List categories, operationId: listCategories, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/tags:
+    get: { tags: [public], summary: List tags, operationId: listTags, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/tags/top:
+    get: { tags: [public], summary: List popular tags, operationId: listPopularTags, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/comments:
+    get: { tags: [public], summary: List comments, operationId: listComments, responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [public], summary: Create comment, operationId: createComment, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/comments/top:
+    get: { tags: [public], summary: List recent comments, operationId: listRecentComments, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/comments/{commentId}/replies:
+    get: { tags: [public], summary: List comment replies, operationId: listCommentReplies, parameters: [{ $ref: '#/components/parameters/CommentId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/links:
+    get: { tags: [public], summary: List friend links, operationId: listFriendLinks, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/albums:
+    get: { tags: [public], summary: List photo albums, operationId: listAlbums, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/albums/{albumId}/photos:
+    get: { tags: [public], summary: List album photos, operationId: listAlbumPhotos, parameters: [{ $ref: '#/components/parameters/AlbumId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/talks:
+    get: { tags: [public], summary: List talks, operationId: listTalks, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/talks/{talkId}:
+    get: { tags: [public], summary: Get talk detail, operationId: getTalk, parameters: [{ $ref: '#/components/parameters/TalkId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/users/{userInfoId}:
+    get: { tags: [public], summary: Get public user information, operationId: getPublicUser, parameters: [{ $ref: '#/components/parameters/UserInfoId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/reports/visit:
+    post: { tags: [public], summary: Report a visit, operationId: reportVisit, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/diagnostics/business-error:
+    get: { tags: [public], summary: Trigger a business error for diagnostics, operationId: triggerBusinessError, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/login:
+    post: { tags: [auth], summary: Sign in, operationId: login, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/logout:
+    post: { tags: [auth], summary: Sign out, operationId: logout, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/register:
+    post: { tags: [auth], summary: Register, operationId: register, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/verification-code:
+    get: { tags: [auth], summary: Send verification code, operationId: sendVerificationCode, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/password:
+    put: { tags: [auth], summary: Update password, operationId: updatePassword, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me:
+    put: { tags: [auth], summary: Update current user, operationId: updateCurrentUser, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/avatar:
+    post: { tags: [auth], summary: Update current user avatar, operationId: updateCurrentAvatar, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/email:
+    put: { tags: [auth], summary: Bind current user email, operationId: bindCurrentEmail, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/subscription:
+    put: { tags: [auth], summary: Update subscription, operationId: updateSubscription, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/dashboard:
+    get: { tags: [admin], summary: Get dashboard information, operationId: getAdminDashboard, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles:
+    get: { tags: [admin], summary: List admin articles, operationId: listAdminArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save an article, operationId: saveAdminArticle, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/{articleId}:
+    get: { tags: [admin], summary: Get admin article, operationId: getAdminArticle, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/images:
+    post: { tags: [admin], summary: Upload article image, operationId: uploadArticleImage, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/import:
+    post: { tags: [admin], summary: Import articles, operationId: importArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/export:
+    post: { tags: [admin], summary: Export articles, operationId: exportArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/featured:
+    put: { tags: [admin], summary: Update article flags, operationId: updateArticleFlags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/trash:
+    put: { tags: [admin], summary: Move articles to or from trash, operationId: updateArticleTrash, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/batch-delete:
+    delete: { tags: [admin], summary: Permanently delete articles, operationId: deleteArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/site:
+    get: { tags: [admin], summary: Get website configuration, operationId: getSite, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update website configuration, operationId: updateSite, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/site/images:
+    post: { tags: [admin], summary: Upload website image, operationId: uploadSiteImage, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/about:
+    put: { tags: [admin], summary: Update about page, operationId: updateAbout, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/categories:
+    get: { tags: [admin], summary: List admin categories, operationId: listAdminCategories, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save category, operationId: saveCategory, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete categories, operationId: deleteCategories, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/categories/search:
+    get: { tags: [admin], summary: Search admin categories, operationId: searchAdminCategories, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/tags:
+    get: { tags: [admin], summary: List admin tags, operationId: listAdminTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save tag, operationId: saveTag, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete tags, operationId: deleteTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/tags/search:
+    get: { tags: [admin], summary: Search admin tags, operationId: searchAdminTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/comments:
+    get: { tags: [admin], summary: List admin comments, operationId: listAdminComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete comments, operationId: deleteComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/comments/review:
+    put: { tags: [admin], summary: Review comments, operationId: reviewComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/friend-links:
+    get: { tags: [admin], summary: List friend links, operationId: listAdminFriendLinks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save friend link, operationId: saveFriendLink, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete friend links, operationId: deleteFriendLinks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums:
+    get: { tags: [admin], summary: List albums, operationId: listAdminAlbums, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save album, operationId: saveAlbum, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums/{albumId}:
+    get: { tags: [admin], summary: Get album, operationId: getAdminAlbum, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/AlbumId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete album, operationId: deleteAlbum, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/AlbumId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums/options:
+    get: { tags: [admin], summary: List album options, operationId: listAlbumOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums/cover:
+    post: { tags: [admin], summary: Upload album cover, operationId: uploadAlbumCover, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos:
+    get: { tags: [admin], summary: List photos, operationId: listAdminPhotos, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save photos, operationId: savePhotos, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update photo, operationId: updatePhoto, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete photos, operationId: deletePhotos, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos/trash:
+    put: { tags: [admin], summary: Update photo trash status, operationId: updatePhotoTrash, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos/album:
+    put: { tags: [admin], summary: Move photos to an album, operationId: movePhotosToAlbum, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos/upload:
+    post: { tags: [admin], summary: Upload photo, operationId: uploadPhoto, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/talks:
+    get: { tags: [admin], summary: List admin talks, operationId: listAdminTalks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save talk, operationId: saveTalk, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete talks, operationId: deleteTalks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/talks/{talkId}:
+    get: { tags: [admin], summary: Get admin talk, operationId: getAdminTalk, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/TalkId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/talks/images:
+    post: { tags: [admin], summary: Upload talk image, operationId: uploadTalkImage, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/permissions:
+    get: { tags: [admin], summary: List permissions, operationId: listPermissions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save permission, operationId: savePermission, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/permissions/{resourceId}:
+    delete: { tags: [admin], summary: Delete permission, operationId: deletePermission, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/roles:
+    get: { tags: [admin], summary: List roles, operationId: listRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save role, operationId: saveRole, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete roles, operationId: deleteRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/roles/resource-options:
+    get: { tags: [admin], summary: List role resource options, operationId: listRoleResourceOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/roles/menu-options:
+    get: { tags: [admin], summary: List role menu options, operationId: listRoleMenuOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/menus:
+    get: { tags: [admin], summary: List menus, operationId: listMenus, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save menu, operationId: saveMenu, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/menus/{menuId}/visibility:
+    put: { tags: [admin], summary: Update menu visibility, operationId: updateMenuVisibility, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/menus/{menuId}:
+    delete: { tags: [admin], summary: Delete menu, operationId: deleteMenu, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/me/menu:
+    get: { tags: [admin], summary: Get current user menu, operationId: getCurrentUserMenu, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users:
+    get: { tags: [admin], summary: List users, operationId: listUsers, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/roles:
+    get: { tags: [admin], summary: List user role options, operationId: listUserRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update user roles, operationId: updateUserRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/disable:
+    put: { tags: [admin], summary: Disable or enable user, operationId: updateUserDisable, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/areas:
+    get: { tags: [admin], summary: Get user areas, operationId: listUserAreas, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/online:
+    get: { tags: [admin], summary: List online users, operationId: listOnlineUsers, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/{userInfoId}/online:
+    delete: { tags: [admin], summary: Remove online user, operationId: removeOnlineUser, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/password:
+    put: { tags: [admin], summary: Update admin password, operationId: updateAdminPassword, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs:
+    get: { tags: [admin], summary: List jobs, operationId: listJobs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Create job, operationId: createJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update job, operationId: updateJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete job, operationId: deleteJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/{id}:
+    get: { tags: [admin], summary: Get job, operationId: getJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/groups:
+    get: { tags: [admin], summary: List job groups, operationId: listJobGroups, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/status:
+    put: { tags: [admin], summary: Update job status, operationId: updateJobStatus, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/run:
+    put: { tags: [admin], summary: Run job once, operationId: runJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/jobs:
+    get: { tags: [admin], summary: List job logs, operationId: listJobLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete job logs, operationId: deleteJobLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/jobs/clean:
+    delete: { tags: [admin], summary: Clean job logs, operationId: cleanJobLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/jobs/groups:
+    get: { tags: [admin], summary: List job log groups, operationId: listJobLogGroups, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/operations:
+    get: { tags: [admin], summary: List operation logs, operationId: listOperationLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete operation logs, operationId: deleteOperationLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/exceptions:
+    get: { tags: [admin], summary: List exception logs, operationId: listExceptionLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete exception logs, operationId: deleteExceptionLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+components:
+  parameters:
+    ArticleId: { name: articleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    AlbumId: { name: albumId, in: path, required: true, schema: { type: integer, format: int64 } }
+    CommentId: { name: commentId, in: path, required: true, schema: { type: integer, format: int64 } }
+    TalkId: { name: talkId, in: path, required: true, schema: { type: integer, format: int64 } }
+    UserInfoId: { name: userInfoId, in: path, required: true, schema: { type: integer, format: int64 } }
+  responses:
+    Result:
+      description: Versioned API response
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiResponse' }
+  schemas:
+    ApiResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: OK }
+        message: { type: string, example: 操作成功 }
+        data: { nullable: true }
+    Page:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items: { type: array, items: {} }
+        total: { type: integer, format: int64 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 0 }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

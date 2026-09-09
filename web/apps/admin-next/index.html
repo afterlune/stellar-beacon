@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('benetnasch.admin.theme')
+          var value = theme === 'light' ? 'light' : 'dark'
+          document.documentElement.setAttribute('data-theme', value)
+          document.documentElement.style.colorScheme = value
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark')
+        }
+      })()
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#5871d8" />
+    <meta name="description" content="Benetnasch 博客编辑台" />
+    <link rel="icon" href="/favicon.svg" />
+    <title>Benetnasch 编辑台</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

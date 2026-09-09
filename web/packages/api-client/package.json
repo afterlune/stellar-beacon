@@ -1,0 +1,14 @@
+{
+  "name": "@benetnasch/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@benetnasch/api-contract": "0.1.0",
+    "axios": "^1.20.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts"
+}

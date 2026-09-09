@@ -4,13 +4,13 @@ ENV GO111MODULE=on \
     CGO_ENABLED=0 \
     GOOS=linux \
     GOARCH=amd64 \
-    GOPROXY=https://goproxy.cn,direct
+    GOPROXY=https://proxy.golang.org,direct
 
 WORKDIR /build
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags '-w -s' -trimpath -a -o benetnasch
+RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags '-w -s' -trimpath -a -o benetnasch ./cmd/benetnasch
 
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS final
 
@@ -22,11 +22,14 @@ WORKDIR /app
 
 COPY --from=builder /build/benetnasch /app/
 
-COPY ./resource /app/resource
+COPY ./resources /app/resources
+COPY ./deploy/config /app/config
 COPY ./docs /app/docs
 
 ENV GIN_MODE=release \
-    PORT=7777
+    PORT=7777 \
+    BENETNASCH_RESOURCE_DIR=/app/resources \
+    BENETNASCH_CONFIG_DIR=/app/config
 
 EXPOSE 7777
 

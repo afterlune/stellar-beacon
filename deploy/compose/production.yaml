@@ -1,0 +1,81 @@
+services:
+  benetnasch:
+    image: benetnasch:latest
+    container_name: demo-user
+    ports:
+      - '7777:7777'
+    volumes:
+      - ./stellar-beacon/resources:/app/resources
+      - ./stellar-beacon/deploy/config:/app/config
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:?SMTP_PASSWORD is required}
+      - ALIYUN_OSS_ACCESS_KEY_ID=${ALIYUN_OSS_ACCESS_KEY_ID:?ALIYUN_OSS_ACCESS_KEY_ID is required}
+      - ALIYUN_OSS_ACCESS_KEY_SECRET=${ALIYUN_OSS_ACCESS_KEY_SECRET:?ALIYUN_OSS_ACCESS_KEY_SECRET is required}
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY:?JWT_PRIVATE_KEY is required}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:?JWT_PUBLIC_KEY is required}
+      - JWT_ALLOW_EPHEMERAL=false
+      - BENETNASCH_RESOURCE_DIR=/app/resources
+      - BENETNASCH_CONFIG_DIR=/app/config
+    restart: always
+  postgresql:
+    image: postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825
+    container_name: pg
+    ports:
+      - '5432:5432'
+    volumes:
+      - D:/containerData/pasql/data:/var/lib/postgresql/data
+    environment:
+      - TZ=Asia/Shanghai
+      - PGDATA=/var/lib/postgresql/data
+      - LANG=C.UTF-8
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    restart: always
+  caddy:
+    image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    container_name: caddy
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+      - '8008:8008/udp'
+      - '8008:8008'
+    volumes:
+      - D:/containerData/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - D:/containerData/caddy/static:/srv
+      - D:/containerData/caddy/caddy.log:/var/log/caddy.log
+      - D:/containerData/caddy/config:/config
+      - D:/containerData/caddy/data:/data
+    environment:
+      - TZ=Asia/Shanghai
+    restart: always
+  redis:
+    image: redis:8.10.1-trixie@sha256:9c5c616b6e72ea6e38125bb9b12eac2dcd92cd57f8f811ee2fb965ae4cb0f16e
+    container_name: redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    ports:
+      - '6379:6379'
+    volumes:
+      - D:/containerData/redis/data:/data
+    environment:
+      - TZ=Asia/Shanghai
+    restart: always
+  meiliSearch:
+    image: getmeili/meilisearch:v1.53.1@sha256:8d6643d86d71fad6ad3cba92cde7ccfce9e4d6c384bda67598eb553571c32431
+    container_name: meili
+    ports:
+      - '7700:7700'
+    volumes:
+      - D:/containerData/meilisearch/data:/meili_data
+    environment:
+      - MEILI_NO_ANALYTICS=true
+      - TZ=Asia/Shanghai
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      - MEILI_ENV=production
+    restart: always
