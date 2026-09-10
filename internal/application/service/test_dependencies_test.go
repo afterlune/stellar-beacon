@@ -94,6 +94,9 @@ func (fakeBenetnaschInfoService) GetWebsiteConfig(context.Context) model.ResultV
 func (fakeBenetnaschInfoService) GetBlogBackInfo(context.Context) model.ResultVO {
 	return model.ResultOk()
 }
+func (fakeBenetnaschInfoService) GetDashboardAnalytics(context.Context, string, string) model.ResultVO {
+	return model.ResultOk()
+}
 func (fakeBenetnaschInfoService) UpdateWebsiteConfig(*gin.Context) model.ResultVO {
 	return model.ResultOk()
 }

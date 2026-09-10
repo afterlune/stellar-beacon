@@ -11,6 +11,7 @@ services:
       - integration-postgres-data:/var/lib/postgresql/data
       - ./deploy/db/init/001-benetnasch.sql:/docker-entrypoint-initdb.d/001-benetnasch.sql:ro
       - ./deploy/db/integration/002-repair-sequences.sql:/docker-entrypoint-initdb.d/002-repair-sequences.sql:ro
+      - ./deploy/db/integration/003-admin-next.sql:/docker-entrypoint-initdb.d/003-admin-next.sql:ro
     ports:
       - "15432:5432"
     healthcheck:

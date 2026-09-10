@@ -128,6 +128,7 @@ export interface AdminUser {
   id?: number
   userInfoId?: number
   avatar?: string
+  email?: string
   nickname?: string
   loginType?: number
   ipAddress?: string
@@ -141,6 +142,62 @@ export interface AdminUser {
   isDisable?: number
   status?: number
   [key: string]: unknown
+}
+
+export type DashboardRange = '7d' | '30d' | '12m'
+
+export interface DashboardOverview {
+  totalViews: number
+  todayViews: number
+  monthViews: number
+  userCount: number
+  articleCount: number
+  messageCount: number
+}
+
+export interface DashboardTrend {
+  period: string
+  views: number
+}
+
+export interface DashboardRegion {
+  name: string
+  label: string
+  code: string
+  value: number
+}
+
+export interface DashboardDistribution {
+  name: string
+  value: number
+}
+
+export interface DashboardArticleRank {
+  id: number
+  title: string
+  views: number
+}
+
+export interface AdminDashboardAnalytics {
+  range: DashboardRange
+  unit: 'day' | 'month'
+  overview: DashboardOverview
+  trend: DashboardTrend[]
+  regions: DashboardRegion[]
+  categories: DashboardDistribution[]
+  tags: DashboardDistribution[]
+  articleRank: DashboardArticleRank[]
+  generatedAt: string
+}
+
+export interface AdminMediaAsset {
+  key: string
+  url: string
+  name: string
+  size?: number
+  contentType?: string
+  lastModified?: string
+  deletable?: boolean
 }
 
 export interface UserMenu {

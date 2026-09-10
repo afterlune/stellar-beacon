@@ -31,17 +31,19 @@ const (
 	TokenBlacklist     = "token_blacklist"
 	RefreshTokenPrefix = "refresh_token_"
 
-	CodeExpireTime    = 1000000000 * 60 * 15
-	BlogViewsCount    = "blog_views_count"
-	ArticleViewsCount = "article_views_count"
-	WebsiteConfig     = "website_config"
-	UserArea          = "user_area"
-	VisitorArea       = "visitor_area"
-	About             = "about"
-	UniqueVisitor     = "unique_visitor"
-	LoginUser         = "login_user"
-	ArticleAccess     = "article_access:"
-	UserCodeKey       = "code:"
+	CodeExpireTime     = 1000000000 * 60 * 15
+	BlogViewsCount     = "blog_views_count"
+	DailyViewsPrefix   = "blog_views_daily:"
+	ArticleViewsCount  = "article_views_count"
+	WebsiteConfig      = "website_config"
+	UserArea           = "user_area"
+	VisitorArea        = "visitor_area"
+	About              = "about"
+	UniqueVisitor      = "unique_visitor"
+	DailyVisitorPrefix = "unique_visitor:"
+	LoginUser          = "login_user"
+	ArticleAccess      = "article_access:"
+	UserCodeKey        = "code:"
 )
 
 const (

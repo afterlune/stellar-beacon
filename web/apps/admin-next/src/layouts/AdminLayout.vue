@@ -1,6 +1,6 @@
 <template>
   <a-layout class="admin-shell">
-    <a-layout-sider v-model:collapsed="collapsed" class="admin-sider" collapsible breakpoint="xl" :width="232" :collapsed-width="72">
+    <a-layout-sider v-model:collapsed="collapsed" class="admin-sider" collapsible :width="232" :collapsed-width="72">
       <div class="admin-brand">
         <span class="admin-brand-mark" aria-hidden="true" />
         <span v-show="!collapsed">Benetnasch 编辑台</span>
@@ -19,7 +19,11 @@
         :style="{ width: '100%' }"
         @menu-item-click="navigate">
         <template v-for="menu in menuStore.visibleMenus" :key="menu.path">
-          <a-sub-menu v-if="group(menu)" :key="menu.path">
+          <a-menu-item v-if="singleWrapper(menu)" :key="menuItemPath(menu, visibleChildren(menu)[0])">
+            <span class="admin-menu-icon" aria-hidden="true"><component :is="menuIconFor(menu)" /></span>
+            {{ menu.name }}
+          </a-menu-item>
+          <a-sub-menu v-else-if="group(menu)" :key="menu.path">
             <template #title>
               <span class="admin-menu-icon" aria-hidden="true"><component :is="menuIconFor(menu)" /></span>
               {{ menu.name }}
@@ -113,5 +117,10 @@ function logout(): void {
 
 function group(menu: NormalizedMenu): boolean {
   return isMenuGroup(menu)
+}
+
+function singleWrapper(menu: NormalizedMenu): boolean {
+  const children = visibleChildren(menu)
+  return children.length === 1 && (children[0].path === '/' || children[0].path === menu.path) && children[0].name === menu.name
 }
 </script>

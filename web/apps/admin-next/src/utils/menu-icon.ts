@@ -32,6 +32,9 @@ export interface MenuLike {
  */
 export function menuIconFor(menu: MenuLike): Component {
   const key = `${menu.path || ''} ${menu.name || ''} ${menu.icon || ''}`.toLowerCase()
+  if (key.includes('dashboard') || key.includes('workplace') || key.includes('工作台') || key.includes('仪表盘')) return IconDashboard
+  if (key.includes('monitor') || key.includes('监控')) return IconDashboard
+  if (key.includes('media') || key.includes('图片资源')) return IconImage
   if (key.includes('article') || key.includes('文章') || key.includes('content') || key.includes('内容')) return IconBook
   if (key.includes('category') || key.includes('分类')) return IconFolder
   if (key.includes('tag') || key.includes('标签')) return IconTags

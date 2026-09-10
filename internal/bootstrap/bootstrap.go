@@ -124,6 +124,7 @@ func Initialize() error {
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.user_info", err)
 	}
+	mediaService := service.NewMediaService(ossStorage)
 
 	api.ConfigureServices(api.Services{
 		Article:      articleService,
@@ -135,6 +136,7 @@ func Initialize() error {
 		JobLog:       service.NewJobLogService(jobLog),
 		Job:          service.NewJobService(job),
 		Menu:         service.NewMenuService(menu),
+		Media:        mediaService,
 		OperationLog: service.NewOperationLogService(operationLog),
 		PhotoAlbum:   photoAlbumService,
 		Photo:        photoService,

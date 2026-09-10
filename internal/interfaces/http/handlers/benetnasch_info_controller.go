@@ -32,6 +32,12 @@ func GetBlogBackInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, benetnaschService.GetBlogBackInfo(c.Request.Context()))
 }
 
+// GetDashboardAnalytics returns the data used by the new admin dashboard.
+// @Router /v1/admin/dashboard/analytics [GET]
+func GetDashboardAnalytics(c *gin.Context) {
+	c.JSON(http.StatusOK, benetnaschService.GetDashboardAnalytics(c.Request.Context(), c.DefaultQuery("range", "7d"), c.DefaultQuery("areaType", "users")))
+}
+
 // UpdateWebsiteConfig
 // @Summary		 benetnasch信息
 // @Description 更新网站配置

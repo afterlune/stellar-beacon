@@ -39,10 +39,8 @@
           @page-change="changePage"
           @page-size-change="changePageSize">
           <template #cover="{ record }">
-            <span class="admin-cover-cell">
-              <img v-if="isHttpUrl(record.articleCover)" :src="String(record.articleCover)" alt="文章封面" />
-              <IconBook v-else aria-hidden="true" />
-            </span>
+            <AdminImagePreview v-if="isHttpUrl(record.articleCover)" :src="String(record.articleCover)" alt="文章封面" :width="92" :height="62" />
+            <span v-else class="admin-cover-cell"><IconBook aria-hidden="true" /></span>
           </template>
           <template #title="{ record }">
             <span class="admin-title-cell" :title="String(record.articleTitle || '')">{{ record.articleTitle || '未命名文章' }}</span>
@@ -84,6 +82,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconBook, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, listAdminPage } from '@/api/http'
+import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { formatCell } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
@@ -107,7 +106,7 @@ const records = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 
 const columns: TableColumn[] = [
-  { title: '封面', dataIndex: 'articleCover', slotName: 'cover', width: 76 },
+  { title: '封面', dataIndex: 'articleCover', slotName: 'cover', width: 112 },
   { title: '标题', dataIndex: 'articleTitle', slotName: 'title', ellipsis: true, tooltip: true },
   { title: '分类', dataIndex: 'categoryName', width: 120 },
   { title: '状态', dataIndex: 'status', slotName: 'status', width: 90 },

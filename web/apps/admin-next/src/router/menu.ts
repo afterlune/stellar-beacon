@@ -13,7 +13,11 @@ export interface ResolvedMenuRoute {
 
 const componentRegistry: Record<string, Component> = {
   Layout: PlaceholderView,
-  '/home/Home.vue': lazyView(() => import('@/views/HomeView.vue')),
+  '/home/Home.vue': lazyView(() => import('@/views/WorkplaceView.vue')),
+  '/dashboard/Workplace.vue': lazyView(() => import('@/views/WorkplaceView.vue')),
+  '/dashboard/Dashboard.vue': lazyView(() => import('@/views/DashboardView.vue')),
+  '/dashboard/Monitor.vue': lazyView(() => import('@/views/MonitorView.vue')),
+  '/media/Media.vue': lazyView(() => import('@/views/MediaView.vue')),
   '/article/ArticleList.vue': lazyView(() => import('@/views/ArticleListView.vue')),
   '/article/Article.vue': lazyView(() => import('@/views/ArticleEditorView.vue')),
   '/category/Category.vue': lazyView(() => import('@/views/CategoryView.vue')),

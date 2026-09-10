@@ -28,6 +28,13 @@
           <template #content="{ record }">
             <span class="talk-content" :title="plainText(record.content)">{{ plainText(record.content) || '—' }}</span>
           </template>
+          <template #images="{ record }">
+            <div v-if="talkImages(record).length" class="talk-images">
+              <AdminImagePreview :src="talkImages(record)[0]" alt="说说图片" :width="76" :height="54" />
+              <span v-if="talkImages(record).length > 1" class="talk-image-count">+{{ talkImages(record).length - 1 }}</span>
+            </div>
+            <span v-else class="admin-muted-cell">—</span>
+          </template>
           <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.status) === 1 ? 'green' : 'orange'">{{ Number(record.status) === 1 ? '公开' : '私密' }}</a-tag></template>
           <template #top="{ record }"><a-tag class="admin-status-tag" :color="Number(record.isTop) === 1 ? 'arcoblue' : 'gray'">{{ Number(record.isTop) === 1 ? '是' : '否' }}</a-tag></template>
           <template #actions="{ record }">
@@ -52,6 +59,7 @@ import { IconPlus } from '@arco-design/web-vue/es/icon'
 import { useRouter } from 'vue-router'
 
 import { apiErrorMessage, deleteAdminTalks, listAdminTalks } from '@/api/http'
+import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminTalk } from '@benetnasch/api-contract'
@@ -59,6 +67,7 @@ import type { AdminTalk } from '@benetnasch/api-contract'
 const router = useRouter()
 const columns = [
   { title: '内容', dataIndex: 'content', ellipsis: true, tooltip: true, slotName: 'content' },
+  { title: '图片', dataIndex: 'images', width: 110, slotName: 'images' },
   { title: '作者', dataIndex: 'nickname', width: 130 },
   { title: '评论数', dataIndex: 'commentCount', width: 100 },
   { title: '置顶', dataIndex: 'isTop', width: 80, slotName: 'top' },
@@ -125,6 +134,20 @@ async function deleteTalk(id: unknown): Promise<void> {
 function plainText(value: unknown): string {
   return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 }
+
+function talkImages(talk: AdminTalk): string[] {
+  if (Array.isArray(talk.imgs)) return talk.imgs.filter(isHttpUrl)
+  if (typeof talk.images !== 'string' || !talk.images.trim()) return []
+  try {
+    const parsed: unknown = JSON.parse(talk.images)
+    if (Array.isArray(parsed)) return parsed.map(String).filter(isHttpUrl)
+  } catch { /* legacy comma-separated image values */ }
+  return talk.images.split(',').map(value => value.trim()).filter(isHttpUrl)
+}
+
+function isHttpUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^https?:\/\//i.test(value)
+}
 </script>
 
 <style scoped>
@@ -135,4 +158,5 @@ function plainText(value: unknown): string {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.talk-images { display: flex; align-items: center; gap: 6px; }.talk-image-count { color: var(--admin-muted); font-size: 12px; }
 </style>

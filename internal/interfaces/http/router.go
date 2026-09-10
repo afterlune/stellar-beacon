@@ -35,6 +35,7 @@ func RouterSetup(router *gin.Engine) {
 	public.GET("/talks", api.ListTalks)
 	public.GET("/talks/:talkId", api.GetTalkById)
 	public.GET("/users/:userInfoId", api.GetUserInfoById)
+	public.GET("/media/proxy", api.ProxyMedia)
 	public.GET("/diagnostics/business-error", api.HandleBizException)
 
 	comments := public.Group("/comments")
@@ -53,6 +54,10 @@ func RouterSetup(router *gin.Engine) {
 	auth.PUT("/me/subscription", api.UpdateUserSubscribe)
 
 	admin.GET("/dashboard", api.GetBlogBackInfo)
+	admin.GET("/dashboard/analytics", api.GetDashboardAnalytics)
+	admin.GET("/media", api.ListMedia)
+	admin.POST("/media/upload", api.UploadMedia)
+	admin.DELETE("/media", api.DeleteMedia)
 	admin.GET("/articles", api.ListArticlesAdmin)
 	admin.POST("/articles", api.SaveOrUpdateArticle)
 	admin.GET("/articles/:articleId", api.GetArticleBackById)

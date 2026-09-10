@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	aliyunoss "github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
@@ -63,6 +64,56 @@ func (s *AliyunStorage) Put(ctx context.Context, key string, body io.Reader) (po
 	return s.ref(key), nil
 }
 
+func (s *AliyunStorage) List(ctx context.Context, prefix string) ([]port.ObjectInfo, error) {
+	if s == nil || s.client == nil {
+		return nil, errors.Unavailable("oss.list", fmt.Errorf("OSS client is not configured"))
+	}
+	result, err := s.client.ListObjects(ctx, &aliyunoss.ListObjectsRequest{
+		Bucket:  aliyunoss.Ptr(s.bucket),
+		Prefix:  aliyunoss.Ptr(prefix),
+		MaxKeys: 1000,
+	})
+	if err != nil {
+		return nil, errors.Unavailable("oss.list", err)
+	}
+	objects := make([]port.ObjectInfo, 0, len(result.Contents))
+	for _, object := range result.Contents {
+		if object.Key == nil || *object.Key == "" {
+			continue
+		}
+		lastModified := time.Time{}
+		if object.LastModified != nil {
+			lastModified = *object.LastModified
+		}
+		objects = append(objects, port.ObjectInfo{
+			Key:          *object.Key,
+			URL:          s.ref(*object.Key).URL,
+			Size:         object.Size,
+			LastModified: lastModified,
+		})
+	}
+	return objects, nil
+}
+
+func (s *AliyunStorage) Delete(ctx context.Context, keys []string) error {
+	if s == nil || s.client == nil {
+		return errors.Unavailable("oss.delete", fmt.Errorf("OSS client is not configured"))
+	}
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, err := s.client.DeleteObject(ctx, &aliyunoss.DeleteObjectRequest{
+			Bucket: aliyunoss.Ptr(s.bucket),
+			Key:    aliyunoss.Ptr(key),
+		}); err != nil {
+			return errors.Unavailable("oss.delete", err)
+		}
+	}
+	return nil
+}
+
 func (s *AliyunStorage) ref(key string) port.ObjectRef {
 	return port.ObjectRef{
 		Key: key,
@@ -71,3 +122,4 @@ func (s *AliyunStorage) ref(key string) port.ObjectRef {
 }
 
 var _ port.ObjectStorage = (*AliyunStorage)(nil)
+var _ port.MediaStorage = (*AliyunStorage)(nil)

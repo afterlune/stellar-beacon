@@ -53,6 +53,60 @@ type BenetnaschBackInfoDTO struct {
 	ArticleRankDTOs       []ArticleRankDTO       `json:"articleRankDTOs"`
 }
 
+type DashboardOverviewDTO struct {
+	TotalViews   int `json:"totalViews"`
+	TodayViews   int `json:"todayViews"`
+	MonthViews   int `json:"monthViews"`
+	UserCount    int `json:"userCount"`
+	ArticleCount int `json:"articleCount"`
+	MessageCount int `json:"messageCount"`
+}
+
+type DashboardTrendDTO struct {
+	Period string `json:"period"`
+	Views  int    `json:"views"`
+}
+
+type DashboardRegionDTO struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
+	Code  string `json:"code"`
+	Value int64  `json:"value"`
+}
+
+type DashboardDistributionDTO struct {
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
+}
+
+type DashboardArticleRankDTO struct {
+	Id    int    `json:"id"`
+	Title string `json:"title"`
+	Views int    `json:"views"`
+}
+
+type DashboardAnalyticsDTO struct {
+	Range       string                     `json:"range"`
+	Unit        string                     `json:"unit"`
+	Overview    DashboardOverviewDTO       `json:"overview"`
+	Trend       []DashboardTrendDTO        `json:"trend"`
+	Regions     []DashboardRegionDTO       `json:"regions"`
+	Categories  []DashboardDistributionDTO `json:"categories"`
+	Tags        []DashboardDistributionDTO `json:"tags"`
+	ArticleRank []DashboardArticleRankDTO  `json:"articleRank"`
+	GeneratedAt time.Time                  `json:"generatedAt"`
+}
+
+type MediaAssetDTO struct {
+	Key          string    `json:"key"`
+	URL          string    `json:"url"`
+	Name         string    `json:"name"`
+	Size         int64     `json:"size"`
+	ContentType  string    `json:"contentType"`
+	LastModified time.Time `json:"lastModified"`
+	Deletable    bool      `json:"deletable"`
+}
+
 type BenetnaschHomeInfoDTO struct {
 	ArticleCount    int64            `json:"articleCount"`
 	TalkCount       int64            `json:"talkCount"`

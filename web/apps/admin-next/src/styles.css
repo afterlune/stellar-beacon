@@ -32,7 +32,8 @@
 html,
 body,
 #app {
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   margin: 0;
 }
 
@@ -129,11 +130,14 @@ a {
 }
 
 .admin-shell {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--admin-bg);
 }
 
 .admin-sider {
+  height: 100dvh;
   border-right: 1px solid var(--admin-border);
   background: var(--admin-surface) !important;
   box-shadow: 8px 0 28px rgb(37 52 83 / 2%);
@@ -141,7 +145,16 @@ a {
 }
 
 .admin-sider .arco-layout-sider-children {
+  height: 100%;
+  overflow-y: auto;
   overflow-x: hidden;
+}
+
+.admin-shell > .arco-layout {
+  min-width: 0;
+  min-height: 0;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .admin-brand {
@@ -238,14 +251,22 @@ a {
 }
 
 .admin-menu-icon {
-  width: 18px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-right: 10px;
+  margin-right: 8px;
+  border-radius: 8px;
   color: currentColor;
-  font-size: 17px;
-  vertical-align: -3px;
+  background: rgb(88 113 216 / 9%);
+  font-size: 16px;
+  vertical-align: middle;
+}
+
+.admin-menu-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .admin-sider .arco-menu-inline-header .admin-menu-icon {
@@ -375,7 +396,11 @@ a {
 }
 
 .admin-content {
-  min-height: calc(100vh - 72px);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 30px clamp(18px, 3vw, 42px) 48px;
   background:
     radial-gradient(circle at 96% 0%, rgb(227 232 255 / 34%), transparent 24rem),
@@ -495,7 +520,8 @@ a {
 }
 
 .admin-table-shell {
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--admin-border);
   border-radius: 12px;
 }
@@ -643,8 +669,8 @@ a {
 }
 
 .admin-cover-cell {
-  width: 48px;
-  height: 36px;
+  width: 92px;
+  height: 62px;
   display: inline-grid;
   place-items: center;
   overflow: hidden;
@@ -1234,7 +1260,7 @@ a {
   }
 
   .admin-content {
-    min-height: calc(100vh - 64px);
+    min-height: 0;
     padding: 22px 16px 36px;
   }
 

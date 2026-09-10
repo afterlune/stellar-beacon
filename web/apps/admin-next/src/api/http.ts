@@ -1,7 +1,7 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@benetnasch/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminFriendLink, type AdminJob, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type JobRunOutcome, type Page, type ResultVO, type UserMenu, type UserRole } from '@benetnasch/api-contract'
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type JobRunOutcome, type Page, type ResultVO, type UserMenu, type UserRole } from '@benetnasch/api-contract'
 
 export const AUTH_EXPIRED_EVENT = 'benetnasch-admin-auth-expired'
 
@@ -30,6 +30,11 @@ export async function login(username: string, password: string): Promise<AdminUs
 
 export async function listUserMenus(config?: AxiosRequestConfig): Promise<UserMenu[]> {
   const response = await http.get<ResultVO<UserMenu[]>>('admin/me/menu', config)
+  return responseData(response)
+}
+
+export async function getAdminDashboardAnalytics(range: DashboardRange = '7d', areaType: 'users' | 'visitors' = 'users'): Promise<AdminDashboardAnalytics> {
+  const response = await http.get<ResultVO<AdminDashboardAnalytics>>('admin/dashboard/analytics', { params: { range, areaType } })
   return responseData(response)
 }
 
@@ -170,6 +175,21 @@ export async function uploadAdminTalkImage(file: File): Promise<string> {
   form.append('file', file)
   const response = await http.post<ResultVO<string>>('admin/talks/images', form)
   return responseData(response)
+}
+
+export async function uploadAdminArticleImage(file: File): Promise<string> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await http.post<ResultVO<string>>('admin/articles/images', form)
+  return responseData(response)
+}
+
+export async function listAdminCategories(keywords = ''): Promise<Array<Record<string, unknown>>> {
+  return listAdminCollection<Record<string, unknown>>('admin/categories/search', keywords ? { keywords } : {})
+}
+
+export async function listAdminTags(keywords = ''): Promise<Array<Record<string, unknown>>> {
+  return listAdminCollection<Record<string, unknown>>('admin/tags/search', keywords ? { keywords } : {})
 }
 
 export async function getAdminAlbum(id: number): Promise<AdminAlbum> {
@@ -325,6 +345,46 @@ export async function updateAbout(content: string): Promise<void> {
 
 export async function updateUserProfile(payload: { nickname: string; intro: string; website: string }): Promise<void> {
   const response = await http.put<ResultVO<unknown>>('auth/me', payload)
+  responseData(response)
+}
+
+export async function uploadUserAvatar(file: File): Promise<string> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await http.post<ResultVO<string>>('auth/me/avatar', form)
+  return responseData(response)
+}
+
+export async function changeAdminPassword(payload: { oldPassword: string; newPassword: string }): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>('admin/users/password', payload)
+  responseData(response)
+}
+
+export async function listAdminOnlineUsers(params: Record<string, string | number> = {}): Promise<Page<AdminUser>> {
+  return listAdminPage<AdminUser>('admin/users/online', params)
+}
+
+export async function listAdminOperationLogs(params: Record<string, string | number> = {}): Promise<Page<Record<string, unknown>>> {
+  return listAdminPage<Record<string, unknown>>('admin/logs/operations', params)
+}
+
+export async function listAdminExceptionLogs(params: Record<string, string | number> = {}): Promise<Page<Record<string, unknown>>> {
+  return listAdminPage<Record<string, unknown>>('admin/logs/exceptions', params)
+}
+
+export async function listAdminMedia(params: Record<string, string | number> = {}): Promise<Page<AdminMediaAsset>> {
+  return listAdminPage<AdminMediaAsset>('admin/media', params)
+}
+
+export async function uploadAdminMedia(file: File): Promise<AdminMediaAsset> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await http.post<ResultVO<AdminMediaAsset>>('admin/media/upload', form)
+  return responseData(response)
+}
+
+export async function deleteAdminMedia(keys: string[]): Promise<void> {
+  const response = await http.delete<ResultVO<unknown>>('admin/media', { data: keys })
   responseData(response)
 }
 

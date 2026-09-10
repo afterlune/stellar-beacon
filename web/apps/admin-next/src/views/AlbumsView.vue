@@ -24,12 +24,13 @@
           @page-change="changePage"
           @page-size-change="changePageSize">
           <template #cover="{ record }">
-            <img v-if="isHttpUrl(record.albumCover)" class="album-cover" :src="record.albumCover" alt="相册封面" />
+            <AdminImagePreview v-if="isHttpUrl(record.albumCover)" :src="String(record.albumCover)" alt="相册封面" :width="112" :height="76" />
             <span v-else>—</span>
           </template>
           <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.status) === 1 ? 'green' : 'orange'">{{ Number(record.status) === 1 ? '公开' : '私密' }}</a-tag></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
+              <a-button type="text" size="small" @click="router.push(`/albums/${record.id}`)">照片</a-button>
               <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
               <a-popconfirm content="确定删除该相册吗？" @ok="deleteAlbum(record.id)">
                 <a-button type="text" status="danger" size="small">删除</a-button>
@@ -83,12 +84,13 @@ import {
   saveAdminAlbum,
   uploadAdminAlbumCover
 } from '@/api/http'
+import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum } from '@benetnasch/api-contract'
 
 const columns = [
-  { title: '封面', dataIndex: 'albumCover', width: 90, slotName: 'cover' },
+  { title: '封面', dataIndex: 'albumCover', width: 132, slotName: 'cover' },
   { title: '相册名称', dataIndex: 'albumName' },
   { title: '描述', dataIndex: 'albumDesc', ellipsis: true, tooltip: true },
   { title: '照片数', dataIndex: 'photoCount', width: 100 },
@@ -212,13 +214,6 @@ function isHttpUrl(value: unknown): value is string {
 </script>
 
 <style scoped>
-.album-cover {
-  width: 56px;
-  height: 40px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-
 .field-hint {
   color: var(--color-text-3);
   font-size: 12px;

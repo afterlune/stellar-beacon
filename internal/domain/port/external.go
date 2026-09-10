@@ -50,6 +50,26 @@ type ObjectStorage interface {
 	Put(context.Context, string, io.Reader) (ObjectRef, error)
 }
 
+// ObjectInfo describes an object that can be browsed from the administration
+// media center. The core upload contract intentionally stays small; providers
+// opt into MediaStorage when they support listing and deletion.
+type ObjectInfo struct {
+	Key          string
+	URL          string
+	Size         int64
+	ContentType  string
+	LastModified time.Time
+}
+
+// MediaStorage is an optional extension of ObjectStorage used by the admin
+// media library. Keeping it separate means existing upload-only fakes and
+// providers remain valid for the rest of the application.
+type MediaStorage interface {
+	ObjectStorage
+	List(context.Context, string) ([]ObjectInfo, error)
+	Delete(context.Context, []string) error
+}
+
 // ArticleSearchHit is a typed search result. Highlighted fields preserve the
 // existing MeiliSearch response behavior without exposing raw SDK maps.
 type ArticleSearchHit struct {

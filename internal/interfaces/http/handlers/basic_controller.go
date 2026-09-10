@@ -12,6 +12,7 @@ var (
 	jobLogService       service.JobLogService         = new(service.MyJobLogService)
 	jobService          service.JobService            = new(service.MyJobService)
 	menuService         service.MenuService           = new(service.MyMenuSService)
+	mediaService        service.MediaService          = new(service.MyMediaService)
 	operationLogService service.OperationLogService   = new(service.MyOperationLogService)
 	photoAlbumService   service.PhotoAlbumService     = new(service.MyPhotoAlbumService)
 	photoService        service.PhotoService          = new(service.MyPhotoService)
@@ -33,6 +34,7 @@ type Services struct {
 	JobLog       service.JobLogService
 	Job          service.JobService
 	Menu         service.MenuService
+	Media        service.MediaService
 	OperationLog service.OperationLogService
 	PhotoAlbum   service.PhotoAlbumService
 	Photo        service.PhotoService
@@ -54,6 +56,7 @@ func ConfigureServices(s Services) {
 	jobLogService = s.JobLog
 	jobService = s.Job
 	menuService = s.Menu
+	mediaService = s.Media
 	operationLogService = s.OperationLog
 	photoAlbumService = s.PhotoAlbum
 	photoService = s.Photo

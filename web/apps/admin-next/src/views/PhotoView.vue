@@ -19,30 +19,19 @@
         <a-descriptions-item label="照片数">{{ album.photoCount ?? 0 }}</a-descriptions-item>
         <a-descriptions-item label="状态">{{ Number(album.status) === 1 ? '公开' : '私密' }}</a-descriptions-item>
       </a-descriptions>
-      <div class="admin-table-shell">
-        <a-table
-          :data="photos"
-          :columns="columns"
-          :loading="loading"
-          :pagination="pagination"
-          row-key="id"
-          @page-change="changePage"
-          @page-size-change="changePageSize">
-          <template #source="{ record }">
-            <img v-if="isHttpUrl(record.photoSrc)" class="photo-thumb" :src="record.photoSrc" alt="照片" />
-            <span v-else>—</span>
-          </template>
-          <template #actions="{ record }">
-            <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-              <a-popconfirm content="确定移除这张照片吗？" @ok="removePhoto(record.id)">
-                <a-button type="text" status="danger" size="small">移除</a-button>
-              </a-popconfirm>
-            </a-space>
-          </template>
-          <template #empty><div class="admin-table-empty"><a-empty description="暂无照片" /></div></template>
-        </a-table>
+      <div v-if="loading" class="admin-page-loading">照片加载中…</div>
+      <div v-else-if="photos.length" class="photo-masonry">
+        <article v-for="(photo, index) in photos" :key="photo.id" class="photo-tile">
+          <AdminImagePreview v-if="isHttpUrl(photo.photoSrc)" :src="photo.photoSrc" :alt="photo.photoName || '照片'" :width="280" :height="tileHeight(index)" />
+          <div class="photo-tile-copy"><strong>{{ photo.photoName || '未命名照片' }}</strong><span>{{ photo.photoDesc || '—' }}</span></div>
+          <div class="photo-tile-actions">
+            <a-button type="text" size="small" @click="openEditor(photo)">编辑</a-button>
+            <a-popconfirm content="确定移除这张照片吗？" @ok="removePhoto(photo.id)"><a-button type="text" status="danger" size="small">移除</a-button></a-popconfirm>
+          </div>
+        </article>
       </div>
+      <a-empty v-else description="暂无照片，上传第一张吧" />
+      <a-pagination v-if="total > pageSize" class="photo-pagination" :total="total" :current="current" :page-size="pageSize" show-total show-jumper @change="changePage" />
     </a-card>
 
     <a-modal v-model:visible="editorVisible" title="编辑照片" :ok-loading="saving" @ok="saveEditor">
@@ -74,7 +63,7 @@ import {
   uploadAdminPhoto
 } from '@/api/http'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
-import { tablePagination } from '@/utils/pagination'
+import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import type { AdminAlbum, AdminPhoto } from '@benetnasch/api-contract'
 
 const route = useRoute()
@@ -83,12 +72,6 @@ const albumId = computed(() => Number(route.params.albumId || route.params.id ||
 const pageTitle = computed(() => album.value.albumName ? `${album.value.albumName} · 照片` : '照片管理')
 const album = ref<AdminAlbum>({ id: 0, albumName: '' })
 const photos = ref<AdminPhoto[]>([])
-const columns = [
-  { title: '预览', dataIndex: 'photoSrc', width: 90, slotName: 'source' },
-  { title: '名称', dataIndex: 'photoName' },
-  { title: '描述', dataIndex: 'photoDesc', ellipsis: true, tooltip: true },
-  { title: '操作', dataIndex: 'actions', width: 140, slotName: 'actions' }
-]
 const current = ref(1)
 const pageSize = ref(18)
 const total = ref(0)
@@ -99,8 +82,6 @@ const editorVisible = ref(false)
 const errorMessage = ref('')
 const photoInput = ref<HTMLInputElement | null>(null)
 const editor = reactive({ id: 0, photoName: '', photoDesc: '' })
-
-const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
 onMounted(() => void loadAll())
 
@@ -135,12 +116,6 @@ async function loadPhotos(): Promise<void> {
 
 function changePage(page: number): void {
   current.value = page
-  void loadPhotos()
-}
-
-function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
   void loadPhotos()
 }
 
@@ -203,13 +178,15 @@ async function selectPhotos(event: Event): Promise<void> {
 function isHttpUrl(value: unknown): value is string {
   return typeof value === 'string' && /^https?:\/\//i.test(value)
 }
+
+function tileHeight(index: number): number {
+  return [220, 300, 180, 260, 240, 190][index % 6]
+}
 </script>
 
 <style scoped>
-.photo-thumb {
-  width: 56px;
-  height: 40px;
-  border-radius: 6px;
-  object-fit: cover;
-}
+.photo-masonry { column-count: 4; column-gap: 16px; }.photo-tile { display: inline-block; width: 100%; margin: 0 0 16px; padding: 10px; break-inside: avoid; border: 1px solid var(--admin-border); border-radius: 14px; background: var(--admin-surface); }.photo-tile :deep(.admin-image-preview) { width: 100% !important; border-radius: 10px; }.photo-tile-copy { display: grid; gap: 4px; margin: 10px 2px; }.photo-tile-copy strong { color: var(--admin-ink); font-size: 13px; }.photo-tile-copy span { overflow: hidden; color: var(--admin-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.photo-tile-actions { display: flex; justify-content: flex-end; gap: 4px; }.photo-pagination { margin-top: 18px; }
+@media (max-width: 1200px) { .photo-masonry { column-count: 3; } }
+@media (max-width: 760px) { .photo-masonry { column-count: 2; } }
+@media (max-width: 460px) { .photo-masonry { column-count: 1; } }
 </style>

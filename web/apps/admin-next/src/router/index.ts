@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
 import { flattenMenuRoutes } from '@/router/menu'
 import ForbiddenView from '@/views/ForbiddenView.vue'
-import HomeView from '@/views/HomeView.vue'
+import HomeView from '@/views/WorkplaceView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 

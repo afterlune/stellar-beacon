@@ -65,6 +65,48 @@ func (s *MinioStorage) Put(ctx context.Context, key string, body io.Reader) (por
 	return s.ref(key), nil
 }
 
+func (s *MinioStorage) List(ctx context.Context, prefix string) ([]port.ObjectInfo, error) {
+	if s == nil || s.client == nil {
+		return nil, errors.Unavailable("minio.list", fmt.Errorf("MinIO client is not configured"))
+	}
+	if err := s.ensureBucket(ctx); err != nil {
+		return nil, err
+	}
+	objects := make([]port.ObjectInfo, 0)
+	for object := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if object.Err != nil {
+			return nil, errors.Unavailable("minio.list", object.Err)
+		}
+		if object.Key == "" {
+			continue
+		}
+		objects = append(objects, port.ObjectInfo{
+			Key:          object.Key,
+			URL:          s.ref(object.Key).URL,
+			Size:         object.Size,
+			ContentType:  object.ContentType,
+			LastModified: object.LastModified,
+		})
+	}
+	return objects, nil
+}
+
+func (s *MinioStorage) Delete(ctx context.Context, keys []string) error {
+	if s == nil || s.client == nil {
+		return errors.Unavailable("minio.delete", fmt.Errorf("MinIO client is not configured"))
+	}
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{}); err != nil {
+			return errors.Unavailable("minio.delete", err)
+		}
+	}
+	return nil
+}
+
 func (s *MinioStorage) ensureBucket(ctx context.Context) error {
 	exists, err := s.client.BucketExists(ctx, s.bucket)
 	if err != nil {
@@ -133,3 +175,4 @@ func isMissingObject(err error) bool {
 }
 
 var _ port.ObjectStorage = (*MinioStorage)(nil)
+var _ port.MediaStorage = (*MinioStorage)(nil)

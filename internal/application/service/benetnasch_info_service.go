@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,7 @@ type BenetnaschInfoService interface {
 	GetBlogHomeInfo(ctx context.Context) model.ResultVO
 	GetWebsiteConfig(ctx context.Context) model.ResultVO
 	GetBlogBackInfo(ctx context.Context) model.ResultVO
+	GetDashboardAnalytics(ctx context.Context, rangeValue, areaType string) model.ResultVO
 	UpdateWebsiteConfig(c *gin.Context) model.ResultVO
 	GetAbout(ctx context.Context) model.ResultVO
 	UpdateAbout(c *gin.Context) model.ResultVO
@@ -82,6 +84,26 @@ func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 		return model.ResultFail()
 	}
 	fingerprint := identity.Fingerprint
+	today := timeNow().Format("2006-01-02")
+	dailyVisitorKey := support.DailyVisitorPrefix + today
+	dailySeen, err := b.cache.SIsMember(ctx, dailyVisitorKey, fingerprint)
+	if err != nil {
+		slog.Error("record unique visitor failed", "error", err)
+		return model.ResultFail()
+	}
+	if !dailySeen {
+		if _, err := b.cache.SAdd(ctx, dailyVisitorKey, fingerprint); err != nil {
+			slog.Error("record daily unique visitor failed", "error", err)
+			return model.ResultFail()
+		}
+		if _, err := b.cache.Expire(ctx, dailyVisitorKey, 400*24*time.Hour); err != nil {
+			slog.WarnContext(ctx, "expire daily unique visitor set failed", "error", err)
+		}
+		if _, err := b.cache.IncrBy(ctx, support.DailyViewsPrefix+today, 1); err != nil {
+			slog.Error("increment daily blog view count failed", "error", err)
+			return model.ResultFail()
+		}
+	}
 	seen, err := b.cache.SIsMember(ctx, support.UniqueVisitor, fingerprint)
 	if err != nil {
 		slog.Error("record unique visitor failed", "error", err)
@@ -251,6 +273,201 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.Res
 		}
 	}
 	return model.ResultOkWithData(data)
+}
+
+func (b *MyBenetnaschInfoService) GetDashboardAnalytics(ctx context.Context, rangeValue, areaType string) model.ResultVO {
+	if rangeValue != "30d" && rangeValue != "12m" {
+		rangeValue = "7d"
+	}
+	now := timeNow()
+	unit := "day"
+	start := now.AddDate(0, 0, -6)
+	if rangeValue == "30d" {
+		start = now.AddDate(0, 0, -29)
+	} else if rangeValue == "12m" {
+		unit = "month"
+		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -11, 0)
+	}
+	end := now.AddDate(0, 0, 1)
+	historic, err := b.siteRepository().ListUniqueViews(ctx, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	historicByDay := make(map[string]int, len(historic))
+	for _, item := range historic {
+		historicByDay[item.Day] = item.ViewsCount
+	}
+
+	trend := make([]model.DashboardTrendDTO, 0)
+	todayViews := 0
+	monthViews := 0
+	if unit == "day" {
+		for cursor := start; !cursor.After(now); cursor = cursor.AddDate(0, 0, 1) {
+			period := cursor.Format("2006-01-02")
+			views := b.dailyViews(ctx, period, historicByDay[period])
+			trend = append(trend, model.DashboardTrendDTO{Period: period, Views: views})
+			if period == now.Format("2006-01-02") {
+				todayViews = views
+			}
+		}
+	} else {
+		for cursor := start; !cursor.After(now); cursor = cursor.AddDate(0, 1, 0) {
+			period := cursor.Format("2006-01")
+			views := 0
+			for day := cursor; day.Before(cursor.AddDate(0, 1, 0)) && !day.After(now); day = day.AddDate(0, 0, 1) {
+				key := day.Format("2006-01-02")
+				views += b.dailyViews(ctx, key, historicByDay[key])
+			}
+			trend = append(trend, model.DashboardTrendDTO{Period: period, Views: views})
+		}
+		todayViews = b.dailyViews(ctx, now.Format("2006-01-02"), historicByDay[now.Format("2006-01-02")])
+	}
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	for day := monthStart; !day.After(now); day = day.AddDate(0, 0, 1) {
+		key := day.Format("2006-01-02")
+		monthViews += b.dailyViews(ctx, key, historicByDay[key])
+	}
+
+	viewCount := 0
+	if raw, cacheErr := b.cache.Get(ctx, support.BlogViewsCount); cacheErr == nil {
+		viewCount, _ = strconv.Atoi(raw)
+	}
+	messageCount, err := b.siteRepository().CountComments(ctx, 2)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	userCount, err := b.siteRepository().CountUsers(ctx)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	articleCount, err := b.siteRepository().CountArticles(ctx)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	categories, err := b.categoryRepository().List(ctx)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	tags, err := b.tagRepository().List(ctx)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	categoryStats := make([]model.DashboardDistributionDTO, 0, len(categories))
+	for _, category := range categories {
+		categoryStats = append(categoryStats, model.DashboardDistributionDTO{Name: category.CategoryName, Value: int64(category.ArticleCount)})
+	}
+	tagStats := make([]model.DashboardDistributionDTO, 0, len(tags))
+	for _, tag := range tags {
+		if tag != nil {
+			tagStats = append(tagStats, model.DashboardDistributionDTO{Name: tag.TagName, Value: int64(tag.Count)})
+		}
+	}
+	regions := b.dashboardRegions(ctx, areaType)
+	articleRank := make([]model.DashboardArticleRankDTO, 0)
+	if b.cache != nil {
+		articleMap, cacheErr := b.cache.ZRevRangeWithScores(ctx, support.ArticleViewsCount, 0, 7)
+		if cacheErr == nil && len(articleMap) > 0 {
+			ids := make([]int, 0, len(articleMap))
+			for key := range articleMap {
+				if id, parseErr := strconv.Atoi(key); parseErr == nil {
+					ids = append(ids, id)
+				}
+			}
+			articles, listErr := b.siteRepository().ListArticleRank(ctx, ids)
+			if listErr != nil {
+				return model.ResultFromError(listErr)
+			}
+			for _, article := range articles {
+				articleRank = append(articleRank, model.DashboardArticleRankDTO{Id: article.Id, Title: article.ArticleTitle, Views: int(articleMap[strconv.Itoa(article.Id)])})
+			}
+			sort.Slice(articleRank, func(i, j int) bool { return articleRank[i].Views > articleRank[j].Views })
+		}
+	}
+	return model.ResultOkWithData(model.DashboardAnalyticsDTO{
+		Range: rangeValue,
+		Unit:  unit,
+		Overview: model.DashboardOverviewDTO{
+			TotalViews:   viewCount,
+			TodayViews:   todayViews,
+			MonthViews:   monthViews,
+			UserCount:    int(userCount),
+			ArticleCount: int(articleCount),
+			MessageCount: int(messageCount),
+		},
+		Trend:       trend,
+		Regions:     regions,
+		Categories:  categoryStats,
+		Tags:        tagStats,
+		ArticleRank: articleRank,
+		GeneratedAt: now,
+	})
+}
+
+func (b *MyBenetnaschInfoService) dailyViews(ctx context.Context, day string, fallback int) int {
+	if raw, err := b.cache.Get(ctx, support.DailyViewsPrefix+day); err == nil {
+		value, parseErr := strconv.Atoi(raw)
+		if parseErr == nil {
+			return value
+		}
+	}
+	return fallback
+}
+
+func (b *MyBenetnaschInfoService) dashboardRegions(ctx context.Context, areaType string) []model.DashboardRegionDTO {
+	if areaType != "visitors" {
+		areaType = "users"
+	}
+	regions := make([]model.DashboardRegionDTO, 0)
+	if areaType == "users" {
+		raw, err := b.cache.Get(ctx, support.UserArea)
+		if err != nil || raw == "" {
+			return regions
+		}
+		var values []model.UserAreaDTO
+		if json.Unmarshal([]byte(raw), &values) != nil {
+			return regions
+		}
+		for _, value := range values {
+			regions = append(regions, regionDTO(value.Name, value.Name, value.Value))
+		}
+		return regions
+	}
+	values, err := b.cache.HGetAll(ctx, support.VisitorArea)
+	if err != nil {
+		return regions
+	}
+	for rawName, rawValue := range values {
+		count, parseErr := strconv.ParseInt(rawValue, 10, 64)
+		if parseErr != nil {
+			continue
+		}
+		label := rawName
+		parts := strings.Split(rawName, "|")
+		if len(parts) > 0 && strings.TrimSpace(parts[0]) != "" {
+			label = strings.TrimSpace(parts[0])
+		}
+		regions = append(regions, regionDTO(label, rawName, count))
+	}
+	return regions
+}
+
+func regionDTO(name, label string, value int64) model.DashboardRegionDTO {
+	code := ""
+	switch strings.TrimSpace(strings.ToLower(name)) {
+	case "中国", "china", "cn":
+		code = "CN"
+	case "美国", "united states", "us":
+		code = "US"
+	case "日本", "japan", "jp":
+		code = "JP"
+	case "英国", "united kingdom", "uk":
+		code = "GB"
+	case "加拿大", "canada", "ca":
+		code = "CA"
+	case "澳大利亚", "australia", "au":
+		code = "AU"
+	}
+	return model.DashboardRegionDTO{Name: name, Label: label, Code: code, Value: value}
 }
 
 func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.ResultVO {
