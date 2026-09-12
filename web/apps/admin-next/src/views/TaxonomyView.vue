@@ -27,10 +27,16 @@
         </a-button>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="列表加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${records.length} 个${config.unit}`" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="records"
           :columns="columns"
           :loading="loading"
@@ -96,13 +102,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { computed, reactive, ref } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { IconFolder, IconPlus, IconRefresh, IconTags } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, deleteTaxonomy, listAdminPage, saveTaxonomy } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, formatNumber } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
@@ -159,48 +170,50 @@ const columns = computed(() => [
 ])
 
 const keywords = ref('')
-const current = ref(1)
-const size = ref(10)
-const total = ref(0)
-const records = ref<Row[]>([])
-const loading = ref(false)
 const saving = ref(false)
-const errorMessage = ref('')
 const dialogError = ref('')
 const dialogVisible = ref(false)
 const editing = ref(false)
+const selectedKeys = ref<number[]>([])
+const batchDeleting = ref(false)
 const form = reactive({ id: 0, name: '' })
-const pagination = computed(() => tablePagination(current.value, size.value, total.value))
 
-onMounted(() => void reload())
+const VIEW_KEY = 'taxonomy'
 
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
+const {
+  items: records,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<Row>(
+  ({ current: page, pageSize: size, signal }) => listAdminPage<Row>(config.value.endpoint, {
+    current: page,
+    size,
+    keywords: keywords.value.trim()
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '列表加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
+
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
+const selectedIds = computed(() =>
+  [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
+)
 
 function clearKeywords(): void {
   keywords.value = ''
   void reload()
-}
-
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminPage<Row>(config.value.endpoint, {
-      current: current.value,
-      size: size.value,
-      keywords: keywords.value.trim()
-    })
-    records.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
 }
 
 function openCreate(): void {
@@ -266,13 +279,41 @@ async function remove(id: unknown): Promise<void> {
 }
 
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  clearSelection()
+  gotoPage(page)
 }
 
-function changePageSize(pageSize: number): void {
-  size.value = pageSize
-  current.value = 1
-  void load()
+function changePageSize(size: number): void {
+  clearSelection()
+  applyPageSize(size)
+}
+
+function clearSelection(): void {
+  selectedKeys.value = []
+}
+
+function batchDelete(): void {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  Modal.confirm({
+    title: '批量删除',
+    content: `删除选中的 ${ids.length} 个${config.value.unit}后，已关联的文章会失去这个${config.value.unit}，确定继续吗？`,
+    okText: '批量删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      batchDeleting.value = true
+      try {
+        await deleteTaxonomy(props.kind, ids)
+        Message.success(`已删除 ${ids.length} 个${config.value.unit}`)
+        clearSelection()
+        await load()
+      } catch (error) {
+        Message.error(apiErrorMessage(error, '批量删除失败'))
+      } finally {
+        batchDeleting.value = false
+      }
+    }
+  })
 }
 </script>

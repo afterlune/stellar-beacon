@@ -2,6 +2,11 @@
   <section class="admin-page">
     <AdminPageHeader title="文章列表" description="把文章、状态和发布节奏整理在一张清晰的桌面上。">
       <template #actions>
+        <input ref="importInput" type="file" accept=".md,.markdown,.txt" hidden @change="onImportFile" />
+        <a-button :loading="importing" @click="pickImportFile">
+          <template #icon><IconUpload /></template>
+          导入文章
+        </a-button>
         <a-button type="primary" @click="router.push('/articles')">
           <template #icon><IconPlus /></template>
           发布文章
@@ -36,13 +41,49 @@
         </div>
         <div class="admin-table-toolbar-actions">
           <span class="admin-toolbar-caption">共 {{ total }} 篇文章</span>
+          <a-dropdown trigger="click" position="br">
+            <a-button size="small">
+              <template #icon><IconSettings /></template>
+              列设置
+            </a-button>
+            <template #content>
+              <div class="admin-column-settings">
+                <div class="admin-column-settings-head">
+                  <span>显示列</span>
+                  <a-button type="text" size="mini" @click="columnPrefs.reset">全部显示</a-button>
+                </div>
+                <a-checkbox
+                  v-for="column in columns"
+                  :key="column.dataIndex"
+                  :model-value="columnPrefs.isVisible(column.dataIndex)"
+                  :disabled="column.dataIndex === 'actions'"
+                  @change="(value) => columnPrefs.toggle(column.dataIndex, Boolean(value))">
+                  {{ column.title }}
+                </a-checkbox>
+              </div>
+            </template>
+          </a-dropdown>
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="文章列表加载失败" @retry="load" />
+
+      <AdminBatchBar
+        :count="selectedKeys.length"
+        :hint="`本页 ${records.length} 篇`"
+        @clear="clearSelection">
+        <a-button size="small" @click="exportSelected">
+          <template #icon><IconDownload /></template>
+          导出 Markdown
+        </a-button>
+        <a-button size="small" @click="batchTrash">移入回收站</a-button>
+        <a-button size="small" status="danger" @click="batchDelete">永久删除</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="records"
           :columns="tableColumns"
           :loading="loading"
@@ -87,7 +128,7 @@
             <a-space class="admin-action-space">
               <a-button type="text" size="small" @click="editArticle(record.id)">编辑</a-button>
               <a-dropdown trigger="click" position="br">
-                <a-button type="text" size="small" :loading="busyId === Number(record.id)">
+                <a-button type="text" size="small" :loading="isPending(record.id)">
                   更多
                   <template #icon><IconDown /></template>
                 </a-button>
@@ -116,26 +157,54 @@
         </a-table>
       </div>
     </a-card>
+
+    <a-modal v-model:visible="exportVisible" title="导出结果" :footer="false" width="560px">
+      <p class="admin-export-hint">后端已把选中的文章导出为 Markdown 文件，可以打开或复制链接。</p>
+      <div class="admin-export-list">
+        <div v-for="(url, index) in exportUrls" :key="url" class="admin-export-item">
+          <span class="admin-export-index">{{ index + 1 }}</span>
+          <a-link :href="url" target="_blank" rel="noopener" class="admin-export-link">{{ url }}</a-link>
+          <a-button size="mini" @click="copyText(url, { success: '导出链接已复制' })">复制链接</a-button>
+        </div>
+      </div>
+    </a-modal>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Modal, Message } from '@arco-design/web-vue'
-import { IconBook, IconDown, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
+import { Message, Modal } from '@arco-design/web-vue'
+import {
+  IconBook,
+  IconDown,
+  IconDownload,
+  IconPlus,
+  IconRefresh,
+  IconSettings,
+  IconUpload
+} from '@arco-design/web-vue/es/icon'
 
 import {
   apiErrorMessage,
   deleteAdminArticles,
+  exportAdminArticles,
+  importAdminArticles,
   listAdminPage,
   updateAdminArticleFeatured,
   updateAdminArticleTrash
 } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag, { type StatusKind } from '@/components/AdminStatusTag.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { usePendingIds } from '@/composables/usePendingIds'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useColumnPrefs, useStoredPageSize } from '@/composables/useTablePrefs'
+import { copyText } from '@/utils/clipboard'
 import { formatDateTime, formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
@@ -148,17 +217,19 @@ interface TableColumn {
   tooltip?: boolean
 }
 
+const VIEW_KEY = 'article-list'
+
 const router = useRouter()
 const keywords = ref('')
 const status = ref<number | undefined>(undefined)
 const type = ref<number | undefined>(undefined)
-const current = ref(1)
-const pageSize = ref(10)
-const loading = ref(false)
-const errorMessage = ref('')
-const records = ref<Record<string, unknown>[]>([])
-const total = ref(0)
-const busyId = ref(0)
+const selectedKeys = ref<number[]>([])
+const importInput = ref<HTMLInputElement | null>(null)
+const importing = ref(false)
+const exportVisible = ref(false)
+const exportUrls = ref<string[]>([])
+
+const { isPending, withPending } = usePendingIds()
 
 const columns: TableColumn[] = [
   { title: '封面', dataIndex: 'articleCover', slotName: 'cover', width: 108 },
@@ -172,18 +243,45 @@ const columns: TableColumn[] = [
   { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 152 }
 ]
 
-// Every column gets an explicit slot: the fallback `formatted` slot renders
-// untouched data, which would bypass the shared time/number formatting.
-const tableColumns = computed(() => columns.map((column) => ({ ...column, slotName: column.slotName || 'formatted' })))
+const columnPrefs = useColumnPrefs(VIEW_KEY, columns.map((column) => column.dataIndex))
+
+const {
+  items: records,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<Record<string, unknown>>(
+  ({ current: page, pageSize: size, signal }) => listAdminPage<Record<string, unknown>>('admin/articles', {
+    current: page,
+    size,
+    keywords: keywords.value.trim(),
+    status: status.value ?? 0,
+    type: type.value ?? 0
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '文章列表加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'status', ref: status },
+  { key: 'type', ref: type },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
+
+// 每一列都显式给一个 slot：默认的 `formatted` 槽位会绕过共享的时间/数字格式化。
+const tableColumns = computed(() => columns
+  .filter((column) => columnPrefs.isVisible(column.dataIndex))
+  .map((column) => ({ ...column, slotName: column.slotName || 'formatted' })))
+
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const hasFilters = computed(() => Boolean(keywords.value.trim()) || status.value !== undefined || type.value !== undefined)
-
-onMounted(() => void reload())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
 
 function resetFilters(): void {
   keywords.value = ''
@@ -192,36 +290,102 @@ function resetFilters(): void {
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminPage<Record<string, unknown>>('admin/articles', {
-      current: current.value,
-      size: pageSize.value,
-      keywords: keywords.value.trim(),
-      status: status.value ?? 0,
-      type: type.value ?? 0
-    })
-    records.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '文章列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
-}
-
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  clearSelection()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
+  clearSelection()
+  applyPageSize(size)
+}
+
+function clearSelection(): void {
+  selectedKeys.value = []
+}
+
+function selectedIds(): number[] {
+  return selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+}
+
+/** 批量动作的公共收尾：清空选中、重新加载、错误只弹一次。 */
+async function runBatch(action: () => Promise<void>, failureMessage: string): Promise<void> {
+  try {
+    await action()
+    clearSelection()
+    await load()
+  } catch (error) {
+    Message.error(apiErrorMessage(error, failureMessage))
+  }
+}
+
+function batchTrash(): void {
+  const ids = selectedIds()
+  if (ids.length === 0) return
+  Modal.confirm({
+    title: '移入回收站',
+    content: `确定把选中的 ${ids.length} 篇文章移入回收站吗？之后可以在回收站中恢复。`,
+    okText: '移入回收站',
+    cancelText: '取消',
+    onOk: () => runBatch(async () => {
+      await updateAdminArticleTrash(ids, 1)
+      Message.success(`已移入回收站 ${ids.length} 篇`)
+    }, '移入回收站失败')
+  })
+}
+
+function batchDelete(): void {
+  const ids = selectedIds()
+  if (ids.length === 0) return
+  Modal.confirm({
+    title: '永久删除',
+    content: `永久删除选中的 ${ids.length} 篇文章后无法恢复，确定继续吗？`,
+    okText: '永久删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: () => runBatch(async () => {
+      await deleteAdminArticles(ids)
+      Message.success(`已删除 ${ids.length} 篇文章`)
+    }, '删除失败')
+  })
+}
+
+async function exportSelected(): Promise<void> {
+  const ids = selectedIds()
+  if (ids.length === 0) return
+  try {
+    const urls = await exportAdminArticles(ids)
+    if (urls.length === 0) {
+      Message.warning('没有可导出的文章')
+      return
+    }
+    exportUrls.value = urls
+    exportVisible.value = true
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '导出失败'))
+  }
+}
+
+function pickImportFile(): void {
+  importInput.value?.click()
+}
+
+async function onImportFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  // 清空 value，保证连续导入同一个文件也能再次触发 change。
+  input.value = ''
+  if (!file) return
+  importing.value = true
+  try {
+    await importAdminArticles(file)
+    Message.success(`已导入《${file.name}》，默认保存为草稿`)
+    await reload()
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '导入失败，请确认文件为 Markdown 或文本'))
+  } finally {
+    importing.value = false
+  }
 }
 
 function editArticle(id: unknown): void {
@@ -234,20 +398,19 @@ async function toggleFlag(record: Record<string, unknown>, field: 'isTop' | 'isF
   const id = Number(record.id)
   if (!Number.isInteger(id) || id <= 0) return
   const next = Number(record[field]) === 1 ? 0 : 1
-  busyId.value = id
-  try {
-    await updateAdminArticleFeatured({
-      id,
-      isTop: field === 'isTop' ? next : Number(record.isTop) === 1 ? 1 : 0,
-      isFeatured: field === 'isFeatured' ? next : Number(record.isFeatured) === 1 ? 1 : 0
-    })
-    record[field] = next
-    Message.success(next === 1 ? (field === 'isTop' ? '已设为置顶' : '已设为精选') : '已取消标记')
-  } catch (error) {
-    Message.error(apiErrorMessage(error, '标记更新失败'))
-  } finally {
-    busyId.value = 0
-  }
+  await withPending(id, async () => {
+    try {
+      await updateAdminArticleFeatured({
+        id,
+        isTop: field === 'isTop' ? next : Number(record.isTop) === 1 ? 1 : 0,
+        isFeatured: field === 'isFeatured' ? next : Number(record.isFeatured) === 1 ? 1 : 0
+      })
+      record[field] = next
+      Message.success(next === 1 ? (field === 'isTop' ? '已设为置顶' : '已设为精选') : '已取消标记')
+    } catch (error) {
+      Message.error(apiErrorMessage(error, '标记更新失败'))
+    }
+  })
 }
 
 function moveToTrash(record: Record<string, unknown>): void {
@@ -258,8 +421,7 @@ function moveToTrash(record: Record<string, unknown>): void {
     content: `确定把《${String(record.articleTitle || '未命名文章')}》移入回收站吗？之后可以在回收站中恢复。`,
     okText: '移入回收站',
     cancelText: '取消',
-    onOk: async () => {
-      busyId.value = id
+    onOk: () => withPending(id, async () => {
       try {
         await updateAdminArticleTrash([id], 1)
         Message.success('已移入回收站')
@@ -267,10 +429,8 @@ function moveToTrash(record: Record<string, unknown>): void {
         await load()
       } catch (error) {
         Message.error(apiErrorMessage(error, '移入回收站失败'))
-      } finally {
-        busyId.value = 0
       }
-    }
+    })
   })
 }
 
@@ -283,8 +443,7 @@ function removeArticle(record: Record<string, unknown>): void {
     okText: '永久删除',
     cancelText: '取消',
     okButtonProps: { status: 'danger' },
-    onOk: async () => {
-      busyId.value = id
+    onOk: () => withPending(id, async () => {
       try {
         await deleteAdminArticles([id])
         Message.success('文章已删除')
@@ -292,10 +451,8 @@ function removeArticle(record: Record<string, unknown>): void {
         await load()
       } catch (error) {
         Message.error(apiErrorMessage(error, '删除失败'))
-      } finally {
-        busyId.value = 0
       }
-    }
+    })
   })
 }
 
@@ -322,6 +479,46 @@ function typeLabel(value: unknown): string {
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.admin-export-hint {
+  margin: 0 0 12px;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.admin-export-list {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.admin-export-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+}
+
+.admin-export-index {
+  flex: none;
+  width: 20px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-export-link {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
 }
 </style>
 

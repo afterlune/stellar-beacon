@@ -29,6 +29,7 @@
 
           <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
           <a-alert v-if="menuWarning" type="warning" closable @close="menuWarning = ''">{{ menuWarning }}</a-alert>
+          <a-alert v-if="redirectHint" type="info">{{ redirectHint }}</a-alert>
 
           <a-form ref="formRef" :model="form" layout="vertical" :disabled="auth.loading" @submit-success="submit">
             <a-form-item
@@ -89,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { IconArrowRight, IconCheckCircle } from '@arco-design/web-vue/es/icon'
@@ -98,6 +99,7 @@ import { apiErrorMessage } from '@/api/http'
 import { resetMenuRoutes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
+import { resetSessionExpiredNotice } from '@/utils/session-notice'
 
 const highlights = [
   '文章、分类、标签统一管理',
@@ -116,6 +118,11 @@ const errorMessage = ref('')
 const menuWarning = ref('')
 const formRef = ref<{ validate: () => Promise<Record<string, unknown> | undefined> } | null>(null)
 
+/** 因会话过期或未登录被挡回登录页时，告诉用户登录后会回到原来的页面。 */
+const redirectHint = computed(() => (safeRedirect(route.query.redirect) === '/'
+  ? ''
+  : '登录成功后会返回你刚才访问的页面。'))
+
 async function submit(): Promise<void> {
   const errors = await formRef.value?.validate()
   if (errors) return
@@ -126,6 +133,8 @@ async function submit(): Promise<void> {
   // Phase 1: credential check. Failures here stay on the login page.
   try {
     await auth.login(form.username, form.password)
+    // 新会话开始，允许下一次过期重新提示。
+    resetSessionExpiredNotice()
   } catch (error) {
     errorMessage.value = apiErrorMessage(error, '登录失败，请检查账号和密码')
     return

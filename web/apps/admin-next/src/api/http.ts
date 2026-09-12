@@ -5,6 +5,14 @@ import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalyt
 
 export const AUTH_EXPIRED_EVENT = 'benetnasch-admin-auth-expired'
 
+/** `GET admin/albums/options`（服务端 `PhotoAlbumDTO`）的可用字段。 */
+export interface AdminAlbumOption {
+  id: number
+  albumName: string
+  albumDesc?: string
+  albumCover?: string
+}
+
 export const http = createApiClient({
   getToken: () => sessionStorage.getItem('token'),
   onUnauthorized: () => window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
@@ -29,8 +37,15 @@ export async function listUserMenus(config?: AxiosRequestConfig): Promise<UserMe
   return responseData(response)
 }
 
-export async function getAdminDashboardAnalytics(range: DashboardRange = '7d', areaType: 'users' | 'visitors' = 'users'): Promise<AdminDashboardAnalytics> {
-  const response = await http.get<ResultVO<AdminDashboardAnalytics>>('admin/dashboard/analytics', { params: { range, areaType } })
+export async function getAdminDashboardAnalytics(
+  range: DashboardRange = '7d',
+  areaType: 'users' | 'visitors' = 'users',
+  config?: AxiosRequestConfig
+): Promise<AdminDashboardAnalytics> {
+  const response = await http.get<ResultVO<AdminDashboardAnalytics>>('admin/dashboard/analytics', {
+    ...config,
+    params: { range, areaType }
+  })
   return responseData(response)
 }
 
@@ -49,8 +64,8 @@ export async function updateAdminUserDisable(id: number, isDisable: number): Pro
   responseData(response)
 }
 
-export async function listAdminRoles(params: Record<string, string | number> = {}): Promise<Page<AdminRole>> {
-  return listAdminPage<AdminRole>('admin/roles', params)
+export async function listAdminRoles(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminRole>> {
+  return listAdminPage<AdminRole>('admin/roles', params, config)
 }
 
 export async function listRoleMenus(): Promise<unknown[]> {
@@ -71,8 +86,8 @@ export async function deleteAdminRoles(ids: number[]): Promise<void> {
   responseData(response)
 }
 
-export async function listAdminJobs(params: Record<string, string | number> = {}): Promise<Page<AdminJob>> {
-  return listAdminPage<AdminJob>('admin/jobs', params)
+export async function listAdminJobs(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminJob>> {
+  return listAdminPage<AdminJob>('admin/jobs', params, config)
 }
 
 export async function getAdminJob(id: number): Promise<AdminJob> {
@@ -112,8 +127,8 @@ export async function runAdminJob(id: number, jobGroup: string): Promise<JobRunO
   return responseData(response)
 }
 
-export async function listAdminAlbums(params: Record<string, string | number> = {}): Promise<Page<AdminAlbum>> {
-  return listAdminPage<AdminAlbum>('admin/albums', params)
+export async function listAdminAlbums(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminAlbum>> {
+  return listAdminPage<AdminAlbum>('admin/albums', params, config)
 }
 
 export async function saveAdminAlbum(payload: { id?: number; albumName: string; albumDesc: string; albumCover: string; status: number }): Promise<void> {
@@ -126,8 +141,8 @@ export async function deleteAdminAlbum(id: number): Promise<void> {
   responseData(response)
 }
 
-export async function listAdminFriendLinks(params: Record<string, string | number> = {}): Promise<Page<AdminFriendLink>> {
-  return listAdminPage<AdminFriendLink>('admin/friend-links', params)
+export async function listAdminFriendLinks(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminFriendLink>> {
+  return listAdminPage<AdminFriendLink>('admin/friend-links', params, config)
 }
 
 export async function saveAdminFriendLink(payload: { id?: number; linkName: string; linkAvatar: string; linkAddress: string; linkIntro: string }): Promise<void> {
@@ -147,8 +162,8 @@ export async function uploadAdminAlbumCover(file: File): Promise<string> {
   return responseData(response)
 }
 
-export async function listAdminTalks(params: Record<string, string | number> = {}): Promise<Page<AdminTalk>> {
-  return listAdminPage<AdminTalk>('admin/talks', params)
+export async function listAdminTalks(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminTalk>> {
+  return listAdminPage<AdminTalk>('admin/talks', params, config)
 }
 
 export async function getAdminTalk(id: number): Promise<AdminTalk> {
@@ -193,8 +208,8 @@ export async function getAdminAlbum(id: number): Promise<AdminAlbum> {
   return responseData(response)
 }
 
-export async function listAdminPhotos(params: Record<string, string | number> = {}): Promise<Page<AdminPhoto>> {
-  return listAdminPage<AdminPhoto>('admin/photos', params)
+export async function listAdminPhotos(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminPhoto>> {
+  return listAdminPage<AdminPhoto>('admin/photos', params, config)
 }
 
 export async function uploadAdminPhoto(file: File): Promise<string> {
@@ -224,8 +239,19 @@ export async function deleteAdminPhotos(ids: number[]): Promise<void> {
   responseData(response)
 }
 
-export async function listAdminMenus(params: Record<string, string | number> = {}): Promise<unknown[]> {
-  return listAdminCollection<unknown>('admin/menus', params)
+/** Move the selected photos into another album. */
+export async function moveAdminPhotosToAlbum(photoIds: number[], albumId: number): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>('admin/photos/album', { photoIds, albumId })
+  responseData(response)
+}
+
+/** Album id/name options used by the "move photos" picker. */
+export async function listAdminAlbumOptions(): Promise<AdminAlbumOption[]> {
+  return listAdminCollection<AdminAlbumOption>('admin/albums/options')
+}
+
+export async function listAdminMenus(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<unknown[]> {
+  return listAdminCollection<unknown>('admin/menus', params, config)
 }
 
 export async function saveAdminMenu(payload: Record<string, unknown>): Promise<void> {
@@ -243,8 +269,8 @@ export async function deleteAdminMenu(id: number): Promise<void> {
   responseData(response)
 }
 
-export async function listAdminResources(params: Record<string, string | number> = {}): Promise<unknown[]> {
-  return listAdminCollection<unknown>('admin/permissions', params)
+export async function listAdminResources(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<unknown[]> {
+  return listAdminCollection<unknown>('admin/permissions', params, config)
 }
 
 export async function saveAdminResource(payload: Record<string, unknown>): Promise<void> {
@@ -273,13 +299,25 @@ export async function logout(): Promise<void> {
   responseData(response)
 }
 
-export async function listAdminPage<T>(path: string, params: Record<string, string | number>): Promise<Page<T>> {
-  const response = await http.get<ResultVO<unknown>>(path, { params })
+/**
+ * `config` 用于透传 `AbortSignal` 等请求级选项：列表视图在筛选/分页快速变化时
+ * 需要中止上一次还在飞的请求（见 `composables/useAsyncList.ts`）。
+ */
+export async function listAdminPage<T>(
+  path: string,
+  params: Record<string, string | number>,
+  config?: AxiosRequestConfig
+): Promise<Page<T>> {
+  const response = await http.get<ResultVO<unknown>>(path, { ...config, params })
   return normalizePage<T>(responseData(response))
 }
 
-export async function listAdminCollection<T>(path: string, params: Record<string, string | number> = {}): Promise<T[]> {
-  const response = await http.get<ResultVO<unknown>>(path, { params })
+export async function listAdminCollection<T>(
+  path: string,
+  params: Record<string, string | number> = {},
+  config?: AxiosRequestConfig
+): Promise<T[]> {
+  const response = await http.get<ResultVO<unknown>>(path, { ...config, params })
   const value = responseData(response)
   return Array.isArray(value) ? value as T[] : []
 }
@@ -312,6 +350,32 @@ export async function deleteAdminArticles(ids: number[]): Promise<void> {
   responseData(response)
 }
 
+/**
+ * Import one Markdown/text file as a new draft article.
+ *
+ * The backend derives the title from the file name and stores the raw text as
+ * the body with `status: 3` (draft); the response carries no id, so callers can
+ * only refresh the list afterwards.
+ */
+export async function importAdminArticles(file: File): Promise<void> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await http.post<ResultVO<unknown>>('admin/articles/import', form)
+  responseData(response)
+}
+
+/**
+ * Export articles as Markdown.
+ *
+ * `POST admin/articles/export` binds a bare JSON array of ids (not an object),
+ * and answers with the public URLs of the uploaded `.md` files.
+ */
+export async function exportAdminArticles(ids: number[]): Promise<string[]> {
+  const response = await http.post<ResultVO<unknown>>('admin/articles/export', ids)
+  const value = responseData(response)
+  return Array.isArray(value) ? value.map(String) : []
+}
+
 export async function saveTaxonomy(kind: 'categories' | 'tags', payload: Record<string, unknown>): Promise<void> {
   const response = await http.post<ResultVO<unknown>>(`admin/${kind}`, payload)
   responseData(response)
@@ -324,6 +388,17 @@ export async function deleteTaxonomy(kind: 'categories' | 'tags', ids: number[])
 
 export async function reviewComment(id: number, isReview: number): Promise<void> {
   const response = await http.put<ResultVO<unknown>>('admin/comments/review', { ids: [id], isReview })
+  responseData(response)
+}
+
+/** Review several comments in one request (`ReviewVO` accepts an id list). */
+export async function reviewComments(ids: number[], isReview: number): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>('admin/comments/review', { ids, isReview })
+  responseData(response)
+}
+
+export async function deleteComments(ids: number[]): Promise<void> {
+  const response = await http.delete<ResultVO<unknown>>('admin/comments', { data: ids })
   responseData(response)
 }
 
@@ -369,8 +444,8 @@ export async function changeAdminPassword(payload: { oldPassword: string; newPas
   responseData(response)
 }
 
-export async function listAdminOnlineUsers(params: Record<string, string | number> = {}): Promise<Page<AdminUser>> {
-  return listAdminPage<AdminUser>('admin/users/online', params)
+export async function listAdminOnlineUsers(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminUser>> {
+  return listAdminPage<AdminUser>('admin/users/online', params, config)
 }
 
 /** Force a single online session to log out. */
@@ -379,16 +454,42 @@ export async function removeAdminOnlineUser(userInfoId: number): Promise<void> {
   responseData(response)
 }
 
-export async function listAdminOperationLogs(params: Record<string, string | number> = {}): Promise<Page<Record<string, unknown>>> {
-  return listAdminPage<Record<string, unknown>>('admin/logs/operations', params)
+export async function listAdminJobGroups(): Promise<string[]> {
+  return listJobGroupOptions('admin/jobs/groups')
 }
 
-export async function listAdminExceptionLogs(params: Record<string, string | number> = {}): Promise<Page<Record<string, unknown>>> {
-  return listAdminPage<Record<string, unknown>>('admin/logs/exceptions', params)
+export async function listAdminJobLogGroups(): Promise<string[]> {
+  return listJobGroupOptions('admin/logs/jobs/groups')
 }
 
-export async function listAdminMedia(params: Record<string, string | number> = {}): Promise<Page<AdminMediaAsset>> {
-  return listAdminPage<AdminMediaAsset>('admin/media', params)
+/**
+ * Job group options.
+ *
+ * `admin/jobs/groups` answers with a JSON array, while `admin/logs/jobs/groups`
+ * currently serialises a single string from the repository, so both shapes are
+ * accepted and split loosely instead of trusting one contract.
+ */
+async function listJobGroupOptions(path: string): Promise<string[]> {
+  const response = await http.get<ResultVO<unknown>>(path)
+  return normalizeGroupList(responseData(response))
+}
+
+function normalizeGroupList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean)
+  if (typeof value === 'string') return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)
+  return []
+}
+
+export async function listAdminOperationLogs(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<Record<string, unknown>>> {
+  return listAdminPage<Record<string, unknown>>('admin/logs/operations', params, config)
+}
+
+export async function listAdminExceptionLogs(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<Record<string, unknown>>> {
+  return listAdminPage<Record<string, unknown>>('admin/logs/exceptions', params, config)
+}
+
+export async function listAdminMedia(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminMediaAsset>> {
+  return listAdminPage<AdminMediaAsset>('admin/media', params, config)
 }
 
 export async function uploadAdminMedia(file: File): Promise<AdminMediaAsset> {

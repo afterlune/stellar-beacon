@@ -25,18 +25,54 @@
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
           <a-tag v-if="jobScopeLabel" color="arcoblue">{{ jobScopeLabel }}</a-tag>
-          <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
+          <a-select
+            v-if="mode === 'job'"
+            v-model="groupFilter"
+            placeholder="全部分组"
+            allow-clear
+            style="width: 150px"
+            @change="reload">
+            <a-option v-for="group in groupOptions" :key="group" :value="group">{{ group }}</a-option>
+          </a-select>
           <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
           <span class="admin-toolbar-caption">共 {{ total }} 条记录</span>
+          <a-dropdown trigger="click" position="br">
+            <a-button size="small">
+              <template #icon><IconSettings /></template>
+              列设置
+            </a-button>
+            <template #content>
+              <div class="admin-column-settings">
+                <div class="admin-column-settings-head">
+                  <span>显示列</span>
+                  <a-button type="text" size="mini" @click="columnPrefs.reset">全部显示</a-button>
+                </div>
+                <a-checkbox
+                  v-for="column in config.columns"
+                  :key="column.dataIndex"
+                  :model-value="columnPrefs.isVisible(column.dataIndex)"
+                  :disabled="column.dataIndex === 'actions'"
+                  @change="(value) => columnPrefs.toggle(column.dataIndex, Boolean(value))">
+                  {{ column.title }}
+                </a-checkbox>
+              </div>
+            </template>
+          </a-dropdown>
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="日志加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${records.length} 条`" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="records"
           :columns="tableColumns"
           :loading="loading"
@@ -112,13 +148,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconCopy, IconHistory, IconRefresh } from '@arco-design/web-vue/es/icon'
+import { IconCopy, IconHistory, IconRefresh, IconSettings } from '@arco-design/web-vue/es/icon'
 import { useRoute } from 'vue-router'
 
-import { apiErrorMessage, cleanAdminJobLogs, deleteAdminLogs, listAdminPage } from '@/api/http'
+import {
+  apiErrorMessage,
+  cleanAdminJobLogs,
+  deleteAdminLogs,
+  listAdminJobLogGroups,
+  listAdminPage
+} from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useColumnPrefs, useStoredPageSize } from '@/composables/useTablePrefs'
+import { copyText } from '@/utils/clipboard'
 import { formatCell, formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
@@ -191,24 +239,71 @@ const configs = {
 } as const
 
 const config = computed(() => configs[props.mode])
-// Give every column an explicit slot so no cell leaks a raw RFC3339 timestamp.
-const tableColumns = computed(() => config.value.columns.map((column) => ({
-  ...column,
-  slotName: 'slotName' in column ? column.slotName : 'formatted'
-})))
 
-const records = ref<LogRecord[]>([])
+const viewKey = `log-${props.mode}`
+const columnPrefs = useColumnPrefs(viewKey, configs[props.mode].columns.map((column) => column.dataIndex))
+
+// Give every column an explicit slot so no cell leaks a raw RFC3339 timestamp.
+const tableColumns = computed(() => config.value.columns
+  .filter((column) => columnPrefs.isVisible(column.dataIndex))
+  .map((column) => ({
+    ...column,
+    slotName: 'slotName' in column ? column.slotName : 'formatted'
+  })))
+
 const keywords = ref('')
-const current = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-const loading = ref(false)
+const groupFilter = ref<string | undefined>(undefined)
+const groupOptions = ref<string[]>([])
+const selectedKeys = ref<number[]>([])
 const cleaning = ref(false)
-const errorMessage = ref('')
+const batchDeleting = ref(false)
 const detailVisible = ref(false)
 const detail = ref<LogRecord | null>(null)
 
+const {
+  items: records,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<LogRecord>(
+  ({ current: page, pageSize: size, signal }) => {
+    // 任务日志按任务名过滤，其余日志按关键词过滤。
+    const filterKey = props.mode === 'job' ? 'jobName' : 'keywords'
+    const params: Record<string, string | number> = {
+      current: page,
+      size,
+      [filterKey]: keywords.value.trim()
+    }
+    if (props.mode === 'job') {
+      const jobId = Number(route.params.quartzId)
+      if (Number.isInteger(jobId) && jobId > 0) params.jobId = jobId
+      if (groupFilter.value) params.jobGroup = groupFilter.value
+    }
+    return listAdminPage<LogRecord>(configs[props.mode].endpoint, params, { signal })
+  },
+  { pageSize: readStoredPageSize(viewKey), fallbackMessage: '日志加载失败', immediate: false }
+)
+
+useStoredPageSize(viewKey, pageSize)
+useQueryFilters([
+  { key: props.mode === 'job' ? 'jobName' : 'keywords', ref: keywords, debounce: true },
+  { key: 'jobGroup', ref: groupFilter },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
+
+onMounted(() => {
+  void load()
+  if (props.mode === 'job') void loadGroupOptions()
+})
+
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
+const selectedIds = computed(() => selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))
 const jobScopeLabel = computed(() => {
   if (props.mode !== 'job') return ''
   const jobId = Number(route.params.quartzId)
@@ -242,56 +337,52 @@ const detailSections = computed(() => {
     .map((section) => ({ label: section.label, value: pretty(section.raw) }))
 })
 
-onMounted(() => void load())
-
 watch(() => route.params.quartzId, () => {
   if (props.mode === 'job') void reload()
 })
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
 
 function clearKeywords(): void {
   keywords.value = ''
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const filterKey = props.mode === 'job' ? 'jobName' : 'keywords'
-    const params: Record<string, string | number> = {
-      current: current.value,
-      size: pageSize.value,
-      [filterKey]: keywords.value.trim()
-    }
-    if (props.mode === 'job') {
-      const jobId = Number(route.params.quartzId)
-      if (Number.isInteger(jobId) && jobId > 0) params.jobId = jobId
-    }
-    const page = await listAdminPage<LogRecord>(config.value.endpoint, params)
-    records.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '日志加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
+function clearSelection(): void {
+  selectedKeys.value = []
 }
 
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  clearSelection()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
+  clearSelection()
+  applyPageSize(size)
+}
+
+/** 分组接口只用于下拉选项，失败时静默降级为「不提供分组筛选」。 */
+async function loadGroupOptions(): Promise<void> {
+  try {
+    groupOptions.value = await listAdminJobLogGroups()
+  } catch {
+    groupOptions.value = []
+  }
+}
+
+async function batchDelete(): Promise<void> {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  batchDeleting.value = true
+  try {
+    await deleteAdminLogs(props.mode, ids)
+    Message.success(`已删除 ${ids.length} 条日志`)
+    clearSelection()
+    await load()
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '批量删除失败'))
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 function showDetail(record: LogRecord): void {
@@ -299,14 +390,12 @@ function showDetail(record: LogRecord): void {
   detailVisible.value = true
 }
 
-async function copyDetail(): Promise<void> {
+function copyDetail(): void {
   if (!detail.value) return
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(detail.value, null, 2))
-    Message.success('日志原始数据已复制')
-  } catch {
-    Message.warning('浏览器不允许自动复制，请手动选择文本')
-  }
+  void copyText(JSON.stringify(detail.value, null, 2), {
+    success: '日志原始数据已复制',
+    failure: '浏览器不允许自动复制，请手动选择文本'
+  })
 }
 
 async function deleteLog(id: unknown): Promise<void> {

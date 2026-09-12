@@ -8,7 +8,7 @@
           placeholder="搜索昵称"
           allow-clear
           @search="reload" />
-        <a-button :loading="loading" @click="loadUsers">
+        <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
           刷新
         </a-button>
@@ -33,7 +33,7 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="用户列表加载失败" @retry="load" />
 
       <div class="admin-table-shell">
         <a-table
@@ -135,10 +135,16 @@ import {
   updateAdminUserDisable
 } from '@/api/http'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, initialOf } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminUser, UserRole } from '@benetnasch/api-contract'
+
+const VIEW_KEY = 'users'
 
 const columns = [
   { title: '用户', dataIndex: 'nickname', slotName: 'nickname', minWidth: 210 },
@@ -150,21 +156,44 @@ const columns = [
   { title: '操作', dataIndex: 'actions', width: 88, slotName: 'actions' }
 ]
 
-const users = ref<AdminUser[]>([])
 const roleOptions = ref<UserRole[]>([])
 const rolesLoading = ref(false)
 const keywords = ref('')
 const loginType = ref<number | undefined>(undefined)
 const disableFilter = ref<number | undefined>(undefined)
-const current = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-const loading = ref(false)
 const saving = ref(false)
 const pendingDisableId = ref(0)
-const errorMessage = ref('')
 const editorVisible = ref(false)
 const editor = reactive({ userInfoId: 0, nickname: '', roleIds: [] as number[], loginType: 0 })
+
+const {
+  items: users,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminUser>(
+  ({ current: page, pageSize: size, signal }) => listAdminPage<AdminUser>('admin/users', {
+    current: page,
+    size,
+    keywords: keywords.value.trim(),
+    loginType: loginType.value ?? 0
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '用户列表加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'loginType', ref: loginType },
+  { key: 'disable', ref: disableFilter },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const hasFilters = computed(() =>
@@ -173,46 +202,20 @@ const hasFilters = computed(() =>
 /** Client-side refinement so the status filter works without a backend flag. */
 const visibleUsers = computed(() => {
   if (disableFilter.value === undefined) return users.value
-  const wantDisabled = disableFilter.value === 1
+  // URL 还原回来的是字符串，比较前统一转成数字。
+  const wantDisabled = Number(disableFilter.value) === 1
   return users.value.filter((user) => (Number(user.isDisable) === 1) === wantDisabled)
 })
 
 onMounted(() => {
-  void Promise.all([loadUsers(), loadRoles()])
+  void loadRoles()
 })
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await loadUsers()
-}
 
 function resetFilters(): void {
   keywords.value = ''
   loginType.value = undefined
   disableFilter.value = undefined
   void reload()
-}
-
-async function loadUsers(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    // `disableFilter` is a view-level refinement: the admin users endpoint does
-    // not expose a disabled flag, so it is applied client-side below.
-    const page = await listAdminPage<AdminUser>('admin/users', {
-      current: current.value,
-      size: pageSize.value,
-      keywords: keywords.value.trim(),
-      loginType: loginType.value ?? 0
-    })
-    users.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '用户列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
 }
 
 async function loadRoles(): Promise<void> {
@@ -227,14 +230,11 @@ async function loadRoles(): Promise<void> {
 }
 
 function changePage(page: number): void {
-  current.value = page
-  void loadUsers()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void loadUsers()
+  applyPageSize(size)
 }
 
 function openEditor(user: AdminUser): void {
@@ -259,7 +259,7 @@ async function saveEditor(): Promise<void> {
     })
     Message.success('用户信息已保存')
     editorVisible.value = false
-    await loadUsers()
+    await load()
   } catch (error) {
     Message.error(apiErrorMessage(error, '用户信息保存失败'))
   } finally {

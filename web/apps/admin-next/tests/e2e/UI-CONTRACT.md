@@ -982,3 +982,68 @@ outside the delivered artifacts and then deleted. Note that `web/apps/admin-next
 in the working tree (2188 insertions / 811 deletions) before this analysis began — that pre-existing change is not
 mine and was left untouched; the suite contract above is unaffected by it because it only asserts the class names and
 roles listed in §1 and §2.
+
+---
+
+## Addendum (console capability round): new surfaces and the rules they impose
+
+Everything in §0–§2 above still holds and is still asserted. This addendum records the DOM surfaces added when the
+console gained batch operations, URL-synced filters, live search and the editor leave-guard, plus the constraints any
+future change to them must respect.
+
+### New always-renderable surfaces
+
+| Surface | Where | Notes |
+| --- | --- | --- |
+| `.admin-batch-bar` | `components/AdminBatchBar.vue` | Renders **only when `count > 0`**. Holds a `已选 N 项` caption, the action slot, and a `取消选择` text button. |
+| `.admin-error-state` | `components/AdminErrorState.vue` | Replaces the per-view list-load `a-alert`. Carries `role="alert"` and one `重试` button; renders only when the list request failed. |
+| `.admin-column-settings` | `ArticleListView`, `LogListView` | Content of a `列设置` dropdown holding `a-checkbox` per column. Only reachable on user click; never visible by default. |
+| Leave guard | `components/AdminLeaveGuard.vue` + `composables/useUnsavedGuard.ts` | An `a-modal` in `ArticleEditorView`/`TalkEditorView`, visible only when the form differs from its post-load baseline. Buttons are `放弃修改` / `继续编辑` — deliberately **not** `确定`. |
+
+### Rules for future edits (each one is enforced by an existing assertion)
+
+1. **Batch labels must avoid `新增`, `编辑`, `确定`, `通过审核`, `取消审核`, `执行一次`.** `admin-shell.spec.ts` clicks
+   page-wide, non-exact `getByRole('button', { name: '新增' | '编辑' })` on `/categories`, `/tags`, `/users`, `/quartz`,
+   `/talk-list`, `/albums`, `/menus`, `/resources` and a page-wide `确定` on `/users` (662). Any additional matching
+   button turns those clicks into strict-mode violations. `批量审核` / `批量删除` / `取消选择` / `导出 Markdown` /
+   `移动到相册` were chosen to satisfy this.
+2. **Batch bars only exist while something is selected.** This is what keeps rule 1 satisfiable for the many buttons
+   whose names would otherwise collide, and it is why `CommentsView`'s `通过审核` and `PhotoTrashView`'s `批量恢复`
+   assertions still resolve to exactly one element.
+3. **`PhotoTrashView` keeps exactly one checkbox per row** and `批量恢复` must stay `disabled` until a row is selected
+   (719-722). The same `v-model:selected-keys` + `onlyCurrent` pattern was applied to the other list views, so a row
+   checkbox now exists on `/article-list`, `/comments`, `/talk-list`, `/quartz`, `/roles`, `/tags`, `/categories`,
+   `/links`, `/albums/5` and all three log routes. No assertion counts checkboxes on those pages.
+4. **URL sync never writes a default value.** `composables/useQueryFilters.ts` drops any filter equal to its initial
+   value, so the default URL stays `/article-list`, `/categories`, `/tags`, `/albums`, `/users`, `/roles`,
+   `/online/users`, `/links`, `/media`. The `toHaveURL(/…$/)` anchors in §0 depend on this — do not "normalise" the
+   query by always writing the full filter set.
+5. **`/quartz/log/:quartzId`'s `jobId` must keep flowing.** It is derived from the route param (not the query) inside
+   the `useAsyncList` fetcher (`LogListView.vue`), and `admin-shell.spec.ts:701` asserts the request carries `jobId=85`.
+   `useQueryFilters` preserves unrelated query keys but must not be used to move `jobId` into the query.
+6. **List state belongs to `composables/useAsyncList.ts`.** It owns `items/total/current/pageSize/loading/error`, drops
+   stale responses by sequence number and aborts superseded requests. Views must not reintroduce their own `load()`
+   that mutates those refs directly, or cancellation and the empty-`error` contract break.
+7. **The editors' dirty baseline is set after load and after save** (`markClean()`), which is why `/articles/42` and
+   `/talks/7` can be opened and left in the read-only test paths without a confirmation dialog appearing.
+
+### Facts corrected by this round
+
+- The note in §1.13 claiming `PhotoView.vue` renders a `photo-tile` masonry with **no** `a-table` is stale:
+  `/albums/:id` now renders a real `a-table` with `tr`/`td`, so the `.arco-table` / `getByRole('row')` /
+  `row.getByRole('cell').nth(1)` expectations of the gated suites are satisfiable as written.
+- `admin-shell.spec.ts` now contains **6** baseline tests (the 6th is
+  `imports and exports articles, moves photos, and keeps filters in the URL`), so a run reports
+  `6 passed / 5 skipped`. It is still 5 skipped: the `@integration` suites remain env-gated and are not run by CI.
+
+### Local verification commands
+
+```bash
+cd web
+npx vue-tsc --noEmit -p apps/admin-next/tsconfig.json                       # 0 errors
+npx vue-tsc --noEmit -p apps/admin-next/tsconfig.json \
+  --noUnusedLocals --noUnusedParameters                                     # 0 errors
+npm run build:admin                                                         # vite build
+npm run test:admin                                                          # 6 passed / 5 skipped
+```
+

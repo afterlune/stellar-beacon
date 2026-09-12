@@ -8,15 +8,6 @@
           placeholder="搜索友链名称"
           allow-clear
           @search="reload" />
-        <a-popconfirm
-          :content="`确定删除选中的 ${selectedIds.length} 条友链吗？`"
-          :disabled="selectedIds.length === 0"
-          @ok="deleteLinks(selectedIds)">
-          <a-button status="danger" :disabled="selectedIds.length === 0">
-            <template #icon><IconDelete /></template>
-            批量删除
-          </a-button>
-        </a-popconfirm>
         <a-button type="primary" @click="openEditor()">
           <template #icon><IconPlus /></template>
           新增
@@ -41,7 +32,19 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="友链列表加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${links.length} 条`" @clear="clearSelection">
+        <a-popconfirm
+          :content="`确定删除选中的 ${selectedIds.length} 条友链吗？`"
+          :disabled="selectedIds.length === 0"
+          @ok="deleteLinks(selectedIds)">
+          <a-button status="danger" :disabled="selectedIds.length === 0">
+            <template #icon><IconDelete /></template>
+            批量删除
+          </a-button>
+        </a-popconfirm>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
@@ -132,17 +135,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDelete, IconLink, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, deleteAdminFriendLinks, listAdminFriendLinks, saveAdminFriendLink } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminFriendLink } from '@benetnasch/api-contract'
+
+const VIEW_KEY = 'friend-links'
 
 const columns = [
   { title: '头像', dataIndex: 'linkAvatar', width: 84, slotName: 'avatar' },
@@ -153,65 +163,64 @@ const columns = [
   { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 150 }
 ]
 
-const links = ref<AdminFriendLink[]>([])
 const selectedKeys = ref<Array<string | number>>([])
 const keywords = ref('')
-const current = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-const loading = ref(false)
 const saving = ref(false)
-const errorMessage = ref('')
 const editorVisible = ref(false)
 const editor = reactive({ id: 0, linkName: '', linkAvatar: '', linkAddress: '', linkIntro: '' })
+
+const {
+  items: links,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminFriendLink>(
+  async ({ current: page, pageSize: size, signal }) => {
+    const result = await listAdminFriendLinks({
+      current: page,
+      size,
+      keywords: keywords.value.trim()
+    }, { signal })
+    // 重新加载后丢掉已不在当前页的勾选，避免批量删除误伤其它页的数据。
+    const available = new Set(result.items.map((link) => Number(link.id)))
+    selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
+    return result
+  },
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '友链列表加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
 
 const selectedIds = computed(() =>
   [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
 )
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 
-onMounted(() => void load())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
-
 function clearKeywords(): void {
   keywords.value = ''
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminFriendLinks({
-      current: current.value,
-      size: pageSize.value,
-      keywords: keywords.value.trim()
-    })
-    links.value = page.items
-    total.value = page.total
-    const available = new Set(links.value.map((link) => Number(link.id)))
-    selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '友链列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
-}
-
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
+  applyPageSize(size)
+}
+
+function clearSelection(): void {
+  selectedKeys.value = []
 }
 
 function openEditor(link?: AdminFriendLink): void {

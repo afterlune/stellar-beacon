@@ -40,17 +40,24 @@
           <span class="admin-toolbar-caption">本页 {{ filteredPhotos.length }} 张</span>
         </div>
         <div class="admin-table-toolbar-actions">
-          <a-button :loading="loading" size="small" @click="reload">
+          <a-button :loading="loading" size="small" @click="reloadAll">
             <template #icon><IconRefresh /></template>
             刷新
           </a-button>
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="照片加载失败" @retry="reloadAll" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${filteredPhotos.length} 张`" @clear="clearSelection">
+        <a-button size="small" @click="openMove">移动到相册</a-button>
+        <a-button size="small" status="danger" @click="batchRemove">移入回收站</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="filteredPhotos"
           :columns="columns"
           :loading="loading"
@@ -116,6 +123,30 @@
         <span class="admin-field-hint">照片文件本身不会因为重命名而改变。</span>
       </div>
     </a-modal>
+
+    <a-modal
+      v-model:visible="moveVisible"
+      title="移动到相册"
+      :ok-loading="moving"
+      :ok-button-props="{ disabled: !targetAlbumId }"
+      :mask-closable="false"
+      width="480px"
+      @ok="confirmMove">
+      <a-form :model="{ targetAlbumId }" layout="vertical">
+        <a-form-item label="目标相册" required>
+          <a-select v-model="targetAlbumId" placeholder="选择目标相册" :loading="albumOptionsLoading">
+            <a-option
+              v-for="option in albumOptions"
+              :key="option.id"
+              :value="option.id"
+              :disabled="Number(option.id) === albumId">
+              {{ option.albumName }}
+            </a-option>
+          </a-select>
+          <template #help>照片会从当前相册移出并加入目标相册，原图不会被删除。</template>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </section>
 </template>
 
@@ -128,19 +159,29 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   apiErrorMessage,
   getAdminAlbum,
+  listAdminAlbumOptions,
   listAdminPhotos,
+  moveAdminPhotosToAlbum,
   saveAdminPhotos,
   updateAdminPhoto,
   updateAdminPhotoDelete,
-  uploadAdminPhoto
+  uploadAdminPhoto,
+  type AdminAlbumOption
 } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum, AdminPhoto } from '@benetnasch/api-contract'
+
+const VIEW_KEY = 'photos'
 
 const route = useRoute()
 const router = useRouter()
@@ -159,20 +200,52 @@ const columns = [
 ]
 
 const album = ref<AdminAlbum>({ id: 0, albumName: '' })
-const photos = ref<AdminPhoto[]>([])
 const keywords = ref('')
-const current = ref(1)
-const pageSize = ref(18)
-const total = ref(0)
-const loading = ref(false)
 const uploading = ref(false)
 const saving = ref(false)
 const editorVisible = ref(false)
-const errorMessage = ref('')
+const albumError = ref('')
 const photoInput = ref<HTMLInputElement | null>(null)
 const editor = reactive({ id: 0, photoName: '', photoDesc: '', photoSrc: '' })
 
+const selectedKeys = ref<number[]>([])
+const moveVisible = ref(false)
+const moving = ref(false)
+const targetAlbumId = ref<number | undefined>(undefined)
+const albumOptions = ref<AdminAlbumOption[]>([])
+const albumOptionsLoading = ref(false)
+
+const {
+  items: photos,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: listError,
+  load: loadPhotos,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminPhoto>(
+  ({ current: page, pageSize: size, signal }) => listAdminPhotos({
+    current: page,
+    size,
+    albumId: albumId.value,
+    isDelete: 0
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY, 18), fallbackMessage: '照片列表加载失败', immediate: false }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'page', ref: current }
+], { onRestore: () => void loadPhotos() })
+
+onMounted(() => void reloadAll())
+
+const errorMessage = computed(() => listError.value || albumError.value)
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value, [18, 36, 72]))
+const selectedIds = computed(() => selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))
 const filteredPhotos = computed(() => {
   const query = keywords.value.trim().toLowerCase()
   if (!query) return photos.value
@@ -182,56 +255,35 @@ const filteredPhotos = computed(() => {
 })
 const editorPreview = computed(() => (isHttpUrl(editor.photoSrc) ? editor.photoSrc : ''))
 
-onMounted(() => void loadAll())
-
-async function loadAll(): Promise<void> {
+async function reloadAll(): Promise<void> {
+  albumError.value = ''
   if (!albumId.value) {
-    errorMessage.value = '相册不存在或链接已失效。'
+    albumError.value = '相册不存在或链接已失效。'
     return
   }
   await Promise.all([loadAlbum(), loadPhotos()])
-}
-
-async function reload(): Promise<void> {
-  await loadAll()
 }
 
 async function loadAlbum(): Promise<void> {
   try {
     album.value = await getAdminAlbum(albumId.value)
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '相册信息加载失败')
+    albumError.value = apiErrorMessage(error, '相册信息加载失败')
   }
 }
 
-async function loadPhotos(): Promise<void> {
-  loading.value = true
-  try {
-    const page = await listAdminPhotos({
-      current: current.value,
-      size: pageSize.value,
-      albumId: albumId.value,
-      isDelete: 0
-    })
-    photos.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '照片列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
+function clearSelection(): void {
+  selectedKeys.value = []
 }
 
 function changePage(page: number): void {
-  current.value = page
-  void loadPhotos()
+  clearSelection()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void loadPhotos()
+  clearSelection()
+  applyPageSize(size)
 }
 
 function openEditor(photo: AdminPhoto): void {
@@ -273,6 +325,51 @@ async function removePhoto(id: unknown): Promise<void> {
     await Promise.all([loadPhotos(), loadAlbum()])
   } catch (error) {
     Message.error(apiErrorMessage(error, '照片移除失败'))
+  }
+}
+
+async function batchRemove(): Promise<void> {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  try {
+    await updateAdminPhotoDelete(ids)
+    Message.success(`已移入回收站 ${ids.length} 张照片`)
+    clearSelection()
+    await Promise.all([loadPhotos(), loadAlbum()])
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '批量移除失败'))
+  }
+}
+
+async function openMove(): Promise<void> {
+  if (selectedIds.value.length === 0) return
+  targetAlbumId.value = undefined
+  moveVisible.value = true
+  albumOptionsLoading.value = true
+  try {
+    albumOptions.value = await listAdminAlbumOptions()
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '相册列表加载失败'))
+  } finally {
+    albumOptionsLoading.value = false
+  }
+}
+
+async function confirmMove(): Promise<void> {
+  const ids = selectedIds.value
+  if (ids.length === 0 || !targetAlbumId.value) return
+  moving.value = true
+  try {
+    await moveAdminPhotosToAlbum(ids, Number(targetAlbumId.value))
+    Message.success(`已移动 ${ids.length} 张照片`)
+    moveVisible.value = false
+    clearSelection()
+    // 照片离开了当前相册，页数与总数都要重新取。
+    await Promise.all([loadPhotos(), loadAlbum()])
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '照片移动失败'))
+  } finally {
+    moving.value = false
   }
 }
 

@@ -34,10 +34,16 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="说说列表加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${visibleTalks.length} 条`" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="visibleTalks"
           :columns="columns"
           :loading="loading"
@@ -94,16 +100,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { computed, ref } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { IconMessage, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 import { useRouter } from 'vue-router'
 
-import { apiErrorMessage, deleteAdminTalks, getAdminTalk, listAdminTalks, saveAdminTalk } from '@/api/http'
+import { apiErrorMessage, deleteAdminTalks, getAdminTalk, listAdminPage, saveAdminTalk } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, isHttpUrl, plainText } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminTalk } from '@benetnasch/api-contract'
@@ -121,18 +132,43 @@ const columns = [
   { title: '操作', dataIndex: 'actions', width: 150, slotName: 'actions' }
 ]
 
+const VIEW_KEY = 'talks'
+
 const router = useRouter()
-const talks = ref<AdminTalk[]>([])
 const keywords = ref('')
 const statusFilter = ref<'all' | '1' | '2'>('all')
-const current = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-const loading = ref(false)
 const pendingTopId = ref(0)
-const errorMessage = ref('')
+const selectedKeys = ref<number[]>([])
+const batchDeleting = ref(false)
+
+const {
+  items: talks,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminTalk>(
+  ({ current: page, pageSize: size, signal }) => listAdminPage<AdminTalk>('admin/talks', { current: page, size }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '说说列表加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+// 说说的关键词与状态都是页内过滤，同步进地址栏只是为了刷新/分享后仍保留条件。
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'status', ref: statusFilter },
+  { key: 'page', ref: current }
+], { onRestore: () => void load() })
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
+const selectedIds = computed(() =>
+  [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
+)
 const hasFilters = computed(() => Boolean(keywords.value.trim()) || statusFilter.value !== 'all')
 /**
  * The talk list endpoint filters by status only, so the keyword box narrows the
@@ -147,43 +183,49 @@ const visibleTalks = computed(() => {
   return scoped.filter((talk) => plainText(talk.content).toLowerCase().includes(query))
 })
 
-onMounted(() => void load())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
-
 function resetFilters(): void {
   keywords.value = ''
   statusFilter.value = 'all'
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminTalks({ current: current.value, size: pageSize.value })
-    talks.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '说说列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
-}
-
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  clearSelection()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
+  clearSelection()
+  applyPageSize(size)
+}
+
+function clearSelection(): void {
+  selectedKeys.value = []
+}
+
+function batchDelete(): void {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  Modal.confirm({
+    title: '批量删除',
+    content: `删除选中的 ${ids.length} 条说说后无法恢复，确定继续吗？`,
+    okText: '批量删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      batchDeleting.value = true
+      try {
+        await deleteAdminTalks(ids)
+        Message.success(`已删除 ${ids.length} 条说说`)
+        clearSelection()
+        await load()
+      } catch (error) {
+        Message.error(apiErrorMessage(error, '批量删除失败'))
+      } finally {
+        batchDeleting.value = false
+      }
+    }
+  })
 }
 
 /**

@@ -111,6 +111,10 @@
     </a-card>
 
     <AdminMediaPicker v-model="mediaPickerVisible" @select="selectMedia" />
+
+    <AdminLeaveGuard :visible="leaveVisible" @ok="confirmLeave" @cancel="cancelLeave">
+      当前页面还有未保存的修改，离开后这些内容会丢失。
+    </AdminLeaveGuard>
   </section>
 </template>
 
@@ -129,9 +133,11 @@ import {
 } from '@/api/http'
 import AdminFlagCheckbox from '@/components/AdminFlagCheckbox.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
+import AdminLeaveGuard from '@/components/AdminLeaveGuard.vue'
 import AdminMediaPicker from '@/components/AdminMediaPicker.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
-import { plainText, truncate } from '@/utils/format'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
+import { plainText } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,6 +171,23 @@ const tags = ref<string[]>([])
 const articleId = computed(() => (typeof route.params.articleId === 'string' ? route.params.articleId : ''))
 const isEditing = computed(() => /^\d+$/.test(articleId.value))
 
+/**
+ * 只比较真正会被保存的字段：加载与保存都会重置基线，因此「打开就离开」不会被拦截。
+ */
+const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsavedGuard(() => JSON.stringify([
+  form.articleTitle,
+  form.articleContent,
+  form.articleCover,
+  form.categoryName,
+  form.tagNames,
+  form.status,
+  form.type,
+  form.isTop,
+  form.isFeatured,
+  form.password,
+  form.originalUrl
+]))
+
 const wordCount = computed(() => plainText(form.articleContent).replace(/\s/g, '').length)
 const summary = computed(() => {
   const parts = [`约 ${wordCount.value} 字`]
@@ -176,7 +199,10 @@ const summary = computed(() => {
 onMounted(() => {
   void loadTaxonomy()
   if (isEditing.value) void load()
-  else editorReady.value = true
+  else {
+    editorReady.value = true
+    markClean()
+  }
 })
 
 async function load(): Promise<void> {
@@ -205,6 +231,7 @@ async function load(): Promise<void> {
     Message.error(errorMessage.value)
   } finally {
     editorReady.value = true
+    markClean()
   }
 }
 
@@ -239,6 +266,7 @@ async function save(): Promise<void> {
       originalUrl: form.type === 1 ? '' : form.originalUrl.trim()
     })
     Message.success(isEditing.value ? '文章已更新' : '文章已发布')
+    markClean()
     await router.push('/article-list')
   } catch (error) {
     errorMessage.value = apiErrorMessage(error, '文章保存失败')

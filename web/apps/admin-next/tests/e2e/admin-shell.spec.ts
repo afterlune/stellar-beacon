@@ -10,6 +10,13 @@ let websiteConfigUpdatedCalled = false
 let aboutUpdatedCalled = false
 let profileUpdatedCalled = false
 let returnEmptyMenus = false
+let articleImported = false
+let articleImportHasFile = false
+let articleExportedIds: number[] = []
+let articleExported = false
+let photoMovePayload: { photoIds?: number[]; albumId?: number } | null = null
+let jobGroupsRequested = false
+let jobLogGroupsRequested = false
 
 const defaultWebsiteConfig = {
   name: 'Benetnasch',
@@ -36,6 +43,13 @@ test.beforeEach(async ({ page }) => {
   aboutUpdatedCalled = false
   profileUpdatedCalled = false
   returnEmptyMenus = false
+  articleImported = false
+  articleImportHasFile = false
+  articleExportedIds = []
+  articleExported = false
+  photoMovePayload = null
+  jobGroupsRequested = false
+  jobLogGroupsRequested = false
   websiteConfig = { ...defaultWebsiteConfig }
   aboutContent = defaultAboutContent
   profile = { nickname: '测试管理员', intro: '保持公开资料边界', website: 'https://example.com/admin' }
@@ -329,6 +343,80 @@ test.beforeEach(async ({ page }) => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 42, articleTitle: '已存在文章', articleContent: '正文', categoryName: '工程化', tagNames: ['工程化'], status: 1, type: 1, isTop: 1, isFeatured: 0 } })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/articles/import') {
+      // 导入走 multipart，服务端读的是 `file` 字段。
+      articleImported = true
+      articleImportHasFile = (route.request().postData() || '').includes('name="file"')
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/articles/export') {
+      // 导出接口绑定的是裸的 id 数组，而不是对象。
+      articleExportedIds = (route.request().postDataJSON() as number[] | null) || []
+      articleExported = true
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          flag: true,
+          code: 20000,
+          message: '操作成功',
+          data: ['https://example.com/export/传统后台路线.md']
+        })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/photos/album') {
+      photoMovePayload = route.request().postDataJSON() as { photoIds?: number[]; albumId?: number }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/albums/options') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          flag: true,
+          code: 20000,
+          message: '操作成功',
+          data: [{ id: 5, albumName: '项目截图' }, { id: 6, albumName: '旅行相册' }]
+        })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/jobs/groups') {
+      jobGroupsRequested = true
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: ['默认', '清理'] })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/logs/jobs/groups') {
+      // 该接口当前把分组序列化成一个字符串，前端必须兼容这种形状。
+      jobLogGroupsRequested = true
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: '默认,清理' })
       })
       return
     }
@@ -824,6 +912,83 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await expect(page.getByRole('main').locator('input:not([type="file"])').nth(0)).toHaveValue('测试管理员 E2E')
   await expect(page.getByRole('main').locator('textarea')).toHaveValue('个人中心刷新后仍保留')
   await expect(page.getByRole('main').locator('input:not([type="file"])').nth(1)).toHaveValue('https://example.com/admin-e2e')
+  expect(pageErrors()).toEqual([])
+})
+
+test('imports and exports articles, moves photos, and keeps filters in the URL', async ({ page }) => {
+  test.setTimeout(120_000)
+  const pageErrors = capturePageErrors(page)
+  await page.goto('/login')
+  await page.getByTestId('login-username').locator('input').fill('admin@example.com')
+  await page.getByTestId('login-password').locator('input').fill('password')
+  await page.getByTestId('login-submit').click()
+  await expect(page).toHaveURL(/\/$/)
+
+  await page.locator('.admin-sider').getByText('文章列表', { exact: true }).click()
+  await expect(page).toHaveURL(/\/article-list$/)
+  await expect(page.locator('.arco-table').getByText('传统后台路线')).toBeVisible()
+  // 默认态不写任何 query，行尾锚点才能继续成立。
+  expect(new URL(page.url()).search).toBe('')
+
+  // 导入文章：multipart 上传，服务端按文件名建草稿。
+  await page.locator('input[type="file"]').setInputFiles({
+    name: '导入的文章.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from('# 导入的文章')
+  })
+  await expect.poll(() => articleImported).toBe(true)
+  expect(articleImportHasFile).toBe(true)
+
+  // 批量导出：请求体必须是裸的 id 数组，返回的 Markdown 链接要展示出来。
+  await page.getByRole('row', { name: /传统后台路线/ }).getByRole('checkbox').locator('..').click()
+  await expect(page.getByRole('button', { name: '导出 Markdown' })).toBeVisible()
+  await page.getByRole('button', { name: '导出 Markdown' }).click()
+  await expect.poll(() => articleExported).toBe(true)
+  expect(articleExportedIds).toEqual([7])
+  await expect(page.locator('.arco-modal:visible')).toContainText('传统后台路线.md')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.arco-modal:visible')).toHaveCount(0)
+
+  // 搜索防抖：停止输入后既查一次接口，也把非默认条件写进地址栏。
+  const search = page.locator('.arco-input-search').getByRole('textbox')
+  const filtered = page.waitForResponse((response) => {
+    const responseURL = new URL(response.url())
+    return responseURL.pathname === '/api/v1/admin/articles' &&
+      response.request().method() === 'GET' &&
+      responseURL.searchParams.get('keywords') === '联调'
+  })
+  await search.fill('联调')
+  await filtered
+  await expect(page).toHaveURL(/keywords=/)
+  // 第一页是默认值，不应该出现在地址栏里。
+  expect(new URL(page.url()).searchParams.has('page')).toBe(false)
+
+  // 刷新后筛选条件仍然生效，说明 URL 是唯一事实来源。
+  await page.reload()
+  await expect(page.locator('.arco-input-search').getByRole('textbox')).toHaveValue('联调')
+
+  // 照片批量移动相册：PUT 的请求体要同时带 photoIds 与 albumId。
+  await page.goto('/albums/5')
+  await expect(page.getByRole('main').getByText('项目截图 · 照片')).toBeVisible()
+  await page.getByRole('row', { name: /首页截图/ }).getByRole('checkbox').locator('..').click()
+  await page.getByRole('button', { name: '移动到相册' }).click()
+  const moveDialog = page.locator('.arco-modal:visible')
+  await expect(moveDialog).toContainText('目标相册')
+  await moveDialog.locator('.arco-select').click()
+  await page.locator('.arco-select-option').filter({ hasText: '旅行相册' }).click()
+  await moveDialog.getByRole('button', { name: '确定' }).click()
+  await expect.poll(() => photoMovePayload?.albumId).toBe(6)
+  expect(photoMovePayload?.photoIds).toEqual([13])
+
+  // 任务分组：列表接口返回数组，日志接口返回字符串，两者都要能被解析成选项。
+  await page.goto('/quartz')
+  await expect.poll(() => jobGroupsRequested).toBe(true)
+  await page.goto('/quartz/log/85')
+  await expect.poll(() => jobLogGroupsRequested).toBe(true)
+  await page.getByRole('main').locator('.arco-select').first().click()
+  await expect(page.locator('.arco-select-option').filter({ hasText: '清理' })).toBeVisible()
+  await page.keyboard.press('Escape')
+
   expect(pageErrors()).toEqual([])
 })
 

@@ -1095,6 +1095,13 @@ a:hover {
   gap: var(--admin-gap-sm);
 }
 
+/* 筛选区吃满整行。默认的 `flex: 0 1 auto` 会按内容收缩，结果把最后一个筛选挤到
+   第二行、只剩一个孤立的下拉框——看起来像是没做完的页面。 */
+.admin-table-toolbar-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .admin-table-toolbar-actions {
   margin-left: auto;
 }
@@ -1114,6 +1121,103 @@ a:hover {
   width: 1px;
   height: 20px;
   background: var(--admin-border);
+}
+
+/* — 批量操作条 — */
+
+.admin-batch-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--admin-gap-sm);
+  margin-bottom: var(--admin-gap);
+  padding: 8px 10px 8px 14px;
+  border: 1px solid var(--admin-brand-soft-strong);
+  border-radius: var(--admin-radius-card);
+  background: var(--admin-brand-soft);
+  animation: admin-batch-bar-in var(--admin-duration) var(--admin-ease) both;
+}
+
+.admin-batch-bar-count {
+  color: var(--admin-brand-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-batch-bar-count strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.admin-batch-bar-hint {
+  margin-left: 6px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.admin-batch-bar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--admin-gap-xs);
+  margin-left: auto;
+}
+
+.admin-batch-bar-clear {
+  flex: none;
+}
+
+@keyframes admin-batch-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* — 列显示设置 — */
+
+.admin-column-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 6px;
+  min-width: 252px;
+  max-height: 280px;
+  padding: 4px 2px;
+  overflow-y: auto;
+}
+
+/* Arco 会把下拉内容限制在 ~200px 高度，单列排 9 个列名会被裁掉一半；
+   两列排布让完整列表落在限制之内，列再多也只是内部滚动。 */
+.admin-column-settings-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px 8px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-column-settings .arco-checkbox {
+  padding: 3px 4px;
+  border-radius: var(--admin-radius-xs);
+}
+
+.admin-column-settings .arco-checkbox:hover {
+  background: var(--admin-surface-soft);
+}
+
+.admin-column-settings .arco-checkbox-label {
+  color: var(--admin-ink);
+  font-size: 13px;
 }
 
 .admin-table-shell {
@@ -1540,6 +1644,56 @@ a:hover {
   gap: 8px;
   justify-content: center;
   margin-top: 4px;
+}
+
+/* — 加载失败态 — */
+
+.admin-error-state {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: var(--admin-gap);
+  padding: 14px 16px;
+  border: 1px solid var(--admin-danger-soft);
+  border-radius: var(--admin-radius-card);
+  background: var(--admin-danger-soft);
+}
+
+.admin-error-state-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  color: var(--admin-danger);
+  background: var(--admin-surface);
+  font-size: 18px;
+}
+
+.admin-error-state-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-error-state-copy strong {
+  color: var(--admin-ink-strong);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.admin-error-state-copy p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.admin-error-state .arco-btn {
+  flex: none;
+  margin-left: auto;
 }
 
 /* — 实时状态徽标 — */

@@ -56,6 +56,10 @@
         </div>
       </a-form>
     </a-card>
+
+    <AdminLeaveGuard :visible="leaveVisible" @ok="confirmLeave" @cancel="cancelLeave">
+      当前页面还有未保存的修改，离开后这些内容会丢失。
+    </AdminLeaveGuard>
   </section>
 </template>
 
@@ -67,7 +71,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage, getAdminTalk, saveAdminTalk, uploadAdminTalkImage } from '@/api/http'
 import AdminFlagCheckbox from '@/components/AdminFlagCheckbox.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
+import AdminLeaveGuard from '@/components/AdminLeaveGuard.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 
 const route = useRoute()
 const router = useRouter()
@@ -83,11 +89,20 @@ const editor = reactive({ id: 0, content: '', images: [] as string[], isTop: 0, 
 const talkId = computed(() => String(route.params.talkId || route.params.id || route.params.articleId || ''))
 const isEditing = computed(() => /^\d+$/.test(talkId.value))
 
+/** 只在内容/图片/可见性真正变化时拦截离开；加载完成即建立基线。 */
+const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsavedGuard(() => JSON.stringify([
+  editor.content,
+  editor.images,
+  editor.isTop,
+  editor.status
+]))
+
 onMounted(() => {
   if (isEditing.value) {
     void load()
   } else {
     editorReady.value = true
+    markClean()
   }
 })
 
@@ -103,6 +118,7 @@ async function load(): Promise<void> {
     errorMessage.value = apiErrorMessage(error, '说说加载失败')
   } finally {
     editorReady.value = true
+    markClean()
   }
 }
 

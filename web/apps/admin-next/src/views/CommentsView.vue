@@ -37,10 +37,17 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="评论加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${records.length} 条`" @clear="clearSelection">
+        <a-button size="small" type="primary" :loading="batchApproving" @click="batchReview">批量审核</a-button>
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="records"
           :columns="columns"
           :loading="loading"
@@ -64,7 +71,7 @@
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" :loading="busyId === record.id" @click="toggleReview(record)">
+              <a-button type="text" size="small" :loading="isPending(record.id)" @click="toggleReview(record)">
                 {{ Number(record.isReview) === 1 ? '取消审核' : '通过审核' }}
               </a-button>
               <a-popconfirm content="确认删除这条评论吗？删除后无法恢复。" @ok="remove(record.id)">
@@ -87,14 +94,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconMessage, IconRefresh } from '@arco-design/web-vue/es/icon'
 
-import { apiErrorMessage, deleteComment, listAdminPage, reviewComment } from '@/api/http'
+import {
+  apiErrorMessage,
+  deleteComment,
+  deleteComments,
+  listAdminPage,
+  reviewComment,
+  reviewComments
+} from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { usePendingIds } from '@/composables/usePendingIds'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, plainText } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
@@ -104,6 +124,8 @@ interface CommentRow extends Record<string, unknown> {
   commentContent?: string
   createTime?: string
 }
+
+const VIEW_KEY = 'comments'
 
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 78, slotName: 'id' },
@@ -117,62 +139,107 @@ const columns = [
 
 const keywords = ref('')
 const reviewFilter = ref(0)
-const current = ref(1)
-const size = ref(10)
-const total = ref(0)
-const records = ref<CommentRow[]>([])
-const loading = ref(false)
+const selectedKeys = ref<number[]>([])
 const approvingAll = ref(false)
-const busyId = ref(0)
-const errorMessage = ref('')
+const batchApproving = ref(false)
+const batchDeleting = ref(false)
 
-const pagination = computed(() => tablePagination(current.value, size.value, total.value))
+const { isPending, withPending } = usePendingIds()
+
+const {
+  items: records,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<CommentRow>(
+  ({ current: page, pageSize: size, signal }) => listAdminPage<CommentRow>('admin/comments', {
+    current: page,
+    size,
+    keywords: keywords.value.trim(),
+    isReview: reviewFilter.value
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '评论加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'isReview', ref: reviewFilter },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
+
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const pendingCount = computed(() => records.value.filter((row) => Number(row.isReview) !== 1).length)
-
-onMounted(() => void reload())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
+const selectedIds = computed(() => selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))
 
 function clearKeywords(): void {
   keywords.value = ''
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminPage<CommentRow>('admin/comments', {
-      current: current.value,
-      size: size.value,
-      keywords: keywords.value.trim(),
-      isReview: reviewFilter.value
-    })
-    records.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '评论加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
+function clearSelection(): void {
+  selectedKeys.value = []
+}
+
+function changePage(page: number): void {
+  clearSelection()
+  gotoPage(page)
+}
+
+function changePageSize(size: number): void {
+  clearSelection()
+  applyPageSize(size)
 }
 
 async function toggleReview(row: CommentRow): Promise<void> {
   const next = Number(row.isReview) === 1 ? 0 : 1
-  busyId.value = Number(row.id)
+  await withPending(row.id, async () => {
+    try {
+      await reviewComment(Number(row.id), next)
+      row.isReview = next
+      Message.success(next === 1 ? '评论已通过审核' : '已取消审核')
+      await load()
+    } catch (error) {
+      Message.error(apiErrorMessage(error, '审核操作失败'))
+    }
+  })
+}
+
+async function batchReview(): Promise<void> {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  batchApproving.value = true
   try {
-    await reviewComment(Number(row.id), next)
-    row.isReview = next
-    Message.success(next === 1 ? '评论已通过审核' : '已取消审核')
+    await reviewComments(ids, 1)
+    Message.success(`已通过 ${ids.length} 条评论`)
+    clearSelection()
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '审核操作失败'))
+    Message.error(apiErrorMessage(error, '批量审核失败'))
   } finally {
-    busyId.value = 0
+    batchApproving.value = false
+  }
+}
+
+async function batchDelete(): Promise<void> {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  batchDeleting.value = true
+  try {
+    await deleteComments(ids)
+    Message.success(`已删除 ${ids.length} 条评论`)
+    clearSelection()
+    await load()
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '批量删除失败'))
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -181,7 +248,7 @@ async function approveAllPending(): Promise<void> {
   if (pending.length === 0) return
   approvingAll.value = true
   try {
-    for (const row of pending) await reviewComment(Number(row.id), 1)
+    await reviewComments(pending.map((row) => Number(row.id)), 1)
     Message.success(`已通过本页 ${pending.length} 条评论`)
     await load()
   } catch (error) {
@@ -203,17 +270,6 @@ async function remove(id: unknown): Promise<void> {
   } catch (error) {
     Message.error(apiErrorMessage(error, '删除失败'))
   }
-}
-
-function changePage(page: number): void {
-  current.value = page
-  void load()
-}
-
-function changePageSize(pageSize: number): void {
-  size.value = pageSize
-  current.value = 1
-  void load()
 }
 </script>
 

@@ -38,7 +38,7 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="相册加载失败" @retry="load" />
 
       <div class="admin-table-shell">
         <a-table
@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDelete, IconImage, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 import { useRouter } from 'vue-router'
@@ -145,14 +145,18 @@ import { useRouter } from 'vue-router'
 import {
   apiErrorMessage,
   deleteAdminAlbum,
-  listAdminAlbums,
+  listAdminPage,
   saveAdminAlbum,
   uploadAdminAlbumCover
 } from '@/api/http'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum } from '@benetnasch/api-contract'
@@ -166,20 +170,43 @@ const columns = [
   { title: '操作', dataIndex: 'actions', width: 176, slotName: 'actions' }
 ]
 
+const VIEW_KEY = 'albums'
+
 const router = useRouter()
-const albums = ref<AdminAlbum[]>([])
 const keywords = ref('')
 const statusFilter = ref<'all' | '1' | '2'>('all')
-const current = ref(1)
-const pageSize = ref(8)
-const total = ref(0)
-const loading = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
-const errorMessage = ref('')
 const editorVisible = ref(false)
 const coverInput = ref<HTMLInputElement | null>(null)
 const editor = reactive({ id: 0, albumName: '', albumDesc: '', albumCover: '', status: 1 })
+
+const {
+  items: albums,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminAlbum>(
+  ({ current: page, pageSize: size, signal }) => listAdminPage<AdminAlbum>('admin/albums', {
+    current: page,
+    size,
+    keywords: keywords.value.trim()
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY, 8), fallbackMessage: '相册加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'status', ref: statusFilter },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const hasFilters = computed(() => Boolean(keywords.value.trim()) || statusFilter.value !== 'all')
@@ -188,47 +215,18 @@ const filteredAlbums = computed(() => statusFilter.value === 'all'
   : albums.value.filter((album) => Number(album.status) === Number(statusFilter.value)))
 const totalPhotos = computed(() => albums.value.reduce((sum, album) => sum + Number(album.photoCount || 0), 0))
 
-onMounted(() => void load())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
-
 function resetFilters(): void {
   keywords.value = ''
   statusFilter.value = 'all'
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminAlbums({
-      current: current.value,
-      size: pageSize.value,
-      keywords: keywords.value.trim()
-    })
-    albums.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '相册加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
-}
-
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
+  applyPageSize(size)
 }
 
 function openEditor(album?: AdminAlbum): void {

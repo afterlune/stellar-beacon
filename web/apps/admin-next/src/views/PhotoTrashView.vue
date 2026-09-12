@@ -46,7 +46,7 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="回收站加载失败" @retry="load" />
 
       <div class="admin-table-shell">
         <a-table
@@ -98,18 +98,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDelete, IconImage, IconLeft, IconRefresh, IconUndo } from '@arco-design/web-vue/es/icon'
 import { useRouter } from 'vue-router'
 
 import { apiErrorMessage, deleteAdminPhotos, listAdminPage, updateAdminPhotoDelete } from '@/api/http'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminPhoto } from '@benetnasch/api-contract'
+
+const VIEW_KEY = 'photo-trash'
 
 const columns = [
   { title: '预览', dataIndex: 'photoSrc', width: 108, slotName: 'source' },
@@ -119,16 +125,33 @@ const columns = [
 ]
 
 const router = useRouter()
-const photos = ref<AdminPhoto[]>([])
 const selectedKeys = ref<Array<string | number>>([])
 const keywords = ref('')
-const current = ref(1)
-const pageSize = ref(18)
-const total = ref(0)
-const loading = ref(false)
 const restoring = ref(false)
 const deleting = ref(false)
-const errorMessage = ref('')
+
+const {
+  items: photos,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminPhoto>(
+  ({ current: page, pageSize: size, signal }) =>
+    listAdminPage<AdminPhoto>('admin/photos', { current: page, size, isDelete: 1 }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY, 18), fallbackMessage: '回收站加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+// 回收站的关键词是页内过滤，这里只把条件写进地址栏，方便刷新后保留。
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'page', ref: current }
+], { onRestore: () => void load() })
 
 const selectedIds = computed(() =>
   [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
@@ -143,48 +166,22 @@ const filteredPhotos = computed(() => {
   )
 })
 
-onMounted(() => void load())
+// 分页后丢弃已不在当前页的选中项，保持工具栏的计数与列表一致。
+watch(photos, (list) => {
+  const available = new Set(list.map((photo) => Number(photo.id)))
+  selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
+})
 
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
+function changePage(page: number): void {
+  gotoPage(page)
+}
+
+function changePageSize(size: number): void {
+  applyPageSize(size)
 }
 
 function clearKeywords(): void {
   keywords.value = ''
-}
-
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminPage<AdminPhoto>('admin/photos', {
-      current: current.value,
-      size: pageSize.value,
-      isDelete: 1
-    })
-    photos.value = page.items
-    total.value = page.total
-    // Drop selections that are no longer rendered to keep the toolbar honest.
-    const available = new Set(photos.value.map((photo) => Number(photo.id)))
-    selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '回收站加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
-}
-
-function changePage(page: number): void {
-  current.value = page
-  void load()
-}
-
-function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
 }
 
 async function restore(ids: number[]): Promise<void> {

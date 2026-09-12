@@ -22,14 +22,15 @@
           <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
           <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
         </div>
-        <div class="admin-table-toolbar-actions">
-          <a-button :disabled="selectedIds.length === 0" size="small" status="danger" @click="removeSelected">
-            强制下线选中（{{ selectedIds.length }}）
-          </a-button>
-        </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="在线用户加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${records.length} 人`" @clear="clearSelection">
+        <a-button :disabled="selectedIds.length === 0" size="small" status="danger" @click="removeSelected">
+          强制下线选中（{{ selectedIds.length }}）
+        </a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
@@ -87,16 +88,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconRefresh, IconUser } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, listAdminOnlineUsers, removeAdminOnlineUser } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, initialOf } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminUser } from '@benetnasch/api-contract'
+
+const VIEW_KEY = 'online-users'
 
 const columns = [
   { title: '用户', dataIndex: 'nickname', slotName: 'user', minWidth: 190 },
@@ -106,63 +114,62 @@ const columns = [
   { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 120 }
 ]
 
-const records = ref<AdminUser[]>([])
 const selectedKeys = ref<Array<string | number>>([])
 const keywords = ref('')
-const current = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-const loading = ref(false)
 const pendingId = ref(0)
-const errorMessage = ref('')
+
+const {
+  items: records,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminUser>(
+  async ({ current: page, pageSize: size, signal }) => {
+    const result = await listAdminOnlineUsers({
+      current: page,
+      size,
+      keywords: keywords.value.trim()
+    }, { signal })
+    // 重新加载后丢掉已不在当前页的勾选，避免批量下线误伤已下线的会话。
+    const available = new Set(result.items.map((record) => Number(record.userInfoId ?? record.id)))
+    selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
+    return result
+  },
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '在线用户加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const selectedIds = computed(() =>
   [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
 )
 
-onMounted(() => void reload())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
-
 function clearKeywords(): void {
   keywords.value = ''
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminOnlineUsers({
-      current: current.value,
-      size: pageSize.value,
-      keywords: keywords.value.trim()
-    })
-    records.value = page.items
-    total.value = page.total
-    const available = new Set(records.value.map((record) => Number(record.userInfoId ?? record.id)))
-    selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '在线用户加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
-}
-
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
+  applyPageSize(size)
+}
+
+function clearSelection(): void {
+  selectedKeys.value = []
 }
 
 async function removeOne(record: AdminUser): Promise<void> {

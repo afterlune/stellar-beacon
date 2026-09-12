@@ -23,17 +23,23 @@
         </div>
         <div class="admin-table-toolbar-actions">
           <span class="admin-toolbar-caption">共 {{ total }} 个角色</span>
-          <a-button :loading="loading" size="small" @click="loadRoles">
+          <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
             刷新
           </a-button>
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="角色列表加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${roles.length} 个`" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="roles"
           :columns="columns"
           :loading="loading"
@@ -161,7 +167,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 
 import {
@@ -172,9 +178,14 @@ import {
   listRoleResources,
   saveAdminRole
 } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminRole } from '@benetnasch/api-contract'
@@ -187,6 +198,8 @@ interface PermissionOption {
 
 type Scope = 'menu' | 'resource'
 
+const VIEW_KEY = 'roles'
+
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 84, slotName: 'id' },
   { title: '角色名', dataIndex: 'roleName', slotName: 'roleName', minWidth: 180 },
@@ -196,52 +209,53 @@ const columns = [
   { title: '操作', dataIndex: 'actions', width: 176, slotName: 'actions' }
 ]
 
-const roles = ref<AdminRole[]>([])
 const menuOptions = ref<PermissionOption[]>([])
 const resourceOptions = ref<PermissionOption[]>([])
 const keywords = ref('')
-const current = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-const loading = ref(false)
 const saving = ref(false)
+const selectedKeys = ref<number[]>([])
+const batchDeleting = ref(false)
 const editorVisible = ref(false)
-const errorMessage = ref('')
 const editor = reactive({ id: 0, roleName: '', menuIds: [] as number[], resourceIds: [] as number[] })
 
+const {
+  items: roles,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminRole>(
+  ({ current: page, pageSize: size, signal }) => listAdminRoles({
+    current: page,
+    size,
+    keywords: keywords.value.trim()
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '角色列表加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
+
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
+const selectedIds = computed(() =>
+  [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
+)
 
 onMounted(() => {
-  void Promise.all([loadRoles(), loadPermissionOptions()])
+  void loadPermissionOptions()
 })
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await loadRoles()
-}
 
 function clearKeywords(): void {
   keywords.value = ''
   void reload()
-}
-
-async function loadRoles(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminRoles({
-      current: current.value,
-      size: pageSize.value,
-      keywords: keywords.value.trim()
-    })
-    roles.value = page.items
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '角色列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
 }
 
 async function loadPermissionOptions(): Promise<void> {
@@ -255,14 +269,42 @@ async function loadPermissionOptions(): Promise<void> {
 }
 
 function changePage(page: number): void {
-  current.value = page
-  void loadRoles()
+  clearSelection()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void loadRoles()
+  clearSelection()
+  applyPageSize(size)
+}
+
+function clearSelection(): void {
+  selectedKeys.value = []
+}
+
+function batchDelete(): void {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  Modal.confirm({
+    title: '批量删除',
+    content: `删除选中的 ${ids.length} 个角色后，拥有这些角色的账号会立即失去对应权限，确定继续吗？`,
+    okText: '批量删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      batchDeleting.value = true
+      try {
+        await deleteAdminRoles(ids)
+        Message.success(`已删除 ${ids.length} 个角色`)
+        clearSelection()
+        await load()
+      } catch (error) {
+        Message.error(apiErrorMessage(error, '批量删除失败'))
+      } finally {
+        batchDeleting.value = false
+      }
+    }
+  })
 }
 
 function openEditor(role?: AdminRole): void {
@@ -288,7 +330,7 @@ async function saveEditor(): Promise<void> {
     })
     editorVisible.value = false
     Message.success(editor.id ? '角色已更新' : '角色已创建')
-    await loadRoles()
+    await load()
   } catch (error) {
     Message.error(apiErrorMessage(error, '角色保存失败'))
   } finally {
@@ -303,7 +345,7 @@ async function deleteRole(id: unknown): Promise<void> {
     await deleteAdminRoles([roleId])
     if (roles.value.length === 1 && current.value > 1) current.value -= 1
     Message.success('角色已删除')
-    await loadRoles()
+    await load()
   } catch (error) {
     Message.error(apiErrorMessage(error, '角色删除失败'))
   }

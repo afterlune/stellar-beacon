@@ -7,15 +7,6 @@
           <template #icon><IconUpload /></template>
           {{ uploading ? uploadLabel : '上传图片' }}
         </a-button>
-        <a-popconfirm
-          :content="`确定永久删除选中的 ${selectedKeys.length} 张图片吗？引用这些图片的内容会显示为损坏图片。`"
-          :disabled="selectedKeys.length === 0"
-          @ok="removeSelected">
-          <a-button status="danger" :disabled="selectedKeys.length === 0">
-            <template #icon><IconDelete /></template>
-            删除选中
-          </a-button>
-        </a-popconfirm>
       </template>
     </AdminPageHeader>
 
@@ -42,10 +33,19 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-alert v-if="selectedKeys.length" type="info" class="media-selection-tip">
-        已选中 {{ selectedKeys.length }} 张图片，可以批量删除。
-      </a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="图片资源加载失败" @retry="load" />
+
+      <AdminBatchBar :count="selectedKeys.length" @clear="selectedKeys = []">
+        <a-popconfirm
+          :content="`确定永久删除选中的 ${selectedKeys.length} 张图片吗？引用这些图片的内容会显示为损坏图片。`"
+          :disabled="selectedKeys.length === 0"
+          @ok="removeSelected">
+          <a-button status="danger" :disabled="selectedKeys.length === 0">
+            <template #icon><IconDelete /></template>
+            删除选中
+          </a-button>
+        </a-popconfirm>
+      </AdminBatchBar>
 
       <div v-if="loading" class="media-skeleton-grid">
         <div v-for="index in 8" :key="index" class="admin-skeleton media-skeleton-card" />
@@ -103,72 +103,76 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDelete, IconImage, IconRefresh, IconUpload } from '@arco-design/web-vue/es/icon'
 
-import { apiErrorMessage, deleteAdminMedia, listAdminMedia, uploadAdminMedia } from '@/api/http'
+import { apiErrorMessage, deleteAdminMedia, listAdminPage, uploadAdminMedia } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDate, formatFileSize } from '@/utils/format'
 import type { AdminMediaAsset } from '@benetnasch/api-contract'
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
-const assets = ref<AdminMediaAsset[]>([])
+const VIEW_KEY = 'media'
+
 const prefix = ref('')
-const current = ref(1)
-const pageSize = 24
-const total = ref(0)
 const selectedKeys = ref<string[]>([])
-const loading = ref(false)
 const uploading = ref(false)
 const uploadProgress = ref({ done: 0, total: 0 })
-const errorMessage = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
+
+const {
+  items: assets,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage
+} = useAsyncList<AdminMediaAsset>(
+  ({ current: page, pageSize: size, signal }) =>
+    listAdminPage<AdminMediaAsset>('admin/media', {
+      current: page,
+      size,
+      prefix: prefix.value.trim()
+    }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY, 24), fallbackMessage: '图片资源加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'prefix', ref: prefix, debounce: true },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
 
 const uploadLabel = computed(() => {
   const { done, total: count } = uploadProgress.value
   return count > 0 ? `上传中 ${done}/${count}` : '上传中…'
 })
 
-onMounted(() => void load())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
-}
+// 分页或筛选后丢弃已不在列表中的选中项，避免删除到看不见的图片。
+watch(assets, (list) => {
+  const available = new Set(list.map((asset) => asset.key))
+  selectedKeys.value = selectedKeys.value.filter((key) => available.has(key))
+})
 
 function clearPrefix(): void {
   prefix.value = ''
   void reload()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminMedia({
-      current: current.value,
-      size: pageSize,
-      prefix: prefix.value.trim()
-    })
-    assets.value = page.items
-    total.value = page.total
-    const available = new Set(assets.value.map((asset) => asset.key))
-    selectedKeys.value = selectedKeys.value.filter((key) => available.has(key))
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '图片资源加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
-}
-
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  gotoPage(page)
 }
 
 function toggleSelectAll(): void {
@@ -244,10 +248,6 @@ async function copyUrl(url: string): Promise<void> {
 </script>
 
 <style scoped>
-.media-selection-tip {
-  margin-bottom: 14px;
-}
-
 .media-skeleton-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

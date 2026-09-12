@@ -14,7 +14,11 @@
       </template>
     </AdminPageHeader>
 
-    <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+    <AdminErrorState
+      v-if="errorMessage"
+      :error="errorMessage"
+      title="仪表盘数据加载失败"
+      @retry="load" />
 
     <div class="admin-stat-grid">
       <AdminStatCard
@@ -60,7 +64,12 @@
 
     <div class="dashboard-grid dashboard-grid-three">
       <a-card class="admin-panel" :bordered="false" title="访客地域">
-        <template #extra><span class="admin-muted-cell">按大洲聚合</span></template>
+        <template #extra>
+          <a-radio-group v-model="areaType" type="button" size="mini" :disabled="loading" @change="load">
+            <a-radio value="users">用户</a-radio>
+            <a-radio value="visitors">访客</a-radio>
+          </a-radio-group>
+        </template>
         <AdminEChart v-if="regionMapData.length" :option="regionOption" height="300px" />
         <div v-else class="admin-chart-empty">
           <AdminEmptyState
@@ -110,23 +119,25 @@ import {
 
 import { apiErrorMessage, getAdminDashboardAnalytics } from '@/api/http'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminEChart from '@/components/AdminEChart.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatCard from '@/components/AdminStatCard.vue'
-import { formatDateTime, formatNumber } from '@/utils/format'
+import { useLatestRequest } from '@/composables/useAsyncList'
+import { formatNumber } from '@/utils/format'
 import worldMap from '@/assets/world.json'
 import type { AdminDashboardAnalytics, DashboardRange } from '@benetnasch/api-contract'
 
 echarts.registerMap('world', worldMap as never)
 
 const range = ref<DashboardRange>('7d')
+const areaType = ref<'users' | 'visitors'>('users')
 const loading = ref(false)
 const errorMessage = ref('')
 const analytics = reactive<AdminDashboardAnalytics>(emptyAnalytics())
 
-// Guards against out-of-order responses when the range is switched quickly:
-// only the newest request is allowed to write into `analytics`.
-let requestSeq = 0
+// 区间与地域维度可以连续切换，由共享的「最新请求胜出」保护丢弃过期响应。
+const latest = useLatestRequest()
 
 const rangeLabel = computed(() => (range.value === '30d' ? '近 30 天' : range.value === '12m' ? '近 12 月' : '近 7 天'))
 
@@ -207,18 +218,17 @@ const regionMapData = computed(() => {
 onMounted(() => void load())
 
 async function load(): Promise<void> {
-  const seq = ++requestSeq
   loading.value = true
   errorMessage.value = ''
   try {
-    const value = await getAdminDashboardAnalytics(range.value, 'users')
-    if (seq !== requestSeq) return
+    // 只允许最新一次请求写入：切换区间/地域维度很快，旧响应绝不能覆盖新结果。
+    const value = await latest.run((signal) => getAdminDashboardAnalytics(range.value, areaType.value, { signal }))
+    if (!value) return
     Object.assign(analytics, value)
   } catch (error) {
-    if (seq !== requestSeq) return
     errorMessage.value = apiErrorMessage(error, '仪表盘数据加载失败')
   } finally {
-    if (seq === requestSeq) loading.value = false
+    loading.value = false
   }
 }
 

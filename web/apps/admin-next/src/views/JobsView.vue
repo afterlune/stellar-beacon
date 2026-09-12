@@ -23,8 +23,15 @@
             <a-radio value="1">正常</a-radio>
             <a-radio value="0">已暂停</a-radio>
           </a-radio-group>
-          <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
-          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+          <a-select
+            v-model="groupFilter"
+            placeholder="全部分组"
+            allow-clear
+            style="width: 150px"
+            @change="reload">
+            <a-option v-for="group in groupOptions" :key="group" :value="group">{{ group }}</a-option>
+          </a-select>
+          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">重置筛选</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
           <span class="admin-toolbar-caption">共 {{ total }} 个任务</span>
@@ -35,11 +42,17 @@
         </div>
       </div>
 
-      <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="任务列表加载失败" @retry="load" />
       <a-alert v-if="runHint" type="info" closable @close="runHint = ''">{{ runHint }}</a-alert>
+
+      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${jobs.length} 个`" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      </AdminBatchBar>
 
       <div class="admin-table-shell">
         <a-table
+          v-model:selected-keys="selectedKeys"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
           :data="jobs"
           :columns="columns"
           :loading="loading"
@@ -68,8 +81,8 @@
                 :model-value="Number(record.status) === 1"
                 :checked-value="true"
                 :unchecked-value="false"
-                :loading="pendingStatusId === Number(record.id)"
-                :disabled="pendingStatusId !== 0 && pendingStatusId !== Number(record.id)"
+                :loading="isPending(record.id)"
+                :disabled="pending.some((item) => item !== Number(record.id))"
                 @change="changeStatus(record, $event)">
                 <template #checked>正常</template>
                 <template #unchecked>暂停</template>
@@ -122,6 +135,19 @@
           </a-form-item>
           <a-form-item field="jobGroup" label="任务分组" required>
             <a-input v-model="editor.jobGroup" maxlength="64" show-word-limit placeholder="例如：默认" />
+            <!-- 建议分组只是把已有分组填进输入框，不新增输入控件（分组字段的
+                 输入序号被 E2E 契约锁定，且 fill() 需要可写的 text input）。 -->
+            <template v-if="editorGroupSuggestions.length" #help>
+              <span class="job-group-hint">
+                已有分组：
+                <a-button
+                  v-for="group in editorGroupSuggestions"
+                  :key="group"
+                  type="text"
+                  size="mini"
+                  @click="editor.jobGroup = group">{{ group }}</a-button>
+              </span>
+            </template>
           </a-form-item>
         </div>
         <a-form-item field="invokeTarget" label="调用目标" required>
@@ -176,15 +202,24 @@ import {
   deleteAdminJobs,
   getAdminJob,
   listAdminJobs,
+  listAdminJobGroups,
   runAdminJob,
   saveAdminJob,
   updateAdminJobStatus
 } from '@/api/http'
+import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
+import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { useAsyncList } from '@/composables/useAsyncList'
+import { usePendingIds } from '@/composables/usePendingIds'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminJob } from '@benetnasch/api-contract'
+
+const VIEW_KEY = 'jobs'
 
 const columns = [
   { title: '任务名称', dataIndex: 'jobName', slotName: 'jobName', minWidth: 200 },
@@ -196,20 +231,17 @@ const columns = [
   { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 224 }
 ]
 
-const jobs = ref<AdminJob[]>([])
 const keywords = ref('')
 const statusFilter = ref<'all' | '0' | '1'>('all')
-const current = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-const loading = ref(false)
+const groupFilter = ref<string | undefined>(undefined)
+const groupOptions = ref<string[]>([])
+const selectedKeys = ref<number[]>([])
 const saving = ref(false)
 const editorLoading = ref(false)
-const pendingStatusId = ref(0)
 const runningId = ref(0)
-const errorMessage = ref('')
 const runHint = ref('')
 const editorVisible = ref(false)
+const batchDeleting = ref(false)
 const editor = reactive<AdminJob>({
   id: 0,
   jobName: '',
@@ -222,58 +254,99 @@ const editor = reactive<AdminJob>({
   remark: ''
 })
 
+const { pending, isPending, withPending } = usePendingIds()
+
+const {
+  items: rows,
+  total,
+  current,
+  pageSize,
+  loading,
+  error: errorMessage,
+  load,
+  reload,
+  changePage: gotoPage,
+  changePageSize: applyPageSize
+} = useAsyncList<AdminJob>(
+  ({ current: page, pageSize: size, signal }) => listAdminJobs({
+    current: page,
+    size,
+    jobName: keywords.value.trim(),
+    jobGroup: groupFilter.value || ''
+  }, { signal }),
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '任务列表加载失败' }
+)
+
+useStoredPageSize(VIEW_KEY, pageSize)
+useQueryFilters([
+  { key: 'keywords', ref: keywords, debounce: true },
+  { key: 'status', ref: statusFilter },
+  { key: 'jobGroup', ref: groupFilter },
+  { key: 'page', ref: current }
+], { onRestore: () => void load(), onSearch: () => void reload() })
+
+onMounted(() => void loadGroupOptions())
+
+/**
+ * 任务列表接口只按「名称 / 分组 / 状态」过滤，其中 `status=0` 在后端等于「不过滤」，
+ * 因此状态页签仍在本地生效（否则无法只看已暂停任务），分组与名称走服务端。
+ */
+const jobs = computed(() => (statusFilter.value === 'all'
+  ? rows.value
+  : rows.value.filter((job) => Number(job.status) === Number(statusFilter.value))))
+
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
-const hasFilters = computed(() => Boolean(keywords.value.trim()) || statusFilter.value !== 'all')
+const hasFilters = computed(() => Boolean(keywords.value.trim()) || statusFilter.value !== 'all' || Boolean(groupFilter.value))
+const selectedIds = computed(() => selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))
+const editorGroupSuggestions = computed(() => {
+  const current = editor.jobGroup.trim()
+  return groupOptions.value.filter((group) => group !== current).slice(0, 8)
+})
 
-onMounted(() => void load())
-
-async function reload(): Promise<void> {
-  current.value = 1
-  await load()
+/** 分组接口失败时静默降级：只是没有下拉选项，不影响列表本身。 */
+async function loadGroupOptions(): Promise<void> {
+  try {
+    groupOptions.value = await listAdminJobGroups()
+  } catch {
+    groupOptions.value = []
+  }
 }
 
 function resetFilters(): void {
   keywords.value = ''
   statusFilter.value = 'all'
+  groupFilter.value = undefined
   void reload()
 }
 
-function clearKeywords(): void {
-  keywords.value = ''
-  void reload()
-}
-
-async function load(): Promise<void> {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await listAdminJobs({
-      current: current.value,
-      size: pageSize.value,
-      jobName: keywords.value.trim()
-    })
-    // The jobs endpoint filters by name only, so the status tab is applied here.
-    jobs.value = statusFilter.value === 'all'
-      ? page.items
-      : page.items.filter((job) => Number(job.status) === Number(statusFilter.value))
-    total.value = page.total
-  } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '任务列表加载失败')
-    Message.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
+function clearSelection(): void {
+  selectedKeys.value = []
 }
 
 function changePage(page: number): void {
-  current.value = page
-  void load()
+  clearSelection()
+  gotoPage(page)
 }
 
 function changePageSize(size: number): void {
-  pageSize.value = size
-  current.value = 1
-  void load()
+  clearSelection()
+  applyPageSize(size)
+}
+
+async function batchDelete(): Promise<void> {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  batchDeleting.value = true
+  try {
+    await deleteAdminJobs(ids)
+    Message.success(`已删除 ${ids.length} 个任务`)
+    clearSelection()
+    await load()
+  } catch (error) {
+    Message.error(apiErrorMessage(error, '批量删除失败'))
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 async function openEditor(job?: AdminJob): Promise<void> {
@@ -326,6 +399,8 @@ async function saveEditor(): Promise<void> {
     })
     editorVisible.value = false
     Message.success(editing ? '任务已更新' : '任务已创建')
+    // 新建的分组要立刻出现在筛选下拉里。
+    void loadGroupOptions()
     await load()
   } catch (error) {
     Message.error(apiErrorMessage(error, '任务保存失败'))
@@ -341,16 +416,15 @@ async function changeStatus(job: AdminJob, value: boolean | string | number): Pr
   const previous = Number(job.status) === 1 ? 1 : 0
   const next = enabled ? 1 : 0
   job.status = next
-  pendingStatusId.value = jobId
-  try {
-    await updateAdminJobStatus(jobId, next)
-    Message.success(next === 1 ? '任务已启用' : '任务已暂停')
-  } catch (error) {
-    job.status = previous
-    Message.error(apiErrorMessage(error, '任务状态更新失败'))
-  } finally {
-    pendingStatusId.value = 0
-  }
+  await withPending(jobId, async () => {
+    try {
+      await updateAdminJobStatus(jobId, next)
+      Message.success(next === 1 ? '任务已启用' : '任务已暂停')
+    } catch (error) {
+      job.status = previous
+      Message.error(apiErrorMessage(error, '任务状态更新失败'))
+    }
+  })
 }
 
 async function runOnce(job: AdminJob): Promise<void> {
@@ -373,7 +447,7 @@ async function deleteJob(id: unknown): Promise<void> {
   if (!Number.isInteger(jobId) || jobId <= 0) return
   try {
     await deleteAdminJobs([jobId])
-    if (jobs.value.length === 1 && current.value > 1) current.value -= 1
+    if (rows.value.length === 1 && current.value > 1) current.value -= 1
     Message.success('任务已删除')
     await load()
   } catch (error) {
@@ -418,5 +492,13 @@ function groupColor(group: unknown): string {
   display: flex;
   justify-content: center;
   padding: 56px 0;
+}
+
+.job-group-hint {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  color: var(--admin-muted);
 }
 </style>
