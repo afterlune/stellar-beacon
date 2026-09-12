@@ -64,8 +64,13 @@
       </nav>
 
       <div class="admin-nav-footer">
-        <strong>{{ auth.user?.nickname || auth.user?.username || '管理员' }}</strong>
-        <span>后端 RBAC 决定最终可见范围</span>
+        <span class="admin-nav-user">
+          <span class="admin-nav-avatar" aria-hidden="true">{{ avatarText }}</span>
+          <span class="admin-nav-user-copy">
+            <strong>{{ auth.user?.nickname || auth.user?.username || '管理员' }}</strong>
+            <span>后端 RBAC 决定最终可见范围</span>
+          </span>
+        </span>
       </div>
     </a-layout-sider>
 

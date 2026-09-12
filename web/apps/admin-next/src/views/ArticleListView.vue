@@ -114,7 +114,8 @@
             <span class="admin-muted-cell">{{ typeLabel(record.type) }}</span>
           </template>
           <template #flags="{ record }">
-            <a-space v-if="Number(record.isTop) === 1 || Number(record.isFeatured) === 1" wrap>
+            <!-- 间距收到 4px：默认 8px 会让「置顶 + 精选」在 120px 列里折行，把整行撑高 -->
+            <a-space v-if="Number(record.isTop) === 1 || Number(record.isFeatured) === 1" wrap :size="4">
               <a-tag v-if="Number(record.isTop) === 1" color="arcoblue">置顶</a-tag>
               <a-tag v-if="Number(record.isFeatured) === 1" color="green">精选</a-tag>
             </a-space>
@@ -231,16 +232,22 @@ const exportUrls = ref<string[]>([])
 
 const { isPending, withPending } = usePendingIds()
 
+// 列宽预算：这里是按"列内容实际需要多宽"倒推出来的，不是随手填的数。
+// - 封面 116 = 88px 缩略图 + 左右内边距（原来 108 会把缩略图裁掉一截）
+// - 操作 148 = 「编辑」+「更多⌄」两个按钮 + 间距（原来收得太窄时「更多」被裁没）
+// - 标记 128 = 置顶 + 精选 两个标签并排（96px 内容 + 间距），否则会折行把整行撑高
+// - 标题给死 220：这一列原来不给宽度，1280 宽的窗口里被固定列宽挤成 0px，
+//   表格里最重要的信息直接消失，是这次改版修掉的真实缺陷。
 const columns: TableColumn[] = [
-  { title: '封面', dataIndex: 'articleCover', slotName: 'cover', width: 108 },
-  { title: '标题', dataIndex: 'articleTitle', slotName: 'title', ellipsis: true, tooltip: true },
-  { title: '分类', dataIndex: 'categoryName', slotName: 'category', width: 130 },
-  { title: '状态', dataIndex: 'status', slotName: 'status', width: 96 },
-  { title: '类型', dataIndex: 'type', slotName: 'type', width: 86 },
-  { title: '标记', dataIndex: 'flags', slotName: 'flags', width: 118 },
-  { title: '浏览量', dataIndex: 'viewsCount', slotName: 'views', width: 96 },
-  { title: '创建时间', dataIndex: 'createTime', slotName: 'time', width: 168 },
-  { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 152 }
+  { title: '封面', dataIndex: 'articleCover', slotName: 'cover', width: 116 },
+  { title: '标题', dataIndex: 'articleTitle', slotName: 'title', width: 220, ellipsis: true, tooltip: true },
+  { title: '分类', dataIndex: 'categoryName', slotName: 'category', width: 96 },
+  { title: '状态', dataIndex: 'status', slotName: 'status', width: 84 },
+  { title: '类型', dataIndex: 'type', slotName: 'type', width: 62 },
+  { title: '标记', dataIndex: 'flags', slotName: 'flags', width: 128 },
+  { title: '浏览量', dataIndex: 'viewsCount', slotName: 'views', width: 74 },
+  { title: '创建时间', dataIndex: 'createTime', slotName: 'time', width: 164 },
+  { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 148 }
 ]
 
 const columnPrefs = useColumnPrefs(VIEW_KEY, columns.map((column) => column.dataIndex))

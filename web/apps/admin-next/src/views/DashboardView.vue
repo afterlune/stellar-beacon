@@ -124,6 +124,8 @@ import AdminEChart from '@/components/AdminEChart.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatCard from '@/components/AdminStatCard.vue'
 import { useLatestRequest } from '@/composables/useAsyncList'
+import { useThemeStore } from '@/stores/theme'
+import { chartSeriesColor, verticalFade, withAlpha } from '@/utils/chart-theme'
 import { formatNumber } from '@/utils/format'
 import worldMap from '@/assets/world.json'
 import type { AdminDashboardAnalytics, DashboardRange } from '@benetnasch/api-contract'
@@ -135,6 +137,7 @@ const areaType = ref<'users' | 'visitors'>('users')
 const loading = ref(false)
 const errorMessage = ref('')
 const analytics = reactive<AdminDashboardAnalytics>(emptyAnalytics())
+const themeStore = useThemeStore()
 
 // 区间与地域维度可以连续切换，由共享的「最新请求胜出」保护丢弃过期响应。
 const latest = useLatestRequest()
@@ -150,58 +153,67 @@ const stats = computed(() => [
   { label: '评论数量', value: formatNumber(analytics.overview.messageCount), caption: '已审核评论与留言', icon: IconMessage, tone: 'danger' as const }
 ])
 
-const trendOption = computed(() => ({
-  color: ['#4f6bd8'],
-  tooltip: { trigger: 'axis' },
-  grid: { left: 18, right: 18, top: 28, bottom: 20, containLabel: true },
-  xAxis: {
-    type: 'category',
-    boundaryGap: false,
-    data: analytics.trend.map((item) => (range.value === '12m' ? item.period : item.period.slice(5))),
-    axisLine: { lineStyle: { color: 'rgba(127,127,127,.25)' } },
-    axisLabel: { color: 'rgba(127,127,127,1)' }
-  },
-  yAxis: {
-    type: 'value',
-    minInterval: 1,
-    splitLine: { lineStyle: { color: 'rgba(127,127,127,.14)' } },
-    axisLabel: { color: 'rgba(127,127,127,1)' }
-  },
-  series: [{
-    name: '访问量',
-    type: 'line',
-    smooth: true,
-    symbol: 'circle',
-    symbolSize: 7,
-    areaStyle: { color: 'rgba(79,107,216,.12)' },
-    data: analytics.trend.map((item) => item.views)
-  }]
-}))
+// 坐标轴、网格线、提示框都交给 chart-theme 注册的主题，这里只描述数据本身。
+const trendOption = computed(() => {
+  const brand = chartSeriesColor(themeStore.theme, 0)
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { left: 4, right: 16, top: 24, bottom: 2, containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: analytics.trend.map((item) => (range.value === '12m' ? item.period : item.period.slice(5))),
+      axisLabel: { hideOverlap: true }
+    },
+    yAxis: { type: 'value', minInterval: 1 },
+    series: [{
+      name: '访问量',
+      type: 'line',
+      // 折线只在悬浮时露出圆点：默认满屏圆点会把趋势线切成一串珠子。
+      showSymbol: false,
+      symbolSize: 7,
+      lineStyle: {
+        width: 2.4,
+        color: brand,
+        shadowBlur: 14,
+        shadowColor: withAlpha(brand, 0.32),
+        shadowOffsetY: 7
+      },
+      itemStyle: { color: brand, borderWidth: 2 },
+      emphasis: { focus: 'series', scale: 1.6 },
+      areaStyle: { color: verticalFade(brand) },
+      data: analytics.trend.map((item) => item.views)
+    }]
+  }
+})
 
-const regionOption = computed(() => ({
-  tooltip: {
-    trigger: 'item',
-    formatter: (params: { name?: string; value?: number }) => `${params.name || '未知地域'}：${formatNumber(params.value || 0)}`
-  },
-  visualMap: {
-    min: 0,
-    max: Math.max(1, ...regionMapData.value.map((item) => item.value)),
-    left: 'center',
-    bottom: 0,
-    calculable: true,
-    textStyle: { color: 'rgba(127,127,127,1)' },
-    inRange: { color: ['#e8edff', '#4f6bd8'] }
-  },
-  series: [{
-    name: '访问地域',
-    type: 'map',
-    map: 'world',
-    roam: true,
-    itemStyle: { areaColor: 'rgba(127,127,127,.14)', borderColor: 'rgba(127,127,127,.28)' },
-    emphasis: { label: { show: false } },
-    data: regionMapData.value
-  }]
-}))
+const regionOption = computed(() => {
+  const brand = chartSeriesColor(themeStore.theme, 0)
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: { name?: string; value?: number }) => `${params.name || '未知地域'}：${formatNumber(params.value || 0)}`
+    },
+    visualMap: {
+      min: 0,
+      max: Math.max(1, ...regionMapData.value.map((item) => item.value)),
+      left: 'center',
+      bottom: 0,
+      calculable: true,
+      itemWidth: 12,
+      itemHeight: 74,
+      inRange: { color: [withAlpha(brand, 0.14), brand] }
+    },
+    series: [{
+      name: '访问地域',
+      type: 'map',
+      map: 'world',
+      roam: true,
+      emphasis: { label: { show: false }, itemStyle: { areaColor: withAlpha(brand, 0.42) } },
+      data: regionMapData.value
+    }]
+  }
+})
 
 const categoryOption = computed(() => distributionOption(analytics.categories))
 const tagOption = computed(() => distributionOption(analytics.tags))
@@ -234,31 +246,39 @@ async function load(): Promise<void> {
 
 function distributionOption(items: AdminDashboardAnalytics['categories']): Record<string, unknown> {
   const total = items.reduce((sum, item) => sum + Number(item.value || 0), 0)
-  const topNames = new Set(
-    [...items]
-      .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
-      .slice(0, 5)
-      .map((item) => item.name)
-  )
+  const shares = new Map(items.map((item) => [
+    item.name,
+    total > 0 ? Math.round((Number(item.value || 0) / total) * 100) : 0
+  ]))
   return {
     tooltip: { trigger: 'item', formatter: '{b}：{c}（{d}%）' },
-    legend: { type: 'scroll', bottom: 0, textStyle: { color: 'rgba(127,127,127,1)' } },
+    // 环心留白里放总计：环形图最缺的就是“整体量级”这个参照。
+    title: {
+      text: formatNumber(total),
+      subtext: '总计',
+      left: 'center',
+      top: '35%',
+      textAlign: 'center',
+      textStyle: { fontSize: 21, fontWeight: 700 },
+      subtextStyle: { fontSize: 11 }
+    },
+    // 占比放进图例而不是环形外侧：窄卡片里外侧引线标签会被裁成“工程化 3…”，
+    // 图例本身就在卡片内，位置稳定且不遮挡环体。
+    legend: {
+      type: 'scroll',
+      bottom: 0,
+      itemGap: 12,
+      formatter: (name: string) => (shares.has(name) ? `${name} ${shares.get(name)}%` : name)
+    },
     series: [{
       type: 'pie',
-      radius: ['38%', '68%'],
-      center: ['50%', '43%'],
-      avoidLabelOverlap: true,
-      // 只给占比最高的 5 个扇区画标签：长尾碎片（各占 6% 甚至 0%）
-      // 全画出来会挤满圆环边缘，反而看不清主要构成，其余看图例与悬浮提示。
-      minShowLabelAngle: 12,
-      label: { formatter: '{b} {d}%', color: 'rgba(127,127,127,1)' },
-      labelLine: { length: 6, length2: 8, smooth: true },
-      itemStyle: { borderWidth: 2, borderColor: 'rgba(127,127,127,.08)' },
-      data: items.map((item) => {
-        const percent = total > 0 ? (Number(item.value || 0) / total) * 100 : 0
-        const show = topNames.has(item.name) && percent >= 8
-        return { name: item.name, value: item.value, label: { show }, labelLine: { show } }
-      })
+      radius: ['52%', '72%'],
+      center: ['50%', '44%'],
+      label: { show: false },
+      labelLine: { show: false },
+      avoidLabelOverlap: false,
+      emphasis: { scale: true, scaleSize: 6 },
+      data: items.map((item) => ({ name: item.name, value: item.value }))
     }]
   }
 }

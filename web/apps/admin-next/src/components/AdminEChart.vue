@@ -7,6 +7,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 
 import { useThemeStore } from '@/stores/theme'
+import { ensureChartTheme } from '@/utils/chart-theme'
 
 const props = withDefaults(defineProps<{ option: Record<string, unknown>; height?: string }>(), {
   height: '300px'
@@ -27,7 +28,8 @@ function ensureChart(): echarts.ECharts | null {
   if (chart) return chart
   const element = container.value
   if (!element || element.clientWidth === 0 || element.clientHeight === 0) return null
-  chart = echarts.init(element, theme.theme === 'dark' ? 'dark' : undefined)
+  // 用本站设计令牌注册的主题，而不是 ECharts 内置的那套高饱和彩虹色。
+  chart = echarts.init(element, ensureChartTheme(theme.theme))
   chart.setOption(props.option, true)
   return chart
 }

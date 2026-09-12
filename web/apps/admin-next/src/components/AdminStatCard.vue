@@ -1,5 +1,5 @@
 <template>
-  <a-card class="admin-card admin-stat-card" :bordered="false">
+  <a-card class="admin-card admin-stat-card" :class="`admin-stat-tone-${tone}`" :bordered="false">
     <span class="admin-stat-icon" :class="`admin-tone-${tone}`" aria-hidden="true">
       <component :is="icon" />
     </span>

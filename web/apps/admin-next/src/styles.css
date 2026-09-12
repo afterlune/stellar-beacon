@@ -22,26 +22,31 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  color: #223047;
-  background: #f6f8fc;
+  /* 必须走令牌：写死浅色会让暗色主题下 <html> 露出白底
+     （内容比视口短或页面发生滚动时会在顶部/底部露出来）。 */
+  color: var(--admin-ink);
+  background: var(--admin-bg);
 
-  /* — 表面与文字 — */
-  --admin-bg: #f5f7fb;
+  /* — 表面与文字 —（层级：bg < soft < sunken/surface） */
+  --admin-bg: #f4f6fb;
   --admin-surface: #ffffff;
-  --admin-surface-soft: #f1f4fa;
+  --admin-surface-soft: #f2f5fa;
+  --admin-surface-sunken: #eaeff7;
   --admin-surface-raised: #ffffff;
-  --admin-ink: #1d2939;
-  --admin-ink-strong: #101828;
-  --admin-muted: #667085;
-  --admin-subtle: #98a2b3;
-  --admin-border: #e6eaf1;
-  --admin-border-strong: #d3dae6;
+  --admin-ink: #1e2b3f;
+  --admin-ink-strong: #0f1a2e;
+  --admin-muted: #64748b;
+  --admin-subtle: #94a3b8;
+  --admin-border: #e4e9f2;
+  --admin-border-strong: #ccd6e5;
+  --admin-border-hover: #b6c2d6;
+  --admin-row-hover: #f7f9fe;
 
   /* — 品牌色阶（靛蓝） — */
   --admin-brand: #4f6bd8;
-  --admin-brand-hover: #4560c9;
+  --admin-brand-hover: #4359c6;
   --admin-brand-soft: #eef1ff;
-  --admin-brand-soft-strong: #e0e6ff;
+  --admin-brand-soft-strong: #dde4ff;
   --admin-brand-ink: #35459b;
 
   /* — 语义色 — */
@@ -58,16 +63,18 @@
 
   /* — 圆角 — */
   --admin-radius-xs: 6px;
-  --admin-radius-control: 8px;
+  --admin-radius-control: 9px;
   --admin-radius-card: 14px;
   --admin-radius-panel: 18px;
   --admin-radius-pill: 999px;
 
-  /* — 阴影 — */
-  --admin-shadow-xs: 0 1px 2px rgb(16 24 40 / 5%);
-  --admin-shadow-card: 0 1px 2px rgb(16 24 40 / 4%), 0 8px 24px -12px rgb(16 24 40 / 10%);
-  --admin-shadow-float: 0 24px 48px -12px rgb(16 24 40 / 18%);
-  --admin-shadow-focus: 0 0 0 3px rgb(79 107 216 / 16%);
+  /* — 阴影：三级高度，越靠前越"贴桌面" — */
+  --admin-shadow-xs: 0 1px 2px rgb(15 23 42 / 5%);
+  --admin-shadow-card: 0 1px 2px rgb(15 23 42 / 4%), 0 10px 28px -18px rgb(15 23 42 / 22%);
+  --admin-shadow-hover: 0 2px 4px -1px rgb(15 23 42 / 6%), 0 18px 34px -22px rgb(15 23 42 / 32%);
+  --admin-shadow-float: 0 28px 56px -18px rgb(15 23 42 / 26%);
+  --admin-shadow-focus: 0 0 0 3px rgb(79 107 216 / 18%);
+  --admin-overlay: rgb(15 23 42 / 46%);
 
   /* — 间距节奏 — */
   --admin-gap-xs: 6px;
@@ -88,8 +95,8 @@
   /* — 布局尺寸 — */
   --admin-sider-width: 236px;
   --admin-sider-collapsed: 72px;
-  --admin-topbar-height: 68px;
-  --admin-content-max: 1400px;
+  --admin-topbar-height: 64px;
+  --admin-content-max: 1440px;
 }
 
 /* ============================ 2. 基础层 ================================== */
@@ -196,6 +203,11 @@ select {
   outline: 2px solid rgb(var(--primary-6) / 55%);
   outline-offset: 2px;
   border-radius: var(--admin-radius-xs);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--admin-subtle);
 }
 
 a {
@@ -350,7 +362,7 @@ a:hover {
   overflow: hidden;
   border-radius: 10px;
   background: linear-gradient(145deg, #5f7ae0, #6fbfa4);
-  box-shadow: 0 6px 16px -6px rgb(79 107 216 / 55%);
+  box-shadow: 0 6px 16px -6px rgb(79 107 216 / 55%), inset 0 1px 0 rgb(255 255 255 / 26%);
 }
 
 .admin-brand-mark::before,
@@ -385,7 +397,7 @@ a:hover {
   /* 细滚动条：展开态菜单很长、收缩态不需要滚动，
      滚动条越细，切换时行宽的变化就越小（图标 x 不受影响，始终是 27px）。 */
   scrollbar-width: thin;
-  padding: 12px 12px 18px;
+  padding: 12px 12px 16px;
 }
 
 .admin-sider .arco-menu {
@@ -454,6 +466,10 @@ a:hover {
     padding var(--admin-sider-duration) var(--admin-ease-sider);
 }
 
+.admin-sider .arco-menu-item {
+  letter-spacing: 0.005em;
+}
+
 .admin-sider .arco-menu-inline-header,
 .admin-sider .arco-menu-pop-header {
   color: var(--admin-ink);
@@ -471,6 +487,7 @@ a:hover {
   color: var(--admin-brand);
   font-weight: 650;
   background: var(--admin-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--admin-brand-soft-strong);
 }
 
 .admin-sider .arco-menu-item.arco-menu-selected::before {
@@ -569,10 +586,15 @@ a:hover {
   padding-right: 15px;
 }
 
+.admin-sider.arco-layout-sider-collapsed .arco-menu-item.arco-menu-selected {
+  /* 收缩态行宽只有 48px，内描边会贴着图标，改用纯色块 */
+  box-shadow: none;
+}
+
 /* 菜单文字：独立包裹（子菜单标题原本是裸文本节点，无法参与过渡）。
    关键：收缩时不要让文字瞬间消失，而是让它跟着行宽被“挤”出去 ——
    行宽由侧栏宽度驱动、是连续变化的，文字因此会连续收窄到 0；
-   行内边距 12/12 + 图标 18 恰好占满收缩后的 48px，文字最终宽度为 0，
+   行内边距 15/15 + 图标 18 恰好占满收缩后的 48px，文字最终宽度为 0，
    不会残留省略号或半个字。Arco 自带的 opacity:0 会破坏这个过程。 */
 .admin-menu-text {
   display: inline-block;
@@ -616,36 +638,76 @@ a:hover {
   margin-right: 0;
 }
 
+/* — 侧栏账号卡片 — */
 .admin-nav-footer {
   flex: 0 0 auto;
-  max-height: 120px;
-  padding: 12px 16px 16px;
+  max-height: 150px;
+  margin: 0 12px 14px;
+  padding: 10px 12px;
   overflow: hidden;
-  border-top: 1px solid var(--admin-border);
-  color: var(--admin-subtle);
-  font-size: 11px;
-  line-height: 1.6;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface-soft);
   transition: max-height var(--admin-sider-duration) var(--admin-ease-sider),
+    margin var(--admin-sider-duration) var(--admin-ease-sider),
     padding var(--admin-sider-duration) var(--admin-ease-sider),
     opacity var(--admin-sider-duration) var(--admin-ease-sider),
-    border-top-width var(--admin-sider-duration) var(--admin-ease-sider);
+    border-width var(--admin-sider-duration) var(--admin-ease-sider);
 }
 
 /* 收缩态收起账号信息：用高度过渡让它“让位”，而不是整块瞬间消失 */
 .admin-sider.arco-layout-sider-collapsed .admin-nav-footer {
   max-height: 0;
+  margin: 0;
   padding-top: 0;
   padding-bottom: 0;
-  border-top-width: 0;
+  border-width: 0;
   opacity: 0;
 }
 
-.admin-nav-footer strong {
+.admin-nav-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.admin-nav-avatar {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--admin-brand-ink);
+  background: var(--admin-brand-soft-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-nav-user-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.admin-nav-user-copy strong {
   display: block;
   overflow: hidden;
-  color: var(--admin-muted);
-  font-size: 11px;
+  color: var(--admin-ink);
+  font-size: 12px;
   font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-nav-user-copy span {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-subtle);
+  font-size: 10.5px;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -658,11 +720,11 @@ a:hover {
   justify-content: space-between;
   gap: var(--admin-gap);
   flex: 0 0 auto;
-  padding: 0 clamp(16px, 2.4vw, 28px);
+  padding: 0 clamp(16px, 2.2vw, 26px);
   position: relative;
   z-index: 20;
   border-bottom: 1px solid var(--admin-border);
-  background: rgb(255 255 255 / 88%);
+  background: rgb(255 255 255 / 86%);
   backdrop-filter: saturate(180%) blur(16px);
 }
 
@@ -681,10 +743,10 @@ a:hover {
   margin: 0;
   overflow: hidden;
   color: var(--admin-ink-strong);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.015em;
-  line-height: 1.3;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -692,10 +754,10 @@ a:hover {
 .admin-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
+  gap: 5px;
+  margin-bottom: 3px;
   color: var(--admin-subtle);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -716,8 +778,8 @@ a:hover {
 
 .admin-breadcrumb-sep {
   color: var(--admin-subtle);
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 10px;
+  opacity: 0.6;
 }
 
 .admin-breadcrumb-current {
@@ -732,13 +794,13 @@ a:hover {
 }
 
 .admin-icon-button {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: inline-grid;
   place-items: center;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--admin-muted);
   background: transparent;
   font-size: 17px;
@@ -761,30 +823,32 @@ a:hover {
 }
 
 .admin-search-trigger {
-  min-height: 36px;
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px 0 11px;
+  padding: 0 9px 0 10px;
   border: 1px solid var(--admin-border);
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--admin-subtle);
   background: var(--admin-surface-soft);
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
   transition: border-color var(--admin-duration-fast) var(--admin-ease),
     color var(--admin-duration-fast) var(--admin-ease),
-    background-color var(--admin-duration-fast) var(--admin-ease);
+    background-color var(--admin-duration-fast) var(--admin-ease),
+    box-shadow var(--admin-duration-fast) var(--admin-ease);
 }
 
 .admin-search-trigger:hover {
   border-color: var(--admin-border-strong);
   color: var(--admin-muted);
   background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-xs);
 }
 
 .admin-search-trigger kbd {
-  padding: 2px 6px;
+  padding: 1px 5px;
   border: 1px solid var(--admin-border);
   border-radius: 5px;
   color: var(--admin-subtle);
@@ -792,17 +856,17 @@ a:hover {
   font-family: inherit;
   font-size: 10px;
   font-weight: 650;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .admin-user {
-  min-height: 40px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 3px 8px 3px 4px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 11px;
   color: var(--admin-ink);
   background: transparent;
   cursor: pointer;
@@ -825,7 +889,7 @@ a:hover {
 .admin-user-name {
   max-width: 170px;
   overflow: hidden;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 650;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -834,7 +898,7 @@ a:hover {
 
 .admin-user-role {
   color: var(--admin-subtle);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   line-height: 1.25;
 }
@@ -877,9 +941,10 @@ a:hover {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: clamp(18px, 2.4vw, 30px) clamp(16px, 2.6vw, 38px) 56px;
+  padding: clamp(18px, 2.2vw, 28px) clamp(16px, 2.4vw, 34px) 56px;
   background:
-    radial-gradient(circle at 92% -6%, rgb(224 230 255 / 46%), transparent 30rem),
+    radial-gradient(58rem 30rem at 94% -14%, rgb(224 230 255 / 52%), transparent 60%),
+    radial-gradient(44rem 24rem at 2% 2%, rgb(215 244 233 / 34%), transparent 58%),
     var(--admin-bg);
 }
 
@@ -914,13 +979,17 @@ a:hover {
 
 /* ========================= 4. 页面骨架 =================================== */
 
+/* 页头与内容之间用一条实线分开：管理台每个页面都是"标题 + 操作 + 内容"，
+   没有这条线时，标题和下面第一张卡片会糊成一片。 */
 .admin-page-header {
-  min-height: 58px;
+  min-height: 56px;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--admin-gap-lg);
-  margin-bottom: var(--admin-gap-lg);
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .admin-page-header-copy {
@@ -940,14 +1009,14 @@ a:hover {
 .admin-page-header h2 {
   margin: 0;
   color: var(--admin-ink-strong);
-  font-size: clamp(21px, 2vw, 26px);
+  font-size: clamp(20px, 1.9vw, 25px);
   font-weight: 720;
   letter-spacing: -0.022em;
   line-height: 1.24;
 }
 
 .admin-page-header p {
-  max-width: 660px;
+  max-width: 680px;
   margin: 7px 0 0;
   color: var(--admin-muted);
   font-size: 13px;
@@ -971,7 +1040,7 @@ a:hover {
 .admin-panel .arco-card-header,
 .admin-form-panel .arco-card-header,
 .admin-card .arco-card-header {
-  min-height: 58px;
+  min-height: 56px;
   padding: 0 20px;
   border-bottom-color: var(--admin-border);
 }
@@ -994,9 +1063,23 @@ a:hover {
 }
 
 .arco-card-header-title {
+  display: flex;
+  align-items: center;
   color: var(--admin-ink-strong);
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+/* 卡片标题前的品牌色短竖条：给每张卡片一个统一的"起笔"位置 */
+.arco-card-header-title::before {
+  content: "";
+  width: 3px;
+  height: 13px;
+  flex: 0 0 auto;
+  margin-right: 9px;
+  border-radius: var(--admin-radius-pill);
+  background: var(--admin-brand);
 }
 
 .arco-card-body {
@@ -1017,11 +1100,27 @@ a:hover {
   overflow: hidden;
 }
 
+/* 顶部语义色描边：六张卡片并排时，颜色本身就是分组信息 */
+.admin-stat-card::before {
+  content: "";
+  height: 2px;
+  position: absolute;
+  inset: 0 0 auto;
+  background: var(--admin-brand);
+  opacity: 0.85;
+}
+
+.admin-stat-tone-green::before { background: var(--admin-sage); }
+.admin-stat-tone-warm::before { background: var(--admin-warm); }
+.admin-stat-tone-violet::before { background: var(--admin-violet); }
+.admin-stat-tone-info::before { background: var(--admin-info); }
+.admin-stat-tone-danger::before { background: var(--admin-danger); }
+
 .admin-stat-card .arco-card-body {
   display: flex;
   align-items: flex-start;
   gap: 13px;
-  padding: 18px;
+  padding: 17px 18px 18px;
 }
 
 .admin-stat-icon {
@@ -1044,18 +1143,19 @@ a:hover {
   color: var(--admin-muted);
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .admin-stat-value {
   display: block;
-  margin: 4px 0 3px;
+  margin: 5px 0 4px;
   color: var(--admin-ink-strong);
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 720;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1078,13 +1178,19 @@ a:hover {
 
 /* ========================= 5. 数据展示 =================================== */
 
+/* 工具栏做成卡片内的一条浅色带：筛选控件、统计文字、列设置因此成为一个整体，
+   而不是散落在白色卡片顶部的一排孤立控件。 */
 .admin-table-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
   margin-bottom: var(--admin-gap);
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface-soft);
 }
 
 .admin-table-toolbar-main,
@@ -1132,10 +1238,20 @@ a:hover {
   gap: var(--admin-gap-sm);
   margin-bottom: var(--admin-gap);
   padding: 8px 10px 8px 14px;
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--admin-brand-soft-strong);
-  border-radius: var(--admin-radius-card);
+  border-radius: 12px;
   background: var(--admin-brand-soft);
   animation: admin-batch-bar-in var(--admin-duration) var(--admin-ease) both;
+}
+
+.admin-batch-bar::before {
+  content: "";
+  width: 3px;
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--admin-brand);
 }
 
 .admin-batch-bar-count {
@@ -1226,6 +1342,7 @@ a:hover {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-card);
   background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-xs);
 }
 
 .arco-table-container {
@@ -1233,19 +1350,46 @@ a:hover {
 }
 
 .arco-table-th {
-  height: 46px;
+  height: 44px;
   color: var(--admin-muted);
   background: var(--admin-surface-soft);
+  border-bottom: 1px solid var(--admin-border);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: 680;
+  letter-spacing: 0.02em;
 }
 
+/* 单元格内边距收到 12px：9 列的表格每列省 8px，整行就能多出 70px 给正文列，
+   1440 宽的笔记本上「标题」「操作」才不会被固定列宽挤没。 */
 .arco-table-td {
   min-height: 56px;
-  color: #3d4a5f;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: #38455c;
   border-bottom-color: #eef1f6;
   font-size: 13px;
+}
+
+.admin-table-shell .arco-table-th,
+.admin-table-shell .arco-table-td {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+/* 列多于容器宽度时 Arco 用自己的滚动条容器，默认几乎不可见；
+   给缩略块一点对比度，用户才知道右侧还有内容。 */
+.admin-table-shell .arco-scrollbar-thumb {
+  background: var(--admin-border-strong);
+  opacity: 0.9;
+}
+
+.admin-table-shell .arco-scrollbar-thumb:hover,
+.admin-table-shell .arco-scrollbar-thumb-dragging {
+  background: var(--admin-subtle);
+}
+
+.admin-table-shell .arco-scrollbar-track {
+  background: transparent;
 }
 
 /* 数据密集视图：单元格默认单行 + 省略号。
@@ -1271,7 +1415,7 @@ a:hover {
 }
 
 .arco-table-tr:hover .arco-table-td {
-  background: #fafbfe;
+  background: var(--admin-row-hover);
 }
 
 .arco-table-tr.arco-table-tr-checked .arco-table-td {
@@ -1280,7 +1424,9 @@ a:hover {
 
 .arco-pagination {
   margin-top: var(--admin-gap);
+  padding-top: 14px;
   justify-content: flex-end;
+  border-top: 1px solid var(--admin-border);
 }
 
 .admin-table-empty {
@@ -1339,7 +1485,7 @@ a:hover {
 }
 
 .admin-status-tag {
-  min-width: 52px;
+  min-width: 56px;
   justify-content: center;
 }
 
@@ -1475,7 +1621,15 @@ a:hover {
 }
 
 .arco-btn-primary {
-  box-shadow: 0 6px 14px -6px rgb(var(--primary-6) / 55%);
+  box-shadow: 0 6px 16px -8px rgb(var(--primary-6) / 68%);
+}
+
+.arco-btn-primary:not(.arco-btn-disabled):hover {
+  box-shadow: 0 10px 22px -10px rgb(var(--primary-6) / 72%);
+}
+
+.arco-btn-text {
+  font-weight: 600;
 }
 
 .arco-input-wrapper,
@@ -1496,7 +1650,7 @@ a:hover {
 .arco-picker:hover,
 .arco-textarea-wrapper:hover,
 .arco-input-number:hover {
-  border-color: #bcc6d6;
+  border-color: var(--admin-border-hover);
   background: var(--admin-surface);
 }
 
@@ -1511,7 +1665,7 @@ a:hover {
 
 .arco-form-item-label-col > .arco-form-item-label {
   color: #475467;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 650;
 }
 
@@ -1544,19 +1698,24 @@ a:hover {
   background: #f4fbf8;
 }
 
+.arco-modal-mask {
+  background: var(--admin-overlay);
+  backdrop-filter: blur(2px);
+}
+
 .arco-modal {
   border-radius: var(--admin-radius-panel);
   box-shadow: var(--admin-shadow-float);
 }
 
 .arco-modal-header {
-  height: 60px;
+  height: 58px;
   border-bottom-color: var(--admin-border);
 }
 
 .arco-modal-title {
   color: var(--admin-ink-strong);
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 680;
 }
 
@@ -1566,7 +1725,7 @@ a:hover {
 
 .arco-dropdown,
 .arco-select-dropdown {
-  border-radius: var(--admin-radius-card);
+  border-radius: 12px;
   box-shadow: var(--admin-shadow-float);
 }
 
@@ -1618,6 +1777,7 @@ a:hover {
   display: grid;
   place-items: center;
   margin-bottom: 8px;
+  border: 1px solid var(--admin-brand-soft-strong);
   border-radius: 18px;
   color: var(--admin-brand);
   background: var(--admin-brand-soft);
@@ -1822,7 +1982,7 @@ a:hover {
 .admin-quick-link:hover {
   border-color: var(--admin-brand-soft-strong);
   background: var(--admin-brand-soft);
-  box-shadow: 0 10px 24px -14px rgb(79 107 216 / 55%);
+  box-shadow: var(--admin-shadow-hover);
   transform: translateY(-2px);
 }
 
@@ -2286,7 +2446,7 @@ a:hover {
 
 .media-card:hover {
   border-color: var(--admin-brand-soft-strong);
-  box-shadow: 0 12px 28px -18px rgb(16 24 40 / 40%);
+  box-shadow: var(--admin-shadow-hover);
   transform: translateY(-2px);
 }
 
@@ -2501,10 +2661,22 @@ a:hover {
   box-shadow: var(--admin-shadow-card);
 }
 
+.workplace-welcome::after {
+  content: "";
+  width: 320px;
+  height: 320px;
+  position: absolute;
+  top: -170px;
+  right: -90px;
+  border: 1px solid rgb(79 107 216 / 12%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 .workplace-welcome h2 {
   margin: 0;
   color: var(--admin-ink-strong);
-  font-size: clamp(23px, 2.6vw, 32px);
+  font-size: clamp(23px, 2.4vw, 30px);
   font-weight: 740;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -2551,13 +2723,15 @@ a:hover {
   cursor: pointer;
   transition: border-color var(--admin-duration) var(--admin-ease),
     background-color var(--admin-duration) var(--admin-ease),
-    transform var(--admin-duration) var(--admin-ease);
+    transform var(--admin-duration) var(--admin-ease),
+    box-shadow var(--admin-duration) var(--admin-ease);
 }
 
 .workplace-shortcut:hover {
   border-color: var(--admin-brand-soft-strong);
   background: var(--admin-brand-soft);
   transform: translateY(-2px);
+  box-shadow: var(--admin-shadow-hover);
 }
 
 .workplace-shortcut-icon {
@@ -2717,7 +2891,7 @@ a:hover {
   align-items: flex-start;
   justify-content: center;
   padding: 12vh 20px 20px;
-  background: rgb(16 24 40 / 42%);
+  background: var(--admin-overlay);
   backdrop-filter: blur(3px);
 }
 
@@ -2778,6 +2952,8 @@ a:hover {
   font-size: 13px;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--admin-duration-fast) var(--admin-ease),
+    color var(--admin-duration-fast) var(--admin-ease);
 }
 
 .admin-command-item.is-active {
@@ -2850,20 +3026,23 @@ a:hover {
 /* ========================= 8. 暗色主题 =================================== */
 
 [data-theme="dark"] {
-  --admin-bg: #080b16;
-  --admin-surface: #0e1327;
-  --admin-surface-soft: #141b33;
-  --admin-surface-raised: #161d38;
-  --admin-ink: #dce3f7;
-  --admin-ink-strong: #f2f5ff;
+  --admin-bg: #070b14;
+  --admin-surface: #0e1424;
+  --admin-surface-soft: #151d31;
+  --admin-surface-sunken: #0a1020;
+  --admin-surface-raised: #17203a;
+  --admin-ink: #dbe3f5;
+  --admin-ink-strong: #f3f6ff;
   --admin-muted: #8b97ba;
-  --admin-subtle: #5a6689;
-  --admin-border: #1e2646;
-  --admin-border-strong: #2c3560;
+  --admin-subtle: #5f6b8f;
+  --admin-border: #1d2740;
+  --admin-border-strong: #2b3757;
+  --admin-border-hover: #3a4770;
+  --admin-row-hover: rgb(125 149 255 / 5%);
   --admin-brand: #7d95ff;
   --admin-brand-hover: #94a8ff;
   --admin-brand-soft: rgb(125 149 255 / 14%);
-  --admin-brand-soft-strong: rgb(125 149 255 / 26%);
+  --admin-brand-soft-strong: rgb(125 149 255 / 28%);
   --admin-brand-ink: #b6c3ff;
   --admin-sage: #34d399;
   --admin-sage-soft: rgb(52 211 153 / 13%);
@@ -2876,9 +3055,11 @@ a:hover {
   --admin-violet: #a78bfa;
   --admin-violet-soft: rgb(167 139 250 / 14%);
   --admin-shadow-xs: 0 1px 2px rgb(0 0 0 / 40%);
-  --admin-shadow-card: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px -16px rgb(0 0 0 / 70%);
-  --admin-shadow-float: 0 24px 60px -12px rgb(0 0 0 / 72%);
+  --admin-shadow-card: 0 1px 2px rgb(0 0 0 / 34%), 0 14px 34px -20px rgb(0 0 0 / 76%);
+  --admin-shadow-hover: 0 2px 6px -1px rgb(0 0 0 / 40%), 0 22px 44px -24px rgb(0 0 0 / 82%);
+  --admin-shadow-float: 0 28px 64px -16px rgb(0 0 0 / 78%);
   --admin-shadow-focus: 0 0 0 3px rgb(125 149 255 / 22%);
+  --admin-overlay: rgb(4 7 14 / 62%);
 }
 
 [data-theme="dark"] body {
@@ -2958,12 +3139,21 @@ a:hover {
 }
 
 [data-theme="dark"] .admin-topbar {
-  border-bottom-color: rgb(30 38 70 / 90%);
-  background: rgb(8 11 22 / 76%);
+  border-bottom-color: rgb(29 39 64 / 90%);
+  background: rgb(7 11 20 / 78%);
 }
 
 [data-theme="dark"] .admin-sider {
-  background: rgb(14 19 39 / 88%) !important;
+  background: rgb(14 20 36 / 90%) !important;
+}
+
+[data-theme="dark"] .admin-nav-footer {
+  background: rgb(21 29 49 / 72%);
+}
+
+[data-theme="dark"] .admin-nav-avatar {
+  color: var(--admin-brand-ink);
+  background: var(--admin-brand-soft-strong);
 }
 
 [data-theme="dark"] .admin-sider .arco-menu-item,
@@ -2983,11 +3173,17 @@ a:hover {
 [data-theme="dark"] .admin-sider .arco-menu-item.arco-menu-selected {
   color: var(--admin-brand);
   background: var(--admin-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--admin-brand-soft-strong);
+}
+
+[data-theme="dark"] .admin-sider.arco-layout-sider-collapsed .arco-menu-item.arco-menu-selected {
+  box-shadow: none;
 }
 
 [data-theme="dark"] .arco-table-th {
   color: var(--admin-muted);
   background: #10162c;
+  border-bottom-color: var(--admin-border);
 }
 
 [data-theme="dark"] .arco-table-td {
@@ -2996,7 +3192,7 @@ a:hover {
 }
 
 [data-theme="dark"] .arco-table-tr:hover .arco-table-td {
-  background: rgb(125 149 255 / 5%);
+  background: var(--admin-row-hover);
 }
 
 [data-theme="dark"] .arco-table-tr.arco-table-tr-checked .arco-table-td {
@@ -3005,6 +3201,10 @@ a:hover {
 
 [data-theme="dark"] .admin-table-shell {
   background: var(--admin-surface);
+}
+
+[data-theme="dark"] .admin-table-toolbar {
+  background: rgb(21 29 49 / 62%);
 }
 
 [data-theme="dark"] .arco-input-wrapper,
@@ -3020,7 +3220,7 @@ a:hover {
 [data-theme="dark"] .arco-picker:hover,
 [data-theme="dark"] .arco-textarea-wrapper:hover,
 [data-theme="dark"] .arco-input-number:hover {
-  border-color: #3a4678;
+  border-color: var(--admin-border-hover);
   background: #141b33;
 }
 
@@ -3029,6 +3229,11 @@ a:hover {
 [data-theme="dark"] .arco-textarea-wrapper.arco-textarea-focus,
 [data-theme="dark"] .arco-input-number.arco-input-number-focused {
   background: #141b33;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--admin-subtle);
 }
 
 [data-theme="dark"] .arco-form-item-label-col > .arco-form-item-label {
@@ -3068,15 +3273,19 @@ a:hover {
   background: linear-gradient(90deg, transparent, rgb(125 149 255 / 8%), transparent);
 }
 
+[data-theme="dark"] .admin-empty-state-icon {
+  border-color: var(--admin-brand-soft-strong);
+}
+
 [data-theme="dark"] .admin-brand-mark {
-  box-shadow: 0 6px 18px -6px rgb(125 149 255 / 60%);
+  box-shadow: 0 6px 18px -6px rgb(125 149 255 / 60%), inset 0 1px 0 rgb(255 255 255 / 14%);
 }
 
 [data-theme="dark"] .admin-quick-link:hover,
 [data-theme="dark"] .workplace-shortcut:hover,
 [data-theme="dark"] .media-card:hover {
   border-color: var(--admin-brand-soft-strong);
-  box-shadow: 0 10px 26px -16px rgb(0 0 0 / 80%);
+  box-shadow: var(--admin-shadow-hover);
 }
 
 [data-theme="dark"] .admin-rank-item:nth-child(1) .admin-rank-index { color: #fbbf24; background: rgb(251 191 36 / 14%); }
@@ -3107,7 +3316,7 @@ a:hover {
   height: 62vw;
   top: -22vw;
   left: -14vw;
-  background: radial-gradient(circle, rgb(125 149 255 / 17%), transparent 70%);
+  background: radial-gradient(circle, rgb(125 149 255 / 16%), transparent 70%);
   animation: aurora-drift-a 28s ease-in-out infinite alternate;
 }
 
@@ -3116,7 +3325,7 @@ a:hover {
   height: 56vw;
   right: -12vw;
   bottom: -20vw;
-  background: radial-gradient(circle, rgb(139 92 246 / 13%), transparent 70%);
+  background: radial-gradient(circle, rgb(139 92 246 / 12%), transparent 70%);
   animation: aurora-drift-b 34s ease-in-out infinite alternate;
 }
 
@@ -3127,16 +3336,15 @@ a:hover {
   z-index: -1;
   pointer-events: none;
   background-image:
-    radial-gradient(1.5px 1.5px at 12% 24%, rgb(255 255 255 / 44%), transparent 50%),
-    radial-gradient(1px 1px at 68% 12%, rgb(255 255 255 / 34%), transparent 50%),
-    radial-gradient(1px 1px at 38% 78%, rgb(160 180 255 / 40%), transparent 50%),
-    radial-gradient(1.5px 1.5px at 82% 62%, rgb(160 200 255 / 34%), transparent 50%),
-    radial-gradient(1px 1px at 52% 44%, rgb(255 255 255 / 26%), transparent 50%);
+    radial-gradient(1.5px 1.5px at 12% 24%, rgb(255 255 255 / 40%), transparent 50%),
+    radial-gradient(1px 1px at 68% 12%, rgb(255 255 255 / 30%), transparent 50%),
+    radial-gradient(1px 1px at 38% 78%, rgb(160 180 255 / 36%), transparent 50%),
+    radial-gradient(1.5px 1.5px at 82% 62%, rgb(160 200 255 / 30%), transparent 50%),
+    radial-gradient(1px 1px at 52% 44%, rgb(255 255 255 / 22%), transparent 50%);
   background-size: 480px 480px;
   animation: star-drift 90s linear infinite;
 }
 
-[data-theme="dark"] .admin-home-hero,
 [data-theme="dark"] .workplace-welcome,
 [data-theme="dark"] .profile-hero {
   border-color: var(--admin-border);
@@ -3149,6 +3357,10 @@ a:hover {
 [data-theme="dark"] .workplace-welcome p,
 [data-theme="dark"] .profile-hero-copy p {
   color: var(--admin-muted);
+}
+
+[data-theme="dark"] .workplace-welcome::after {
+  border-color: rgb(125 149 255 / 14%);
 }
 
 [data-theme="dark"] .profile-meta {
@@ -3255,7 +3467,11 @@ a:hover {
 
 @media (max-width: 760px) {
   .admin-topbar {
-    min-height: 62px;
+    min-height: 60px;
+  }
+
+  .admin-brand {
+    height: 60px;
   }
 
   .admin-breadcrumb {
@@ -3263,7 +3479,7 @@ a:hover {
   }
 
   .admin-topbar-title h1 {
-    font-size: 16px;
+    font-size: 15.5px;
   }
 
   .admin-search-trigger span,
@@ -3273,12 +3489,13 @@ a:hover {
 
   .admin-content {
     min-height: 0;
-    padding: 18px 14px 40px;
+    padding: 16px 14px 40px;
   }
 
   .admin-page-header {
     display: block;
     margin-bottom: var(--admin-gap);
+    padding-bottom: 14px;
   }
 
   .admin-page-actions {
@@ -3294,7 +3511,7 @@ a:hover {
   .admin-form-panel .arco-card-header,
   .admin-card .arco-card-header,
   .arco-card-header {
-    min-height: 54px;
+    min-height: 52px;
     padding: 0 16px;
   }
 
@@ -3308,6 +3525,7 @@ a:hover {
   .admin-table-toolbar {
     align-items: stretch;
     flex-direction: column;
+    padding: 10px;
   }
 
   .admin-table-toolbar-main,

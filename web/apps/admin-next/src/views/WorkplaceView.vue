@@ -113,11 +113,14 @@ import AdminEChart from '@/components/AdminEChart.vue'
 import AdminStatCard from '@/components/AdminStatCard.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
+import { chartSeriesColor, verticalFade, withAlpha } from '@/utils/chart-theme'
 import { formatDateTime, formatNumber } from '@/utils/format'
 import type { AdminDashboardAnalytics } from '@benetnasch/api-contract'
 
 const router = useRouter()
 const auth = useAuthStore()
+const themeStore = useThemeStore()
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -159,33 +162,37 @@ const shortcuts = computed(() => [
   { path: '/setting', label: '个人中心', caption: '更新个人资料', icon: IconSettings }
 ])
 
-const trendOption = computed(() => ({
-  color: ['#4f6bd8'],
-  tooltip: { trigger: 'axis' },
-  grid: { left: 18, right: 18, top: 24, bottom: 20, containLabel: true },
-  xAxis: {
-    type: 'category',
-    boundaryGap: false,
-    data: analytics.trend.map((item) => item.period.slice(5)),
-    axisLine: { lineStyle: { color: 'rgba(127,127,127,.25)' } },
-    axisLabel: { color: 'rgba(127,127,127,1)' }
-  },
-  yAxis: {
-    type: 'value',
-    minInterval: 1,
-    splitLine: { lineStyle: { color: 'rgba(127,127,127,.14)' } },
-    axisLabel: { color: 'rgba(127,127,127,1)' }
-  },
-  series: [{
-    name: '访问量',
-    type: 'line',
-    smooth: true,
-    symbol: 'circle',
-    symbolSize: 6,
-    areaStyle: { color: 'rgba(79,107,216,.12)' },
-    data: analytics.trend.map((item) => item.views)
-  }]
-}))
+const trendOption = computed(() => {
+  const brand = chartSeriesColor(themeStore.theme, 0)
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { left: 4, right: 16, top: 24, bottom: 2, containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: analytics.trend.map((item) => item.period.slice(5)),
+      axisLabel: { hideOverlap: true }
+    },
+    yAxis: { type: 'value', minInterval: 1 },
+    series: [{
+      name: '访问量',
+      type: 'line',
+      showSymbol: false,
+      symbolSize: 7,
+      lineStyle: {
+        width: 2.4,
+        color: brand,
+        shadowBlur: 14,
+        shadowColor: withAlpha(brand, 0.32),
+        shadowOffsetY: 7
+      },
+      itemStyle: { color: brand, borderWidth: 2 },
+      emphasis: { focus: 'series', scale: 1.6 },
+      areaStyle: { color: verticalFade(brand) },
+      data: analytics.trend.map((item) => item.views)
+    }]
+  }
+})
 
 onMounted(() => void load())
 
