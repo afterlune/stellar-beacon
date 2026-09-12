@@ -7,7 +7,8 @@ intended to be reproducible locally and in CI without exposing credentials.
 
 - `go vet ./...`, `go test -race ./...`, and `govulncheck ./...` run in CI.
 - `golang.org/x/crypto` is required for bcrypt password hashing. The project does
-  not use `golang.org/x/crypto/openpgp`.
+  not use `golang.org/x/crypto/openpgp`. Keep it on a patched release (currently
+  `v0.56.0` or later) to address the SSH package advisories.
 - The Go vulnerability database currently reports `GO-2026-5932` for the
   unmaintained `openpgp` package. It has no fixed upstream version, but it is not
   reachable from this project because there is no OpenPGP import. The
@@ -18,24 +19,20 @@ intended to be reproducible locally and in CI without exposing credentials.
 
 ## JavaScript dependencies
 
-The two frontends are intentionally handled in phases:
+The frontends are audited as a single dependency tree, including development and
+build tools:
 
-- Direct runtime dependencies with compatible security updates are kept current
-  in `package.json` and both lockfiles.
-- CI blocks on fixable high and critical vulnerabilities in the production
-  dependency graph with:
+- CI blocks on any npm advisory in the workspace with:
 
   ```sh
-  npm audit --omit=dev --audit-level=high
+  npm audit --registry=https://registry.npmjs.org
   ```
 
-- The blog keeps its Vue CLI and SVG sprite build chain, while `web/apps/admin-next`
-  uses Vue 3 and Vite. Development-only transitive advisories should be tracked
-  separately from the production dependency gate; `npm audit fix --force` is
-  not an accepted remediation.
-- Any new fixable high/critical issue in production dependencies must be fixed
-  before release, even when the full development-tree audit contains an existing
-  exception.
+- Both frontends use Vite; the blog no longer includes the Vue CLI/Webpack SVG
+  sprite build chain. The blog's typecheck and production build run in CI.
+- `echarts` is kept at `v6.1.0` or later to include the XSS fix. Do not use
+  `npm audit fix --force`; review and explicitly update affected direct
+  dependencies instead.
 
 ## Container images
 
@@ -64,12 +61,14 @@ From the repository root:
 
 ```sh
 bash scripts/checks/check-no-openpgp.sh
-go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 go test -race ./...
 
 cd web && npm ci --no-audit --no-fund
-npm audit --workspace=apps/blog --omit=dev --audit-level=high
-npm audit --workspace=apps/admin-next --omit=dev --audit-level=high
+npm audit --registry=https://registry.npmjs.org
+npm run typecheck --workspace=@benetnasch/blog
+npm run build:blog
+npm run build:admin
 ```
 
 Container scans are performed by the CI runner with Trivy; they do not require

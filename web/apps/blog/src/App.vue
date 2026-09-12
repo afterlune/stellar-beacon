@@ -43,6 +43,7 @@ import Footer from '@/components/Footer.vue'
 import MobileMenu from '@/components/MobileMenu.vue'
 import Dia from '@/components/Dia.vue'
 import AuroraNavigator from '@/components/AuroraNavigator.vue'
+import defaultCover from '@/assets/default-cover.jpg'
 import UserCenter from '@/components/UserCenter.vue'
 import api from './api/api'
 export default defineComponent({
@@ -135,7 +136,7 @@ export default defineComponent({
       theme: computed(() => appStore.themeConfig.theme),
       headerImage: computed(() => {
         return {
-          backgroundImage: `url(${commonStore.headerImage}), url(${require('@/assets/default-cover.jpg')})`,
+          backgroundImage: `url(${commonStore.headerImage}), url(${defaultCover})`,
           opacity: commonStore.headerImage !== '' ? 1 : 0
         }
       }),

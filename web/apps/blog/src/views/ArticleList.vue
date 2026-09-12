@@ -30,6 +30,7 @@ import Breadcrumb from '@/components/Breadcrumb.vue'
 import { ArticleCard } from '@/components/ArticleCard'
 import Paginator from '@/components/Paginator.vue'
 import { useRoute } from 'vue-router'
+import MarkdownIt from 'markdown-it'
 import api from '@/api/api'
 
 export default defineComponent({
@@ -37,7 +38,7 @@ export default defineComponent({
   components: { Breadcrumb, ArticleCard, Paginator },
   setup() {
     const route = useRoute()
-    let md = require('markdown-it')()
+    const md = new MarkdownIt()
     const pagination = reactive({
       size: 12,
       total: 0,

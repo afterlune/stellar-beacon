@@ -4,15 +4,17 @@ import cookies from 'js-cookie'
 function loadLocaleMessages(): {
   [key: string]: { [key: string]: { [key: string]: string } }
 } {
-  const locales = require.context('../locales/languages', true, /[A-Za-z0-9-_,\s]+\.json$/i)
+  const locales = import.meta.glob<Record<string, Record<string, string>>>('../locales/languages/**/*.json', {
+    eager: true,
+    import: 'default'
+  })
   const messages: {
     [key: string]: { [key: string]: { [key: string]: string } }
   } = {}
-  locales.keys().forEach((key) => {
-    const matched = key.match(/([A-Za-z0-9-_]+)\./i)
-    if (matched && matched.length > 1) {
-      const locale = matched[1]
-      messages[locale] = locales(key)
+  Object.entries(locales).forEach(([path, message]) => {
+    const matched = path.match(/([^/]+)\.json$/i)
+    if (matched) {
+      messages[matched[1]] = message
     }
   })
   return messages

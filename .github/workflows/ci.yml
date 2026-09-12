@@ -20,13 +20,23 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '24.x'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: web
         run: npm ci --no-audit --no-fund
+
+      - name: Audit complete frontend dependency tree
+        if: matrix.app == 'blog'
+        working-directory: web
+        run: npm audit --registry=https://registry.npmjs.org
+
+      - name: Typecheck blog
+        if: matrix.app == 'blog'
+        working-directory: web
+        run: npm run typecheck --workspace=@benetnasch/blog
 
       - name: Audit production dependencies
         working-directory: web/apps/${{ matrix.app }}
@@ -136,7 +146,7 @@ jobs:
       - name: Run govulncheck
         shell: bash
         run: |
-          go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
       - name: Check forbidden OpenPGP imports
         shell: bash

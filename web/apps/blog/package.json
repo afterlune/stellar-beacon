@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build"
+    "serve": "vite --host 0.0.0.0 --port 8080",
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@benetnasch/api-client": "0.1.0",
     "@benetnasch/api-contract": "0.1.0",
+    "@babel/runtime": "^7.29.7",
     "axios": "^1.20.0",
-    "core-js": "^3.8.3",
     "element-plus": "^2.14.5",
     "js-cookie": "^3.0.8",
     "markdown-it": "^15.0.0",
@@ -33,20 +34,16 @@
     "vue3-lazy": "^1.0.0-alpha.1"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "@types/nprogress": "^0.2.0",
     "@types/prismjs": "^1.26.0",
-    "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-plugin-router": "~5.0.0",
-    "@vue/cli-plugin-typescript": "~5.0.0",
-    "@vue/cli-service": "~5.0.0",
+    "@vitejs/plugin-vue": "^6.0.1",
     "autoprefixer": "^10.4.8",
-    "babel-plugin-import": "^1.13.5",
-    "babel-plugin-prismjs": "^2.1.0",
     "sass": "^1.53.0",
-    "sass-loader": "^12.6.0",
-    "svg-sprite-loader": "^6.0.11",
     "tailwindcss": "^3.1.8",
-    "typescript": "~4.9.5"
+    "typescript": "^5.6.3",
+    "vite": "^7.1.3",
+    "vue-tsc": "^3.3.11"
   },
   "browserslist": [
     "> 1%",

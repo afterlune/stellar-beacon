@@ -1,5 +1,8 @@
-export default function markdownToHtml(content: any) {
-  const MarkdownIt = require('markdown-it')
+import MarkdownIt from 'markdown-it'
+import markdownEmoji from 'markdown-it-emoji'
+import markdownKatexExternal from 'markdown-it-katex-external'
+
+export default function markdownToHtml(content: string) {
   const md = new MarkdownIt({
     html: true
   })
@@ -10,6 +13,6 @@ export default function markdownToHtml(content: any) {
   if (typeof markdownUtils.assign !== 'function') {
     markdownUtils.assign = Object.assign
   }
-  md.use(require('markdown-it-katex-external')).use(require('markdown-it-emoji'))
+  md.use(markdownKatexExternal).use(markdownEmoji)
   return md.render(content)
 }

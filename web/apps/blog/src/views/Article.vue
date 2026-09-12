@@ -159,7 +159,8 @@ import '@/styles/prism-aurora-future.css'
 import { useCommonStore } from '@/stores/common'
 import { useCommentStore } from '@/stores/comment'
 import Sticky from '@/components/Sticky.vue'
-import Prism from 'prismjs'
+import Prism from '@/utils/prism'
+import MarkdownIt from 'markdown-it'
 import tocbot from 'tocbot'
 import emitter from '@/utils/mitt'
 import { v3ImgPreviewFn } from 'v3-img-preview'
@@ -180,7 +181,7 @@ export default defineComponent({
     const { t } = useI18n()
     const loading = ref(true)
     const articleRef = ref()
-    let md = require('markdown-it')()
+    const md = new MarkdownIt()
     const reactiveData = reactive({
       articleId: '' as any,
       article: '' as any,

@@ -1,6 +1,12 @@
 interface AWFConfig {
   resourcePath: string
 }
+
+const localeMessageFiles = import.meta.glob<Record<string, Record<string, string>>>('./messages/**/*.json', {
+  eager: true,
+  import: 'default'
+})
+
 export class AuroraWaifu {
   configs: AWFConfig = {
     resourcePath: '/'
@@ -262,15 +268,13 @@ class AuroraBotSoftware {
     this.showMessage(text, 7000, 8)
   }
   loadLocaleMessages() {
-    const locales = require.context('./messages/', true, /[A-Za-z0-9-_,\s]+\.json$/i)
     const messages: {
       [key: string]: { [key: string]: { [key: string]: string } }
     } = {}
-    locales.keys().forEach((key) => {
-      const matched = key.match(/([A-Za-z0-9-_]+)\./i)
-      if (matched && matched.length > 1) {
-        const locale = matched[1]
-        messages[locale] = locales(key)
+    Object.entries(localeMessageFiles).forEach(([path, message]) => {
+      const matched = path.match(/([^/]+)\.json$/i)
+      if (matched) {
+        messages[matched[1]] = message
       }
     })
     this.locales = messages

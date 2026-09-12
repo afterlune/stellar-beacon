@@ -80,6 +80,7 @@ import { useArticleStore } from '@/stores/article'
 import { useCategoryStore } from '@/stores/Category'
 import { useI18n } from 'vue-i18n'
 import Paginator from '@/components/Paginator.vue'
+import MarkdownIt from 'markdown-it'
 import api from '@/api/api'
 
 export default defineComponent({
@@ -123,7 +124,7 @@ export default defineComponent({
       current: 1
     })
     let nowCategoryId = 0
-    let md = require('markdown-it')()
+    const md = new MarkdownIt()
     onMounted(() => {
       fetchTopAndFeatured()
       fetchCategories()
