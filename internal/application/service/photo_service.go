@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	"benetnasch/internal/domain/port"
 	"benetnasch/internal/interfaces/http/model"
@@ -68,7 +67,7 @@ func (p *MyPhotoService) ListPhotos(c *gin.Context) model.ResultVO {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New()})
 	}
 	var dtos []model.PhotoAdminDTO
-	support.StructCopy(photos, &dtos)
+	StructCopy(photos, &dtos)
 	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
 }
 
@@ -92,7 +91,7 @@ func (p *MyPhotoService) SavePhotos(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	uuid := support.GetUUID()
+	uuid := GetUUID()
 	photos := make([]entity.TPhoto, 0, len(vo.PhotoUrls))
 	for _, url := range vo.PhotoUrls {
 		photos = append(photos, entity.TPhoto{AlbumId: albumID, PhotoName: uuid[:20], PhotoSrc: url})
@@ -145,7 +144,7 @@ func (p *MyPhotoService) ListPhotosByAlbumId(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("相册不存在")
 	}
-	if album.IsDelete != support.False || album.Status != 1 {
+	if album.IsDelete != False || album.Status != 1 {
 		return model.ResultFailWithMessage("相册不存在")
 	}
 	current, _ := strconv.Atoi(c.Query("current"))

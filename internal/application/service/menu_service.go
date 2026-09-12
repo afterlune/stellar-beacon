@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	apperrors "benetnasch/internal/domain/errors"
 	"benetnasch/internal/domain/port"
@@ -140,9 +139,9 @@ func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
 	result := make([]model.MenuDTO, 0, len(catalogs))
 	for _, catalog := range catalogs {
 		var dto model.MenuDTO
-		support.StructCopy(catalog, &dto)
+		StructCopy(catalog, &dto)
 		var childDTOs []model.MenuDTO
-		support.StructCopy(children[catalog.Id], &childDTOs)
+		StructCopy(children[catalog.Id], &childDTOs)
 		sort.Slice(childDTOs, func(i, j int) bool { return childDTOs[i].OrderNum < childDTOs[j].OrderNum })
 		dto.Children = childDTOs
 		result = append(result, dto)
@@ -151,7 +150,7 @@ func (m *MyMenuSService) menuDTOs(menus []entity.TMenu) []model.MenuDTO {
 	if len(children) > 0 {
 		for _, childList := range children {
 			var dtos []model.MenuDTO
-			support.StructCopy(childList, &dtos)
+			StructCopy(childList, &dtos)
 			result = append(result, dtos...)
 		}
 	}
@@ -167,10 +166,10 @@ func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int
 			Name:   catalog.Name,
 			Path:   catalog.Path,
 			Icon:   catalog.Icon,
-			Hidden: catalog.IsHidden == support.True,
+			Hidden: catalog.IsHidden == True,
 		}
 		if len(children) == 0 {
-			dto.Component = support.Component
+			dto.Component = Component
 			dto.Children = []model.UserMenuDTO{{
 				Name:      catalog.Name,
 				Icon:      catalog.Icon,
@@ -180,7 +179,7 @@ func (m *MyMenuSService) convertUserMenuList(catalogs []entity.TMenu, hm map[int
 		} else {
 			sort.Slice(children, func(i, j int) bool { return children[i].OrderNum < children[j].OrderNum })
 			for _, child := range children {
-				dto.Children = append(dto.Children, model.UserMenuDTO{Name: child.Name, Path: child.Path, Icon: child.Icon, Component: child.Component, Hidden: child.IsHidden == support.True})
+				dto.Children = append(dto.Children, model.UserMenuDTO{Name: child.Name, Path: child.Path, Icon: child.Icon, Component: child.Component, Hidden: child.IsHidden == True})
 			}
 		}
 		result = append(result, dto)

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	"benetnasch/internal/domain/port"
 	"benetnasch/internal/interfaces/http/model"
@@ -37,7 +36,7 @@ func (f *MyFriendLinkService) ListFriendLinks() model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.FriendLinkDTO
-	support.StructCopy(links, &dtos)
+	StructCopy(links, &dtos)
 	return model.ResultOkWithData(dtos)
 }
 
@@ -51,7 +50,7 @@ func (f *MyFriendLinkService) ListFriendLinkDTO(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.FriendLinkAdminDTO
-	support.StructCopy(links, &dtos)
+	StructCopy(links, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}

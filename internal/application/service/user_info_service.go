@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/port"
 	"benetnasch/internal/interfaces/http/model"
 	"container/list"
@@ -99,7 +98,7 @@ func (u *MyUserInfoService) SaveUserEmail(c *gin.Context) model.ResultVO {
 	if u.cache == nil {
 		return model.ResultFail()
 	}
-	code, err := u.cache.Get(c.Request.Context(), support.UserCodeKey+vo.Email)
+	code, err := u.cache.Get(c.Request.Context(), UserCodeKey+vo.Email)
 	if err != nil {
 		if errors.Is(err, port.ErrCacheMiss) {
 			return model.ResultFailWithMessage("验证码错误")
@@ -171,21 +170,21 @@ func (u *MyUserInfoService) ListOnlineUsers(c *gin.Context) model.ResultVO {
 	if u.cache == nil {
 		return model.ResultFail()
 	}
-	userMaps, err := u.cache.HGetAll(c.Request.Context(), support.LoginUser)
+	userMaps, err := u.cache.HGetAll(c.Request.Context(), LoginUser)
 	if err != nil {
 		return model.ResultFail()
 	}
 	users := make([]model.UserDetailsDTO, 0, len(userMaps))
 	for _, value := range userMaps {
 		var dto model.UserDetailsDTO
-		if err := support.Unmarsh(value, &dto); err != nil {
+		if err := Unmarsh(value, &dto); err != nil {
 			slog.WarnContext(c.Request.Context(), "skip malformed online user cache", "error", err)
 			continue
 		}
 		users = append(users, dto)
 	}
 	var online []model.UserOnlineDTO
-	support.StructCopy(users, &online)
+	StructCopy(users, &online)
 	filtered := online[:0]
 	for _, user := range online {
 		if vo.Keywords == "" || strings.Contains(user.Nickname, vo.Keywords) {
@@ -226,7 +225,7 @@ func (u *MyUserInfoService) RemoveOnlineUser(c *gin.Context) model.ResultVO {
 	if u.cache == nil {
 		return model.ResultFail()
 	}
-	if err := u.cache.HDel(c.Request.Context(), support.LoginUser, strconv.Itoa(auth.Id)); err != nil {
+	if err := u.cache.HDel(c.Request.Context(), LoginUser, strconv.Itoa(auth.Id)); err != nil {
 		return model.ResultFail()
 	}
 	return model.ResultOk()
@@ -242,6 +241,6 @@ func (u *MyUserInfoService) GetUserInfoById(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dto model.UserInfoDTO
-	support.StructCopy(info, &dto)
+	StructCopy(info, &dto)
 	return model.ResultOkWithData(dto)
 }

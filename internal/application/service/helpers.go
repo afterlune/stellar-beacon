@@ -1,4 +1,4 @@
-package support
+package service
 
 import (
 	"crypto/md5"

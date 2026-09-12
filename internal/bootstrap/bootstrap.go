@@ -10,7 +10,7 @@ import (
 	"benetnasch/internal/infrastructure/persistence/postgres/repository"
 	"benetnasch/internal/infrastructure/search/meilisearch"
 	"benetnasch/internal/infrastructure/storage/object"
-	"benetnasch/internal/infrastructure/visitor/ip"
+	"benetnasch/internal/infrastructure/visitor"
 	"benetnasch/internal/interfaces/http/handlers"
 	"benetnasch/internal/interfaces/http/middleware"
 )
@@ -52,7 +52,7 @@ func Initialize() error {
 	auth := repository.NewUserAuthRepo(engine)
 	userInfo := repository.NewUserInfoRepo(engine)
 
-	service.ConfigureRepositories(site, article, category, comment, job, jobLog, errorLog, operationLog, friendLink, menu, resource, photoAlbum, photo, role, tag, talk, auth, userInfo)
+	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	benetnasch, err := service.NewBenetnaschInfoService(service.BenetnaschInfoServiceDeps{
 		Site:       site,
 		Articles:   article,
@@ -64,8 +64,6 @@ func Initialize() error {
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.benetnasch_info", err)
 	}
-	service.ConfigureBenetnaschService(benetnasch)
-
 	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
 		Repo:    article,
 		Cache:   redisCache,

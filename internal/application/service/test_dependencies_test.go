@@ -81,9 +81,6 @@ func (fakeServiceVisitor) Resolve(context.Context, *http.Request) (port.VisitorI
 
 type fakeBenetnaschInfoService struct{}
 
-func (fakeBenetnaschInfoService) GetBenetnaschHomeInfo() model.ResultVO {
-	return model.ResultOk()
-}
 func (fakeBenetnaschInfoService) Report(*http.Request) model.ResultVO { return model.ResultOk() }
 func (fakeBenetnaschInfoService) GetBlogHomeInfo(context.Context) model.ResultVO {
 	return model.ResultOk()

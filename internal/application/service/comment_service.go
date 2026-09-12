@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	apperrors "benetnasch/internal/domain/errors"
 	"benetnasch/internal/domain/port"
@@ -114,7 +113,7 @@ func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 		return websiteConfigResult
 	}
 	isReview := 0
-	if websiteConfig.IsCommentReview == support.False {
+	if websiteConfig.IsCommentReview == False {
 		isReview = 1
 	}
 	topicID := 0
@@ -209,10 +208,10 @@ func (c *MyCommentService) DeleteComments(ctx *gin.Context) model.ResultVO {
 }
 
 func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO) error {
-	if len(support.TypeHM[vo.Type]) == 0 {
+	if len(TypeHM[vo.Type]) == 0 {
 		return apperrors.Invalid("comment.validate", "invalid comment type")
 	}
-	if vo.Type == support.Article || vo.Type == support.Talk {
+	if vo.Type == Article || vo.Type == Talk {
 		if vo.TopicId == "" {
 			return apperrors.Invalid("comment.validate", "topic is required")
 		}
@@ -224,7 +223,7 @@ func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO)
 			return err
 		}
 	}
-	if (vo.Type == support.Link || vo.Type == support.Abouts || vo.Type == support.Message) && vo.TopicId != "" {
+	if (vo.Type == Link || vo.Type == Abouts || vo.Type == Message) && vo.TopicId != "" {
 		return apperrors.Invalid("comment.validate", "topic must be empty")
 	}
 	if vo.ParentId == 0 && vo.ReplyUserId != 0 {

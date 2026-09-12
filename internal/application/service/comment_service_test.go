@@ -50,8 +50,7 @@ func TestCommentServiceAttachesRepliesUsingPortData(t *testing.T) {
 	if !result.Flag {
 		t.Fatalf("unexpected result: %+v", result)
 	}
-	page, ok := result.Data.(interface{})
-	if !ok || page == nil {
+	if result.Data == nil {
 		t.Fatal("expected page data")
 	}
 }

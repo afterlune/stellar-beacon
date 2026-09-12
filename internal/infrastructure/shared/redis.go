@@ -158,10 +158,6 @@ func DelCtx(ctx context.Context, key string) error {
 	return err
 }
 
-func SetNXCtx(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error) {
-	return rdb.SetNX(validContext(ctx), key, value, ttl).Result()
-}
-
 func IncrExpireCtx(ctx context.Context, key string, ttl time.Duration) (int64, error) {
 	seconds := int64(ttl / time.Second)
 	if seconds < 1 {
@@ -178,142 +174,11 @@ return count
 	return result, err
 }
 
-// The following wrappers are kept for non-HTTP legacy callers. New code must
-// use the Context variants above so request cancellation reaches Redis.
-func SIsMember(key string, value interface{}) bool {
-	result, err := SIsMemberCtx(context.Background(), key, value)
-	if err != nil {
-		logRedisError("SIsMember", err)
-	}
-	return result
-}
-
-func HIncrBy(key, hashKey string, delta int64) int64 {
-	result, err := HIncrByCtx(context.Background(), key, hashKey, delta)
-	if err != nil {
-		logRedisError("HIncrBy", err)
-	}
-	return result
-}
-
-func IncrBy(key string, delta int64) int64 {
-	result, err := IncrByCtx(context.Background(), key, delta)
-	if err != nil {
-		logRedisError("IncrBy", err)
-	}
-	return result
-}
-
-func SAdd(key string, values ...interface{}) int64 {
-	result, err := SAddCtx(context.Background(), key, values...)
-	if err != nil {
-		logRedisError("SAdd", err)
-	}
-	return result
-}
-
-func Get(key string) interface{} {
-	result, err := GetCtx(context.Background(), key)
-	if err != nil {
-		logRedisError("Get", err)
-	}
-	return result
-}
-
+// Set is used by the background user-area refresh task.
 func Set(key string, value interface{}) {
 	if err := SetCtx(context.Background(), key, value); err != nil {
 		logRedisError("Set", err)
 	}
-}
-
-func ZIncr(key string, score float64, value string) float64 {
-	result, err := ZIncrCtx(context.Background(), key, score, value)
-	if err != nil {
-		logRedisError("ZIncr", err)
-	}
-	return result
-}
-
-func ZScore(key, value string) float64 {
-	result, err := ZScoreCtx(context.Background(), key, value)
-	if err != nil {
-		logRedisError("ZScore", err)
-	}
-	return result
-}
-
-func SetWithTime(key string, value interface{}, ttl time.Duration) {
-	if err := SetWithTimeCtx(context.Background(), key, value, ttl); err != nil {
-		logRedisError("SetWithTime", err)
-	}
-}
-
-func HSet(key, hashKey string, value interface{}, ttl time.Duration) bool {
-	if err := HSetCtx(context.Background(), key, hashKey, value, ttl); err != nil {
-		logRedisError("HSet", err)
-		return false
-	}
-	return true
-}
-
-func Expire(key string, ttl time.Duration) bool {
-	result, err := ExpireCtx(context.Background(), key, ttl)
-	if err != nil {
-		logRedisError("Expire", err)
-	}
-	return result
-}
-
-func HGet(key, hashKey string) string {
-	result, err := HGetCtx(context.Background(), key, hashKey)
-	if err != nil {
-		logRedisError("HGet", err)
-	}
-	return result
-}
-
-func HDel(key, hashKey string) {
-	if err := HDelCtx(context.Background(), key, hashKey); err != nil {
-		logRedisError("HDel", err)
-	}
-}
-
-func ZReverseRangeWithScore(key string, start, end int64) map[interface{}]float64 {
-	result, err := ZReverseRangeWithScoreCtx(context.Background(), key, start, end)
-	if err != nil {
-		logRedisError("ZReverseRangeWithScore", err)
-	}
-	return result
-}
-
-func HGetAll(key string) map[string]string {
-	result, err := HGetAllCtx(context.Background(), key)
-	if err != nil {
-		logRedisError("HGetAll", err)
-	}
-	return result
-}
-
-func ZAllScore(key string) map[interface{}]float64 {
-	result, err := ZAllScoreCtx(context.Background(), key)
-	if err != nil {
-		logRedisError("ZAllScore", err)
-	}
-	return result
-}
-
-func Del(key string) {
-	if err := DelCtx(context.Background(), key); err != nil {
-		logRedisError("Del", err)
-	}
-}
-
-func IncrExpire(key string, ttl time.Duration) int64 {
-	result, err := IncrExpireCtx(context.Background(), key, ttl)
-	if err != nil {
-		logRedisError("IncrExpire", err)
-	}
-	return result
 }
 
 func logRedisError(operation string, err error) {

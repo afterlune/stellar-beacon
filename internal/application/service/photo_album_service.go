@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	apperrors "benetnasch/internal/domain/errors"
 	"benetnasch/internal/domain/port"
@@ -49,7 +48,7 @@ func (p *MyPhotoAlbumService) ListPhotoAlbums() model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.PhotoAlbumDTO
-	support.StructCopy(albums, &dtos)
+	StructCopy(albums, &dtos)
 	return model.ResultOkWithData(dtos)
 }
 
@@ -105,7 +104,7 @@ func (p *MyPhotoAlbumService) ListPhotoAlbumBackInfos() model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.PhotoAlbumDTO
-	support.StructCopy(albums, &dtos)
+	StructCopy(albums, &dtos)
 	return model.ResultOkWithData(dtos)
 }
 
@@ -121,12 +120,12 @@ func (p *MyPhotoAlbumService) GetPhotoAlbumBackById(c *gin.Context) model.Result
 		}
 		return model.ResultFromError(err)
 	}
-	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, support.False)
+	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, False)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	var dto model.PhotoAlbumAdminDTO
-	support.StructCopy(album, &dto)
+	StructCopy(album, &dto)
 	dto.PhotoCount = int(count)
 	return model.ResultOkWithData(dto)
 }

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/errors"
 	"benetnasch/internal/domain/port"
 	"context"
@@ -17,7 +16,7 @@ func uploadMultipart(ctx context.Context, storage port.ObjectStorage, file *mult
 	if file == nil {
 		return port.ObjectRef{}, errors.Invalid("storage.upload", "file is required")
 	}
-	key, err := support.ObjectKey(file.Filename, prefix)
+	key, err := ObjectKey(file.Filename, prefix)
 	if err != nil {
 		return port.ObjectRef{}, errors.Invalid("storage.upload", err.Error())
 	}

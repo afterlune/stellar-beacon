@@ -104,8 +104,7 @@ func TestArticleServiceListPropagatesRepositoryData(t *testing.T) {
 	if !result.Flag || result.Code != 20000 {
 		t.Fatalf("unexpected result: %+v", result)
 	}
-	page, ok := result.Data.(interface{})
-	if !ok || page == nil {
+	if result.Data == nil {
 		t.Fatal("expected page data")
 	}
 }

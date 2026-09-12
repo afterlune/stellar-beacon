@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/port"
 	"benetnasch/internal/interfaces/http/model"
 	"context"
@@ -18,7 +17,6 @@ import (
 )
 
 type BenetnaschInfoService interface {
-	GetBenetnaschHomeInfo() model.ResultVO
 	Report(req *http.Request) model.ResultVO
 	GetBlogHomeInfo(ctx context.Context) model.ResultVO
 	GetWebsiteConfig(ctx context.Context) model.ResultVO
@@ -70,10 +68,6 @@ func (b *MyBenetnaschInfoService) tagRepository() port.TagRepository {
 	return b.tags
 }
 
-func (b *MyBenetnaschInfoService) GetBenetnaschHomeInfo() model.ResultVO {
-	return model.ResultVO{}
-}
-
 func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 	if b.cache == nil || b.visitor == nil {
 		return model.ResultFail()
@@ -85,7 +79,7 @@ func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 	}
 	fingerprint := identity.Fingerprint
 	today := timeNow().Format("2006-01-02")
-	dailyVisitorKey := support.DailyVisitorPrefix + today
+	dailyVisitorKey := DailyVisitorPrefix + today
 	dailySeen, err := b.cache.SIsMember(ctx, dailyVisitorKey, fingerprint)
 	if err != nil {
 		slog.Error("record unique visitor failed", "error", err)
@@ -99,12 +93,12 @@ func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 		if _, err := b.cache.Expire(ctx, dailyVisitorKey, 400*24*time.Hour); err != nil {
 			slog.WarnContext(ctx, "expire daily unique visitor set failed", "error", err)
 		}
-		if _, err := b.cache.IncrBy(ctx, support.DailyViewsPrefix+today, 1); err != nil {
+		if _, err := b.cache.IncrBy(ctx, DailyViewsPrefix+today, 1); err != nil {
 			slog.Error("increment daily blog view count failed", "error", err)
 			return model.ResultFail()
 		}
 	}
-	seen, err := b.cache.SIsMember(ctx, support.UniqueVisitor, fingerprint)
+	seen, err := b.cache.SIsMember(ctx, UniqueVisitor, fingerprint)
 	if err != nil {
 		slog.Error("record unique visitor failed", "error", err)
 		return model.ResultFail()
@@ -112,17 +106,17 @@ func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 	if !seen {
 		ipSource := identity.Region
 		if ipSource == "" {
-			ipSource = support.Unknown
+			ipSource = Unknown
 		}
-		if _, err := b.cache.HIncrBy(ctx, support.VisitorArea, ipSource, 1); err != nil {
+		if _, err := b.cache.HIncrBy(ctx, VisitorArea, ipSource, 1); err != nil {
 			slog.Error("increment visitor area failed", "error", err)
 			return model.ResultFail()
 		}
-		if _, err := b.cache.IncrBy(ctx, support.BlogViewsCount, 1); err != nil {
+		if _, err := b.cache.IncrBy(ctx, BlogViewsCount, 1); err != nil {
 			slog.Error("increment blog view count failed", "error", err)
 			return model.ResultFail()
 		}
-		if _, err := b.cache.SAdd(ctx, support.UniqueVisitor, fingerprint); err != nil {
+		if _, err := b.cache.SAdd(ctx, UniqueVisitor, fingerprint); err != nil {
 			slog.Error("record unique visitor failed", "error", err)
 			return model.ResultFail()
 		}
@@ -149,7 +143,7 @@ func (b *MyBenetnaschInfoService) GetBlogHomeInfo(ctx context.Context) model.Res
 	}
 	viewCount := "0"
 	if b.cache != nil {
-		viewCount, err = b.cache.Get(ctx, support.BlogViewsCount)
+		viewCount, err = b.cache.Get(ctx, BlogViewsCount)
 		if errors.Is(err, port.ErrCacheMiss) {
 			viewCount = "0"
 		} else if err != nil {
@@ -177,7 +171,7 @@ func (b *MyBenetnaschInfoService) GetWebsiteConfig(ctx context.Context) model.Re
 	var err error
 	config := ""
 	if b.cache != nil {
-		config, err = b.cache.Get(ctx, support.WebsiteConfig)
+		config, err = b.cache.Get(ctx, WebsiteConfig)
 		if err != nil && !errors.Is(err, port.ErrCacheMiss) {
 			slog.WarnContext(ctx, "read website configuration cache failed", "error", err)
 			config = ""
@@ -189,7 +183,7 @@ func (b *MyBenetnaschInfoService) GetWebsiteConfig(ctx context.Context) model.Re
 			return model.ResultFromError(err)
 		}
 		if b.cache != nil {
-			if err := b.cache.Set(ctx, support.WebsiteConfig, config, 0); err != nil {
+			if err := b.cache.Set(ctx, WebsiteConfig, config, 0); err != nil {
 				slog.Error("cache website configuration failed", "error", err)
 			}
 		}
@@ -205,7 +199,7 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.Res
 	var err error
 	viewCount := "0"
 	if b.cache != nil {
-		viewCount, err = b.cache.Get(ctx, support.BlogViewsCount)
+		viewCount, err = b.cache.Get(ctx, BlogViewsCount)
 		if errors.Is(err, port.ErrCacheMiss) {
 			viewCount = "0"
 		} else if err != nil {
@@ -250,7 +244,7 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.Res
 	}
 	articleMap := map[string]float64{}
 	if b.cache != nil {
-		articleMap, err = b.cache.ZRevRangeWithScores(ctx, support.ArticleViewsCount, 0, 4)
+		articleMap, err = b.cache.ZRevRangeWithScores(ctx, ArticleViewsCount, 0, 4)
 		if err != nil {
 			slog.WarnContext(ctx, "load article view ranking failed", "error", err)
 			articleMap = map[string]float64{}
@@ -282,9 +276,10 @@ func (b *MyBenetnaschInfoService) GetDashboardAnalytics(ctx context.Context, ran
 	now := timeNow()
 	unit := "day"
 	start := now.AddDate(0, 0, -6)
-	if rangeValue == "30d" {
+	switch rangeValue {
+	case "30d":
 		start = now.AddDate(0, 0, -29)
-	} else if rangeValue == "12m" {
+	case "12m":
 		unit = "month"
 		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -11, 0)
 	}
@@ -329,7 +324,7 @@ func (b *MyBenetnaschInfoService) GetDashboardAnalytics(ctx context.Context, ran
 	}
 
 	viewCount := 0
-	if raw, cacheErr := b.cache.Get(ctx, support.BlogViewsCount); cacheErr == nil {
+	if raw, cacheErr := b.cache.Get(ctx, BlogViewsCount); cacheErr == nil {
 		viewCount, _ = strconv.Atoi(raw)
 	}
 	messageCount, err := b.siteRepository().CountComments(ctx, 2)
@@ -365,7 +360,7 @@ func (b *MyBenetnaschInfoService) GetDashboardAnalytics(ctx context.Context, ran
 	regions := b.dashboardRegions(ctx, areaType)
 	articleRank := make([]model.DashboardArticleRankDTO, 0)
 	if b.cache != nil {
-		articleMap, cacheErr := b.cache.ZRevRangeWithScores(ctx, support.ArticleViewsCount, 0, 7)
+		articleMap, cacheErr := b.cache.ZRevRangeWithScores(ctx, ArticleViewsCount, 0, 7)
 		if cacheErr == nil && len(articleMap) > 0 {
 			ids := make([]int, 0, len(articleMap))
 			for key := range articleMap {
@@ -404,7 +399,7 @@ func (b *MyBenetnaschInfoService) GetDashboardAnalytics(ctx context.Context, ran
 }
 
 func (b *MyBenetnaschInfoService) dailyViews(ctx context.Context, day string, fallback int) int {
-	if raw, err := b.cache.Get(ctx, support.DailyViewsPrefix+day); err == nil {
+	if raw, err := b.cache.Get(ctx, DailyViewsPrefix+day); err == nil {
 		value, parseErr := strconv.Atoi(raw)
 		if parseErr == nil {
 			return value
@@ -419,7 +414,7 @@ func (b *MyBenetnaschInfoService) dashboardRegions(ctx context.Context, areaType
 	}
 	regions := make([]model.DashboardRegionDTO, 0)
 	if areaType == "users" {
-		raw, err := b.cache.Get(ctx, support.UserArea)
+		raw, err := b.cache.Get(ctx, UserArea)
 		if err != nil || raw == "" {
 			return regions
 		}
@@ -432,7 +427,7 @@ func (b *MyBenetnaschInfoService) dashboardRegions(ctx context.Context, areaType
 		}
 		return regions
 	}
-	values, err := b.cache.HGetAll(ctx, support.VisitorArea)
+	values, err := b.cache.HGetAll(ctx, VisitorArea)
 	if err != nil {
 		return regions
 	}
@@ -483,7 +478,7 @@ func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.Resu
 		return model.ResultFromError(err)
 	}
 	if b.cache != nil {
-		if err := b.cache.Set(c.Request.Context(), support.WebsiteConfig, string(data), 0); err != nil {
+		if err := b.cache.Set(c.Request.Context(), WebsiteConfig, string(data), 0); err != nil {
 			slog.Error("cache website configuration failed", "error", err)
 		}
 	}
@@ -495,19 +490,19 @@ func (b *MyBenetnaschInfoService) GetAbout(ctx context.Context) model.ResultVO {
 	var err error
 	content := ""
 	if b.cache != nil {
-		content, err = b.cache.Get(ctx, support.About)
+		content, err = b.cache.Get(ctx, About)
 		if err != nil && !errors.Is(err, port.ErrCacheMiss) {
 			slog.WarnContext(ctx, "read about cache failed", "error", err)
 			content = ""
 		}
 	}
 	if content == "" {
-		content, err = b.siteRepository().GetAbout(ctx, support.DefaultAboutID)
+		content, err = b.siteRepository().GetAbout(ctx, DefaultAboutID)
 		if err != nil {
 			return model.ResultFromError(err)
 		}
 		if b.cache != nil {
-			if err := b.cache.Set(ctx, support.About, content, 0); err != nil {
+			if err := b.cache.Set(ctx, About, content, 0); err != nil {
 				slog.Error("cache about content failed", "error", err)
 			}
 		}
@@ -526,16 +521,16 @@ func (b *MyBenetnaschInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	document, err := json.Marshal(model.AboutDTO{Content: vo.Content})
+	document, err := json.Marshal(model.AboutDTO(vo))
 	if err != nil {
 		return model.ResultFailWithMessage("关于内容格式不正确")
 	}
 	serialized := string(document)
-	if err := b.siteRepository().UpdateAbout(c.Request.Context(), support.DefaultAboutID, serialized); err != nil {
+	if err := b.siteRepository().UpdateAbout(c.Request.Context(), DefaultAboutID, serialized); err != nil {
 		return model.ResultFromError(err)
 	}
 	if b.cache != nil {
-		if err := b.cache.Set(c.Request.Context(), support.About, serialized, 0); err != nil {
+		if err := b.cache.Set(c.Request.Context(), About, serialized, 0); err != nil {
 			slog.Error("cache about content failed", "error", err)
 		}
 	}

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	apperrors "benetnasch/internal/domain/errors"
 	"benetnasch/internal/domain/port"
@@ -140,7 +139,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	}
 	if get != "" {
 		var dto model.ArticleDTO
-		if err := support.Unmarsh(get, &dto); err == nil {
+		if err := Unmarsh(get, &dto); err == nil {
 			if a.cache != nil {
 				if _, err := a.cache.Expire(c.Request.Context(), articleId, time.Hour*1); err != nil {
 					slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
@@ -177,7 +176,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 		if a.cache == nil {
 			return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 		}
-		isAccess, err := a.cache.SIsMember(c.Request.Context(), support.ArticleAccess+strconv.Itoa(dto.Id), articleId)
+		isAccess, err := a.cache.SIsMember(c.Request.Context(), ArticleAccess+strconv.Itoa(dto.Id), articleId)
 		if err != nil {
 			slog.ErrorContext(c.Request.Context(), "check article access failed", "error", err)
 			return model.ResultFail()
@@ -218,7 +217,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	}
 	score := float64(0)
 	if a.cache != nil {
-		score, err = a.cache.ZScore(c.Request.Context(), support.ArticleViewsCount, articleId)
+		score, err = a.cache.ZScore(c.Request.Context(), ArticleViewsCount, articleId)
 		if err != nil && !errors.Is(err, port.ErrCacheMiss) {
 			slog.WarnContext(c.Request.Context(), "read article view count failed", "error", err)
 		}
@@ -246,7 +245,7 @@ func (a *MyArticleService) updateArticleViewsCount(ctx context.Context, articleI
 		slog.WarnContext(ctx, "article view cache is not configured")
 		return
 	}
-	if _, err := a.cache.ZIncrBy(ctx, support.ArticleViewsCount, 1, articleId); err != nil {
+	if _, err := a.cache.ZIncrBy(ctx, ArticleViewsCount, 1, articleId); err != nil {
 		slog.ErrorContext(ctx, "increment article view count failed", "error", err)
 	}
 }
@@ -304,7 +303,7 @@ func (a *MyArticleService) AccessArticle(c *gin.Context) model.ResultVO {
 		if a.cache == nil {
 			return model.ResultFailWithMessage("系统繁忙，请稍后再试")
 		}
-		if _, err := a.cache.SAdd(c.Request.Context(), support.ArticleAccess+strconv.Itoa(dto.Id), vo.ArticleId); err != nil {
+		if _, err := a.cache.SAdd(c.Request.Context(), ArticleAccess+strconv.Itoa(dto.Id), vo.ArticleId); err != nil {
 			slog.ErrorContext(c.Request.Context(), "record article access failed", "error", err)
 			return model.ResultFail()
 		}
@@ -389,7 +388,7 @@ func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 	}
 	viewsCountMap := map[string]float64{}
 	if a.cache != nil {
-		viewsCountMap, err = a.cache.ZRangeWithScores(c.Request.Context(), support.ArticleViewsCount)
+		viewsCountMap, err = a.cache.ZRangeWithScores(c.Request.Context(), ArticleViewsCount)
 		if err != nil {
 			slog.WarnContext(c.Request.Context(), "load article view counts failed", "error", err)
 			viewsCountMap = map[string]float64{}

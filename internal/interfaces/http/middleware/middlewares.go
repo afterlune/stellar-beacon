@@ -8,6 +8,7 @@ import (
 	"benetnasch/internal/infrastructure/persistence/postgres/orm"
 	"benetnasch/internal/infrastructure/persistence/postgres/repository"
 	"benetnasch/internal/infrastructure/shared"
+	"benetnasch/internal/infrastructure/visitor"
 	"benetnasch/internal/interfaces/http/model"
 	"bytes"
 	"context"
@@ -233,8 +234,8 @@ func Log() gin.HandlerFunc {
 		if c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodDelete {
 			reqURI := strings.Split(c.Request.RequestURI, "?")[0]
 			reqMethod := c.Request.Method
-			ip := shared.GetIpAddress(c.Request)
-			ipSource := shared.GetIpSource(ip)
+			ip := visitor.ClientIP(c.Request.Context(), c.Request)
+			ipSource := visitor.RegionForIP(c.Request.Context(), ip)
 
 			value, ok := c.Get("userInfo")
 			var dto model.UserDetailsDTO
@@ -285,8 +286,8 @@ func Log() gin.HandlerFunc {
 		if resData["code"] == "OPERATION_FAILED" || resData["code"] == "INVALID_ARGUMENT" || resData["code"] == 51000 {
 			reqURI := strings.Split(c.Request.RequestURI, "?")[0]
 			reqMethod := c.Request.Method
-			ip := shared.GetIpAddress(c.Request)
-			ipSource := shared.GetIpSource(ip)
+			ip := visitor.ClientIP(c.Request.Context(), c.Request)
+			ipSource := visitor.RegionForIP(c.Request.Context(), ip)
 			optFunc := c.HandlerName()
 
 			// 获取 swagger 信息
@@ -309,7 +310,7 @@ func Log() gin.HandlerFunc {
 
 func SpiderReject() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if shared.IsBot(c.Request) {
+		if visitor.IsBot(c.Request) {
 			c.AbortWithStatusJSON(http.StatusForbidden, model.ResultFailWithMessage("You may be a robot！"))
 			return
 		}
@@ -365,7 +366,7 @@ func Users(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("邮箱格式不正确！")
 	}
 	ctx := c.Request.Context()
-	ipAddress := shared.GetIpAddress(c.Request)
+	ipAddress := visitor.ClientIP(ctx, c.Request)
 	allowed, err := loginAttemptAllowed(ctx, userVO.Username, ipAddress)
 	if err != nil {
 		slog.Error("login rate limiter failed", "error", err)
@@ -388,7 +389,7 @@ func Users(c *gin.Context) model.ResultVO {
 	if err := clearLoginFailures(ctx, userVO.Username, ipAddress); err != nil {
 		slog.Error("clear login failures", "error", err)
 	}
-	region := shared.GetIpSource(ipAddress)
+	region := visitor.RegionForIP(ctx, ipAddress)
 	userAuth := entity.TUserAuth{
 		Id:            userDetailsDTO.Id,
 		IpAddress:     ipAddress,
@@ -407,8 +408,8 @@ func Users(c *gin.Context) model.ResultVO {
 	}
 	userDetailsDTO.IpAddress = ipAddress
 	userDetailsDTO.IpSource = ipSource
-	name, version := shared.GetBrowser(c.Request)
-	osName := shared.GetOS(c.Request)
+	name, version := visitor.Browser(c.Request)
+	osName := visitor.OS(c.Request)
 	userDetailsDTO.Browser = name + version
 	userDetailsDTO.Os = osName
 
@@ -708,7 +709,7 @@ func AccessLimiter() gin.HandlerFunc {
 			}
 		}
 
-		ip := shared.GetIpAddress(c.Request)
+		ip := visitor.ClientIP(c.Request.Context(), c.Request)
 		mutex.Lock()
 		limiter, ok := ipLimiter[ip]
 		if !ok {

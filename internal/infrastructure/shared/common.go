@@ -2,9 +2,7 @@ package shared
 
 import (
 	"log/slog"
-	"math/rand"
 	"regexp"
-	"strconv"
 )
 
 func CheckEmail(check string) bool {
@@ -14,8 +12,4 @@ func CheckEmail(check string) bool {
 		slog.Error("validate email pattern failed", "error", err)
 	}
 	return match
-}
-
-func RandomCode() string {
-	return strconv.Itoa(rand.Intn(899999) + 100000)
 }

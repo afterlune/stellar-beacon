@@ -148,7 +148,7 @@ func (s *MeiliSearcher) searchHTTP(ctx context.Context, keywords string) ([]port
 		return nil, errors.Unavailable("search.response", err)
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, errors.Unavailable("search.articles", fmt.Errorf("Meilisearch returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(responseBody))))
+		return nil, errors.Unavailable("search.articles", fmt.Errorf("meilisearch returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(responseBody))))
 	}
 	var decoded struct {
 		Hits []json.RawMessage `json:"hits"`

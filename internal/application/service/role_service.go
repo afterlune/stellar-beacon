@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	apperrors "benetnasch/internal/domain/errors"
 	"benetnasch/internal/domain/port"
@@ -36,7 +35,7 @@ func (r *MyRoleService) ListUserRoles() model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.UserRoleDTO
-	support.StructCopy(roles, &dtos)
+	StructCopy(roles, &dtos)
 	return model.ResultOkWithData(dtos)
 }
 
@@ -71,7 +70,7 @@ func (r *MyRoleService) SaveOrUpdateRole(c *gin.Context) model.ResultVO {
 	if existing.Id != 0 && existing.Id != vo.Id {
 		return model.ResultFailWithMessage("该角色存在")
 	}
-	role := entity.TRole{Id: vo.Id, RoleName: vo.RoleName, IsDisable: support.False}
+	role := entity.TRole{Id: vo.Id, RoleName: vo.RoleName, IsDisable: False}
 	if err := r.roleRepository().SaveOrUpdate(c.Request.Context(), role, vo.ResourceIds, vo.MenuIds); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
 			return model.ResultFailWithMessage("该角色存在")

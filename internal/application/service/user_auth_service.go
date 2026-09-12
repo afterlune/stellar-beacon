@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/entity"
 	apperrors "benetnasch/internal/domain/errors"
 	"benetnasch/internal/domain/port"
@@ -65,7 +64,7 @@ func (u *MyUserAuthService) websiteService() BenetnaschInfoService {
 
 func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 	username := strings.ToLower(strings.TrimSpace(c.Query("username")))
-	if !support.CheckEmail(username) {
+	if !CheckEmail(username) {
 		return model.ResultFailWithMessage("请输入正确邮箱")
 	}
 	ctx := c.Request.Context()
@@ -99,20 +98,20 @@ func (u *MyUserAuthService) SendCode(c *gin.Context) model.ResultVO {
 	if emailCount > 5 || ipCount > 20 {
 		return model.ResultFailWithMessage("验证码发送过于频繁")
 	}
-	code := support.RandomCode()
+	code := RandomCode()
 	codem := make(map[string]interface{})
 	codem["content"] = "您的验证码为 " + code + " 有效期15分钟，请不要告诉他人哦！"
 	emailDTO := model.EmailDTO{
 		Email:      username,
 		CommentMap: codem,
 		Template:   "resources/template/common.html",
-		Subject:    support.Captcha,
+		Subject:    Captcha,
 	}
 	if err := u.mailer.SendHTML(ctx, port.EmailMessage{To: emailDTO.Email, Subject: emailDTO.Subject, Template: emailDTO.Template, CommentMap: emailDTO.CommentMap}); err != nil {
 		slog.Error("send captcha email failed", "error", err)
 		return model.ResultFailWithMessage("验证码发送失败")
 	}
-	if err := u.cache.Set(ctx, support.UserCodeKey+username, code, 15*time.Minute); err != nil {
+	if err := u.cache.Set(ctx, UserCodeKey+username, code, 15*time.Minute); err != nil {
 		slog.Error("store captcha failed", "error", err)
 		return model.ResultFailWithMessage("验证码发送失败")
 	}
@@ -127,7 +126,7 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 		if u.cache == nil {
 			return model.ResultFail()
 		}
-		userArea, err := u.cache.Get(c.Request.Context(), support.UserArea)
+		userArea, err := u.cache.Get(c.Request.Context(), UserArea)
 		if err != nil {
 			slog.Error("load user area failed", "error", err)
 			return model.ResultFail()
@@ -143,7 +142,7 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 		if u.cache == nil {
 			return model.ResultFail()
 		}
-		visitorArea, err := u.cache.HGetAll(c.Request.Context(), support.VisitorArea)
+		visitorArea, err := u.cache.HGetAll(c.Request.Context(), VisitorArea)
 		if err != nil {
 			slog.Error("load visitor area failed", "error", err)
 			return model.ResultFail()
@@ -199,7 +198,7 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 	if u.cache == nil {
 		return model.ResultFail()
 	}
-	code, err := u.cache.Get(c.Request.Context(), support.UserCodeKey+strings.ToLower(strings.TrimSpace(userVo.Username)))
+	code, err := u.cache.Get(c.Request.Context(), UserCodeKey+strings.ToLower(strings.TrimSpace(userVo.Username)))
 	if err != nil {
 		slog.Error("load registration captcha failed", "error", err)
 		return model.ResultFail()
@@ -208,7 +207,7 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("验证码有误！")
 	}
 
-	if !support.CheckEmail(userVo.Username) {
+	if !CheckEmail(userVo.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
 	username := strings.ToLower(strings.TrimSpace(userVo.Username))
@@ -227,7 +226,7 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 	}
 	userInfo := entity.TUserInfo{
 		Email:    username,
-		Nickname: support.DefaultNickname,
+		Nickname: DefaultNickname,
 		Avatar:   websiteConfig.UserAvatar,
 	}
 
@@ -256,7 +255,7 @@ func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	if u.cache == nil {
 		return model.ResultFail()
 	}
-	code, err := u.cache.Get(c.Request.Context(), support.UserCodeKey+strings.ToLower(strings.TrimSpace(userVO.Username)))
+	code, err := u.cache.Get(c.Request.Context(), UserCodeKey+strings.ToLower(strings.TrimSpace(userVO.Username)))
 	if err != nil {
 		slog.Error("load password reset captcha failed", "error", err)
 		return model.ResultFail()
@@ -264,7 +263,7 @@ func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	if userVO.Code != code {
 		return model.ResultFailWithMessage("验证码有误！")
 	}
-	if !support.CheckEmail(userVO.Username) {
+	if !CheckEmail(userVO.Username) {
 		return model.ResultFailWithMessage("邮箱格式不对！")
 	}
 	exists, err := u.userExists(c.Request.Context(), userVO.Username)
@@ -327,7 +326,7 @@ func (u *MyUserAuthService) Logout(ctx context.Context, id int) model.ResultVO {
 	if u.cache == nil {
 		return model.ResultFailWithMessage("注销失败，请稍后再试")
 	}
-	if err := u.cache.HDel(ctx, support.LoginUser, strconv.Itoa(id)); err != nil {
+	if err := u.cache.HDel(ctx, LoginUser, strconv.Itoa(id)); err != nil {
 		slog.Error("remove login session failed", "error", err)
 		return model.ResultFailWithMessage("注销失败，请稍后再试")
 	}
@@ -395,7 +394,7 @@ func (u *MyUserAuthService) CheckUserAuth(ctx context.Context, vo model.UserVO) 
 
 func (u *MyUserAuthService) UpdateUserIp(ctx context.Context, user entity.TUserAuth) error {
 	if user.IpSource == "0" || user.IpSource == "" {
-		user.IpSource = support.Unknown
+		user.IpSource = Unknown
 	}
 	return u.authRepository().UpdateLoginMetadata(ctx, user)
 }

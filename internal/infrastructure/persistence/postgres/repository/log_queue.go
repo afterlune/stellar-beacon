@@ -204,7 +204,7 @@ func isRetryableLogError(err error) bool {
 
 	var netErr net.Error
 	if errors.As(err, &netErr) {
-		return netErr.Timeout() || netErr.Temporary()
+		return netErr.Timeout() || netErr.Temporary() //nolint:staticcheck // Preserve the existing retry policy for transient network errors.
 	}
 	return true
 }

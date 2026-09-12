@@ -1,7 +1,6 @@
 package service
 
 import (
-	"benetnasch/internal/application/support"
 	"benetnasch/internal/domain/port"
 	"benetnasch/internal/interfaces/http/model"
 	"container/list"
@@ -60,7 +59,7 @@ func (j *MyJobLogService) ListJobLogs(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	var dtos []model.JobLogDTO
-	support.StructCopy(logs, &dtos)
+	StructCopy(logs, &dtos)
 	if count == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}

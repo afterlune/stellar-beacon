@@ -67,10 +67,6 @@ func loadOrGenerateKeys() error {
 	return nil
 }
 
-func CreateToken(dto *model.UserDetailsDTO) (string, string, error) {
-	return CreateTokenCtx(context.Background(), dto)
-}
-
 func CreateTokenCtx(ctx context.Context, dto *model.UserDetailsDTO) (string, string, error) {
 	if keyLoadErr != nil {
 		return "", "", keyLoadErr
@@ -136,10 +132,6 @@ func GetUUID() string {
 	return strings.ReplaceAll(newUUID.String(), "-", "")
 }
 
-func TokenParse(tokenStr string) (jwt2.MapClaims, error) {
-	return TokenParseCtx(context.Background(), tokenStr)
-}
-
 func TokenParseCtx(ctx context.Context, tokenStr string) (jwt2.MapClaims, error) {
 	if tokenStr == "" {
 		return nil, errors.New("empty token")
@@ -169,10 +161,6 @@ func TokenParseCtx(ctx context.Context, tokenStr string) (jwt2.MapClaims, error)
 	return claims, nil
 }
 
-func InvalidateToken(tokenStr string) error {
-	return InvalidateTokenCtx(context.Background(), tokenStr)
-}
-
 func InvalidateTokenCtx(ctx context.Context, tokenStr string) error {
 	claims, err := parseTokenWithoutValidation(tokenStr)
 	if err != nil {
@@ -188,18 +176,9 @@ func InvalidateTokenCtx(ctx context.Context, tokenStr string) error {
 	return HSetCtx(ctx, TOKEN_BLACKLIST, tokenStr, "1", ttl)
 }
 
-func IsTokenBlacklisted(tokenStr string) bool {
-	result, err := IsTokenBlacklistedCtx(context.Background(), tokenStr)
-	return err == nil && result
-}
-
 func IsTokenBlacklistedCtx(ctx context.Context, tokenStr string) (bool, error) {
 	value, err := HGetCtx(ctx, TOKEN_BLACKLIST, tokenStr)
 	return value != "", err
-}
-
-func RefreshToken(refreshTokenStr string) (string, string, error) {
-	return RefreshTokenCtx(context.Background(), refreshTokenStr)
 }
 
 func RefreshTokenCtx(ctx context.Context, refreshTokenStr string) (string, string, error) {
