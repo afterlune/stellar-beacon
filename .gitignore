@@ -41,3 +41,6 @@ web/**/dist/
 web/**/test-results/
 web/**/.env.local
 web/**/.env.*.local
+
+# Local UI review scratch space (CDP plans and screenshots)
+.screenshots/

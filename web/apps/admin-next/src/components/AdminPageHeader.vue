@@ -5,8 +5,11 @@
       <h2>{{ title }}</h2>
       <p v-if="description">{{ description }}</p>
     </div>
-    <div v-if="$slots.actions" class="admin-page-actions">
-      <slot name="actions" />
+    <div v-if="$slots.actions || $slots.default" class="admin-page-actions">
+      <a-space wrap>
+        <slot name="actions" />
+        <slot />
+      </a-space>
     </div>
   </div>
 </template>

@@ -178,7 +178,7 @@ func (u *MyUserAuthService) ListUsers(c *gin.Context) model.ResultVO {
 		Current:   vo.Current,
 		Size:      vo.Size,
 		Keywords:  vo.Keywords,
-		LoginType: vo.LonginType,
+		LoginType: vo.LoginType,
 	})
 	if err != nil {
 		return model.ResultFromError(err)

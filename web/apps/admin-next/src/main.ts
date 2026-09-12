@@ -1,78 +1,28 @@
 import { createApp } from 'vue'
-import {
-  Alert,
-  Avatar,
-  Button,
-  Card,
-  Checkbox,
-  Descriptions,
-  Divider,
-  Dropdown,
-  Empty,
-  Form,
-  Grid,
-  Input,
-  InputNumber,
-  Layout,
-  Menu,
-  Modal,
-  Popconfirm,
-  Radio,
-  Result,
-  Select,
-  Space,
-  Spin,
-  Statistic,
-  Switch,
-  Table,
-  Tabs,
-  Tag,
-  Textarea,
-  Tooltip
-} from '@arco-design/web-vue'
+import { createPinia } from 'pinia'
+import ArcoVue from '@arco-design/web-vue'
 import '@arco-design/web-vue/dist/arco.css'
 
 import App from '@/App.vue'
-import router from '@/router'
-import { createPinia } from 'pinia'
+import router, { resetMenuRoutes } from '@/router'
 import '@/styles.css'
 import { AUTH_EXPIRED_EVENT } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
-import { resetMenuRoutes } from '@/router'
 
 const app = createApp(App)
+
 app.use(createPinia())
-app.use(Alert)
-app.use(Avatar)
-app.use(Button)
-app.use(Card)
-app.use(Checkbox)
-app.use(Descriptions)
-app.use(Divider)
-app.use(Dropdown)
-app.use(Empty)
-app.use(Form)
-app.use(Grid)
-app.use(Input)
-app.use(InputNumber)
-app.use(Layout)
-app.use(Menu)
-app.use(Modal)
-app.use(Popconfirm)
-app.use(Radio)
-app.use(Result)
-app.use(Select)
-app.use(Space)
-app.use(Spin)
-app.use(Statistic)
-app.use(Switch)
-app.use(Table)
-app.use(Tabs)
-app.use(Tag)
-app.use(Textarea)
-app.use(Tooltip)
 app.use(router)
+
+// Register the full Arco component set: the admin console uses almost every
+// primitive (table, form, grid, modal, pagination, descriptions, …) and the
+// per-component list was drifting out of sync with the templates. The library
+// is already a single vendor chunk and the shell loads it on first paint, so a
+// complete registration costs nothing extra while removing a whole class of
+// "component not resolved" runtime warnings.
+app.use(ArcoVue)
+
 app.mount('#app')
 
 window.addEventListener(AUTH_EXPIRED_EVENT, () => {

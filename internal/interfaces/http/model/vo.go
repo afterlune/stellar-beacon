@@ -54,7 +54,7 @@ type ConditionVO struct {
 	CategoryId int       `json:"categoryId" form:"categoryId"`
 	TagId      int       `json:"tagId" form:"tagId"`
 	AlbumId    int       `json:"albumId" form:"albumId"`
-	LonginType int       `json:"longinType" form:"longinType"`
+	LoginType  int       `json:"loginType" form:"loginType"`
 	Type       int       `json:"type" form:"type"`
 	Status     int       `json:"status" form:"status"`
 	StartTime  time.Time `json:"startTime" form:"startTime"`

@@ -14,10 +14,6 @@ function responseData<T>(response: AxiosResponse<ResultVO<T>>): T {
   return unwrapResult<T>(response.data)
 }
 
-export function resultData<T>(response: AxiosResponse<ResultVO<T>>): T {
-  return responseData(response)
-}
-
 export async function login(username: string, password: string): Promise<AdminUser & { token: string }> {
   const form = new URLSearchParams()
   form.set('username', username)
@@ -197,11 +193,6 @@ export async function getAdminAlbum(id: number): Promise<AdminAlbum> {
   return responseData(response)
 }
 
-export async function listAdminAlbumOptions(): Promise<AdminAlbum[]> {
-  const response = await http.get<ResultVO<AdminAlbum[]>>('admin/albums/options')
-  return responseData(response)
-}
-
 export async function listAdminPhotos(params: Record<string, string | number> = {}): Promise<Page<AdminPhoto>> {
   return listAdminPage<AdminPhoto>('admin/photos', params)
 }
@@ -303,6 +294,24 @@ export async function saveAdminArticle(payload: Record<string, unknown>): Promis
   responseData(response)
 }
 
+/** Toggle the 置顶 / 精选 flags of one article. */
+export async function updateAdminArticleFeatured(payload: { id: number; isTop: number; isFeatured: number }): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>('admin/articles/featured', payload)
+  responseData(response)
+}
+
+/** Move articles into (or out of) the recycle bin. `isDelete: 0` restores them. */
+export async function updateAdminArticleTrash(ids: number[], isDelete = 1): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>('admin/articles/trash', { ids, isDelete })
+  responseData(response)
+}
+
+/** Permanently delete articles. */
+export async function deleteAdminArticles(ids: number[]): Promise<void> {
+  const response = await http.delete<ResultVO<unknown>>('admin/articles/batch-delete', { data: ids })
+  responseData(response)
+}
+
 export async function saveTaxonomy(kind: 'categories' | 'tags', payload: Record<string, unknown>): Promise<void> {
   const response = await http.post<ResultVO<unknown>>(`admin/${kind}`, payload)
   responseData(response)
@@ -362,6 +371,12 @@ export async function changeAdminPassword(payload: { oldPassword: string; newPas
 
 export async function listAdminOnlineUsers(params: Record<string, string | number> = {}): Promise<Page<AdminUser>> {
   return listAdminPage<AdminUser>('admin/users/online', params)
+}
+
+/** Force a single online session to log out. */
+export async function removeAdminOnlineUser(userInfoId: number): Promise<void> {
+  const response = await http.delete<ResultVO<unknown>>(`admin/users/${encodeURIComponent(userInfoId)}/online`)
+  responseData(response)
 }
 
 export async function listAdminOperationLogs(params: Record<string, string | number> = {}): Promise<Page<Record<string, unknown>>> {

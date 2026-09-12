@@ -1,37 +1,110 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader :title="config.title" :description="description">
+    <AdminPageHeader :title="config.title" :description="config.description">
       <template #actions>
-        <a-space>
-          <a-input-search v-model="keywords" class="admin-filter-input" :placeholder="config.placeholder" allow-clear @search="reload" />
-          <a-popconfirm v-if="mode === 'job'" content="确定清空全部任务日志吗？" @ok="clean">
-            <a-button status="danger">清空任务日志</a-button>
-          </a-popconfirm>
-        </a-space>
+        <a-input-search
+          v-model="keywords"
+          class="admin-filter-input"
+          :placeholder="config.placeholder"
+          allow-clear
+          @search="reload" />
+        <a-popconfirm
+          v-if="mode === 'job'"
+          content="确定清空全部任务日志吗？此操作不可撤销。"
+          @ok="clean">
+          <a-button status="danger" :loading="cleaning">清空任务日志</a-button>
+        </a-popconfirm>
+        <a-button :loading="loading" @click="load">
+          <template #icon><IconRefresh /></template>
+          刷新
+        </a-button>
       </template>
     </AdminPageHeader>
+
     <a-card class="admin-panel" :bordered="false">
+      <div class="admin-table-toolbar">
+        <div class="admin-table-toolbar-main">
+          <a-tag v-if="jobScopeLabel" color="arcoblue">{{ jobScopeLabel }}</a-tag>
+          <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
+          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+        </div>
+        <div class="admin-table-toolbar-actions">
+          <span class="admin-toolbar-caption">共 {{ total }} 条记录</span>
+        </div>
+      </div>
+
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+
       <div class="admin-table-shell">
-        <a-table :data="records" :columns="config.columns" :loading="loading" :pagination="pagination" row-key="id" @page-change="changePage" @page-size-change="changePageSize">
-          <template #method="{ record }">{{ formatCell(record.requestMethod || record.optMethod) }}</template>
-          <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.status) === 1 ? 'red' : 'green'">{{ Number(record.status) === 1 ? '失败' : '成功' }}</a-tag></template>
-          <template #content="{ record }"><span class="ellipsis" :title="String(record.exceptionInfo || record.jobMessage || '')">{{ formatCell(record.exceptionInfo || record.jobMessage) }}</span></template>
+        <a-table
+          :data="records"
+          :columns="tableColumns"
+          :loading="loading"
+          :pagination="pagination"
+          row-key="id"
+          @page-change="changePage"
+          @page-size-change="changePageSize">
+          <template #method="{ record }">
+            <a-tag :color="methodColor(record.requestMethod || record.optMethod)">
+              {{ formatCell(record.requestMethod || record.optMethod) }}
+            </a-tag>
+          </template>
+          <template #status="{ record }">
+            <AdminStatusTag :kind="Number(record.status) === 1 ? 'failed' : 'success'" />
+          </template>
+          <template #content="{ record }">
+            <span
+              class="ellipsis admin-log-message"
+              :title="String(record.exceptionInfo || record.jobMessage || '')">
+              {{ formatCell(record.exceptionInfo || record.jobMessage) }}
+            </span>
+          </template>
+          <template #time="{ record }">
+            <span class="admin-cell-nowrap">{{ formatDateTime(record.createTime || record.startTime) }}</span>
+          </template>
+          <template #formatted="{ record, column }">{{ formatCell(record[column.dataIndex]) }}</template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
               <a-button type="text" size="small" @click="showDetail(record)">详情</a-button>
-              <a-popconfirm content="确定删除这条日志吗？" @ok="deleteLog(record.id)">
+              <a-popconfirm
+                content="确定删除这条日志吗？删除后无法恢复。"
+                @ok="deleteLog(record.id)">
                 <a-button type="text" status="danger" size="small">删除</a-button>
               </a-popconfirm>
             </a-space>
           </template>
-          <template #empty><div class="admin-table-empty"><a-empty description="暂无日志" /></div></template>
+          <template #empty>
+            <AdminEmptyState
+              :icon="IconHistory"
+              :title="keywords.trim() ? '没有匹配的日志' : '暂无日志'"
+              :description="keywords.trim() ? '换个关键词再试一次。' : config.emptyHint">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
+            </AdminEmptyState>
+          </template>
         </a-table>
       </div>
     </a-card>
 
     <a-modal v-model:visible="detailVisible" title="日志详情" width="760px" :footer="false">
-      <pre class="detail">{{ detailText }}</pre>
+      <div v-if="detail" class="log-detail">
+        <div class="log-detail-head">
+          <span class="log-detail-id">#{{ detail.id }}</span>
+          <a-button size="mini" @click="copyDetail">
+            <template #icon><IconCopy /></template>
+            复制原始数据
+          </a-button>
+        </div>
+        <a-descriptions :column="2" size="small" bordered>
+          <a-descriptions-item v-for="field in detailFields" :key="field.label" :label="field.label" :span="field.span">
+            <span :class="{ 'admin-mono-cell': field.mono }">{{ field.value }}</span>
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <template v-for="section in detailSections" :key="section.label">
+          <h4 class="log-detail-section">{{ section.label }}</h4>
+          <pre class="detail">{{ section.value }}</pre>
+        </template>
+      </div>
     </a-modal>
   </section>
 </template>
@@ -39,49 +112,64 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconCopy, IconHistory, IconRefresh } from '@arco-design/web-vue/es/icon'
 import { useRoute } from 'vue-router'
 
 import { apiErrorMessage, cleanAdminJobLogs, deleteAdminLogs, listAdminPage } from '@/api/http'
+import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
-import { formatCell } from '@/utils/format'
+import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { formatCell, formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
 type LogMode = 'operation' | 'exception' | 'job'
+
 interface LogRecord {
   id: number
   [key: string]: unknown
 }
 
+interface DetailField {
+  label: string
+  value: string
+  mono?: boolean
+  span?: number
+}
+
 const props = defineProps<{ mode: LogMode }>()
 const route = useRoute()
+
 const mode = computed(() => props.mode)
+
 const configs = {
   operation: {
     title: '操作日志',
-    description: '留下可追溯的后台操作记录。',
+    description: '留下可追溯的后台操作记录，方便回溯每一次内容变更。',
     placeholder: '搜索模块或描述',
     endpoint: 'admin/logs/operations',
+    emptyHint: '后台的写操作会自动记录在这里。',
     columns: [
-      { title: '模块', dataIndex: 'optModule' },
-      { title: '类型', dataIndex: 'optType' },
-      { title: 'URI', dataIndex: 'optUri' },
-      { title: '方法', dataIndex: 'requestMethod', slotName: 'method' },
-      { title: '用户', dataIndex: 'nickname' },
-      { title: '时间', dataIndex: 'createTime' },
+      { title: '模块', dataIndex: 'optModule', width: 140 },
+      { title: '类型', dataIndex: 'optType', width: 130 },
+      { title: 'URI', dataIndex: 'optUri', minWidth: 200, ellipsis: true, tooltip: true },
+      { title: '方法', dataIndex: 'requestMethod', slotName: 'method', width: 100 },
+      { title: '用户', dataIndex: 'nickname', width: 168, ellipsis: true, tooltip: true },
+      { title: '时间', dataIndex: 'createTime', slotName: 'time', width: 184 },
       { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]
   },
   exception: {
     title: '异常日志',
-    description: '把异常留在记录里，让问题更容易被定位。',
+    description: '把异常留在记录里，让问题更容易被定位和复现。',
     placeholder: '搜索请求 URI 或描述',
     endpoint: 'admin/logs/exceptions',
+    emptyHint: '接口抛出未捕获异常时会记录在这里。',
     columns: [
-      { title: 'URI', dataIndex: 'optUri' },
-      { title: '方法', dataIndex: 'requestMethod', slotName: 'method' },
-      { title: '描述', dataIndex: 'optDesc' },
-      { title: '异常', dataIndex: 'exceptionInfo', slotName: 'content', ellipsis: true, tooltip: true },
-      { title: '时间', dataIndex: 'createTime' },
+      { title: 'URI', dataIndex: 'optUri', minWidth: 200, ellipsis: true, tooltip: true },
+      { title: '方法', dataIndex: 'requestMethod', slotName: 'method', width: 100 },
+      { title: '描述', dataIndex: 'optDesc', minWidth: 160, ellipsis: true, tooltip: true },
+      { title: '异常', dataIndex: 'exceptionInfo', slotName: 'content', ellipsis: true, tooltip: true, minWidth: 200 },
+      { title: '时间', dataIndex: 'createTime', slotName: 'time', width: 184 },
       { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]
   },
@@ -90,32 +178,72 @@ const configs = {
     description: '回看后台任务的执行结果与耗时。',
     placeholder: '搜索任务名',
     endpoint: 'admin/logs/jobs',
+    emptyHint: '定时任务每次执行都会生成一条日志。',
     columns: [
-      { title: '任务', dataIndex: 'jobName' },
-      { title: '任务组', dataIndex: 'jobGroup' },
-      { title: '调用目标', dataIndex: 'invokeTarget', ellipsis: true, tooltip: true },
-      { title: '状态', dataIndex: 'status', slotName: 'status' },
-      { title: '时间', dataIndex: 'startTime' },
+      { title: '任务', dataIndex: 'jobName', minWidth: 170 },
+      { title: '任务组', dataIndex: 'jobGroup', width: 120 },
+      { title: '调用目标', dataIndex: 'invokeTarget', ellipsis: true, tooltip: true, minWidth: 180 },
+      { title: '状态', dataIndex: 'status', slotName: 'status', width: 96 },
+      { title: '时间', dataIndex: 'startTime', slotName: 'time', width: 184 },
       { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]
   }
 } as const
 
 const config = computed(() => configs[props.mode])
-const description = computed(() => config.value.description)
+// Give every column an explicit slot so no cell leaks a raw RFC3339 timestamp.
+const tableColumns = computed(() => config.value.columns.map((column) => ({
+  ...column,
+  slotName: 'slotName' in column ? column.slotName : 'formatted'
+})))
+
 const records = ref<LogRecord[]>([])
 const keywords = ref('')
 const current = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const loading = ref(false)
+const cleaning = ref(false)
 const errorMessage = ref('')
 const detailVisible = ref(false)
 const detail = ref<LogRecord | null>(null)
-const detailText = computed(() => detail.value ? JSON.stringify(detail.value, null, 2) : '')
+
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
+const jobScopeLabel = computed(() => {
+  if (props.mode !== 'job') return ''
+  const jobId = Number(route.params.quartzId)
+  return Number.isInteger(jobId) && jobId > 0 ? `任务 #${jobId}` : ''
+})
+
+const detailFields = computed<DetailField[]>(() => {
+  const record = detail.value
+  if (!record) return []
+  const hidden = new Set(['id', 'requestParam', 'responseData', 'exceptionInfo', 'jobMessage'])
+  return Object.entries(record)
+    .filter(([key, value]) => !hidden.has(key) && value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => ({
+      label: fieldLabel(key),
+      value: formatCell(value),
+      mono: /uri|url|method|target/i.test(key),
+      span: /desc|module|info/i.test(key) ? 2 : 1
+    }))
+})
+
+const detailSections = computed(() => {
+  const record = detail.value
+  if (!record) return []
+  return [
+    { label: '请求参数', raw: record.requestParam },
+    { label: '响应数据', raw: record.responseData },
+    { label: '异常信息', raw: record.exceptionInfo },
+    { label: '任务输出', raw: record.jobMessage }
+  ]
+    .filter((section) => section.raw !== null && section.raw !== undefined && section.raw !== '')
+    .map((section) => ({ label: section.label, value: pretty(section.raw) }))
+})
 
 onMounted(() => void load())
+
 watch(() => route.params.quartzId, () => {
   if (props.mode === 'job') void reload()
 })
@@ -123,6 +251,11 @@ watch(() => route.params.quartzId, () => {
 async function reload(): Promise<void> {
   current.value = 1
   await load()
+}
+
+function clearKeywords(): void {
+  keywords.value = ''
+  void reload()
 }
 
 async function load(): Promise<void> {
@@ -166,11 +299,22 @@ function showDetail(record: LogRecord): void {
   detailVisible.value = true
 }
 
+async function copyDetail(): Promise<void> {
+  if (!detail.value) return
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(detail.value, null, 2))
+    Message.success('日志原始数据已复制')
+  } catch {
+    Message.warning('浏览器不允许自动复制，请手动选择文本')
+  }
+}
+
 async function deleteLog(id: unknown): Promise<void> {
   const logId = Number(id)
-  if (!logId) return
+  if (!Number.isInteger(logId) || logId <= 0) return
   try {
     await deleteAdminLogs(props.mode, [logId])
+    if (records.value.length === 1 && current.value > 1) current.value -= 1
     Message.success('日志已删除')
     await load()
   } catch (error) {
@@ -179,19 +323,110 @@ async function deleteLog(id: unknown): Promise<void> {
 }
 
 async function clean(): Promise<void> {
+  cleaning.value = true
   try {
     await cleanAdminJobLogs()
     Message.success('任务日志已清空')
     await load()
   } catch (error) {
     Message.error(apiErrorMessage(error, '任务日志清理失败'))
+  } finally {
+    cleaning.value = false
   }
 }
 
+const LABELS: Record<string, string> = {
+  optModule: '操作模块',
+  optType: '操作类型',
+  optUri: '请求地址',
+  optDesc: '操作描述',
+  requestMethod: '请求方法',
+  optMethod: '请求方法',
+  nickname: '操作用户',
+  ipAddress: 'IP 地址',
+  ipSource: 'IP 归属',
+  createTime: '发生时间',
+  startTime: '开始时间',
+  endTime: '结束时间',
+  status: '执行状态',
+  jobName: '任务名称',
+  jobGroup: '任务分组',
+  invokeTarget: '调用目标',
+  elapsed: '耗时'
+}
 
+function fieldLabel(key: string): string {
+  return LABELS[key] || key
+}
+
+function pretty(value: unknown): string {
+  const text = String(value ?? '')
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2)
+    } catch {
+      // Not valid JSON: fall through and show the raw text.
+    }
+  }
+  return text
+}
+
+function methodColor(method: unknown): string {
+  switch (String(method || '').toUpperCase()) {
+    case 'GET': return 'green'
+    case 'POST': return 'arcoblue'
+    case 'PUT': return 'orange'
+    case 'DELETE': return 'red'
+    case 'PATCH': return 'purple'
+    default: return 'gray'
+  }
+}
 </script>
 
 <style scoped>
-.ellipsis { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.detail { max-height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.ellipsis {
+  display: block;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-log-message {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+.log-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.log-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.log-detail-id {
+  color: var(--admin-subtle);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+.log-detail-section {
+  margin: 4px 0 0;
+  color: var(--admin-ink-strong);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.detail {
+  max-height: 40vh;
+  overflow: auto;
+  margin: 0;
+}
 </style>

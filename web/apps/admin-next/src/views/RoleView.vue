@@ -2,17 +2,36 @@
   <section class="admin-page">
     <AdminPageHeader title="角色管理" description="用清晰的角色边界保护内容与后台操作。">
       <template #actions>
-        <a-space>
-          <a-input-search v-model="keywords" class="admin-filter-input" placeholder="搜索角色名" allow-clear @search="reload" />
-          <a-button type="primary" @click="openEditor()">
-            <template #icon><IconPlus /></template>
-            新增
-          </a-button>
-        </a-space>
+        <a-input-search
+          v-model="keywords"
+          class="admin-filter-input"
+          placeholder="搜索角色名"
+          allow-clear
+          @search="reload" />
+        <a-button type="primary" @click="openEditor()">
+          <template #icon><IconPlus /></template>
+          新增
+        </a-button>
       </template>
     </AdminPageHeader>
+
     <a-card class="admin-panel" :bordered="false">
+      <div class="admin-table-toolbar">
+        <div class="admin-table-toolbar-main">
+          <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
+          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+        </div>
+        <div class="admin-table-toolbar-actions">
+          <span class="admin-toolbar-caption">共 {{ total }} 个角色</span>
+          <a-button :loading="loading" size="small" @click="loadRoles">
+            <template #icon><IconRefresh /></template>
+            刷新
+          </a-button>
+        </div>
+      </div>
+
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+
       <div class="admin-table-shell">
         <a-table
           :data="roles"
@@ -22,37 +41,118 @@
           row-key="id"
           @page-change="changePage"
           @page-size-change="changePageSize">
-          <template #status="{ record }"><a-tag class="admin-status-tag" :color="Number(record.isDisable) === 1 ? 'orange' : 'green'">{{ Number(record.isDisable) === 1 ? '禁用' : '启用' }}</a-tag></template>
-          <template #time="{ record }">{{ formatCell(record.createTime) }}</template>
+          <template #id="{ record }"><span class="admin-id-cell">#{{ record.id }}</span></template>
+          <template #roleName="{ record }">
+            <span class="admin-title-cell">{{ record.roleName || '未命名角色' }}</span>
+          </template>
+          <template #status="{ record }">
+            <AdminStatusTag :kind="Number(record.isDisable) === 1 ? 'disabled' : 'enabled'" />
+          </template>
+          <template #permissions="{ record }">
+            <a-space :size="4" wrap>
+              <a-tag>{{ countOf(record.menuIds) }} 菜单</a-tag>
+              <a-tag>{{ countOf(record.resourceIds) }} 接口</a-tag>
+            </a-space>
+          </template>
+          <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
               <a-button type="text" size="small" @click="openEditor(record)">编辑权限</a-button>
-              <a-popconfirm content="确定删除该角色吗？" @ok="deleteRole(record.id)">
+              <a-popconfirm
+                :content="`删除角色「${record.roleName}」后，拥有该角色的账号会立即失去对应权限，确认删除吗？`"
+                @ok="deleteRole(record.id)">
                 <a-button type="text" status="danger" size="small">删除</a-button>
               </a-popconfirm>
             </a-space>
           </template>
-          <template #empty><div class="admin-table-empty"><a-empty description="暂无角色" /></div></template>
+          <template #empty>
+            <AdminEmptyState
+              :icon="IconLock"
+              :title="keywords.trim() ? '没有匹配的角色' : '还没有角色'"
+              :description="keywords.trim() ? '换个关键词再试一次。' : '创建角色并分配菜单与接口权限，再把它授予用户。'">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
+              <a-button v-else type="primary" size="small" @click="openEditor()">新增角色</a-button>
+            </AdminEmptyState>
+          </template>
         </a-table>
       </div>
     </a-card>
 
-    <a-modal v-model:visible="editorVisible" :title="editor.id ? '编辑角色' : '新增角色'" :ok-loading="saving" width="720px" @ok="saveEditor">
+    <a-modal
+      v-model:visible="editorVisible"
+      :title="editor.id ? '编辑角色' : '新增角色'"
+      :ok-loading="saving"
+      :mask-closable="false"
+      width="760px"
+      @ok="saveEditor">
       <a-form :model="editor" layout="vertical">
         <a-form-item field="roleName" label="角色名" required>
-          <a-input v-model="editor.roleName" maxlength="20" show-word-limit />
+          <a-input v-model="editor.roleName" maxlength="20" show-word-limit placeholder="例如：内容编辑" />
+          <template #help>角色名用于标识一组权限，建议使用岗位或职责命名。</template>
         </a-form-item>
+
         <a-form-item label="菜单权限">
-          <a-checkbox-group v-model="editor.menuIds" class="permission-grid">
-            <a-checkbox v-for="option in menuChoices" :key="`menu-${option.id}`" :value="option.id">{{ option.label }}</a-checkbox>
-          </a-checkbox-group>
-          <a-empty v-if="menuChoices.length === 0" description="暂无菜单权限选项" />
+          <div class="permission-panel">
+            <div class="permission-panel-head">
+              <span>已选 {{ editor.menuIds.length }} 项</span>
+              <a-space :size="4">
+                <a-button type="text" size="mini" :disabled="menuOptions.length === 0" @click="selectAll('menu')">全选</a-button>
+                <a-button type="text" size="mini" :disabled="editor.menuIds.length === 0" @click="clearAll('menu')">清空</a-button>
+              </a-space>
+            </div>
+            <div v-if="menuOptions.length" class="permission-groups">
+              <div v-for="group in menuOptions" :key="`menu-group-${group.id}`" class="permission-group-block">
+                <a-checkbox
+                  :model-value="isGroupChecked('menu', group)"
+                  :indeterminate="isGroupIndeterminate('menu', group)"
+                  @change="(checked) => toggleGroup('menu', group, Boolean(checked))">
+                  {{ group.label }}
+                </a-checkbox>
+                <div v-if="group.children?.length" class="permission-children">
+                  <a-checkbox
+                    v-for="child in group.children"
+                    :key="`menu-${child.id}`"
+                    :model-value="editor.menuIds.includes(child.id)"
+                    @change="(checked) => toggleId('menu', child.id, Boolean(checked))">
+                    {{ child.label }}
+                  </a-checkbox>
+                </div>
+              </div>
+            </div>
+            <a-empty v-else description="暂无菜单权限选项" />
+          </div>
         </a-form-item>
-        <a-form-item label="资源权限">
-          <a-checkbox-group v-model="editor.resourceIds" class="permission-grid">
-            <a-checkbox v-for="option in resourceChoices" :key="`resource-${option.id}`" :value="option.id">{{ option.label }}</a-checkbox>
-          </a-checkbox-group>
-          <a-empty v-if="resourceChoices.length === 0" description="暂无资源权限选项" />
+
+        <a-form-item label="接口权限">
+          <div class="permission-panel">
+            <div class="permission-panel-head">
+              <span>已选 {{ editor.resourceIds.length }} 项</span>
+              <a-space :size="4">
+                <a-button type="text" size="mini" :disabled="resourceOptions.length === 0" @click="selectAll('resource')">全选</a-button>
+                <a-button type="text" size="mini" :disabled="editor.resourceIds.length === 0" @click="clearAll('resource')">清空</a-button>
+              </a-space>
+            </div>
+            <div v-if="resourceOptions.length" class="permission-groups">
+              <div v-for="group in resourceOptions" :key="`resource-group-${group.id}`" class="permission-group-block">
+                <a-checkbox
+                  :model-value="isGroupChecked('resource', group)"
+                  :indeterminate="isGroupIndeterminate('resource', group)"
+                  @change="(checked) => toggleGroup('resource', group, Boolean(checked))">
+                  {{ group.label }}
+                </a-checkbox>
+                <div v-if="group.children?.length" class="permission-children">
+                  <a-checkbox
+                    v-for="child in group.children"
+                    :key="`resource-${child.id}`"
+                    :model-value="editor.resourceIds.includes(child.id)"
+                    @change="(checked) => toggleId('resource', child.id, Boolean(checked))">
+                    {{ child.label }}
+                  </a-checkbox>
+                </div>
+              </div>
+            </div>
+            <a-empty v-else description="暂无接口权限选项" />
+          </div>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -62,7 +162,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconPlus } from '@arco-design/web-vue/es/icon'
+import { IconLock, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 
 import {
   apiErrorMessage,
@@ -72,23 +172,28 @@ import {
   listRoleResources,
   saveAdminRole
 } from '@/api/http'
+import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
-import { formatCell } from '@/utils/format'
+import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminRole } from '@benetnasch/api-contract'
 
 interface PermissionOption {
   id: number
   label: string
-  children?: PermissionOption[]
+  children: PermissionOption[]
 }
 
+type Scope = 'menu' | 'resource'
+
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 90 },
-  { title: '角色名', dataIndex: 'roleName' },
-  { title: '状态', dataIndex: 'isDisable', width: 90, slotName: 'status' },
-  { title: '创建时间', dataIndex: 'createTime', width: 200, slotName: 'time' },
-  { title: '操作', dataIndex: 'actions', width: 170, slotName: 'actions' }
+  { title: 'ID', dataIndex: 'id', width: 84, slotName: 'id' },
+  { title: '角色名', dataIndex: 'roleName', slotName: 'roleName', minWidth: 180 },
+  { title: '状态', dataIndex: 'isDisable', width: 100, slotName: 'status' },
+  { title: '权限范围', dataIndex: 'permissions', width: 180, slotName: 'permissions' },
+  { title: '创建时间', dataIndex: 'createTime', width: 180, slotName: 'time' },
+  { title: '操作', dataIndex: 'actions', width: 176, slotName: 'actions' }
 ]
 
 const roles = ref<AdminRole[]>([])
@@ -105,8 +210,6 @@ const errorMessage = ref('')
 const editor = reactive({ id: 0, roleName: '', menuIds: [] as number[], resourceIds: [] as number[] })
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
-const menuChoices = computed(() => flattenOptions(menuOptions.value))
-const resourceChoices = computed(() => flattenOptions(resourceOptions.value))
 
 onMounted(() => {
   void Promise.all([loadRoles(), loadPermissionOptions()])
@@ -117,11 +220,20 @@ async function reload(): Promise<void> {
   await loadRoles()
 }
 
+function clearKeywords(): void {
+  keywords.value = ''
+  void reload()
+}
+
 async function loadRoles(): Promise<void> {
   loading.value = true
   errorMessage.value = ''
   try {
-    const page = await listAdminRoles({ current: current.value, size: pageSize.value, keywords: keywords.value.trim() })
+    const page = await listAdminRoles({
+      current: current.value,
+      size: pageSize.value,
+      keywords: keywords.value.trim()
+    })
     roles.value = page.items
     total.value = page.total
   } catch (error) {
@@ -138,7 +250,7 @@ async function loadPermissionOptions(): Promise<void> {
     menuOptions.value = normalizeOptions(menus)
     resourceOptions.value = normalizeOptions(resources)
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '权限选项加载失败')
+    Message.error(apiErrorMessage(error, '权限选项加载失败'))
   }
 }
 
@@ -156,8 +268,8 @@ function changePageSize(size: number): void {
 function openEditor(role?: AdminRole): void {
   editor.id = Number(role?.id || 0)
   editor.roleName = String(role?.roleName || '')
-  editor.menuIds = idsFrom(role?.['menuIds'])
-  editor.resourceIds = idsFrom(role?.['resourceIds'])
+  editor.menuIds = idsFrom(role?.menuIds)
+  editor.resourceIds = idsFrom(role?.resourceIds)
   editorVisible.value = true
 }
 
@@ -175,7 +287,7 @@ async function saveEditor(): Promise<void> {
       resourceIds: editor.resourceIds
     })
     editorVisible.value = false
-    Message.success('角色已保存')
+    Message.success(editor.id ? '角色已更新' : '角色已创建')
     await loadRoles()
   } catch (error) {
     Message.error(apiErrorMessage(error, '角色保存失败'))
@@ -186,14 +298,69 @@ async function saveEditor(): Promise<void> {
 
 async function deleteRole(id: unknown): Promise<void> {
   const roleId = Number(id)
-  if (!roleId) return
+  if (!Number.isInteger(roleId) || roleId <= 0) return
   try {
     await deleteAdminRoles([roleId])
+    if (roles.value.length === 1 && current.value > 1) current.value -= 1
     Message.success('角色已删除')
     await loadRoles()
   } catch (error) {
     Message.error(apiErrorMessage(error, '角色删除失败'))
   }
+}
+
+function selectionOf(scope: Scope): number[] {
+  return scope === 'menu' ? editor.menuIds : editor.resourceIds
+}
+
+function setSelection(scope: Scope, value: number[]): void {
+  if (scope === 'menu') editor.menuIds = value
+  else editor.resourceIds = value
+}
+
+function groupIds(group: PermissionOption): number[] {
+  return [group.id, ...(group.children || []).map((child) => child.id)]
+}
+
+function isGroupChecked(scope: Scope, group: PermissionOption): boolean {
+  const selection = selectionOf(scope)
+  const ids = groupIds(group)
+  return ids.length > 0 && ids.every((id) => selection.includes(id))
+}
+
+function isGroupIndeterminate(scope: Scope, group: PermissionOption): boolean {
+  const selection = selectionOf(scope)
+  return groupIds(group).some((id) => selection.includes(id)) && !isGroupChecked(scope, group)
+}
+
+function toggleGroup(scope: Scope, group: PermissionOption, checked: boolean): void {
+  const ids = groupIds(group)
+  const selection = new Set(selectionOf(scope))
+  for (const id of ids) {
+    if (checked) selection.add(id)
+    else selection.delete(id)
+  }
+  setSelection(scope, [...selection])
+}
+
+function toggleId(scope: Scope, id: number, checked: boolean): void {
+  const selection = new Set(selectionOf(scope))
+  if (checked) selection.add(id)
+  else selection.delete(id)
+  setSelection(scope, [...selection])
+}
+
+function selectAll(scope: Scope): void {
+  const groups = scope === 'menu' ? menuOptions.value : resourceOptions.value
+  setSelection(scope, [...new Set(groups.flatMap(groupIds))])
+}
+
+function clearAll(scope: Scope): void {
+  setSelection(scope, [])
+}
+
+function countOf(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0
 }
 
 function normalizeOptions(value: unknown): PermissionOption[] {
@@ -203,16 +370,12 @@ function normalizeOptions(value: unknown): PermissionOption[] {
     const source = item as Record<string, unknown>
     const id = Number(source.id)
     if (!Number.isFinite(id) || id <= 0) return []
-    const children = normalizeOptions(source.children)
-    return [{ id, label: String(source.label || source.name || '未命名权限'), children }]
+    return [{
+      id,
+      label: String(source.label || source.name || '未命名权限'),
+      children: normalizeOptions(source.children)
+    }]
   })
-}
-
-function flattenOptions(options: PermissionOption[]): PermissionOption[] {
-  return options.flatMap((option) => [
-    { id: option.id, label: option.label },
-    ...flattenOptions(option.children || [])
-  ])
 }
 
 function idsFrom(value: unknown): number[] {
@@ -220,21 +383,50 @@ function idsFrom(value: unknown): number[] {
     ? value.map(Number).filter((id) => Number.isFinite(id) && id > 0)
     : []
 }
-
-
 </script>
 
 <style scoped>
-.permission-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 16px;
-  max-height: 220px;
-  overflow: auto;
-  padding: 8px 4px;
+.permission-panel {
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface-soft);
 }
 
-@media (max-width: 800px) {
-  .permission-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.permission-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--admin-border);
+  color: var(--admin-muted);
+  background: var(--admin-surface);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.permission-groups {
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.permission-group-block {
+  display: grid;
+  gap: 6px;
+}
+
+.permission-group-block > .arco-checkbox {
+  font-weight: 650;
+}
+
+.permission-children {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 14px;
+  padding-left: 22px;
 }
 </style>

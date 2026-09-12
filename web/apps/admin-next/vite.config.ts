@@ -27,6 +27,13 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 8082,
+    watch: {
+      // 编辑器/工具链在 Windows 上做原子保存时会先在目标目录写
+      // `.Name.<pid>.<uuid>.tmpdir/Name.tmp` 再替换源文件。
+      // 默认 watcher 会去 watch 这个临时目录并以 EBUSY 崩溃，
+      // 同时导致替换失败（ReplaceFileW EIO），因此直接忽略。
+      ignored: ['**/.*.tmpdir/**', '**/*.tmp', '**/*~']
+    },
     proxy: {
       '/api': {
         target: apiTarget,

@@ -1,23 +1,44 @@
 <template>
   <section class="admin-page">
-    <a-card class="admin-form-panel admin-form-card" :bordered="false" :title="isEditing ? '编辑说说' : '发布说说'">
-      <a-alert type="info" :show-icon="true" :closable="false">说说内容按纯文本/已有 HTML 原样交给后端处理，图片只能通过后端对象存储接口上传。</a-alert>
+    <AdminPageHeader
+      :title="isEditing ? '编辑说说' : '发布说说'"
+      :description="isEditing ? '调整说说内容、图片与可见性。' : '记录那些不必写成文章的片刻。'"
+      eyebrow="BENETNASCH / 说说" />
+    <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-spin v-if="!editorReady" class="talk-editor-loading" tip="正在加载说说..." />
-      <a-form v-else class="talk-form" :model="editor" layout="vertical" @submit-success="save">
+      <a-spin v-if="!editorReady" class="talk-editor-loading" tip="正在加载说说…" />
+      <a-form v-else ref="formRef" class="talk-form" :model="editor" layout="vertical">
         <a-form-item field="content" label="内容" :rules="[{ required: true, message: '内容不能为空' }]">
           <a-textarea v-model="editor.content" class="talk-content-editor" :max-length="100000" show-word-limit :auto-size="{ minRows: 12, maxRows: 28 }" />
         </a-form-item>
         <a-form-item label="图片">
           <a-space direction="vertical" fill>
+            <div v-if="editor.images.length" class="talk-image-grid">
+              <AdminImagePreview
+                v-for="image in editor.images"
+                :key="image"
+                :src="image"
+                alt="说说图片"
+                :width="112"
+                :height="78" />
+            </div>
+            <template v-else>
+              <span class="field-hint">暂无图片，可以上传 1–9 张配图。</span>
+            </template>
             <a-space wrap>
-              <a-tag v-for="image in editor.images" :key="image" closable @close="removeImage(image)">{{ image }}</a-tag>
-              <span v-if="editor.images.length === 0" class="field-hint">暂无图片</span>
-            </a-space>
-            <a-space>
               <input ref="imageInput" type="file" accept="image/*" hidden @change="selectImage" />
               <a-button :loading="uploading" @click="imageInput?.click()">上传图片</a-button>
+              <a-button v-if="editor.images.length" @click="editor.images = []">清空图片</a-button>
               <span class="field-hint">上传地址由后端返回，不接受前端直接拼接对象存储 URL。</span>
+            </a-space>
+            <a-space v-if="editor.images.length" wrap :size="4">
+              <a-tag
+                v-for="image in editor.images"
+                :key="`tag-${image}`"
+                closable
+                @close="removeImage(image)">
+                {{ shortenUrl(image) }}
+              </a-tag>
             </a-space>
           </a-space>
         </a-form-item>
@@ -27,12 +48,12 @@
             <a-radio :value="1">公开</a-radio>
             <a-radio :value="2">私密</a-radio>
           </a-radio-group>
-          <a-checkbox v-model="editor.isTop" :checked-value="1" :unchecked-value="0">置顶</a-checkbox>
+          <AdminFlagCheckbox v-model="editor.isTop">置顶</AdminFlagCheckbox>
         </a-space>
-        <a-space class="form-actions admin-form-actions">
-          <a-button type="primary" html-type="submit" :loading="saving">保存</a-button>
-          <a-button @click="router.push('/talk-list')">返回列表</a-button>
-        </a-space>
+        <div class="admin-form-actions">
+          <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
+          <a-button :disabled="saving" @click="router.push('/talk-list')">取消</a-button>
+        </div>
       </a-form>
     </a-card>
   </section>
@@ -44,6 +65,9 @@ import { Message } from '@arco-design/web-vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { apiErrorMessage, getAdminTalk, saveAdminTalk, uploadAdminTalkImage } from '@/api/http'
+import AdminFlagCheckbox from '@/components/AdminFlagCheckbox.vue'
+import AdminImagePreview from '@/components/AdminImagePreview.vue'
+import AdminPageHeader from '@/components/AdminPageHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,7 +76,10 @@ const uploading = ref(false)
 const errorMessage = ref('')
 const imageInput = ref<HTMLInputElement | null>(null)
 const editorReady = ref(false)
+const formRef = ref<{ validate: () => Promise<Record<string, unknown> | undefined> } | null>(null)
 const editor = reactive({ id: 0, content: '', images: [] as string[], isTop: 0, status: 1 })
+// `/talks/*` is normalised to `/talks/:articleId` (see types.ts), so the
+// wildcard parameter must stay part of the lookup chain.
 const talkId = computed(() => String(route.params.talkId || route.params.id || route.params.articleId || ''))
 const isEditing = computed(() => /^\d+$/.test(talkId.value))
 
@@ -85,6 +112,7 @@ async function save(): Promise<void> {
     return
   }
   saving.value = true
+  errorMessage.value = ''
   try {
     await saveAdminTalk({
       id: editor.id || undefined,
@@ -93,17 +121,36 @@ async function save(): Promise<void> {
       isTop: editor.isTop,
       status: editor.status
     })
-    Message.success('说说已保存')
+    Message.success(isEditing.value ? '说说已更新' : '说说已发布')
     await router.push('/talk-list')
   } catch (error) {
     errorMessage.value = apiErrorMessage(error, '说说保存失败')
+    Message.error(errorMessage.value)
   } finally {
     saving.value = false
   }
 }
 
+/** Header-level save: validate first, then persist exactly once. */
+async function submit(): Promise<void> {
+  if (saving.value) return
+  const errors = await formRef.value?.validate()
+  if (errors) {
+    Message.error('请先填写说说内容')
+    return
+  }
+  await save()
+}
+
 function removeImage(image: string): void {
   editor.images = editor.images.filter((item) => item !== image)
+}
+
+/** Object-store URLs are long; show a recognizable tail in the tag list. */
+function shortenUrl(url: string): string {
+  const value = String(url || '')
+  if (value.length <= 42) return value
+  return `…${value.slice(-40)}`
 }
 
 async function selectImage(event: Event): Promise<void> {
@@ -135,8 +182,12 @@ function normalizeImages(images: unknown, serialized: unknown): string[] {
 </script>
 
 <style scoped>
-.talk-form { margin-top: 22px; }
+.talk-form { margin-top: 4px; }
 .talk-editor-loading { display: flex; justify-content: center; padding: 56px 0; }
 .field-hint { color: var(--admin-muted); font-size: 12px; }
-.form-actions { margin-top: 24px; }
+.talk-image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 </style>

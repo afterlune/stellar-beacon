@@ -1,18 +1,33 @@
 <template>
-  <button class="admin-image-preview" type="button" :style="style" :aria-label="`预览${alt}`" @click="open">
-    <img v-if="activeSrc" :src="activeSrc" :alt="alt" @error="handleError" />
-    <span v-if="!activeSrc || broken" class="admin-image-preview-fallback">{{ broken ? '图片不可用' : '暂无图片' }}</span>
+  <button
+    class="admin-image-preview"
+    type="button"
+    :style="style"
+    :aria-label="`预览${alt}`"
+    :disabled="!activeSrc"
+    @click="open">
+    <img v-if="activeSrc && !broken" :src="activeSrc" :alt="alt" loading="lazy" decoding="async" @error="handleError" />
+    <span v-if="!activeSrc || broken" class="admin-image-preview-fallback">
+      {{ broken ? '图片不可用' : '暂无图片' }}
+    </span>
   </button>
-  <a-modal v-model:visible="visible" :title="alt" :footer="false" width="min(90vw, 960px)">
+
+  <a-modal v-model:visible="visible" :title="alt" :footer="false" width="min(92vw, 1000px)">
     <div class="admin-image-preview-large">
       <img v-if="activeSrc && !broken" :src="activeSrc" :alt="alt" @error="handleError" />
-      <span v-else>图片不可用</span>
+      <span v-else class="admin-image-preview-fallback">图片不可用</span>
+    </div>
+    <div v-if="activeSrc" class="admin-image-preview-meta">
+      <span class="admin-muted-cell">{{ displaySrc }}</span>
+      <a-button size="mini" @click="copySrc">复制地址</a-button>
     </div>
   </a-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Message } from '@arco-design/web-vue'
+import { API_BASE_URL } from '@benetnasch/api-client'
 
 const props = withDefaults(defineProps<{
   src?: string
@@ -29,24 +44,40 @@ const props = withDefaults(defineProps<{
 const visible = ref(false)
 const broken = ref(false)
 const fallbackSrc = ref('')
-const style = computed(() => ({ width: `${props.width}px`, height: `${props.height}px` }))
+
+/** Accept both `120` and `'100%'` so callers never produce `100%px`. */
+function toLength(value: number | string): string {
+  return typeof value === 'number' ? `${value}px` : value
+}
+
+const style = computed(() => ({ width: toLength(props.width), height: toLength(props.height) }))
+
+/** Some legacy object-storage URLs are missing a path separator. */
 const normalizedSrc = computed(() => props.src.replace(
   /(aliyuncs\.com)(?=(?:talks|photos|articles|avatar|config)\/)/gi,
   '$1/'
 ))
+
+/**
+ * Resolve the renderable URL: OSS hosts are routed through the backend media
+ * proxy (which hides credentials and normalises CORS), everything else is used
+ * as-is so relative `/api` paths keep working.
+ */
 const displaySrc = computed(() => {
-  if (!normalizedSrc.value) return ''
+  const value = normalizedSrc.value
+  if (!value) return ''
   try {
-    const parsed = new URL(normalizedSrc.value, window.location.origin)
+    const parsed = new URL(value, window.location.origin)
     const hostname = parsed.hostname.toLowerCase()
     if (hostname.endsWith('.aliyuncs.com') || hostname === 'i.example.invalid') {
-      return `/api/v1/public/media/proxy?url=${encodeURIComponent(normalizedSrc.value)}`
+      return `${API_BASE_URL}/public/media/proxy?url=${encodeURIComponent(value)}`
     }
   } catch {
-    return normalizedSrc.value
+    return value
   }
-  return normalizedSrc.value
+  return value
 })
+
 const activeSrc = computed(() => fallbackSrc.value || displaySrc.value)
 
 watch(() => props.src, () => {
@@ -54,6 +85,7 @@ watch(() => props.src, () => {
   fallbackSrc.value = ''
 })
 
+/** On proxy failure fall back to the raw URL once before giving up. */
 function handleError(): void {
   if (normalizedSrc.value && activeSrc.value !== normalizedSrc.value) {
     fallbackSrc.value = normalizedSrc.value
@@ -63,7 +95,17 @@ function handleError(): void {
 }
 
 function open(): void {
-  if (props.src && !broken.value) visible.value = true
+  if (!activeSrc.value || broken.value) return
+  visible.value = true
+}
+
+async function copySrc(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(displaySrc.value)
+    Message.success('图片地址已复制')
+  } catch {
+    Message.warning('浏览器不允许自动复制，请手动选择文本')
+  }
 }
 </script>
 
@@ -79,16 +121,54 @@ function open(): void {
   cursor: pointer;
 }
 
+.admin-image-preview:disabled {
+  cursor: default;
+}
+
 .admin-image-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 180ms ease;
+  transition: transform 180ms var(--admin-ease);
 }
 
-.admin-image-preview:hover img { transform: scale(1.05); }
-.admin-image-preview-fallback { padding: 6px; color: var(--admin-muted); font-size: 11px; }
-.admin-image-preview-large { display: grid; min-height: 220px; place-items: center; background: #f6f8fc; }
-.admin-image-preview-large img { max-width: 100%; max-height: 70vh; object-fit: contain; }
-.admin-image-preview-large span { color: var(--admin-muted); }
+.admin-image-preview:not(:disabled):hover img {
+  transform: scale(1.05);
+}
+
+.admin-image-preview-fallback {
+  padding: 6px;
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+
+.admin-image-preview-large {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface-soft);
+}
+
+.admin-image-preview-large img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.admin-image-preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.admin-image-preview-meta span {
+  overflow: hidden;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>

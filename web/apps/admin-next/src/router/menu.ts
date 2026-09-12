@@ -1,4 +1,4 @@
-import { defineAsyncComponent, type Component } from 'vue'
+import type { RouteRecordRaw } from 'vue-router'
 
 import PlaceholderView from '@/views/PlaceholderView.vue'
 import type { MenuRouteMeta, NormalizedMenu } from '@/types'
@@ -7,49 +7,101 @@ import { menuItemPath } from '@/types'
 export interface ResolvedMenuRoute {
   path: string
   name: string
-  component: Component
+  component: MenuViewComponent
   meta: MenuRouteMeta
 }
 
-const componentRegistry: Record<string, Component> = {
+/** 视图组件：普通组件，或 Vue Router 认可的 `() => import(...)` 懒加载函数。 */
+export type MenuViewComponent = NonNullable<RouteRecordRaw['component']>
+
+/**
+ * 视图注册表保存的是 **动态 import 函数**（而不是 defineAsyncComponent 包出来的
+ * 组件对象）：Vue Router 需要 `() => import(...)` 才能正确切分懒加载边界，
+ * 直接给异步组件包装器会在控制台产生 "is defined using defineAsyncComponent()" 警告。
+ */
+const VIEWS = {
+  workplace: () => import('@/views/WorkplaceView.vue'),
+  dashboard: () => import('@/views/DashboardView.vue'),
+  monitor: () => import('@/views/MonitorView.vue'),
+  media: () => import('@/views/MediaView.vue'),
+  articleList: () => import('@/views/ArticleListView.vue'),
+  article: () => import('@/views/ArticleEditorView.vue'),
+  category: () => import('@/views/CategoryView.vue'),
+  tag: () => import('@/views/TagView.vue'),
+  comment: () => import('@/views/CommentsView.vue'),
+  user: () => import('@/views/UsersView.vue'),
+  onlineUser: () => import('@/views/OnlineUsersView.vue'),
+  role: () => import('@/views/RoleView.vue'),
+  operationLog: () => import('@/views/OperationLogsView.vue'),
+  exceptionLog: () => import('@/views/ExceptionLogsView.vue'),
+  quartzLog: () => import('@/views/JobLogsView.vue'),
+  quartz: () => import('@/views/JobsView.vue'),
+  album: () => import('@/views/AlbumsView.vue'),
+  talkList: () => import('@/views/TalksView.vue'),
+  talk: () => import('@/views/TalkEditorView.vue'),
+  photo: () => import('@/views/PhotoView.vue'),
+  photoTrash: () => import('@/views/PhotoTrashView.vue'),
+  menu: () => import('@/views/MenuView.vue'),
+  resource: () => import('@/views/ResourceView.vue'),
+  friendLink: () => import('@/views/FriendLinksView.vue'),
+  website: () => import('@/views/WebsiteView.vue'),
+  about: () => import('@/views/AboutView.vue'),
+  setting: () => import('@/views/SettingView.vue')
+}
+
+const componentRegistry: Record<string, MenuViewComponent> = {
   Layout: PlaceholderView,
-  '/home/Home.vue': lazyView(() => import('@/views/WorkplaceView.vue')),
-  '/dashboard/Workplace.vue': lazyView(() => import('@/views/WorkplaceView.vue')),
-  '/dashboard/Dashboard.vue': lazyView(() => import('@/views/DashboardView.vue')),
-  '/dashboard/Monitor.vue': lazyView(() => import('@/views/MonitorView.vue')),
-  '/media/Media.vue': lazyView(() => import('@/views/MediaView.vue')),
-  '/article/ArticleList.vue': lazyView(() => import('@/views/ArticleListView.vue')),
-  '/article/Article.vue': lazyView(() => import('@/views/ArticleEditorView.vue')),
-  '/category/Category.vue': lazyView(() => import('@/views/CategoryView.vue')),
-  '/tag/Tag.vue': lazyView(() => import('@/views/TagView.vue')),
-  '/comment/Comment.vue': lazyView(() => import('@/views/CommentsView.vue')),
-  '/user/User.vue': lazyView(() => import('@/views/UsersView.vue')),
-  '/user/Online.vue': lazyView(() => import('@/views/OnlineUsersView.vue')),
-  '/role/Role.vue': lazyView(() => import('@/views/RoleView.vue')),
-  '/log/OperationLog.vue': lazyView(() => import('@/views/OperationLogsView.vue')),
-  '/log/ExceptionLog.vue': lazyView(() => import('@/views/ExceptionLogsView.vue')),
-  '/log/QuartzLog.vue': lazyView(() => import('@/views/JobLogsView.vue')),
-  '/quartz/Quartz.vue': lazyView(() => import('@/views/JobsView.vue')),
-  '/album/Album.vue': lazyView(() => import('@/views/AlbumsView.vue')),
-  '/talk/TalkList.vue': lazyView(() => import('@/views/TalksView.vue')),
-  '/talk/Talk.vue': lazyView(() => import('@/views/TalkEditorView.vue')),
-  '/album/Photo.vue': lazyView(() => import('@/views/PhotoView.vue')),
-  '/album/Delete.vue': lazyView(() => import('@/views/PhotoTrashView.vue')),
-  '/menu/Menu.vue': lazyView(() => import('@/views/MenuView.vue')),
-  '/resource/Resource.vue': lazyView(() => import('@/views/ResourceView.vue')),
-  '/friendLink/FriendLink.vue': lazyView(() => import('@/views/FriendLinksView.vue')),
-  '/website/Website.vue': lazyView(() => import('@/views/WebsiteView.vue')),
-  '/about/About.vue': lazyView(() => import('@/views/AboutView.vue')),
-  '/setting/Setting.vue': lazyView(() => import('@/views/SettingView.vue'))
+  '/home/Home.vue': VIEWS.workplace,
+  '/dashboard/Workplace.vue': VIEWS.workplace,
+  '/dashboard/Dashboard.vue': VIEWS.dashboard,
+  '/dashboard/Monitor.vue': VIEWS.monitor,
+  '/media/Media.vue': VIEWS.media,
+  '/article/ArticleList.vue': VIEWS.articleList,
+  '/article/Article.vue': VIEWS.article,
+  '/category/Category.vue': VIEWS.category,
+  '/tag/Tag.vue': VIEWS.tag,
+  '/comment/Comment.vue': VIEWS.comment,
+  '/user/User.vue': VIEWS.user,
+  '/user/Online.vue': VIEWS.onlineUser,
+  '/role/Role.vue': VIEWS.role,
+  '/log/OperationLog.vue': VIEWS.operationLog,
+  '/log/ExceptionLog.vue': VIEWS.exceptionLog,
+  '/log/QuartzLog.vue': VIEWS.quartzLog,
+  '/quartz/Quartz.vue': VIEWS.quartz,
+  '/album/Album.vue': VIEWS.album,
+  '/talk/TalkList.vue': VIEWS.talkList,
+  '/talk/Talk.vue': VIEWS.talk,
+  '/album/Photo.vue': VIEWS.photo,
+  '/album/Delete.vue': VIEWS.photoTrash,
+  '/menu/Menu.vue': VIEWS.menu,
+  '/resource/Resource.vue': VIEWS.resource,
+  '/friendLink/FriendLink.vue': VIEWS.friendLink,
+  '/website/Website.vue': VIEWS.website,
+  '/about/About.vue': VIEWS.about,
+  '/setting/Setting.vue': VIEWS.setting
 }
 
-function lazyView(loader: () => Promise<{ default: Component }>): Component {
-  return defineAsyncComponent(loader)
-}
-
-export function resolveMenuComponent(componentPath: string | undefined): Component {
+export function resolveMenuComponent(componentPath: string | undefined): MenuViewComponent {
   if (!componentPath) return PlaceholderView
   return componentRegistry[canonicalComponentPath(componentPath)] || PlaceholderView
+}
+
+/**
+ * Whether a backend menu component path maps to a real view.
+ *
+ * The menu editor uses this to warn before saving a path that would silently
+ * fall back to the "under migration" placeholder page.
+ */
+export function isRegisteredComponent(componentPath: string | undefined): boolean {
+  const value = (componentPath || '').trim()
+  if (!value) return false
+  if (value === 'Layout') return true
+  return Boolean(componentRegistry[canonicalComponentPath(value)])
+}
+
+/** Registered component paths, for editor autocomplete and validation hints. */
+export function registeredComponentPaths(): string[] {
+  return Object.keys(componentRegistry).filter((path) => path !== 'Layout').sort()
 }
 
 function canonicalComponentPath(componentPath: string): string {
