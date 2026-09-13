@@ -310,6 +310,10 @@ func Log() gin.HandlerFunc {
 
 func SpiderReject() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.Request.URL.Path == "/healthz" {
+			c.Next()
+			return
+		}
 		if visitor.IsBot(c.Request) {
 			c.AbortWithStatusJSON(http.StatusForbidden, model.ResultFailWithMessage("You may be a robot！"))
 			return

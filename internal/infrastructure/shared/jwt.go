@@ -7,12 +7,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"github.com/goccy/go-json"
 	jwt2 "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -33,19 +35,31 @@ func init() {
 func loadOrGenerateKeys() error {
 	privateKeyBase64 := os.Getenv("JWT_PRIVATE_KEY")
 	publicKeyBase64 := os.Getenv("JWT_PUBLIC_KEY")
-	if privateKeyBase64 == "" || publicKeyBase64 == "" {
-		if strings.EqualFold(os.Getenv("JWT_ALLOW_EPHEMERAL"), "true") {
-			publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-			if err != nil {
-				return fmt.Errorf("generate ephemeral JWT key: %w", err)
-			}
-			ed25519PublicKey = publicKey
-			ed25519PrivateKey = privateKey
-			return nil
+	if privateKeyBase64 != "" || publicKeyBase64 != "" {
+		if privateKeyBase64 == "" || publicKeyBase64 == "" {
+			return errors.New("JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured together")
 		}
-		return errors.New("JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured")
+		return loadEncodedKeys(privateKeyBase64, publicKeyBase64)
 	}
 
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("JWT_ALLOW_EPHEMERAL")), "true") {
+		publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return fmt.Errorf("generate ephemeral JWT key: %w", err)
+		}
+		ed25519PublicKey = publicKey
+		ed25519PrivateKey = privateKey
+		return nil
+	}
+
+	keyDirectory := strings.TrimSpace(os.Getenv("JWT_KEY_DIR"))
+	if keyDirectory == "" {
+		return errors.New("JWT key pair or JWT_KEY_DIR must be configured")
+	}
+	return loadPersistentKeys(keyDirectory)
+}
+
+func loadEncodedKeys(privateKeyBase64, publicKeyBase64 string) error {
 	privateKey, err := base64.StdEncoding.DecodeString(privateKeyBase64)
 	if err != nil {
 		return fmt.Errorf("decode JWT private key: %w", err)
@@ -54,15 +68,100 @@ func loadOrGenerateKeys() error {
 	if err != nil {
 		return fmt.Errorf("decode JWT public key: %w", err)
 	}
-	if len(privateKey) != ed25519.PrivateKeySize || len(publicKey) != ed25519.PublicKeySize {
+	return setKeys(privateKey, publicKey)
+}
+
+func setKeys(privateKeyBytes, publicKeyBytes []byte) error {
+	if len(privateKeyBytes) != ed25519.PrivateKeySize || len(publicKeyBytes) != ed25519.PublicKeySize {
 		return errors.New("invalid Ed25519 JWT key length")
 	}
-	ed25519PrivateKey = ed25519.PrivateKey(privateKey)
-	ed25519PublicKey = ed25519.PublicKey(publicKey)
+	ed25519PrivateKey = ed25519.PrivateKey(privateKeyBytes)
+	ed25519PublicKey = ed25519.PublicKey(publicKeyBytes)
 	if !ed25519PrivateKey.Public().(ed25519.PublicKey).Equal(ed25519PublicKey) {
 		ed25519PrivateKey = nil
 		ed25519PublicKey = nil
 		return errors.New("JWT public key does not match private key")
+	}
+	return nil
+}
+
+func loadPersistentKeys(directory string) error {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("create JWT key directory: %w", err)
+	}
+	privatePath := filepath.Join(directory, "ed25519-private.key")
+	publicPath := filepath.Join(directory, "ed25519-public.key")
+	privateKey, privateErr := os.ReadFile(privatePath)
+	publicKey, publicErr := os.ReadFile(publicPath)
+	if privateErr == nil || publicErr == nil {
+		if privateErr != nil || publicErr != nil {
+			return errors.New("JWT key directory contains an incomplete key pair")
+		}
+		if runtime.GOOS != "windows" {
+			privateInfo, err := os.Stat(privatePath)
+			if err != nil {
+				return fmt.Errorf("stat JWT private key: %w", err)
+			}
+			if privateInfo.Mode().Perm()&0o077 != 0 {
+				return errors.New("JWT private key permissions must not allow group or other access")
+			}
+		}
+		return setKeys(privateKey, publicKey)
+	}
+	if !errors.Is(privateErr, os.ErrNotExist) || !errors.Is(publicErr, os.ErrNotExist) {
+		return fmt.Errorf("read JWT key pair: %w", errors.Join(privateErr, publicErr))
+	}
+
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generate persistent JWT key: %w", err)
+	}
+	if err := writePrivateKey(privatePath, privateKey); err != nil {
+		return err
+	}
+	if err := os.WriteFile(publicPath, publicKey, 0o644); err != nil {
+		_ = os.Remove(privatePath)
+		return fmt.Errorf("write JWT public key: %w", err)
+	}
+	return setKeys(privateKey, publicKey)
+}
+
+func writePrivateKey(path string, privateKey ed25519.PrivateKey) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("JWT key pair was created concurrently; restart the process: %w", err)
+		}
+		return fmt.Errorf("create JWT private key: %w", err)
+	}
+	if _, err := file.Write(privateKey); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return fmt.Errorf("write JWT private key: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return fmt.Errorf("sync JWT private key: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("close JWT private key: %w", err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return fmt.Errorf("set JWT private key permissions: %w", err)
+	}
+	return nil
+}
+
+// ValidateJWTKeys makes an invalid or non-persistent key setup fail before the
+// server begins accepting requests.
+func ValidateJWTKeys() error {
+	if keyLoadErr != nil {
+		return keyLoadErr
+	}
+	if len(ed25519PrivateKey) != ed25519.PrivateKeySize || len(ed25519PublicKey) != ed25519.PublicKeySize {
+		return errors.New("JWT key pair is not initialized")
 	}
 	return nil
 }

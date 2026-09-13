@@ -1,37 +1,56 @@
 # 部署运行手册
 
-## 前置条件
+## 新 Linux 主机：独立生产栈
 
-准备 Docker/Compose、PostgreSQL、Redis、Meilisearch、MinIO 和 Caddy。生产数据与容器属于发布资产，除非在明确发布窗口内，不执行重建、迁移或切换。
+该部署面向 Linux x86_64 单机，由 Compose 管理 API、PostgreSQL、Redis、Meilisearch、Caddy 和两个 Vue 应用；MinIO 是可选的本地对象存储。只需预装 Docker Engine 与 Compose v2，不需要单独安装 Go、Node、PostgreSQL 或 Redis。
 
-复制 `.env.example` 为 `.env` 并填写密钥。运行时配置放在 `deploy/config/`：基础配置为 `base.yaml`，按 `STELLAR_BEACON_ENV` 选择 `dev.yaml`、`integration.yaml` 或 `prod.yaml`。
+先将域名的 A/AAAA 记录指向主机，确保 `SITE_DOMAIN` 和 `ADMIN_DOMAIN` 都可从公网访问；放通 TCP 80/443，启用 HTTP/3 时放通 UDP 443。Caddy 使用 ACME 自动签发证书。
 
-## 构建
-
-```shell
-docker build -t stellar-beacon:latest .
-```
-
-前端在 workspace 根目录构建：
+复制并编辑部署变量：
 
 ```shell
-cd web
-npm ci
-npm run build:blog
-npm run build:admin
+cp .env.production.example .env.production
 ```
 
-静态产物分别为 `web/apps/blog/dist` 和 `web/apps/admin-next/dist`，复制到 Caddy 的 `blog` 与 `admin` 静态目录。产物不纳入 Git。
+必须替换所有 `replace-with-...` 示例密钥，设置 SMTP 主机、发信地址与应用密码，并按实际域名修正 `SITE_DOMAIN`、`ADMIN_DOMAIN`、`ACME_EMAIL` 和 `OBJECT_STORAGE_PUBLIC_URL`。建议使用 `openssl rand -hex 32` 生成数据库、Redis、Meilisearch、MinIO 密钥；SMTP 密码使用服务商提供的应用密码。`.env.production` 已被 Git 忽略，不要提交或放入镜像。
 
-## 生产文件
+使用 MinIO 时配置 `OBJECT_STORAGE_PROVIDER=minio`、endpoint `http://minio:9000`、公开 URL `https://<站点域名>/storage/<bucket>`，并以 `--profile minio` 启动：
 
-- Compose：`deploy/compose/production.yaml`
-- Caddy：`deploy/caddy/production.Caddyfile`
-- 运行时资源：`resources/`
-- 配置：`deploy/config/`
-- 数据库初始化：`deploy/db/init/001-stellar-beacon.sql`
+```shell
+docker compose --env-file .env.production -f deploy/compose/production-standalone.yaml --profile minio up -d --build
+```
 
-生产 Compose 仍连接既有服务。修改数据库、Redis、搜索索引、对象存储或 Caddy 前，必须单独安排发布窗口并保留审计记录。
+改用阿里云 OSS 时，填写 `OBJECT_STORAGE_PROVIDER=aliyun`、endpoint、region、bucket、公开 URL 和访问密钥，并省略 `--profile minio`。外部存储的公开 URL 应由对象存储/CDN 直接提供。两种模式都使用同一 API 配置入口 `deploy/config/prod-standalone.yaml`。
+
+Compose 会构建 Go API 和包含博客、`admin-next` 静态资源的 Caddy 镜像。`migrate` 一次性服务先执行版本化迁移；只有成功后 API 才启动。PostgreSQL、Redis、Meilisearch、JWT 密钥、应用日志、Caddy 证书和 MinIO 数据使用独立命名卷，服务端口不发布到宿主机，仅 Caddy 对外开放 80/443。
+
+迁移结束后，在交互式终端创建第一个管理员。程序会隐藏并二次确认密码；该命令在已有管理员或同邮箱账号时拒绝运行，不提供 HTTP 自动注册管理员入口：
+
+```shell
+docker compose --env-file .env.production -f deploy/compose/production-standalone.yaml --profile minio exec -it backend /app/stellar-beacon bootstrap-admin --email admin@example.com
+```
+
+阿里云 OSS 模式同样省略 `--profile minio`。完成后访问 `https://<SITE_DOMAIN>` 与 `https://<ADMIN_DOMAIN>`，用管理员邮箱和新设密码登录。
+
+更新应用：
+
+```shell
+docker compose --env-file .env.production -f deploy/compose/production-standalone.yaml --profile minio up -d --build
+```
+
+不要用 `down -v` 做常规更新，它会删除数据库、对象文件和密钥卷。发布前备份 PostgreSQL 与对象存储；至少异机保留数据库转储和 MinIO/OSS 对象副本。数据库备份示例：
+
+```shell
+docker compose --env-file .env.production -f deploy/compose/production-standalone.yaml --profile minio exec -T postgresql pg_dump -U stellar_beacon stellar_beacon > stellar-beacon.sql
+```
+
+首次部署创建的是空白站点。历史数据库导出 `deploy/db/init/001-stellar-beacon.sql` 只供原隔离联调栈使用，新生产栈不会挂载或导入它。
+
+## 现有 Windows 生产栈
+
+原有生产配置继续使用 `deploy/compose/production.yaml`、`deploy/caddy/production.Caddyfile` 和已存在的外部服务/数据目录。它们与独立 Linux 栈分开维护；不要把新栈的 migration 命令指向该数据库，也不要改动其卷来进行首次安装。
+
+旧栈仍需手工构建前端时，可在 workspace 根目录运行 `npm ci`、`npm run build:blog` 和 `npm run build:admin`。产物分别为 `web/apps/blog/dist` 与 `web/apps/admin-next/dist`，不纳入 Git。
 
 ## 隔离联调
 

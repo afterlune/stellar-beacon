@@ -25,6 +25,7 @@ go.work
 .env.*
 !.env.example
 !.env.integration.example
+!.env.production.example
 deploy/config/*.local.yaml
 
 # Local integration stack state

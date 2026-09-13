@@ -1,0 +1,157 @@
+name: stellar-beacon-prod
+
+x-backend-environment: &backend-environment
+  STELLAR_BEACON_ENV: prod-standalone
+  STELLAR_BEACON_CONFIG_DIR: /app/config
+  STELLAR_BEACON_RESOURCE_DIR: /app/resources
+  JWT_KEY_DIR: /var/lib/stellar-beacon/keys
+  JWT_ALLOW_EPHEMERAL: "false"
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+  MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+  SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
+  SMTP_EMAIL: ${SMTP_EMAIL:?SMTP_EMAIL is required}
+  SMTP_PORT: "${SMTP_PORT:-465}"
+  SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD is required}
+  SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN is required}
+  ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
+  OBJECT_STORAGE_PROVIDER: ${OBJECT_STORAGE_PROVIDER:-minio}
+  OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://minio:9000}
+  OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+  OBJECT_STORAGE_PUBLIC_URL: ${OBJECT_STORAGE_PUBLIC_URL:?OBJECT_STORAGE_PUBLIC_URL is required}
+  OBJECT_STORAGE_PUBLIC_READ: "${OBJECT_STORAGE_PUBLIC_READ:-true}"
+  OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_ACCESS_KEY_ID:?OBJECT_STORAGE_ACCESS_KEY_ID is required}
+  OBJECT_STORAGE_ACCESS_KEY_SECRET: ${OBJECT_STORAGE_ACCESS_KEY_SECRET:?OBJECT_STORAGE_ACCESS_KEY_SECRET is required}
+  OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:?OBJECT_STORAGE_BUCKET is required}
+  TZ: Asia/Shanghai
+
+x-backend-image: &backend-image
+  image: ${BACKEND_IMAGE:-stellar-beacon/backend:latest}
+
+services:
+  postgresql:
+    image: postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825
+    environment:
+      POSTGRES_DB: stellar_beacon
+      POSTGRES_USER: stellar_beacon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stellar_beacon -d stellar_beacon"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.10.1-trixie@sha256:9c5c616b6e72ea6e38125bb9b12eac2dcd92cd57f8f811ee2fb965ae4cb0f16e
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      TZ: Asia/Shanghai
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.53.1@sha256:8d6643d86d71fad6ad3cba92cde7ccfce9e4d6c384bda67598eb553571c32431
+    environment:
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      TZ: Asia/Shanghai
+    volumes:
+      - meili-data:/meili_data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    profiles: ["minio"]
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY_ID:?OBJECT_STORAGE_ACCESS_KEY_ID is required}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_ACCESS_KEY_SECRET:?OBJECT_STORAGE_ACCESS_KEY_SECRET is required}
+      TZ: Asia/Shanghai
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  migrate:
+    <<: *backend-image
+    command: ["/app/stellar-beacon", "migrate"]
+    environment: *backend-environment
+    volumes:
+      - jwt-keys:/var/lib/stellar-beacon/keys
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    <<: *backend-image
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment: *backend-environment
+    volumes:
+      - jwt-keys:/var/lib/stellar-beacon/keys
+      - application-logs:/app/resources/log
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfsS --max-time 5 https://127.0.0.1:7777/healthz >/dev/null"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  caddy:
+    image: ${WEB_IMAGE:-stellar-beacon/web:latest}
+    build:
+      context: ../../web
+      dockerfile: Dockerfile.production
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN is required}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      TZ: Asia/Shanghai
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ../caddy/production-standalone.Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  meili-data:
+  minio-data:
+  jwt-keys:
+  application-logs:
+  caddy-data:
+  caddy-config:

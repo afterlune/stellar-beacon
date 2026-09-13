@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -108,7 +109,16 @@ func Validate() error {
 
 	required := requiredEnvironmentVars()
 	missing := make(map[string]struct{}, len(missingEnvVars)+len(required))
+	provider := strings.ToLower(strings.TrimSpace(viper.GetString("oss.provider")))
+	environment := strings.ToLower(strings.TrimSpace(configuredEnvironment()))
+	keyDirectory := strings.TrimSpace(os.Getenv("JWT_KEY_DIR"))
 	for name := range missingEnvVars {
+		if shouldIgnoreLegacyAliyunCredential(name, provider, environment) {
+			continue
+		}
+		if keyDirectory != "" && (name == "JWT_PRIVATE_KEY" || name == "JWT_PUBLIC_KEY") {
+			continue
+		}
 		missing[name] = struct{}{}
 	}
 	for _, name := range required {
@@ -117,7 +127,7 @@ func Validate() error {
 		}
 	}
 	if len(missing) == 0 {
-		return nil
+		return validateStandaloneEnvironment()
 	}
 
 	names := make([]string, 0, len(missing))
@@ -128,11 +138,76 @@ func Validate() error {
 	return fmt.Errorf("missing required configuration environment variables: %s", strings.Join(names, ", "))
 }
 
+func isLegacyAliyunCredential(name string) bool {
+	return name == "ALIYUN_OSS_ACCESS_KEY_ID" || name == "ALIYUN_OSS_ACCESS_KEY_SECRET"
+}
+
+func shouldIgnoreLegacyAliyunCredential(name, provider, environment string) bool {
+	if !isLegacyAliyunCredential(name) {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(provider), "minio") ||
+		strings.EqualFold(strings.TrimSpace(environment), "prod-standalone")
+}
+
+func validateStandaloneEnvironment() error {
+	if !strings.EqualFold(configuredEnvironment(), "prod-standalone") {
+		return nil
+	}
+	values := make(map[string]string)
+	for _, name := range []string{
+		"SITE_DOMAIN", "ADMIN_DOMAIN", "ACME_EMAIL", "POSTGRES_PASSWORD", "REDIS_PASSWORD",
+		"MEILI_MASTER_KEY", "SMTP_HOST", "SMTP_EMAIL", "SMTP_PASSWORD",
+		"OBJECT_STORAGE_PUBLIC_URL", "OBJECT_STORAGE_ACCESS_KEY_ID", "OBJECT_STORAGE_ACCESS_KEY_SECRET",
+	} {
+		values[name] = os.Getenv(name)
+	}
+	return validateStandaloneSettings(values)
+}
+
+func validateStandaloneSettings(values map[string]string) error {
+	for _, name := range []string{
+		"SITE_DOMAIN", "ADMIN_DOMAIN", "ACME_EMAIL", "SMTP_HOST", "SMTP_EMAIL",
+		"SMTP_PASSWORD", "OBJECT_STORAGE_PUBLIC_URL", "OBJECT_STORAGE_ACCESS_KEY_ID",
+	} {
+		value := strings.ToLower(strings.TrimSpace(values[name]))
+		if strings.Contains(value, "replace-with") || strings.Contains(value, "example.") {
+			return fmt.Errorf("%s still contains an example value", name)
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(values["SITE_DOMAIN"]), strings.TrimSpace(values["ADMIN_DOMAIN"])) {
+		return fmt.Errorf("SITE_DOMAIN and ADMIN_DOMAIN must be different hosts")
+	}
+	secretNames := []string{"POSTGRES_PASSWORD", "REDIS_PASSWORD", "MEILI_MASTER_KEY", "OBJECT_STORAGE_ACCESS_KEY_SECRET"}
+	for _, name := range secretNames {
+		value := strings.TrimSpace(values[name])
+		if strings.Contains(strings.ToLower(value), "replace-with") {
+			return fmt.Errorf("%s still contains an example value", name)
+		}
+		if len(value) < 24 {
+			return fmt.Errorf("%s must contain at least 24 bytes", name)
+		}
+	}
+	for left := 0; left < len(secretNames); left++ {
+		for right := left + 1; right < len(secretNames); right++ {
+			if values[secretNames[left]] == values[secretNames[right]] {
+				return errors.New("database, Redis, search, and object-storage secrets must be different")
+			}
+		}
+	}
+	return nil
+}
+
 func configuredEnvironment() string {
 	if env := configuredValue("STELLAR_BEACON_ENV", "BENETNASCH_ENV"); env != "" {
 		return env
 	}
 	return viper.GetString("env")
+}
+
+// Environment returns the selected runtime profile name.
+func Environment() string {
+	return configuredEnvironment()
 }
 
 // configuredValue prefers the renamed variable and accepts the former prefix
@@ -145,12 +220,26 @@ func configuredValue(name, legacyName string) string {
 }
 
 func requiredEnvironmentVars() []string {
+	return requiredEnvironmentVarsFor(
+		viper.GetString("oss.provider"),
+		configuredEnvironment(),
+		os.Getenv("JWT_KEY_DIR"),
+		os.Getenv("JWT_ALLOW_EPHEMERAL"),
+	)
+}
+
+func requiredEnvironmentVarsFor(provider, environment, jwtKeyDirectory, allowEphemeral string) []string {
 	required := append([]string(nil), requiredEnvVars...)
-	provider := strings.ToLower(strings.TrimSpace(viper.GetString("oss.provider")))
-	if provider != "minio" {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	environment = strings.ToLower(strings.TrimSpace(environment))
+	if environment == "prod-standalone" {
+		required = append(required, "OBJECT_STORAGE_ACCESS_KEY_ID", "OBJECT_STORAGE_ACCESS_KEY_SECRET")
+	} else if provider != "minio" {
 		required = append(required, "ALIYUN_OSS_ACCESS_KEY_ID", "ALIYUN_OSS_ACCESS_KEY_SECRET")
 	}
-	if !strings.EqualFold(strings.TrimSpace(os.Getenv("JWT_ALLOW_EPHEMERAL")), "true") {
+	if strings.TrimSpace(jwtKeyDirectory) != "" {
+		required = append(required, "JWT_KEY_DIR")
+	} else if !strings.EqualFold(strings.TrimSpace(allowEphemeral), "true") {
 		required = append(required, "JWT_PRIVATE_KEY", "JWT_PUBLIC_KEY")
 	}
 	return required

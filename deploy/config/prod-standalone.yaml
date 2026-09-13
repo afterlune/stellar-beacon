@@ -1,0 +1,41 @@
+env: prod-standalone
+listen:
+  host: ""
+  port: 7777
+verification: "${SITE_DOMAIN}"
+cors:
+  allowed_origins:
+    - "https://${SITE_DOMAIN}"
+    - "https://${ADMIN_DOMAIN}"
+meiliSearch:
+  host: "meilisearch"
+  apiKey: "${MEILI_MASTER_KEY}"
+  port: 7700
+redis:
+  host: "redis"
+  password: "${REDIS_PASSWORD}"
+  port: 6379
+  db: 1
+emailSmtp:
+  smtp: "${SMTP_HOST}"
+  email: "${SMTP_EMAIL}"
+  password: "${SMTP_PASSWORD}"
+  port: ${SMTP_PORT}
+database:
+  driverName: "postgres"
+  host: "postgresql"
+  username: "stellar_beacon"
+  password: "${POSTGRES_PASSWORD}"
+  port: 5432
+  baseName: "stellar_beacon"
+oss:
+  provider: "${OBJECT_STORAGE_PROVIDER}"
+  endPoint: "${OBJECT_STORAGE_ENDPOINT}"
+  region: "${OBJECT_STORAGE_REGION}"
+  publicUrl: "${OBJECT_STORAGE_PUBLIC_URL}"
+  publicRead: ${OBJECT_STORAGE_PUBLIC_READ}
+  accessKeyID: "${OBJECT_STORAGE_ACCESS_KEY_ID}"
+  accessKeySecret: "${OBJECT_STORAGE_ACCESS_KEY_SECRET}"
+  bucketName: "${OBJECT_STORAGE_BUCKET}"
+logger:
+  env: prod

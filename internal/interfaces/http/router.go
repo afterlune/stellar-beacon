@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	api "github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/handlers"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -9,6 +10,10 @@ import (
 // RouterSetup registers the versioned HTTP surface. The reverse proxy removes
 // the external /api prefix, so the backend intentionally owns /v1 only.
 func RouterSetup(router *gin.Engine) {
+	router.GET("/healthz", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
 	v1 := router.Group("/v1")
 	public := v1.Group("/public")
 	auth := v1.Group("/auth")

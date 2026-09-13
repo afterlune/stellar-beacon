@@ -76,4 +76,15 @@ pwsh ./scripts/integration/down.ps1 -RemoveVolumes
 
 ## 部署
 
-生产配置位于 `deploy/config/`，生产 Compose 和 Caddy 文件分别位于 `deploy/compose/production.yaml` 与 `deploy/caddy/production.Caddyfile`。数据库初始化文件位于 `deploy/db/init/`。发布前请阅读 [部署运行手册](docs/runbooks/deployment.md)；生产容器和数据变更必须在明确的发布窗口执行。
+新 Linux 主机可用独立 Compose 栈一次构建博客、管理端与 API。先准备 x86_64 Linux、Docker Compose v2、指向主机的根域名和 `admin.` 子域名，并开放 TCP 80/443（启用 HTTP/3 时也开放 UDP 443）：
+
+```shell
+cp .env.production.example .env.production
+# 编辑 .env.production：换掉所有示例密钥，并填写域名、SMTP 和对象存储配置
+docker compose --env-file .env.production -f deploy/compose/production-standalone.yaml --profile minio up -d --build
+docker compose --env-file .env.production -f deploy/compose/production-standalone.yaml --profile minio exec -it backend /app/stellar-beacon bootstrap-admin --email admin@example.com
+```
+
+首次启动会执行版本化数据库迁移，生成空白博客配置，不会导入历史 SQL、文章、账号或日志。首次管理员密码在终端中隐藏输入。改用阿里云 OSS 时，填写 OSS endpoint、bucket、区域和访问密钥，并从命令中去掉 `--profile minio`；MinIO 数据卷不会启动。`.env.production` 含生产凭据，不要提交到 Git。更完整的安装、更新和备份说明见[部署运行手册](docs/runbooks/deployment.md)。
+
+原有 Windows 生产栈保持独立，仍使用 `deploy/compose/production.yaml` 与 `deploy/caddy/production.Caddyfile`；不要在现有数据卷上运行新栈的初始化步骤。

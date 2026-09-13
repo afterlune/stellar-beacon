@@ -9,6 +9,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/logging"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/security/tls"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/shared"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/task"
 	httpapi "github.com/eternallyzzz/stellar-beacon/internal/interfaces/http"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/middleware"
@@ -45,6 +46,9 @@ func execute() error {
 func runServer() error {
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
+	}
+	if err := shared.ValidateJWTKeys(); err != nil {
+		return fmt.Errorf("JWT key initialization failed: %w", err)
 	}
 	logDirectory, err := config.ResourcePath("log")
 	if err != nil {

@@ -26,11 +26,20 @@ COPY ./resources /app/resources
 COPY ./deploy/config /app/config
 COPY ./docs /app/docs
 
+RUN apk add --no-cache curl tzdata \
+    && addgroup -S -g 10001 app \
+    && adduser -S -u 10001 -G app app \
+    && mkdir -p /app/resources/log /var/lib/stellar-beacon/keys \
+    && chown -R 10001:10001 /app/resources/log /var/lib/stellar-beacon \
+    && chmod 0700 /var/lib/stellar-beacon/keys
+
 ENV GIN_MODE=release \
     PORT=7777 \
     STELLAR_BEACON_RESOURCE_DIR=/app/resources \
     STELLAR_BEACON_CONFIG_DIR=/app/config
 
 EXPOSE 7777
+
+USER 10001:10001
 
 CMD ["/app/stellar-beacon"]

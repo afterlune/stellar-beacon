@@ -25,6 +25,7 @@ require (
 	github.com/wneessen/go-mail v0.8.1
 	golang.org/x/crypto v0.56.0
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
+	golang.org/x/term v0.45.0
 	golang.org/x/time v0.11.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	xorm.io/xorm v1.4.1
