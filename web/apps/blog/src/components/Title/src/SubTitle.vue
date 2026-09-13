@@ -1,14 +1,13 @@
 <template>
-  <p class="relative flex items-center pb-2 mb-4 text-xl text-ob-bright uppercase">
+  <p :class="rootClass">
     <svg-icon v-if="icon && side === 'left'" :icon-class="icon" class="inline-block mr-2" />
     <span :class="titleClass">{{ t(titleStr) }}</span>
     <svg-icon v-if="icon && side === 'right'" :icon-class="icon" class="inline-block ml-2" />
-    <span :class="lineClass" :style="gradientBackground" />
+    <span :class="lineClass" />
   </p>
 </template>
 
 <script lang="ts">
-import { useAppStore } from '@/stores/app'
 import { computed, defineComponent, toRefs } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -24,17 +23,35 @@ export default defineComponent({
       type: String,
       default: 'left'
     },
-    icon: String
+    icon: String,
+    // Sidebar headings are a quiet label; section headings in the article body
+    // keep the larger standalone treatment.
+    compact: {
+      type: Boolean,
+      default: false
+    }
   },
   setup(props) {
-    const appStore = useAppStore()
     const { t } = useI18n()
     const titleStr = toRefs(props).title
     const side = toRefs(props).side
+    const compact = toRefs(props).compact
 
     return {
-      gradientBackground: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
+      rootClass: computed(() => {
+        if (compact.value) {
+          return { relative: true, flex: true, 'items-center': true, 'sub-title-compact': true }
+        }
+        return {
+          relative: true,
+          flex: true,
+          'items-center': true,
+          'pb-2': true,
+          'mb-4': true,
+          'text-xl': true,
+          'text-ob-bright': true,
+          uppercase: true
+        }
       }),
       titleClass: computed(() => {
         return {
@@ -50,6 +67,7 @@ export default defineComponent({
           'h-1': true,
           'w-14': true,
           'rounded-full': true,
+          'brand-rule': true,
           'right-0': side.value === 'right' ? true : false
         }
       }),
@@ -59,3 +77,21 @@ export default defineComponent({
   }
 })
 </script>
+
+<style lang="scss" scoped>
+.sub-title-compact {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-hairline);
+
+  /* The hairline is the separator here; the gradient rule would be noise. */
+  .brand-rule {
+    display: none;
+  }
+}
+</style>

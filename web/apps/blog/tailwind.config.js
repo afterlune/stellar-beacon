@@ -15,13 +15,24 @@ module.exports = {
         'ob-secondary': 'var(--text-sub-accent)',
         'ob-bright': 'var(--text-bright)',
         'ob-dim': 'var(--text-dim)',
+        'ob-surface': 'var(--surface-1)',
+        'ob-surface-2': 'var(--surface-2)',
+        'ob-hover': 'var(--surface-hover)',
+        'ob-hairline': 'var(--border-hairline)',
         'ob-deep': {
           800: 'var(--background-secondary)',
           900: 'var(--background-primary)'
         }
       },
+      fontFamily: {
+        sans: ['var(--font-sans)'],
+        mono: ['var(--font-mono)']
+      },
       boxShadow: {
-        ob: 'var(--accent-shadow)'
+        ob: 'var(--accent-shadow)',
+        'elev-1': 'var(--elev-1)',
+        'elev-2': 'var(--elev-2)',
+        'elev-3': 'var(--elev-3)'
       }
     }
   },

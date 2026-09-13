@@ -13,10 +13,9 @@
       </b>
     </span>
     <div class="article">
-      <div class="article-thumbnail">
+      <div class="article-thumbnail" :class="{ 'article-thumbnail-blank': !article.articleCover }">
         <img v-if="article.articleCover" v-lazy="article.articleCover" alt="" />
-        <img v-else src="@/assets/default-cover.jpg" />
-        <span class="thumbnail-screen" :style="gradientBackground" />
+        <span v-else class="article-thumbnail-fallback">{{ fallbackLabel }}</span>
       </div>
       <div class="article-content">
         <span>
@@ -81,7 +80,6 @@
 
 <script lang="ts">
 import { computed, defineComponent, toRefs, getCurrentInstance } from 'vue'
-import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -93,7 +91,6 @@ export default defineComponent({
   props: ['data'],
   setup(props) {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
-    const appStore = useAppStore()
     const userStore = useUserStore()
     const router = useRouter()
     const { t } = useI18n()
@@ -129,10 +126,14 @@ export default defineComponent({
       }
     }
     return {
-      gradientBackground: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
-      }),
       article: toRefs(props).data,
+      // A missing cover used to fall back to the same stock image on every card,
+      // which made the home grid read as one picture repeated. Show the article's
+      // own category mark instead.
+      fallbackLabel: computed(() => {
+        const name = props.data?.categoryName || props.data?.articleTitle || ''
+        return name ? String(name).trim().charAt(0) : '#'
+      }),
       handleAuthorClick,
       handleImageError,
       avatarPlaceholder,

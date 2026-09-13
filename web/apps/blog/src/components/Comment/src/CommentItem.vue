@@ -3,9 +3,9 @@
     <div class="flex space-x-3 xl:space-x-5">
       <Avatar :url="comment.avatar" />
       <div class="max-w-full-calc space-y-5">
-        <div class="bg-white text-primary p-4 rounded-md relative shadow-md reply" style="width: fit-content">
+        <div class="comment-bubble p-4 rounded-md relative reply" style="width: fit-content">
           <p class="commentContent" v-html="comment.commentContent.replaceAll('\n', '<br>')" />
-          <div class="flex justify-between mt-3 text-xs text-gray-400 space-x-3 md:space-x-16">
+          <div class="flex justify-between mt-3 text-xs text-ob-dim space-x-3 md:space-x-16">
             <span>{{ comment.nickname }} | {{ time }}</span>
             <div>
               <span @click="clickOnReply" class="cursor-pointer reply-button">Reply</span>

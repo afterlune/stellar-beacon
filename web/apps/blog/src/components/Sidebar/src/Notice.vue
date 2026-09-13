@@ -1,6 +1,6 @@
 <template>
   <div class="sidebar-box">
-    <SubTitle :title="'titles.notice'" icon="notice" />
+    <SubTitle :title="'titles.notice'" icon="notice" compact />
     <div class="mx-auto">
       <span class="text-sm font-medium text-right notice"> {{ notice }}</span>
     </div>

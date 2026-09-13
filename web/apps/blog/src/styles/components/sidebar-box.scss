@@ -1,3 +1,33 @@
+/* Sidebar boxes are content surfaces: glass with a top edge highlight and real
+   lift. No outline — the previous pass outlined every box on the page with the
+   same 1px hairline, which is what made everything look identical. */
 .sidebar-box {
-  @apply w-full rounded-2xl relative shadow-xl bg-ob-deep-800 mb-8 p-8;
+  width: 100%;
+  position: relative;
+  margin-bottom: 24px;
+  padding: 20px;
+  border-radius: var(--radius-xl);
+  background-color: var(--surface-1);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
+}
+
+@supports (backdrop-filter: blur(2px)) {
+  .sidebar-box {
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  }
+}
+
+.sidebar-box-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-hairline);
 }

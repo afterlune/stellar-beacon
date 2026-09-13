@@ -1,6 +1,6 @@
 <template>
   <div class="sidebar-box">
-    <SubTitle :title="'titles.tag_list'" icon="tag" />
+    <SubTitle :title="'titles.tag_list'" icon="tag" compact />
     <TagList>
       <template v-if="tags != '' && tags.length > 0">
         <TagItem v-for="tag in tags" :key="tag.id" :id="tag.id" :name="tag.tagName" :count="tag.count" size="xs" />

@@ -1,5 +1,5 @@
 <template>
-  <div id="footer" class="relative w-full pt-1" :style="gradientBackground">
+  <div id="footer" class="brand-gradient relative w-full pt-1">
     <span class="bg-ob-deep-900 flex justify-center">
       <div
         class="bg-ob-deep-900 rounded-lg max-w-10/12 lg:max-w-screen-2xl text-sm text-ob-normal w-full py-6 px-6 grid grid-rows-1 lg:grid-rows-none lg:grid-cols-4 justify-center items-center gap-8 h-36 mx-auto">
@@ -39,10 +39,7 @@ export default defineComponent({
           [appStore.themeConfig.profile_shape]: true
         }
       }),
-      gradientText: computed(() => appStore.themeConfig.background_gradient_style),
-      gradientBackground: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
-      }),
+
       currentYear: computed(() => new Date().getUTCFullYear()),
       websiteConfig: computed(() => appStore.websiteConfig),
       t

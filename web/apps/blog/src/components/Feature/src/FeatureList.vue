@@ -1,20 +1,17 @@
 <template>
-  <div class="inverted-main-grid py-8 gap-8 box-border">
-    <div class="relative overflow-hidden h-56 lg:h-auto rounded-2xl bg-ob-deep-800 shadow-lg">
-      <div
-        class="ob-gradient-plate opacity-90 relative z-10 bg-ob-deep-900 rounded-2xl flex justify-start items-end px-8 pb-10 shadow-md">
-        <h2 class="text-3xl pb-8 lg:pb-16">
-          <p :style="gradientText">EDITOR'S SELECTION</p>
-          <span class="relative text-2xl text-ob-bright font-semibold">
-            <svg-icon class="inline-block" icon-class="hot" />
-            {{ t('home.recommended') }}
-          </span>
-        </h2>
-      </div>
-      <span class="absolute top-0 w-full h-full z-0" :style="gradientBackground" />
+  <div class="feature-block">
+    <div class="feature-head">
+      <span class="feature-head-icon">
+        <svg-icon icon-class="hot" />
+      </span>
+      <h2 class="feature-head-title">
+        <span class="feature-head-kicker">EDITOR'S SELECTION</span>
+        <span class="feature-head-label">{{ t('home.recommended') }}</span>
+      </h2>
+      <span class="feature-head-rule" />
     </div>
 
-    <ul class="grid lg:grid-cols-2 gap-8">
+    <ul class="grid lg:grid-cols-2 gap-6">
       <template v-if="featuredArticles.length > 0">
         <li v-for="article in featuredArticles" :key="article.id">
           <ArticleCard class="home-featured-article" :data="article" />
@@ -31,10 +28,9 @@
 
 <script lang="ts">
 // @ts-nocheck
-import { useAppStore } from '@/stores/app'
 import { useArticleStore } from '@/stores/article'
 import { useI18n } from 'vue-i18n'
-import { computed, defineComponent, toRef } from 'vue'
+import { defineComponent, toRef } from 'vue'
 import { ArticleCard } from '@/components/ArticleCard'
 
 export default defineComponent({
@@ -43,14 +39,9 @@ export default defineComponent({
     ArticleCard
   },
   setup() {
-    const appStore = useAppStore()
     const articleStore = useArticleStore()
     const { t } = useI18n()
     return {
-      gradientBackground: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
-      }),
-      gradientText: appStore.themeConfig.background_gradient_style,
       featuredArticles: toRef(articleStore.$state, 'featuredArticles'),
       t
     }
@@ -59,6 +50,70 @@ export default defineComponent({
 </script>
 
 <style lang="scss">
+/* Was a 210x434 empty column holding two lines of text — a whole grid track of
+   dead space. Now a normal section header, so the featured cards get full width. */
+.feature-block {
+  padding: 32px 0 8px;
+}
+
+.feature-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.feature-head-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background-image: var(--brand-gradient);
+  color: #fff;
+  flex: none;
+}
+
+.feature-head-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.feature-head-kicker {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.feature-head-label {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-bright);
+}
+
+.feature-head-rule {
+  flex: 1;
+  height: 1px;
+  min-width: 24px;
+  background: linear-gradient(90deg, var(--border-hairline), transparent);
+}
+
+@media (max-width: 767px) {
+  .feature-block {
+    padding-top: 24px;
+  }
+  .feature-head-kicker {
+    display: none;
+  }
+}
+
 .home-featured-article {
   .article-content {
     p {

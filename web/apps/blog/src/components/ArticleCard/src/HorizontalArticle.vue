@@ -16,7 +16,7 @@
       <div class="feature-thumbnail">
         <img v-if="article.articleCover" class="ob-hz-thumbnail" v-lazy="article.articleCover" />
         <img v-else class="ob-hz-thumbnail" src="@/assets/default-cover.jpg" />
-        <span class="thumbnail-screen" :style="bannerHoverGradient" />
+
       </div>
       <div class="feature-content">
         <span>
@@ -80,8 +80,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, toRef, getCurrentInstance } from 'vue'
-import { useAppStore } from '@/stores/app'
+import { defineComponent, toRef, getCurrentInstance } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { useArticleStore } from '@/stores/article'
@@ -93,7 +92,6 @@ export default defineComponent({
   name: 'HorizontalArticle',
   setup() {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
-    const appStore = useAppStore()
     const articleStore = useArticleStore()
     const userStore = useUserStore()
     const router = useRouter()
@@ -130,9 +128,7 @@ export default defineComponent({
       }
     }
     return {
-      bannerHoverGradient: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
-      }),
+
       article: toRef(articleStore.$state, 'topArticle'),
       handleAuthorClick,
       handleImageError,

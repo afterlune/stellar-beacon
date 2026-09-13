@@ -1,97 +1,151 @@
 :root {
   --max-width: 1600px;
+  --page-max: 1240px;
+  --read-max: 46rem;
+  --banner-h: 216px;
+  --banner-h-sm: 164px;
+  --header-h: 72px;
   --gap: 2rem;
-  --main-gradient: linear-gradient(130deg, #24c6dc, #5433ff 41.07%, #ff0099 76.05%);
   --theme-transition: all 250ms ease;
+
+  /* ============================================================
+     AURORA AS LIGHT, NOT AS A BACKGROUND COLOUR
+     An aurora is light in a dark sky, so the hero is built from
+     three saturated radial cores that fade to nothing and are
+     composited with `screen` — overlaps ADD light instead of
+     averaging into grey, which is what a 3-stop linear ramp does.
+     ============================================================ */
+  --aurora-1: #22d3ee; /* cyan  */
+  --aurora-2: #6d4bff; /* violet */
+  --aurora-3: #ff2d95; /* magenta */
+
+  --brand-gradient: linear-gradient(115deg, var(--aurora-1) 0%, var(--aurora-2) 50%, var(--aurora-3) 100%);
+  --main-gradient: var(--brand-gradient);
+
+  --hero-base: #05060d;
+  /* Three light cores, not a ramp: a cyan curtain bleeding in from off-canvas
+     top-left, a violet arc hugging the horizon, a magenta curtain top-right.
+     Peaks sit off the text so the middle stays readable. */
+  --hero-aurora: radial-gradient(62% 210% at 2% -14%, rgba(34, 211, 238, 0.88) 0%, rgba(34, 211, 238, 0) 56%),
+    radial-gradient(128% 96% at 50% 132%, rgba(109, 75, 255, 0.9) 0%, rgba(109, 75, 255, 0) 58%),
+    radial-gradient(56% 190% at 99% 4%, rgba(255, 45, 149, 0.72) 0%, rgba(255, 45, 149, 0) 56%);
+  /* A dark pocket where the breadcrumb and page title live, a light rim scrim so
+     the nav never sits on a raw bright edge, and a seat along the bottom. */
+  --hero-veil: radial-gradient(44% 160% at 14% 54%, rgba(4, 5, 12, 0.6) 0%, rgba(4, 5, 12, 0) 74%),
+    linear-gradient(180deg, rgba(4, 5, 12, 0.28) 0%, rgba(4, 5, 12, 0) 34%),
+    linear-gradient(0deg, rgba(4, 5, 12, 0.5) 0%, rgba(4, 5, 12, 0) 38%);
+  /* Light spills over the horizon instead of stopping at it — this is what makes
+     the band read as light rather than as a painted bar. */
+  --hero-spill: radial-gradient(70% 200% at 12% 0%, rgba(34, 211, 238, 0.5) 0%, rgba(34, 211, 238, 0) 60%),
+    radial-gradient(80% 220% at 55% 0%, rgba(109, 75, 255, 0.55) 0%, rgba(109, 75, 255, 0) 62%),
+    radial-gradient(64% 200% at 94% 0%, rgba(255, 45, 149, 0.42) 0%, rgba(255, 45, 149, 0) 60%);
+  /* Grain kills the banding that large soft gradients always show. */
+  --hero-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.5'/></svg>");
+  --hero-fg: #ffffff;
+
+  /* The aurora's afterglow on the page itself, so content never floats on flat grey. */
+  --ambient: radial-gradient(70% 46% at 88% 2%, rgba(109, 75, 255, 0.16) 0%, rgba(109, 75, 255, 0) 62%),
+    radial-gradient(64% 40% at 2% 20%, rgba(34, 211, 238, 0.11) 0%, rgba(34, 211, 238, 0) 62%);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-bleed: 20px;
+  --radius-pill: 999px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  /* Headings only. System CJK serifs, so this costs zero downloads. */
+  --font-display: 'Source Han Serif SC', 'Noto Serif CJK SC', 'Songti SC', 'SimSun', 'Iowan Old Style',
+    'Palatino Linotype', Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* Kept as aliases so the handful of legacy call sites keep resolving. */
+  --strong-gradient: var(--brand-gradient);
 }
 
 .theme-light {
-  --background-primary: #f1f3f9;
-  --background-primary-alt: #fafafa;
-  --background-secondary: #ffffff;
-  --background-secondary-alt: #2e3236;
-  --background-trans: rgba(0, 0, 0, 0.15);
-  --text-bright: #000000;
-  --text-normal: #333333;
-  --text-accent: #e93796;
-  --text-sub-accent: #547ce7;
-  --text-faint: #b2b2b2;
-  --text-dim: #858585;
-  --text-title-h1: #333;
-  --text-title-h2: #333;
-  --text-title-h3: #333;
-  --text-title-h4: #333;
-  --text-title-h5: #333;
-  --text-link: #b4b4b4;
-  --text-a: #db4d52;
-  --text-a-hover: #db4d52;
-  --bg-accent-55: rgba(244, 86, 157, 0.55);
-  --bg-sub-accent-55: rgba(13, 185, 215, 0.55);
-  --bg-accent-05: rgba(244, 86, 157, 0.05);
-  --strong-gradient: linear-gradient(62deg, #188bfd 0%, #a03bff 100%) !important;
-  --gradient-cover: linear-gradient(
-    90deg,
-    hsla(0, 0%, 98%, 0) 0,
-    hsla(0, 0%, 98%, 0.013) 8.1%,
-    hsla(0, 0%, 98%, 0.049) 15.5%,
-    hsla(0, 0%, 98%, 0.104) 22.5%,
-    hsla(0, 0%, 98%, 0.175) 29%,
-    hsla(0, 0%, 98%, 0.259) 35.3%,
-    hsla(0, 0%, 98%, 0.352) 41.2%,
-    hsla(0, 0%, 98%, 0.45) 47.1%,
-    hsla(0, 0%, 98%, 0.55) 52.9%,
-    hsla(0, 0%, 98%, 0.648) 58.8%,
-    hsla(0, 0%, 98%, 0.741) 64.7%,
-    hsla(0, 0%, 98%, 0.825) 71%,
-    hsla(0, 0%, 98%, 0.896) 77.5%,
-    hsla(0, 0%, 98%, 0.951) 84.5%,
-    hsla(0, 0%, 98%, 0.987) 91.9%,
-    var(--background-secondary)
-  );
-  --article-cover: linear-gradient(
-    180deg,
-    hsla(0, 0%, 98%, 0) 0,
-    hsla(0, 0%, 98%, 0.013) 8.1%,
-    hsla(0, 0%, 98%, 0.049) 15.5%,
-    hsla(0, 0%, 98%, 0.104) 22.5%,
-    hsla(0, 0%, 98%, 0.175) 29%,
-    hsla(0, 0%, 98%, 0.259) 35.3%,
-    hsla(0, 0%, 98%, 0.352) 41.2%,
-    hsla(0, 0%, 98%, 0.45) 47.1%,
-    hsla(0, 0%, 98%, 0.55) 52.9%,
-    hsla(0, 0%, 98%, 0.648) 58.8%,
-    hsla(0, 0%, 98%, 0.741) 64.7%,
-    hsla(0, 0%, 98%, 0.825) 71%,
-    hsla(0, 0%, 98%, 0.896) 77.5%,
-    hsla(0, 0%, 98%, 0.951) 84.5%,
-    hsla(0, 0%, 98%, 0.987) 91.9%,
-    var(--background-secondary)
-  );
+  --background-primary: #eff1f8;
+  --background-primary-alt: #e7eaf4;
+  /* Card surfaces are translucent so the page's aurora afterglow shows through.
+     `--surface-solid` is the opaque twin for anything that must occlude. */
+  --background-secondary: rgba(255, 255, 255, 0.88);
+  --background-secondary-alt: #e6e9f2;
+  --background-trans: rgba(20, 24, 48, 0.06);
+  --surface-1: rgba(255, 255, 255, 0.88);
+  --surface-2: rgba(20, 24, 48, 0.035);
+  --surface-solid: #ffffff;
+  --surface-hover: rgba(20, 24, 48, 0.05);
+  --border-hairline: rgba(20, 24, 48, 0.1);
+  --border-strong: rgba(20, 24, 48, 0.18);
+  --glass-edge: rgba(255, 255, 255, 0.9);
+  --shadow-card: 0 1px 2px rgba(16, 20, 40, 0.06), 0 16px 40px -16px rgba(16, 20, 40, 0.3);
+  --skeleton-bg: #e4e7f1;
+  --skeleton-hl: #eff1f8;
+  --text-bright: #12141c;
+  --text-normal: #2b3038;
+  --text-accent: #5b3cff;
+  --text-sub-accent: #0a718c;
+  --text-faint: #98a0ad;
+  --text-dim: #5d6672;
+  --text-title-h1: #12141c;
+  --text-title-h2: #12141c;
+  --text-title-h3: #12141c;
+  --text-title-h4: #12141c;
+  --text-title-h5: #12141c;
+  --text-link: #8a8f9c;
+  --text-a: #b3315a;
+  --text-a-hover: #8f2447;
+  --bg-accent-55: rgba(91, 60, 255, 0.5);
+  --bg-sub-accent-55: rgba(10, 113, 140, 0.5);
+  --bg-accent-05: rgba(91, 60, 255, 0.05);
+  --aurora-1: #12b8d6;
+  --aurora-2: #5b3cff;
+  --aurora-3: #f0288a;
+  /* On a near-white page the spill is coloured light on paper, not a spotlight:
+     pull the cyan right back or the top of the page blows out. */
+  --hero-spill: radial-gradient(70% 200% at 12% 0%, rgba(18, 184, 214, 0.16) 0%, rgba(18, 184, 214, 0) 56%),
+    radial-gradient(84% 220% at 52% 0%, rgba(91, 60, 255, 0.2) 0%, rgba(91, 60, 255, 0) 58%),
+    radial-gradient(64% 200% at 94% 0%, rgba(240, 40, 138, 0.16) 0%, rgba(240, 40, 138, 0) 56%);
+  --gradient-cover: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.55) 58%, var(--surface-solid) 100%);
+  --article-cover: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.55) 58%, var(--surface-solid) 100%);
   --trans-ease: all 250ms ease;
-  --accent-shadow: 0 20px 25px -5px rgba(232, 57, 255, 0.06), 0 10px 10px -5px rgba(53, 11, 59, 0.1);
-  --sub-accent-shadow: 0 20px 25px -5px rgba(71, 190, 255, 0.06), 0 10px 10px -5px rgba(11, 42, 59, 0.1);
+  --elev-1: 0 1px 2px rgba(18, 22, 45, 0.06), 0 1px 3px 1px rgba(18, 22, 45, 0.04);
+  --elev-2: 0 2px 6px -1px rgba(18, 22, 45, 0.08), 0 8px 20px -6px rgba(18, 22, 45, 0.12);
+  --elev-3: 0 12px 32px -8px rgba(18, 22, 45, 0.2);
+  --accent-shadow: var(--elev-2);
+  --sub-accent-shadow: var(--elev-2);
   --search-modal-key-gradient: linear-gradient(-225deg, #d5dbe4, #f8f8f8);
   --search-modal-key-shadow: inset 0 -2px 0 0 #cdcde6, inset 0 0 1px 1px #fff, 0 1px 2px 1px rgba(30, 35, 90, 0.4);
-  --custom-quote-tip: #7343d5;
-  --custom-quote-warning: #e98503;
-  --custom-quote-danger: #dd2500;
-  --custom-quote: #e93796;
+  --custom-quote-tip: #5b3cff;
+  --custom-quote-warning: #b45309;
+  --custom-quote-danger: #c81e1e;
+  --custom-quote: #5b3cff;
 }
 
 .theme-dark {
-  --background-primary: #1a1a1a;
-  --background-primary-alt: #0d0b12;
-  --background-secondary: #212121;
-  --background-secondary-alt: #0d0b12;
+  --background-primary: #0d0e17;
+  --background-primary-alt: #08090f;
+  --background-secondary: rgba(255, 255, 255, 0.045);
+  --background-secondary-alt: #171922;
   --background-trans: rgba(255, 255, 255, 0.15);
-  --skeleton-bg: #2e2e2e;
-  --skeleton-hl: #363636;
+  --surface-1: rgba(255, 255, 255, 0.045);
+  --surface-2: rgba(255, 255, 255, 0.025);
+  --surface-solid: #171922;
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --border-hairline: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --glass-edge: rgba(255, 255, 255, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 18px 40px -20px rgba(0, 0, 0, 0.8);
+  --skeleton-bg: #1b1d27;
+  --skeleton-hl: #242733;
   --text-bright: #fff;
-  --text-normal: #bebebe;
-  --text-accent: #0fb6d6;
-  --text-sub-accent: #f4569d;
-  --text-dim: #6d6d6d;
-  --text-faint: #7aa2f7;
+  --text-normal: #c9cdd6;
+  --text-accent: #5ee6ff;
+  --text-sub-accent: #ff77b3;
+  --text-dim: #9aa3b5;
+  --text-faint: #6b7280;
   --text-title-h1: var(--text-accent);
   --text-title-h2: #cbdbe5;
   --text-title-h3: #cbdbe5;
@@ -100,57 +154,26 @@
   --text-link: #b4b4b4;
   --text-a: #6bcafb;
   --text-a-hover: #6bcafb;
-  --bg-sub-accent-55: rgba(244, 86, 157, 0.55);
-  --bg-accent-55: rgba(13, 185, 215, 0.55);
-  --bg-accent-05: rgba(14, 210, 247, 0.05);
-  --strong-gradient: linear-gradient(62deg, #87c2fd 0%, #dcb9fc 100%) !important;
-  --gradient-cover: linear-gradient(
-    90deg,
-    hsla(0, 0%, 13%, 0) 0,
-    hsla(0, 0%, 13%, 0.013) 8.1%,
-    hsla(0, 0%, 13%, 0.049) 15.5%,
-    hsla(0, 0%, 13%, 0.104) 22.5%,
-    hsla(0, 0%, 13%, 0.175) 29%,
-    hsla(0, 0%, 13%, 0.259) 35.3%,
-    hsla(0, 0%, 13%, 0.352) 41.2%,
-    hsla(0, 0%, 13%, 0.45) 47.1%,
-    hsla(0, 0%, 13%, 0.55) 52.9%,
-    hsla(0, 0%, 13%, 0.648) 58.8%,
-    hsla(0, 0%, 13%, 0.741) 64.7%,
-    hsla(0, 0%, 13%, 0.825) 71%,
-    hsla(0, 0%, 13%, 0.896) 77.5%,
-    hsla(0, 0%, 13%, 0.951) 84.5%,
-    hsla(00, 0%, 13%, 0.987) 91.9%,
-    var(--background-secondary)
-  );
-  --article-cover: linear-gradient(
-    180deg,
-    hsla(0, 0%, 13%, 0) 0,
-    hsla(0, 0%, 13%, 0.013) 8.1%,
-    hsla(0, 0%, 13%, 0.049) 15.5%,
-    hsla(0, 0%, 13%, 0.104) 22.5%,
-    hsla(0, 0%, 13%, 0.175) 29%,
-    hsla(0, 0%, 13%, 0.259) 35.3%,
-    hsla(0, 0%, 13%, 0.352) 41.2%,
-    hsla(0, 0%, 13%, 0.45) 47.1%,
-    hsla(0, 0%, 13%, 0.55) 52.9%,
-    hsla(0, 0%, 13%, 0.648) 58.8%,
-    hsla(0, 0%, 13%, 0.741) 64.7%,
-    hsla(0, 0%, 13%, 0.825) 71%,
-    hsla(0, 0%, 13%, 0.896) 77.5%,
-    hsla(0, 0%, 13%, 0.951) 84.5%,
-    hsla(00, 0%, 13%, 0.987) 91.9%,
-    var(--background-secondary)
-  );
+  --bg-sub-accent-55: rgba(255, 119, 179, 0.55);
+  --bg-accent-55: rgba(94, 230, 255, 0.55);
+  --bg-accent-05: rgba(94, 230, 255, 0.05);
+  --aurora-1: #22d3ee;
+  --aurora-2: #6d4bff;
+  --aurora-3: #ff2d95;
+  --gradient-cover: linear-gradient(90deg, transparent 0%, rgba(13, 14, 23, 0.6) 58%, var(--surface-solid) 100%);
+  --article-cover: linear-gradient(180deg, transparent 0%, rgba(13, 14, 23, 0.6) 58%, var(--surface-solid) 100%);
   --trans-ease: all 250ms ease;
-  --accent-shadow: 0 20px 25px -5px rgba(11, 42, 59, 0.35), 0 10px 10px -5px rgba(11, 42, 59, 0.14);
-  --sub-accent-shadow: 0 20px 25px -5px rgba(53, 11, 59, 0.35), 0 10px 10px -5px rgba(53, 11, 59, 0.14);
-  --search-modal-key-gradient: linear-gradient(-225deg, #3f3e3e, #2c2c2c);
-  --search-modal-key-shadow: inset 0 -2px 0 0 #363636, inset 0 0 1px 1px #2e2e2e, 0 1px 2px 1px rgba(30, 35, 90, 0.4);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-2: 0 2px 8px -2px rgba(0, 0, 0, 0.5), 0 12px 28px -10px rgba(0, 0, 0, 0.55);
+  --elev-3: 0 18px 44px -12px rgba(0, 0, 0, 0.7);
+  --accent-shadow: var(--elev-2);
+  --sub-accent-shadow: var(--elev-2);
+  --search-modal-key-gradient: linear-gradient(-225deg, #343843, #262933);
+  --search-modal-key-shadow: inset 0 -2px 0 0 #3a3f4b, inset 0 0 1px 1px #2e323c, 0 1px 2px 1px rgba(0, 0, 0, 0.5);
   --custom-quote-tip: #8d53ff;
   --custom-quote-warning: #cbcb00;
   --custom-quote-danger: #dd2500;
-  --custom-quote: #5dc3d9;
+  --custom-quote: #5ee6ff;
 }
 
 .ob-text-bright {
@@ -205,8 +228,7 @@
   animation: 1.5s ease-in-out 0s infinite normal none running SkeletonLoading;
 }
 
-.main-grid,
-.inverted-main-grid {
+.main-grid {
   display: flex;
   flex-direction: column;
 }
@@ -217,15 +239,11 @@
     gap: var(--gap);
     grid-template-columns: minmax(0, 1fr) 320px;
   }
-  .inverted-main-grid {
-    display: grid;
-    gap: var(--gap);
-    grid-template-columns: 245px minmax(0, 1fr);
-  }
 }
 
 .tab {
-  @apply flex flex-row flex-wrap bg-ob-deep-800 pl-6 pr-12 mb-8 rounded-2xl shadow-md overflow-y-hidden;
+  @apply flex flex-row flex-wrap bg-ob-deep-800 pl-6 pr-12 mb-8 rounded-2xl overflow-y-hidden;
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
   height: 3.5rem;
   transition: height 400ms ease;
   &.expanded-tab {

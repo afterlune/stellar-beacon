@@ -1,14 +1,14 @@
 <template>
   <div class="sidebar-box">
-    <SubTitle :title="'titles.recent_comment'" icon="quote" />
+    <SubTitle :title="'titles.recent_comment'" icon="quote" compact />
     <ul>
       <template v-if="comments.length > 0">
         <li
-          class="bg-ob-deep-900 px-2 py-3 mb-1.5 rounded-lg flex flex-row justify-items-center items-center shadow-sm hover:shadow-ob transition-shadow"
+          class="recent-comment-item"
           v-for="comment in comments"
           :key="comment.id">
           <div class="flex-shrink-0 mr-2">
-            <div class="rounded-full ring-gray-100 overflow-hidden shaodw-lg w-9">
+            <div class="rounded-full overflow-hidden w-9">
               <template v-if="comment.avatar">
                 <img class="avatar-img" :src="comment.avatar" alt="" @error="handleImageError" />
               </template>
@@ -22,7 +22,7 @@
               <span class="text-ob pr-2">
                 {{ comment.nickname }}
               </span>
-              <p class="text-gray-500">{{ comment.createTime }}</p>
+              <p class="text-ob-dim">{{ comment.createTime }}</p>
             </div>
             <div class="text-xs text-ob-bright commentContent">
               {{ comment.commentContent }}
@@ -86,6 +86,20 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+.recent-comment-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-md);
+  background-color: var(--surface-2);
+  border: none;
+  transition: background-color 200ms ease;
+}
+.recent-comment-item:hover {
+  background-color: var(--surface-hover);
+}
 .comment {
   width: 70%;
 }

@@ -1,6 +1,6 @@
 <template>
   <div class="flex-shrink-0">
-    <div class="rounded-full ring-gray-100 overflow-hidden shaodw-lg w-9 xl:w-10">
+    <div class="rounded-full overflow-hidden w-9 xl:w-10">
       <template v-if="url"> <img class="avatar-img" :src="url" alt="" @error="handleImageError" /></template>
       <template v-else><img class="avatar-img" :src="default" alt="" /></template>
     </div>

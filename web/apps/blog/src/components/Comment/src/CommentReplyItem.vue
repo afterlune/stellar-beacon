@@ -2,9 +2,9 @@
   <div>
     <div class="flex space-x-3 xl:space-x-5">
       <Avatar :url="reply.avatar" />
-      <div class="reply bg-white flex flex-col p-3 rounded-md relative shadow-md">
+      <div class="reply comment-bubble flex flex-col p-3 rounded-md relative">
         <p class="commentContent" v-html="commentContent.replaceAll('\n', '<br>')" />
-        <div class="flex justify-between mt-2 text-xs text-gray-400 space-x-3 md:space-x-16">
+        <div class="flex justify-between mt-2 text-xs text-ob-dim space-x-3 md:space-x-16">
           <span> {{ reply.nickname }} | {{ time }}</span>
           <div>
             <span @click="clickOnSonReply" class="cursor-pointer reply-button">Reply</span>

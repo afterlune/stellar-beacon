@@ -1,10 +1,7 @@
 <template>
   <div>
-    <Breadcrumb :current="t('menu.message')" />
     <div class="flex flex-col">
-      <div class="post-header">
-        <h1 class="post-title text-white uppercase">{{ t('titles.message') }}</h1>
-      </div>
+      <PageHeader :title="t('titles.message')" :current="t('menu.message')" />
       <div class="main-grid">
         <div class="relative">
           <div class="post-html" v-html="`这是一个留言版<br><br>欢迎大家前来留言💖`" />
@@ -23,7 +20,7 @@
 import { defineComponent, onMounted, reactive, toRefs, computed, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Sidebar, Profile } from '../components/Sidebar'
-import Breadcrumb from '@/components/Breadcrumb.vue'
+import { PageHeader } from '@/components/PageHeader'
 import { Comment } from '../components/Comment'
 import { useCommentStore } from '@/stores/comment'
 import api from '@/api/api'
@@ -32,7 +29,7 @@ import { pageCount, pageRecords } from '@/utils/page'
 
 export default defineComponent({
   name: 'Message',
-  components: { Breadcrumb, Comment, Sidebar, Profile },
+  components: { PageHeader, Comment, Sidebar, Profile },
   setup() {
     const { t } = useI18n()
     const commentStore = useCommentStore()

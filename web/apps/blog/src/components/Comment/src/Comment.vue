@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-ob-deep-800 p-4 mt-8 lg:px-14 lg:py-10 rounded-2xl shadow-xl mb-8 lg:mb-0" id="comments">
+  <div class="surface-panel p-4 mt-8 lg:px-14 lg:py-10 rounded-2xl mb-8 lg:mb-0" id="comments">
     <SubTitle :title="'titles.comment'" />
     <CommentForm />
     <CommentList />

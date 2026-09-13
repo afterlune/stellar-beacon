@@ -14,7 +14,7 @@
       <ob-skeleton v-else height="2.25rem" width="7rem" />
     </h2>
 
-    <span class="h-1 w-14 rounded-full mt-2" :style="gradientBackground" />
+    <span class="brand-rule w-14 mt-2" />
 
     <p
       v-if="websiteConfig.authorIntro"
@@ -142,9 +142,7 @@ export default defineComponent({
     return {
       ...toRefs(reactiveData),
       themeConfig: computed(() => appStore.themeConfig),
-      gradientBackground: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
-      }),
+
       pushPage,
       websiteConfig: computed(() => appStore.websiteConfig),
       articleCount: computed(() => appStore.articleCount),

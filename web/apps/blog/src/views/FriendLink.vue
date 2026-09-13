@@ -1,13 +1,10 @@
 <template>
   <div>
-    <Breadcrumb :current="t('menu.friends')" />
     <div class="flex flex-col">
-      <div class="post-header">
-        <h1 class="post-title text-white uppercase">{{ t('titles.friends') }}</h1>
-      </div>
+      <PageHeader :title="t('titles.friends')" :current="t('menu.friends')" />
       <div class="main-grid">
         <div class="relative space-y-5">
-          <div class="bg-ob-deep-800 p-4 lg:p-14 rounded-2xl shadow-xl mb-8 lg:mb-0">
+          <div class="surface-panel p-4 lg:p-14 rounded-2xl mb-8 lg:mb-0">
             <el-row :gutter="36">
               <template v-for="link in links" :key="link.id">
                 <el-col :span="8" :xs="{ span: 20, offset: 2 }" class="mb-3">
@@ -47,7 +44,7 @@
 import { defineComponent, reactive, provide, computed, toRefs, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Sidebar, Profile } from '../components/Sidebar'
-import Breadcrumb from '@/components/Breadcrumb.vue'
+import { PageHeader } from '@/components/PageHeader'
 import { Comment } from '../components/Comment'
 import { useCommentStore } from '@/stores/comment'
 import emitter from '@/utils/mitt'
@@ -57,7 +54,7 @@ import { safeAvatarImageUrl } from '@/utils/image'
 
 export default defineComponent({
   name: 'FriendLink',
-  components: { Sidebar, Profile, Breadcrumb, Comment },
+  components: { Sidebar, Profile, PageHeader, Comment },
   setup() {
     const { t } = useI18n()
     const commentStore = useCommentStore()

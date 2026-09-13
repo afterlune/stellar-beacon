@@ -23,6 +23,7 @@ export default defineComponent({
 .breadcrumbs {
   position: relative;
   z-index: 20;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
   li {
     position: relative;
     z-index: 20;

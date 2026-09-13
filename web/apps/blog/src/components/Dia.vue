@@ -1,7 +1,7 @@
 <template>
   <transition name="fade-bounce-y" mode="out-in">
     <div v-show="showDia" id="bot-container">
-      <div id="Aurora-Dia--body" :style="cssVariables">
+      <div id="Aurora-Dia--body">
         <div id="Aurora-Dia--tips-wrapper">
           <div id="Aurora-Dia--tips" class="Aurora-Dia--tips">早上好呀～</div>
         </div>
@@ -43,17 +43,6 @@ export default defineComponent({
       }, 1000)
     }
     return {
-      cssVariables: computed(() => {
-        return `
-          --aurora-dia--linear-gradient: ${appStore.themeConfig.header_gradient_css};
-          --aurora-dia--linear-gradient-hover: linear-gradient(
-            to bottom,
-            ${appStore.themeConfig.gradient.color_2},
-            ${appStore.themeConfig.gradient.color_3}
-          );
-          --aurora-dia--platform-light: ${appStore.themeConfig.gradient.color_3};
-        `
-      }),
       showDia
     }
   }
@@ -63,11 +52,11 @@ export default defineComponent({
 <style lang="scss" scoped>
 #bot-container {
   position: fixed;
-  left: 20px;
+  left: 22px;
   bottom: 0;
   z-index: 1000;
-  width: 70px;
-  height: 60px;
+  width: 56px;
+  height: 48px;
 }
 #Aurora-Dia--body {
   position: relative;
@@ -77,23 +66,23 @@ export default defineComponent({
   flex-direction: column;
   width: 100%;
   height: 100%;
-  --auora-dia--width: 65px; /* 110px */
-  --auora-dia--height: 50px; /* 95px */
-  --auora-dia--hover-height: 60px; /* 105px */
-  --auora-dia--jump-1: 55px; /* 95px */
-  --auora-dia--jump-2: 60px; /* 100px */
-  --auora-dia--jump-3: 45px; /* 85px */
-  --auora-dia--eye-top: 10px; /* 25px */
-  --auora-dia--eye-height: 15px; /* 25px */
-  --auora-dia--eye-width: 8px; /* 15px */
-  --auora-dia--eye-top: 10px; /* 20px */
+  --auora-dia--width: 52px; /* 110px */
+  --auora-dia--height: 40px; /* 95px */
+  --auora-dia--hover-height: 48px; /* 105px */
+  --auora-dia--jump-1: 44px; /* 95px */
+  --auora-dia--jump-2: 48px; /* 100px */
+  --auora-dia--jump-3: 36px; /* 85px */
+  --auora-dia--eye-top: 8px; /* 25px */
+  --auora-dia--eye-height: 12px; /* 25px */
+  --auora-dia--eye-width: 6.5px; /* 15px */
+  --auora-dia--eye-top: 8px; /* 20px */
   --auora-dia--platform-size: var(--auora-dia--jump-2); /* 100px */
-  --auora-dia--platform-size-shake-1: 75px; /* 115px */
-  --auora-dia--platform-size-shake-2: 45px; /* 115px */
-  --auora-dia--platform-top: -15px; /* 0 */
-  --aurora-dia--linear-gradient: var(--main-gradient); /* linear-gradient(to bottom, #5fc, #1a8) */
-  --aurora-dia--linear-gradient-hover: linear-gradient(to bottom, #25b0cc, #3f60de);
-  --aurora-dia--platform-light: #b712ac;
+  --auora-dia--platform-size-shake-1: 60px; /* 115px */
+  --auora-dia--platform-size-shake-2: 36px; /* 115px */
+  --auora-dia--platform-top: -12px; /* 0 */
+  --aurora-dia--linear-gradient: var(--brand-gradient); /* linear-gradient(to bottom, #5fc, #1a8) */
+  --aurora-dia--linear-gradient-hover: linear-gradient(to bottom, #3aa9c4, #5433ff);
+  --aurora-dia--platform-light: #ff4fa3;
 }
 .Aurora-Dia {
   position: absolute;
@@ -116,9 +105,11 @@ export default defineComponent({
   height: calc(100% + 2px);
   background-color: #2cdcff;
   background: var(--aurora-dia--linear-gradient);
-  border-radius: 45%;
-  opacity: 0;
-  opacity: 1;
+  /* Was a hard-edged 45%-radius colour blob. Blurred and made organic, it
+     becomes a soft light the mascot sits inside. */
+  border-radius: 46% 54% 52% 48% / 52% 46% 54% 48%;
+  filter: blur(7px);
+  opacity: 0.92;
   transition: 0.3s linear all;
 }
 .Aurora-Dia.active {
@@ -181,33 +172,37 @@ export default defineComponent({
 
 #Aurora-Dia--tips-wrapper {
   position: absolute;
-  bottom: 80px;
-  right: -120px;
-  width: 200px;
-  min-height: 60px;
-  background: var(--aurora-dia--linear-gradient);
+  bottom: 72px;
+  right: -132px;
+  width: 210px;
+  min-height: 54px;
+  /* Was a gradient ring faked with padding + a saturated background, which is
+     the pink-bordered toast. Now a plain glass surface. */
+  background: var(--surface-solid);
+  border: 1px solid var(--border-hairline);
   color: var(--text-normal);
-  padding: 0.2rem;
-  border-radius: 8px;
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
   opacity: 0;
   animation: tips-breathe 3s linear infinite;
   transition: 0.3s linear opacity;
 }
 
 #Aurora-Dia--tips-wrapper.active {
-  opacity: 0.86;
+  opacity: 0.94;
 }
 
 .Aurora-Dia--tips {
   position: relative;
   height: 100%;
   width: 100%;
-  min-height: 60px;
-  border-radius: 6px;
-  padding: 0.2rem 0.5rem;
+  min-height: 54px;
+  border-radius: 12px;
+  padding: 10px 12px;
   font-size: 0.8rem;
-  font-weight: 800;
-  background: var(--background-secondary);
+  font-weight: 600;
+  background: transparent;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -312,16 +307,16 @@ export default defineComponent({
   40%,
   80%,
   100% {
-    box-shadow: 0 0 30px var(--aurora-dia--platform-light), 0 0 45px var(--aurora-dia--platform-light) inset;
+    box-shadow: 0 0 18px rgba(255, 45, 149, 0.45), 0 0 30px rgba(109, 75, 255, 0.22);
   }
   20%,
   60%,
   70%,
   90% {
-    box-shadow: 0 0 70px var(--aurora-dia--platform-light), 0 0 25px var(--aurora-dia--platform-light) inset;
+    box-shadow: 0 0 30px rgba(255, 45, 149, 0.5), 0 0 54px rgba(109, 75, 255, 0.3);
   }
   85% {
-    box-shadow: 0 0 100px var(--aurora-dia--platform-light), 0 0 15px var(--aurora-dia--platform-light) inset;
+    box-shadow: 0 0 44px rgba(255, 45, 149, 0.55), 0 0 76px rgba(109, 75, 255, 0.34);
   }
 }
 
@@ -357,32 +352,28 @@ export default defineComponent({
   60%,
   80%,
   100% {
-    box-shadow: 0 0 var(--auora-dia--platform-size) #2cdcff, 0 0 15px #2cdcff inset;
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.5);
   }
   10%,
   25%,
   35%,
   50%,
   65% {
-    box-shadow: 0 0 var(--auora-dia--platform-size-shake-1) #2cdcff, 0 0 15px #2cdcff inset;
+    box-shadow: 0 0 32px rgba(34, 211, 238, 0.55);
   }
   15%,
   30%,
   45%,
   55%,
   70% {
-    box-shadow: 0 0 var(--auora-dia--platform-size-shake-2) #2cdcff, 0 0 15px #2cdcff inset;
+    box-shadow: 0 0 14px rgba(34, 211, 238, 0.45);
   }
 }
 </style>
 
 <style lang="scss">
 .Aurora-Dia--tips > span {
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-accent);
   padding: 0 0.05rem;
-  color: #7aa2f7;
-  background-color: #7aa2f7;
-  background-image: var(--strong-gradient);
 }
 </style>

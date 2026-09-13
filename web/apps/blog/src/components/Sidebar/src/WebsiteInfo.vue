@@ -1,6 +1,6 @@
 <template>
   <div class="sidebar-box">
-    <SubTitle :title="'titles.website_info'" icon="website-info" />
+    <SubTitle :title="'titles.website_info'" icon="website-info" compact />
     <ul class="mx-auto">
       <li class="pb-3">
         <span class="text-sm font-medium">{{ t('settings.running-time') }}:</span>

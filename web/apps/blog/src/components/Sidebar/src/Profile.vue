@@ -1,51 +1,43 @@
 <template>
-  <div class="h-98 w-full rounded-2xl relative shadow-xl mb-8" :style="gradientBackground">
-    <div
-      class="ob-gradient-cut-plate absolute bg-ob-deep-900 rounded-xl opacity-90 flex justify-center items-center pt-4 px-6 shadow-lg hover:shadow-2xl duration-300"
-      data-dia="author">
-      <div class="profile absolute w-full flex flex-col justify-center items-center">
-        <div class="flex flex-col justify-center items-center">
-          <img v-if="websiteConfig.authorAvatar" :class="avatarClass" :src="websiteConfig.authorAvatar" />
-          <img v-else :class="avatarClass" :src="default" />
-          <h2 class="text-center pt-4 text-4xl font-semibold text-ob-bright">
-            <template v-if="websiteConfig.author">
-              {{ websiteConfig.author }}
-            </template>
-            <ob-skeleton v-else height="2.25rem" width="7rem" />
-          </h2>
-          <span class="h-1 w-14 rounded-full mt-2" :style="gradientBackground" />
-          <p
-            v-if="websiteConfig.authorIntro"
-            class="pt-6 px-10 w-full text-s text-center"
-            v-html="websiteConfig.authorIntro" />
-          <p v-else class="pt-6 px-10 w-full text-sm text-center flex flex-col gap-2">
-            <ob-skeleton :count="2" height="20px" width="10rem" />
-          </p>
-        </div>
-        <div class="h-full w-full flex flex-col flex-1 justify-end items-end">
-          <Social />
-          <ul class="grid grid-cols-4 pt-4 w-full px-2 text-lg">
-            <li class="col-span-1 text-center">
-              <span class="text-ob-bright">
-                {{ articleCount }}
-              </span>
-              <p class="text-base">{{ t('settings.articles') }}</p>
-            </li>
-            <li class="col-span-1 text-center">
-              <span class="text-ob-bright">{{ talkCount }}</span>
-              <p class="text-base">{{ t('settings.talks') }}</p>
-            </li>
-            <li class="col-span-1 text-center">
-              <span class="text-ob-bright">{{ categoryCount }}</span>
-              <p class="text-base">{{ t('settings.categories') }}</p>
-            </li>
-            <li class="col-span-1 text-center">
-              <span class="text-ob-bright">{{ tagCount }}</span>
-              <p class="text-base">{{ t('settings.tags') }}</p>
-            </li>
-          </ul>
-        </div>
-      </div>
+  <div class="sidebar-box profile-card" data-dia="author">
+    <div class="profile flex flex-col justify-center items-center">
+      <span class="profile-avatar-ring">
+        <img v-if="websiteConfig.authorAvatar" :class="avatarClass" :src="websiteConfig.authorAvatar" alt="" />
+        <img v-else :class="avatarClass" :src="default" alt="" />
+      </span>
+      <h2 class="text-center pt-4 text-2xl font-semibold text-ob-bright">
+        <template v-if="websiteConfig.author">
+          {{ websiteConfig.author }}
+        </template>
+        <ob-skeleton v-else height="2.25rem" width="7rem" />
+      </h2>
+      <span class="brand-rule w-14 mt-2" />
+      <p
+        v-if="websiteConfig.authorIntro"
+        class="pt-5 w-full text-sm text-center text-ob-dim"
+        v-html="websiteConfig.authorIntro" />
+      <p v-else class="pt-5 w-full text-sm text-center flex flex-col gap-2">
+        <ob-skeleton :count="2" height="20px" width="10rem" />
+      </p>
+      <Social />
+      <ul class="profile-stats">
+        <li>
+          <span>{{ articleCount }}</span>
+          <p>{{ t('settings.articles') }}</p>
+        </li>
+        <li>
+          <span>{{ talkCount }}</span>
+          <p>{{ t('settings.talks') }}</p>
+        </li>
+        <li>
+          <span>{{ categoryCount }}</span>
+          <p>{{ t('settings.categories') }}</p>
+        </li>
+        <li>
+          <span>{{ tagCount }}</span>
+          <p>{{ t('settings.tags') }}</p>
+        </li>
+      </ul>
     </div>
   </div>
 </template>
@@ -71,10 +63,6 @@ export default defineComponent({
           [appStore.themeConfig.profile_shape]: true
         }
       }),
-      themeConfig: computed(() => appStore.themeConfig),
-      gradientBackground: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
-      }),
       websiteConfig: computed(() => {
         return appStore.websiteConfig
       }),
@@ -90,8 +78,62 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .profile {
-  top: -7%;
-  height: 100%;
-  max-height: 100%;
+  padding-top: 8px;
+}
+
+/* The avatar is the one place the aurora ramp is allowed to frame something. */
+.profile-avatar-ring {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background-image: var(--brand-gradient);
+
+  img {
+    width: 88px !important;
+    height: 88px !important;
+    margin: 0 !important;
+    border-width: 0 !important;
+    box-shadow: none !important;
+    background-color: var(--surface-2);
+  }
+}
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-hairline);
+
+  li {
+    position: relative;
+    text-align: center;
+
+    & + li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1px;
+      height: 20px;
+      background: var(--border-hairline);
+    }
+  }
+
+  span {
+    display: block;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-bright);
+  }
+
+  p {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
 }
 </style>

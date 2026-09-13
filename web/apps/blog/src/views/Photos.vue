@@ -1,15 +1,10 @@
 <template>
   <div>
-    <Breadcrumb :current="t('menu.album')" />
     <div class="flex flex-col">
-      <div class="post-header">
-        <h1 v-if="photoAlbumName != ''" class="post-title text-white uppercase">{{ photoAlbumName }}</h1>
-        <ob-skeleton
-          v-else
-          class="post-title text-white uppercase"
-          width="30%"
-          height="clamp(1.2rem, calc(1rem + 3.5vw), 4rem)" />
-      </div>
+      <PageHeader
+        :title="photoAlbumName"
+        :current="t('menu.album')"
+        :loading="photoAlbumName === ''" />
       <div class="main-grid">
         <div class="relative">
           <div class="post-html">
@@ -46,7 +41,7 @@ import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/common'
 import { useRoute, onBeforeRouteUpdate } from 'vue-router'
 import { Sidebar, Profile } from '../components/Sidebar'
-import Breadcrumb from '@/components/Breadcrumb.vue'
+import { PageHeader } from '@/components/PageHeader'
 import { v3ImgPreviewFn } from 'v3-img-preview'
 import api from '@/api/api'
 import { pageData } from '@/utils/page'
@@ -54,7 +49,7 @@ import { safePhotoImageUrl } from '@/utils/image'
 
 export default defineComponent({
   name: 'Photos',
-  components: { Breadcrumb, Sidebar, Profile },
+  components: { PageHeader, Sidebar, Profile },
   setup() {
     const { t } = useI18n()
     const route = useRoute()

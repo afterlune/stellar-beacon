@@ -1,12 +1,7 @@
 <template>
   <div class="toggler" @click="changeStatus">
     <div class="toggle-track"></div>
-    <div
-      class="slider"
-      :style="{
-        transform: toggleStyle.transform,
-        backgroundColor: toggleStyle.background
-      }">
+    <div class="slider" :class="{ 'slider-active': toggleStyle.active }" :style="{ transform: toggleStyle.transform }">
       <slot />
     </div>
   </div>
@@ -24,9 +19,11 @@ export default defineComponent({
     onMounted(() => {
       changeTransform()
     })
+    // The knob colour used to be a hardcoded purple pair (#6e40c9 / #100E16)
+    // that belonged to no theme; the on state is now the brand ramp.
     let toggleStyle = reactive({
       transform: '',
-      background: '#6e40c9'
+      active: false
     })
     let toggleStatus = status.value
     const changeStatus = () => {
@@ -35,10 +32,8 @@ export default defineComponent({
       emit('changeStatus', toggleStatus)
     }
     const changeTransform = () => {
-      const transform = toggleStatus ? '18px' : '0'
-      toggleStyle.transform = `translateX(${transform})`
-      const backgroundColor = toggleStatus ? '#6e40c9' : '#100E16'
-      toggleStyle.background = backgroundColor
+      toggleStyle.transform = `translateX(${toggleStatus ? '18px' : '0'})`
+      toggleStyle.active = Boolean(toggleStatus)
     }
     return {
       toggleStyle,
@@ -53,9 +48,9 @@ export default defineComponent({
   @apply relative;
   width: 40px;
   height: 22px;
-  background-color: var(--background-primary);
+  background-color: var(--surface-hover);
   border-radius: 24px;
-  border: 3px solid rgba(110, 64, 201, 0.35);
+  border: 3px solid var(--border-hairline);
   box-sizing: border-box;
   transition: background-color 250ms ease;
 }
@@ -64,9 +59,14 @@ export default defineComponent({
   left: -6px;
   width: 28px;
   height: 28px;
-  background-color: #6e40c9;
+  background-color: var(--text-faint);
   border-radius: 50%;
   transition: all 250ms cubic-bezier(0.4, 0.03, 0, 1) 0s;
-  @apply absolute shadow-lg;
+  @apply absolute;
+  box-shadow: var(--elev-1);
+}
+.slider-active {
+  background-color: transparent;
+  background-image: var(--brand-gradient);
 }
 </style>

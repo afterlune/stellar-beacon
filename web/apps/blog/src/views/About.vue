@@ -1,21 +1,11 @@
 <template>
   <div>
-    <Breadcrumb :current="t('menu.about')" />
     <div class="flex flex-col">
-      <div class="post-header">
-        <h1 v-if="about" class="post-title text-white uppercase">
-          {{ t('titles.about') }}
-        </h1>
-        <ob-skeleton
-          v-else
-          class="post-title text-white uppercase"
-          width="100%"
-          height="clamp(1.2rem, calc(1rem + 3.5vw), 4rem)" />
-      </div>
+      <PageHeader :title="t('titles.about')" :current="t('menu.about')" :loading="!about" skeleton-width="100%" />
       <div class="main-grid">
         <div class="relative">
           <div v-if="about" class="post-html" ref="postRef" v-html="about" />
-          <div v-else class="bg-ob-deep-800 px-14 py-16 rounded-2xl shadow-xl block min-h-screen">
+          <div v-else class="surface-panel px-14 py-16 rounded-2xl block min-h-screen">
             <ob-skeleton tag="div" :count="1" height="36px" width="150px" class="mb-6" />
             <br />
             <ob-skeleton tag="div" :count="35" height="16px" width="100px" class="mr-2" />
@@ -48,7 +38,7 @@
 
 <script lang="ts">
 import { defineComponent, onMounted, onUnmounted, toRefs, ref, reactive, nextTick, provide, computed } from 'vue'
-import Breadcrumb from '@/components/Breadcrumb.vue'
+import { PageHeader } from '@/components/PageHeader'
 import { useI18n } from 'vue-i18n'
 import { Sidebar, Profile, Navigator } from '@/components/Sidebar'
 import { useCommonStore } from '@/stores/common'
@@ -67,7 +57,7 @@ import { pageCount, pageRecords } from '@/utils/page'
 
 export default defineComponent({
   name: 'About',
-  components: { Breadcrumb, Sidebar, Profile, Navigator, Sticky, SubTitle, Comment },
+  components: { PageHeader, Sidebar, Profile, Navigator, Sticky, SubTitle, Comment },
   setup() {
     const commonStore = useCommonStore()
     const commentStore = useCommentStore()
@@ -190,17 +180,10 @@ export default defineComponent({
 </script>
 
 <style lang="scss">
-.post-title {
-  @apply my-2;
-  font-size: clamp(1.2rem, calc(1rem + 3.5vw), 4rem);
-  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.5);
-}
-.post-stats {
-  @apply w-full flex flex-row text-sm lg:text-base mb-6;
-  span {
-    @apply text-white stroke-current flex flex-row items-center pr-4;
-  }
-}
+/* This file used to redefine `.post-title` and `.post-stats` globally, so the
+   About page kept the old 64px heading and the override then leaked into every
+   page visited afterwards. The shared scale in components/article.scss owns
+   these now. */
 .post-html {
   word-wrap: break-word;
   word-break: break-all;

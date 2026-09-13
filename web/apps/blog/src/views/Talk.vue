@@ -7,7 +7,7 @@
         </div>
         <div class="main-grid">
           <div class="relative space-y-5">
-            <div class="bg-ob-deep-800 flex p-4 lg:p-8 rounded-2xl shadow-xl mb-8 lg:mb-0">
+            <div class="surface-panel flex p-4 lg:p-8 rounded-2xl mb-8 lg:mb-0">
               <Avatar v-if="talk.avatar" :url="talk.avatar" />
               <div class="talk-info">
                 <div class="user-nickname text-sm">
@@ -194,7 +194,7 @@ export default defineComponent({
   font-weight: 530;
 }
 .time {
-  color: #999;
+  color: var(--text-dim);
   font-size: 13px;
   @media (min-width: 1280px) {
     margin-top: 4px;

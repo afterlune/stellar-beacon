@@ -77,7 +77,8 @@
 </template>
 
 <style lang="css" scoped>
-@import url('https://fonts.googleapis.com/css?family=Fira+Sans');
+/* Was pulling Fira Sans from Google Fonts — a third typeface for the site, and
+   unavailable whenever the page is opened offline. */
 .left-section .inner-content {
   position: absolute;
   top: 50%;
@@ -87,7 +88,8 @@
 #not-found-page {
   margin: 0;
   padding: 0;
-  color: var(--text-noraml);
+  color: var(--text-normal);
+  font-family: var(--font-display);
 }
 
 .background {
@@ -119,7 +121,8 @@
   position: relative;
   margin: 0 auto;
   width: 85%;
-  height: 100vh;
+  height: calc(100vh - var(--header-h));
+  min-height: 520px;
   padding-bottom: 25vh;
   display: flex;
   flex-direction: row;

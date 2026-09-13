@@ -10,7 +10,7 @@
       <div class="flex flex-col relative">
         <ul :class="tabClass">
           <li :class="{ active: activeTab === 0 }" @click="handleTabChange(0)">
-            <span class="first-tab" :style="activeTabStyle(0)">
+            <span class="first-tab" :class="{ 'brand-gradient': activeTab === 0 }">
               {{ t('settings.button-all') }}
             </span>
           </li>
@@ -20,7 +20,7 @@
               :key="category.id"
               :class="{ active: activeTab === category.id }"
               @click="handleTabChange(category.id)">
-              <span :style="activeTabStyle(category.id)">
+              <span :class="{ 'brand-gradient': activeTab === category.id }">
                 {{ category.categoryName }}
               </span>
               <b>
@@ -37,7 +37,7 @@
         <span :class="expanderClass" @click="expandHandler">
           <svg-icon icon-class="chevron" />
         </span>
-        <ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+        <ul class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
           <template v-if="haveArticles === true">
             <li v-for="article in articles" :key="article.id">
               <ArticleCard class="home-article" :data="article" />
@@ -228,10 +228,7 @@ export default defineComponent({
         top: articleOffset.value
       })
     }
-    const activeTabStyle = (catagoryId: any) => {
-      if (catagoryId === activeTab.value) return { background: appStore.themeConfig.header_gradient_css }
-      return {}
-    }
+
     const pageChangeHanlder = (current: number) => {
       userStore.page = current
       pagination.current = current
@@ -246,16 +243,12 @@ export default defineComponent({
       ...toRefs(reactiveData),
       ...toRefs(articleStore.$state),
       categories: toRef(categoryStore.$state, 'categories'),
-      gradientText: computed(() => appStore.themeConfig.background_gradient_style),
-      gradientBackground: computed(() => {
-        return { background: appStore.themeConfig.header_gradient_css }
-      }),
+
       themeConfig: computed(() => appStore.themeConfig),
       expanderClass,
       tabClass,
       expandHandler,
       handleTabChange,
-      activeTabStyle,
       activeTab,
       pagination,
       pageChangeHanlder,
@@ -271,7 +264,7 @@ export default defineComponent({
       overflow: hidden;
       text-overflow: ellipsis;
       display: -webkit-box;
-      -webkit-line-clamp: 5;
+      -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
     }
     .article-footer {

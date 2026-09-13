@@ -26,20 +26,7 @@ export const useAppStore = defineStore('appStore', {
       themeConfig: {
         theme: cookies.get('theme') ? String(cookies.get('theme')) : 'theme-dark',
         profile_shape: 'circle-avatar',
-        feature: true,
-        gradient: {
-          color_1: '#24c6dc',
-          color_2: '#5433ff',
-          color_3: '#ff0099'
-        },
-        header_gradient_css: 'linear-gradient(130deg, #24c6dc, #5433ff 41.07%, #ff0099 76.05%)',
-        background_gradient_style: {
-          background: 'linear-gradient(130deg, #24c6dc, #5433ff 41.07%, #ff0099 76.05%)',
-          '-webkit-background-clip': 'text',
-          '-webkit-text-fill-color': 'transparent',
-          '-webkit-box-decoration-break': 'clone',
-          'box-decoration-break': 'clone'
-        }
+        feature: true
       },
       appLoading: false,
       websiteConfig: '' as any,

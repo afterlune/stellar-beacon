@@ -1,5 +1,12 @@
 <template>
   <div class="header-controls absolute top-10 right-0 flex flex-row" @keydown.k="handleOpenModel" tabindex="0">
+    <span
+      class="header-control header-control-menu"
+      data-dia="menu"
+      :aria-label="t('settings.open-menu')"
+      @click="handleOpenMenu">
+      <svg-icon icon-class="nav-menu" />
+    </span>
     <span class="ob-drop-shadow" data-dia="search" @click="handleOpenModel">
       <svg-icon icon-class="search" />
     </span>
@@ -21,7 +28,7 @@
       <Dropdown hover>
         <span class="mr-2">
           <div class="flex-shrink-0">
-            <div class="rounded-full ring-gray-100 overflow-hidden shaodw-lg w-9">
+            <div class="rounded-full overflow-hidden w-9">
               <img class="avatar-img" :src="userInfo.avatar" alt="" />
             </div>
           </div>
@@ -123,6 +130,7 @@ import ThemeToggle from '@/components/ToggleSwitch/ThemeToggle.vue'
 import api from '@/api/api'
 import SearchModel from '@/components/SearchModel.vue'
 import { useSearchStore } from '@/stores/search'
+import { useNavigatorStore } from '@/stores/navigator'
 import { useI18n } from 'vue-i18n'
 import emitter from '@/utils/mitt'
 
@@ -142,6 +150,7 @@ export default defineComponent({
     const commonStore = useCommonStore()
     const userStore = useUserStore()
     const searchStore = useSearchStore()
+    const navigatorStore = useNavigatorStore()
     const router = useRouter()
     const loginInfo = reactive({
       username: '' as any,
@@ -286,6 +295,12 @@ export default defineComponent({
       searchStore.setOpenModal(status)
     }
 
+    // The mobile drawer was only reachable from the floating navigator button in
+    // the bottom-right corner; a hamburger belongs in the bar.
+    const handleOpenMenu = () => {
+      navigatorStore.toggleMobileMenu()
+    }
+
     const updatePassword = () => {
       api.updatePassword(loginInfo).then(({ data }) => {
         if (data.flag) {
@@ -335,6 +350,7 @@ export default defineComponent({
     }
     return {
       handleOpenModel,
+      handleOpenMenu,
       loginInfo,
       ...toRefs(reactiveDate),
       userInfo: toRef(userStore.$state, 'userInfo'),
@@ -393,31 +409,46 @@ export default defineComponent({
 }
 #submit-button {
   outline: none;
-  background: #0fb6d6;
+  background: var(--text-accent);
 }
 .header-controls {
+  gap: 2px;
   span {
     display: flex;
     justify-content: center;
     align-items: center;
-    color: #fff;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: var(--radius-md);
+    color: var(--header-fg);
+    font-size: 13px;
     cursor: pointer;
-    transition: opacity 250ms ease;
-    padding-right: 0.5rem;
+    transition: background-color 200ms ease, color 250ms ease;
     &[no-hover-effect] {
       &:hover {
-        opacity: 1;
+        background-color: transparent;
       }
     }
     &:hover {
-      opacity: 0.5;
+      background-color: var(--surface-hover);
     }
     .svg-icon {
-      stroke: #fff;
-      height: 2rem;
-      width: 2rem;
-      margin-right: 0.5rem;
+      stroke: var(--header-fg);
+      height: 1.25rem;
+      width: 1.25rem;
+      margin-right: 0;
       pointer-events: none;
+      transition: stroke 250ms ease;
+    }
+  }
+  /* Hamburger only exists below the lg breakpoint, where Navigation is hidden. */
+  .header-control-menu {
+    display: none;
+  }
+  @media (max-width: 1023px) {
+    .header-control-menu {
+      display: flex;
     }
   }
   .search-bar {

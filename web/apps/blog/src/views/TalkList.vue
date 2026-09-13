@@ -1,17 +1,10 @@
 <template>
   <div>
-    <Breadcrumb :current="t('menu.talks')" />
     <div class="flex flex-col">
-      <div class="post-header">
-        <h1 class="post-title text-white uppercase">{{ t('titles.talks') }}</h1>
-      </div>
+      <PageHeader :title="t('titles.talks')" :current="t('menu.talks')" />
       <div class="main-grid">
         <div class="relative space-y-5">
-          <div
-            class="bg-ob-deep-800 flex p-4 lg:p-8 rounded-2xl shadow-xl mb-0 talk-item"
-            v-for="item in talks"
-            :key="item.id"
-            @click="toTalk(item.id)">
+          <div class="talk-item" v-for="item in talks" :key="item.id" @click="toTalk(item.id)">
             <Avatar :url="item.avatar" />
             <div class="talk-info">
               <div class="user-nickname text-sm">
@@ -30,16 +23,15 @@
                 }}
               </div>
               <div class="talk-content" v-html="item.content" />
-              <el-row class="talk-images" v-if="item.imgs">
-                <el-col :md="4" v-for="(img, index) of item.imgs" :key="index">
-                  <el-image
-                    class="images-items"
-                    :src="safeTalkImageUrl(img)"
-                    aspect-ratio="1"
-                    max-height="200"
-                    @click.stop="handlePreview(img)" />
-                </el-col>
-              </el-row>
+              <div class="talk-images" v-if="item.imgs">
+                <el-image
+                  class="talk-image"
+                  v-for="(img, index) of item.imgs"
+                  :key="index"
+                  :src="safeTalkImageUrl(img)"
+                  fit="cover"
+                  @click.stop="handlePreview(img)" />
+              </div>
             </div>
           </div>
           <Paginator
@@ -61,7 +53,7 @@
 <script lang="ts">
 import { defineComponent, onMounted, reactive, toRefs } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Breadcrumb from '@/components/Breadcrumb.vue'
+import { PageHeader } from '@/components/PageHeader'
 import { Sidebar, Profile } from '../components/Sidebar'
 import Paginator from '@/components/Paginator.vue'
 import Avatar from '../components/Avatar.vue'
@@ -72,7 +64,7 @@ import { safeTalkImageUrl } from '@/utils/image'
 
 export default defineComponent({
   name: 'talkList',
-  components: { Breadcrumb, Sidebar, Profile, Paginator, Avatar },
+  components: { PageHeader, Sidebar, Profile, Paginator, Avatar },
   setup() {
     const { t } = useI18n()
     const router = useRouter()
@@ -152,42 +144,55 @@ export default defineComponent({
   margin-left: 5px;
   font-size: 15px;
 }
-.talk-item:hover {
-  transform: scale(1.005);
+.talk-item {
+  display: flex;
+  padding: 20px;
+  border-radius: var(--radius-xl);
+  background-color: var(--surface-1);
+  border: none;
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease;
 }
-.el-card {
-  background: var(--background-primary);
-  border-radius: 10px;
-  border: 0;
+.talk-item:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 22px 48px -22px rgba(0, 0, 0, 0.55);
 }
 .talk-info {
   flex: 1;
-  margin-left: 10px;
+  min-width: 0;
+  margin-left: 12px;
 }
 .user-nickname {
-  font-weight: 530;
+  font-weight: 600;
+  color: var(--text-bright);
 }
 .time {
-  color: #999;
-  font-size: 13px;
-  @media (min-width: 1280px) {
-    margin-top: 4px;
-  }
+  color: var(--text-dim);
+  font-size: 12px;
 }
 .talk-content {
-  margin-top: 10px;
-  font-size: 14px;
-  line-height: 26px;
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text-normal);
   white-space: pre-line;
   word-wrap: break-word;
-  word-break: break-all;
+  word-break: break-word;
 }
+/* el-col with :md="4" collapsed into odd shapes whenever an item had fewer than
+   six images. Fixed-size tracks keep every thumbnail square whatever the count. */
 .talk-images {
-  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 118px);
+  gap: 8px;
+  margin-top: 12px;
 }
-.images-items {
-  cursor: pointer;
-  border-radius: 3px;
-  margin-right: 5px;
+.talk-image {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: none;
 }
 </style>

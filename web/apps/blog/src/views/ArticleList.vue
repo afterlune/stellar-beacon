@@ -1,9 +1,7 @@
 <template>
   <div class="flex flex-col">
-    <div class="post-header">
-      <h1 class="post-title text-white uppercase">{{ tagName }}</h1>
-    </div>
-    <div class="bg-ob-deep-800 px-14 py-16 rounded-2xl shadow-xl block min-h-screen">
+    <PageHeader :title="tagName" />
+    <div class="surface-panel px-14 py-16 rounded-2xl block">
       <ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">
         <template v-if="haveArticles === true">
           <li v-for="article in articles" :key="article.id">
@@ -26,7 +24,7 @@
 </template>
 <script lang="ts">
 import { defineComponent, onMounted, reactive, toRefs } from 'vue'
-import Breadcrumb from '@/components/Breadcrumb.vue'
+import { PageHeader } from '@/components/PageHeader'
 import { ArticleCard } from '@/components/ArticleCard'
 import Paginator from '@/components/Paginator.vue'
 import { useRoute } from 'vue-router'
@@ -35,7 +33,7 @@ import api from '@/api/api'
 
 export default defineComponent({
   name: 'ArticleList',
-  components: { Breadcrumb, ArticleCard, Paginator },
+  components: { PageHeader, ArticleCard, Paginator },
   setup() {
     const route = useRoute()
     const md = new MarkdownIt()

@@ -59,7 +59,8 @@ const routes = [
   {
     path: '/404',
     name: '404',
-    component: () => import('../views/404.vue')
+    component: () => import('../views/404.vue'),
+    meta: { hideBanner: true }
   },
   {
     path: '/:catchAll(.*)',

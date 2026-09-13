@@ -125,14 +125,17 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .input {
-  background: var(--background-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--border-hairline);
   resize: none;
 }
 #submit-button {
   outline: none;
   background: var(--main-gradient);
 }
+/* This is a divider, not a rule: it was drawing a near-black bar across the
+   form in the light theme. */
 .wire {
-  border-color: var(--text-normal);
+  border-color: var(--border-hairline);
 }
 </style>

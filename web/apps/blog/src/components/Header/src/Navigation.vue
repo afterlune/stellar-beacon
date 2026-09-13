@@ -1,15 +1,17 @@
 <template>
   <nav class="items-center flex-1 hidden lg:flex">
-    <ul class="flex flex-row list-none px-6 text-white">
+    <ul class="nav-list flex flex-row list-none px-6">
       <li
         class="not-italic font-medium text-xs h-full relative flex flex-col items-center justify-center cursor-pointer text-center py-4 px-2"
         v-for="route in routes"
         :key="route.path">
         <div
           class="nav-link text-sm block px-1.5 py-0.5 rounded-md relative uppercase cursor-pointer"
+          :class="{ 'nav-link-active': isActive(route.path) }"
           @click="pushPage(route.path)"
           v-if="route.children && route.children.length === 0"
-          :data-menu="route.name">
+          :data-menu="route.name"
+          :aria-current="isActive(route.path) ? 'page' : undefined">
           <span class="relative z-50" v-if="$i18n.locale === 'cn' && route.i18n.cn">
             {{ route.i18n.cn }}
           </span>
@@ -65,7 +67,7 @@
 <script lang="ts">
 // @ts-nocheck
 import { defineComponent, onMounted, reactive, toRef, toRefs } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Dropdown, DropdownMenu, DropdownItem } from '@/components/Dropdown'
 import { isExternal } from '@/utils/validate'
@@ -78,6 +80,14 @@ export default defineComponent({
   setup() {
     const { t, te } = useI18n()
     const router = useRouter()
+    const currentRoute = useRoute()
+    // There was no way to tell which page you were on; the nav only reacted to
+    // the pointer.
+    const isActive = (path: string): boolean => {
+      if (!path) return false
+      if (path === '/') return currentRoute.path === '/'
+      return currentRoute.path === path || currentRoute.path.startsWith(path + '/')
+    }
     const pushPage = (path: string): void => {
       if (!path) return
       if (isExternal(path)) {
@@ -103,6 +113,7 @@ export default defineComponent({
       ...toRefs(reactiveData),
       routes: config.routes,
       pushPage,
+      isActive,
       openPhotoAlbum,
       te,
       t
@@ -112,20 +123,52 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+.nav-list {
+  color: var(--header-fg);
+  /* The bar floats on the aurora; the ink carries its own shadow. */
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+}
+
 .nav-link {
-  @apply hover:text-ob-bright;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+
   &:hover {
+    color: var(--header-fg);
     &:before {
-      @apply opacity-60;
+      opacity: 1;
     }
   }
   &:before {
-    @apply absolute rounded-lg opacity-0 transition bg-ob-deep-800 z-40;
+    @apply absolute rounded-lg opacity-0 transition z-40;
     content: '';
     top: -4px;
     left: -4px;
     width: calc(100% + 8px);
     height: calc(100% + 8px);
+    // Was filled with the card colour, which read as a dirty block over the
+    // brand band. A translucent wash works on any backdrop.
+    background-color: var(--surface-hover);
+  }
+}
+
+/* The nav had no selected state at all. */
+.nav-link-active {
+  color: var(--header-fg);
+  font-weight: 600;
+
+  &:before {
+    opacity: 1;
+  }
+  &:after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -6px;
+    height: 2px;
+    border-radius: var(--radius-pill);
+    background-image: var(--brand-gradient);
   }
 }
 </style>

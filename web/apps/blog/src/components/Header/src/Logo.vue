@@ -1,6 +1,6 @@
 <template>
   <div class="flex items-start self-stretch relative" @click="handleClick">
-    <div class="flex flex-col relative py-4 z-10 text-white font-medium ob-drop-shadow cursor-pointer" @click="">
+    <div class="logo-mark flex flex-col relative py-4 z-10 font-medium ob-drop-shadow cursor-pointer" @click="">
       <span class="flex text-3xl" v-if="websiteConfig.name">
         {{ websiteConfig.name }}
       </span>
@@ -45,6 +45,10 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+.logo-mark {
+  color: var(--header-fg);
+  transition: color 250ms ease;
+}
 .logo-image {
   height: 200px;
   width: 200px;

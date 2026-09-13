@@ -32,7 +32,7 @@
           class="post-title text-white uppercase"
           width="100%"
           height="clamp(1.2rem, calc(1rem + 3.5vw), 4rem)" />
-        <div class="flex flex-row items-center justify-start mt-8 mb-4">
+        <div class="flex flex-row items-center justify-start mt-4 mb-4">
           <div class="post-footer" v-if="article.author">
             <img
               class="hover:opacity-50 cursor-pointer"
@@ -96,7 +96,7 @@
         <template v-if="article.articleContent">
           <div class="post-html" ref="articleRef" v-html="article.articleContent" />
         </template>
-        <div v-else class="bg-ob-deep-800 px-14 py-16 rounded-2xl shadow-xl block min-h-screen">
+        <div v-else class="surface-panel px-14 py-16 rounded-2xl block min-h-screen">
           <ob-skeleton tag="div" :count="1" height="36px" width="150px" class="mb-6" />
           <br />
           <ob-skeleton tag="div" :count="35" height="16px" width="100px" class="mr-2" />
@@ -123,7 +123,7 @@
             <div id="sticky-sidebar">
               <transition name="fade-slide-y" mode="out-in">
                 <div class="sidebar-box mb-4">
-                  <SubTitle :title="'titles.toc'" icon="toc" />
+                  <SubTitle :title="'titles.toc'" icon="toc" compact />
                   <div id="toc1"></div>
                 </div>
               </transition>
