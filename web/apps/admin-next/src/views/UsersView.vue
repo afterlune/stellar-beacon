@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="用户管理" description="查看用户、角色与最近一次登录状态，并维护账号可用性。">
+    <AdminPageHeader title="用户管理" description="查看用户、角色及登录状态。">
       <template #actions>
         <a-input-search
           v-model="keywords"

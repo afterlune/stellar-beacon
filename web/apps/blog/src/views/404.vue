@@ -77,8 +77,6 @@
 </template>
 
 <style lang="css" scoped>
-/* Was pulling Fira Sans from Google Fonts — a third typeface for the site, and
-   unavailable whenever the page is opened offline. */
 .left-section .inner-content {
   position: absolute;
   top: 50%;

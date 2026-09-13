@@ -105,8 +105,7 @@ export default defineComponent({
   height: calc(100% + 2px);
   background-color: #2cdcff;
   background: var(--aurora-dia--linear-gradient);
-  /* Was a hard-edged 45%-radius colour blob. Blurred and made organic, it
-     becomes a soft light the mascot sits inside. */
+  /* Blur the background shape to soften its edge. */
   border-radius: 46% 54% 52% 48% / 52% 46% 54% 48%;
   filter: blur(7px);
   opacity: 0.92;
@@ -176,8 +175,7 @@ export default defineComponent({
   right: -132px;
   width: 210px;
   min-height: 54px;
-  /* Was a gradient ring faked with padding + a saturated background, which is
-     the pink-bordered toast. Now a plain glass surface. */
+  /* Keep the message surface opaque for readability. */
   background: var(--surface-solid);
   border: 1px solid var(--border-hairline);
   color: var(--text-normal);

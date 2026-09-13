@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="网站配置" description="集中维护博客的名称、作者信息、对外链接与互动开关。">
+    <AdminPageHeader title="网站配置" description="配置站点名称、作者信息、外链和互动选项。">
       <template #actions>
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>

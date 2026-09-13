@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="相册管理" description="用一个舒服的空间整理博客里的影像。">
+    <AdminPageHeader title="相册管理" description="管理相册并上传照片。">
       <template #actions>
         <a-input-search
           v-model="keywords"
@@ -87,7 +87,7 @@
             <AdminEmptyState
               :icon="IconImage"
               :title="hasFilters ? '没有匹配的相册' : '还没有相册'"
-              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '创建相册后就可以批量上传照片了。'">
+              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '创建相册后即可上传照片。'">
               <a-button v-if="hasFilters" size="small" @click="resetFilters">重置筛选</a-button>
               <a-button v-else type="primary" size="small" @click="openEditor()">新增相册</a-button>
             </AdminEmptyState>

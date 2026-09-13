@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="文章列表" description="把文章、状态和发布节奏整理在一张清晰的桌面上。">
+    <AdminPageHeader title="文章列表" description="查看和管理文章及发布状态。">
       <template #actions>
         <input ref="importInput" type="file" accept=".md,.markdown,.txt" hidden @change="onImportFile" />
         <a-button :loading="importing" @click="pickImportFile">
@@ -150,7 +150,7 @@
             <AdminEmptyState
               :icon="IconBook"
               :title="hasFilters ? '没有匹配的文章' : '还没有文章'"
-              :description="hasFilters ? '换个关键词或清空筛选条件再试一次。' : '写下第一篇内容，它会立即出现在这里。'">
+              :description="hasFilters ? '换个关键词或清空筛选条件再试一次。' : '创建文章后，可在此查看和管理。'">
               <a-button v-if="hasFilters" size="small" @click="resetFilters">清空筛选</a-button>
               <a-button v-else type="primary" size="small" @click="router.push('/articles')">发布文章</a-button>
             </AdminEmptyState>

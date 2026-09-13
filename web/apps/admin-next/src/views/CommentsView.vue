@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="评论管理" description="保持交流友好，也让每一条反馈都及时得到回应。">
+    <AdminPageHeader title="评论管理" description="审核和管理读者评论。">
       <template #actions>
         <a-input-search
           v-model="keywords"

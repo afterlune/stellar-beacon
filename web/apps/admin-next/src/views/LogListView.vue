@@ -192,7 +192,7 @@ const mode = computed(() => props.mode)
 const configs = {
   operation: {
     title: '操作日志',
-    description: '留下可追溯的后台操作记录，方便回溯每一次内容变更。',
+    description: '查看后台操作记录。',
     placeholder: '搜索模块或描述',
     endpoint: 'admin/logs/operations',
     emptyHint: '后台的写操作会自动记录在这里。',
@@ -208,7 +208,7 @@ const configs = {
   },
   exception: {
     title: '异常日志',
-    description: '把异常留在记录里，让问题更容易被定位和复现。',
+    description: '查看后台异常记录和请求信息。',
     placeholder: '搜索请求 URI 或描述',
     endpoint: 'admin/logs/exceptions',
     emptyHint: '接口抛出未捕获异常时会记录在这里。',

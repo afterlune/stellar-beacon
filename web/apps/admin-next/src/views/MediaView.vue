@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page media-page">
-    <AdminPageHeader title="图片资源" description="集中管理文章、说说和相册上传的图片，支持预览、复制和安全删除。">
+    <AdminPageHeader title="图片资源" description="管理文章、说说和相册图片，支持预览、复制和删除。">
       <template #actions>
         <input ref="fileInput" type="file" accept="image/*" multiple hidden @change="uploadFiles" />
         <a-button type="primary" :loading="uploading" @click="fileInput?.click()">

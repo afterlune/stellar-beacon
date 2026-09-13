@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="个人中心" description="维护你的后台身份信息和对外简介。">
+    <AdminPageHeader title="个人中心" description="编辑账号资料和个人简介。">
       <template #actions>
         <a-button @click="router.push('/setting')">
           <template #icon><IconRefresh /></template>

@@ -132,7 +132,7 @@ const props = defineProps<{ kind: Kind }>()
 const configs = {
   categories: {
     title: '分类管理',
-    description: '为文章建立稳定的归属，让读者更容易找到同一主题下的内容。',
+    description: '管理文章分类。',
     placeholder: '搜索分类名',
     fieldLabel: '分类名',
     unit: '分类',
@@ -146,7 +146,7 @@ const configs = {
   },
   tags: {
     title: '标签管理',
-    description: '用轻量的关键词连接文章之间的脉络，让相关内容彼此可达。',
+    description: '管理文章标签。',
     placeholder: '搜索标签名',
     fieldLabel: '标签名',
     unit: '标签',

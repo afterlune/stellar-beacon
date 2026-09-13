@@ -133,8 +133,7 @@ export default defineComponent({
       theme: computed(() => appStore.themeConfig.theme),
       hideBanner: computed(() => route.meta.hideBanner === true),
       headerImage: computed(() => {
-        // The cover is the ground, the aurora is the light: the image stays well
-        // under the glow so the sky always reads as sky.
+        // Keep the cover image subdued beneath the aurora overlay.
         return {
           backgroundImage: commonStore.headerImage !== '' ? `url(${commonStore.headerImage})` : 'none',
           opacity: commonStore.headerImage !== '' ? 0.42 : 0
@@ -179,8 +178,7 @@ body {
   .app-wrapper {
     @apply min-w-full pb-12;
     background-color: var(--background-primary);
-    // The aurora's afterglow, so content never floats on flat grey. Pinned to
-    // the viewport: it reads as ambient light rather than a texture that scrolls.
+    // Keep the ambient background fixed while the page scrolls.
     background-image: var(--ambient);
     background-repeat: no-repeat;
     background-attachment: fixed;
@@ -216,13 +214,7 @@ body {
   }
 }
 
-/* ============================================================
-   HERO — an aurora, not a gradient bar
-   A night sky with three saturated light cores composited with
-   `screen`, so overlapping glows ADD light instead of averaging
-   into the grey mud a 3-stop linear ramp produces. Five stacked
-   layers, then a brand rule on the horizon.
-   ============================================================ */
+/* Banner layers and blend effects. */
 .app-banner {
   display: block;
   height: var(--banner-h);
@@ -247,14 +239,14 @@ body {
   transition: ease-in-out opacity 300ms;
 }
 
-/* The light itself. `screen` is what makes it read as light rather than paint. */
+/* Blend the aurora over the cover image. */
 .app-banner-aurora {
   z-index: 3;
   background-image: var(--hero-aurora);
   mix-blend-mode: screen;
 }
 
-/* Grain kills the banding that large soft gradients always produce. */
+/* Noise reduces visible banding in the gradient. */
 .app-banner-grain {
   z-index: 4;
   background-image: var(--hero-grain);
@@ -262,13 +254,13 @@ body {
   mix-blend-mode: overlay;
 }
 
-/* Top and bottom scrims: the nav sits high, page titles sit low. */
+/* Preserve contrast for navigation and page titles. */
 .app-banner-veil {
   z-index: 5;
   background-image: var(--hero-veil);
 }
 
-/* The horizon: the brand rule lives where the sky meets the page. */
+/* Brand divider below the banner. */
 .app-banner-rule {
   position: absolute;
   top: var(--banner-h);
@@ -280,8 +272,7 @@ body {
   background-image: var(--brand-gradient);
 }
 
-/* Light spills past the horizon and fades into the page. Without this the hero
-   stops being light and becomes a painted rectangle. */
+/* Fade the banner light into the page content. */
 .app-banner-spill {
   position: absolute;
   top: var(--banner-h);

@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="定时任务" description="让重复的后台工作安静、可靠地运行。">
+    <AdminPageHeader title="定时任务" description="管理定时任务并查看执行结果。">
       <template #actions>
         <a-input-search
           v-model="keywords"

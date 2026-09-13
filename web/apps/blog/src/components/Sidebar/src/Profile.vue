@@ -81,7 +81,7 @@ export default defineComponent({
   padding-top: 8px;
 }
 
-/* The avatar is the one place the aurora ramp is allowed to frame something. */
+/* Brand gradient around the profile avatar. */
 .profile-avatar-ring {
   display: inline-flex;
   padding: 3px;

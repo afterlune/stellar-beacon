@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="说说管理" description="记录那些不必写成文章的片刻。">
+    <AdminPageHeader title="说说管理" description="发布和管理说说。">
       <template #actions>
         <a-input-search
           v-model="keywords"
@@ -88,7 +88,7 @@
             <AdminEmptyState
               :icon="IconMessage"
               :title="hasFilters ? '没有匹配的说说' : '还没有说说'"
-              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '发布第一条说说，记录当下的片段。'">
+              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '发布说说后，会显示在这里。'">
               <a-button v-if="hasFilters" size="small" @click="resetFilters">重置筛选</a-button>
               <a-button v-else type="primary" size="small" @click="router.push('/talks')">发布说说</a-button>
             </AdminEmptyState>

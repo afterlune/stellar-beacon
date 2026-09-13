@@ -19,9 +19,7 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
-/* Was a two-tone pill (name half + count half) filled with the *page* colour,
-   which on a white card in the light theme was barely visible. One pill, one
-   surface, the count demoted to a quiet number. */
+/* Keep the tag count secondary to the tag name. */
 .tag-pill {
   display: inline-flex;
   align-items: center;

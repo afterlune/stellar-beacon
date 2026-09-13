@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page monitor-page">
-    <AdminPageHeader title="实时监控" description="查看当前在线会话、最近操作和异常情况，快速掌握后台运行状态。">
+    <AdminPageHeader title="实时监控" description="查看在线会话、操作记录和异常日志。">
       <template #actions>
         <button
           class="monitor-live-badge"

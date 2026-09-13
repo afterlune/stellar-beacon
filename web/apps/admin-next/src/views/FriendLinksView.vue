@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="友链管理" description="维护博客与朋友们之间的温柔连接。">
+    <AdminPageHeader title="友链管理" description="管理博客友情链接。">
       <template #actions>
         <a-input-search
           v-model="keywords"
@@ -91,7 +91,7 @@
             <AdminEmptyState
               :icon="IconLink"
               :title="keywords.trim() ? '没有匹配的友链' : '还没有友链'"
-              :description="keywords.trim() ? '换个关键词再试一次。' : '把朋友们的站点添加进来，互相引流。'">
+              :description="keywords.trim() ? '换个关键词再试一次。' : '添加友情链接后，会显示在博客前台。'">
               <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
               <a-button v-else type="primary" size="small" @click="openEditor()">新增友链</a-button>
             </AdminEmptyState>

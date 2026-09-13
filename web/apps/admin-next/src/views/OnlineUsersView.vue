@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="在线用户" description="了解当前仍在活动的登录会话，并及时清理异常登录。">
+    <AdminPageHeader title="在线用户" description="查看当前登录会话及其状态。">
       <template #actions>
         <a-input-search
           v-model="keywords"

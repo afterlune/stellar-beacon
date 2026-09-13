@@ -19,8 +19,7 @@ export default defineComponent({
     onMounted(() => {
       changeTransform()
     })
-    // The knob colour used to be a hardcoded purple pair (#6e40c9 / #100E16)
-    // that belonged to no theme; the on state is now the brand ramp.
+    // Use the active theme's brand color for the on state.
     let toggleStyle = reactive({
       transform: '',
       active: false

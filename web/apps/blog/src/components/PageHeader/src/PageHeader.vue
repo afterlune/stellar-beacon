@@ -14,9 +14,7 @@
 import { defineComponent } from 'vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 
-// Every inner page used to repeat breadcrumb + h1 by hand, half of them with the
-// breadcrumb inside `.post-header` and half outside. One component keeps the
-// page-heading scale in sync and gives the loading state a single definition.
+// Shared heading, breadcrumb, and loading skeleton for inner pages.
 export default defineComponent({
   name: 'PageHeader',
   components: { Breadcrumb },

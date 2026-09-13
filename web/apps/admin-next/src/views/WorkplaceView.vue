@@ -4,7 +4,7 @@
       <div class="workplace-welcome-copy">
         <div class="admin-page-eyebrow">BENETNASCH / WORKPLACE</div>
         <h2>{{ greeting }}，{{ auth.user?.nickname || auth.user?.username || '管理员' }}</h2>
-        <p>从内容发布、互动管理到站点运维，今天也把博客维护得井然有序。</p>
+        <p>常用管理入口与近 7 天访问数据。</p>
         <a-space wrap class="workplace-welcome-actions">
           <a-button type="primary" @click="router.push('/articles')">
             <template #icon><IconPlus /></template>
@@ -47,7 +47,7 @@
           v-else
           :icon="IconBarChart"
           title="暂无访问数据"
-          description="博客产生访问后，这里会显示逐日趋势。" />
+          description="有访问记录后，这里会显示每日访问量。" />
       </a-card>
 
       <a-card class="admin-panel" :bordered="false" title="热门文章">
@@ -63,7 +63,7 @@
           v-else
           :icon="IconBook"
           title="暂无浏览数据"
-          description="文章被阅读后，排行会出现在这里。" />
+          description="有文章浏览记录后，这里会显示浏览量排行。" />
       </a-card>
     </div>
 

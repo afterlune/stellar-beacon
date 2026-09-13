@@ -81,8 +81,7 @@ export default defineComponent({
     const { t, te } = useI18n()
     const router = useRouter()
     const currentRoute = useRoute()
-    // There was no way to tell which page you were on; the nav only reacted to
-    // the pointer.
+    // Match the current path and its nested routes.
     const isActive = (path: string): boolean => {
       if (!path) return false
       if (path === '/') return currentRoute.path === '/'
@@ -125,7 +124,7 @@ export default defineComponent({
 <style lang="scss" scoped>
 .nav-list {
   color: var(--header-fg);
-  /* The bar floats on the aurora; the ink carries its own shadow. */
+  /* Keep navigation text readable over the banner. */
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
 }
 
@@ -146,13 +145,12 @@ export default defineComponent({
     left: -4px;
     width: calc(100% + 8px);
     height: calc(100% + 8px);
-    // Was filled with the card colour, which read as a dirty block over the
-    // brand band. A translucent wash works on any backdrop.
+    // Use a translucent hover surface over the banner.
     background-color: var(--surface-hover);
   }
 }
 
-/* The nav had no selected state at all. */
+/* Selected navigation item. */
 .nav-link-active {
   color: var(--header-fg);
   font-weight: 600;

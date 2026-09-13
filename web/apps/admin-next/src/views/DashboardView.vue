@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page dashboard-page">
-    <AdminPageHeader title="数据仪表盘" description="把访问趋势、内容分布和访客地域放在同一个观察面里。">
+    <AdminPageHeader title="数据仪表盘" description="查看访问趋势、内容分布和访客地域。">
       <template #actions>
         <a-radio-group v-model="range" type="button" :disabled="loading" @change="load">
           <a-radio value="7d">近 7 天</a-radio>

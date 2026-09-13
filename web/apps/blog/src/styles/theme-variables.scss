@@ -8,13 +8,7 @@
   --gap: 2rem;
   --theme-transition: all 250ms ease;
 
-  /* ============================================================
-     AURORA AS LIGHT, NOT AS A BACKGROUND COLOUR
-     An aurora is light in a dark sky, so the hero is built from
-     three saturated radial cores that fade to nothing and are
-     composited with `screen` — overlaps ADD light instead of
-     averaging into grey, which is what a 3-stop linear ramp does.
-     ============================================================ */
+  /* Brand colors. */
   --aurora-1: #22d3ee; /* cyan  */
   --aurora-2: #6d4bff; /* violet */
   --aurora-3: #ff2d95; /* magenta */
@@ -23,27 +17,23 @@
   --main-gradient: var(--brand-gradient);
 
   --hero-base: #05060d;
-  /* Three light cores, not a ramp: a cyan curtain bleeding in from off-canvas
-     top-left, a violet arc hugging the horizon, a magenta curtain top-right.
-     Peaks sit off the text so the middle stays readable. */
+  /* Keep the color centers away from the title area. */
   --hero-aurora: radial-gradient(62% 210% at 2% -14%, rgba(34, 211, 238, 0.88) 0%, rgba(34, 211, 238, 0) 56%),
     radial-gradient(128% 96% at 50% 132%, rgba(109, 75, 255, 0.9) 0%, rgba(109, 75, 255, 0) 58%),
     radial-gradient(56% 190% at 99% 4%, rgba(255, 45, 149, 0.72) 0%, rgba(255, 45, 149, 0) 56%);
-  /* A dark pocket where the breadcrumb and page title live, a light rim scrim so
-     the nav never sits on a raw bright edge, and a seat along the bottom. */
+  /* Darken title and navigation areas for contrast. */
   --hero-veil: radial-gradient(44% 160% at 14% 54%, rgba(4, 5, 12, 0.6) 0%, rgba(4, 5, 12, 0) 74%),
     linear-gradient(180deg, rgba(4, 5, 12, 0.28) 0%, rgba(4, 5, 12, 0) 34%),
     linear-gradient(0deg, rgba(4, 5, 12, 0.5) 0%, rgba(4, 5, 12, 0) 38%);
-  /* Light spills over the horizon instead of stopping at it — this is what makes
-     the band read as light rather than as a painted bar. */
+  /* Fade the banner colors into the page below. */
   --hero-spill: radial-gradient(70% 200% at 12% 0%, rgba(34, 211, 238, 0.5) 0%, rgba(34, 211, 238, 0) 60%),
     radial-gradient(80% 220% at 55% 0%, rgba(109, 75, 255, 0.55) 0%, rgba(109, 75, 255, 0) 62%),
     radial-gradient(64% 200% at 94% 0%, rgba(255, 45, 149, 0.42) 0%, rgba(255, 45, 149, 0) 60%);
-  /* Grain kills the banding that large soft gradients always show. */
+  /* Noise reduces visible banding in the gradients. */
   --hero-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.5'/></svg>");
   --hero-fg: #ffffff;
 
-  /* The aurora's afterglow on the page itself, so content never floats on flat grey. */
+  /* Subtle color fields behind page content. */
   --ambient: radial-gradient(70% 46% at 88% 2%, rgba(109, 75, 255, 0.16) 0%, rgba(109, 75, 255, 0) 62%),
     radial-gradient(64% 40% at 2% 20%, rgba(34, 211, 238, 0.11) 0%, rgba(34, 211, 238, 0) 62%);
 
@@ -68,8 +58,7 @@
 .theme-light {
   --background-primary: #eff1f8;
   --background-primary-alt: #e7eaf4;
-  /* Card surfaces are translucent so the page's aurora afterglow shows through.
-     `--surface-solid` is the opaque twin for anything that must occlude. */
+  /* Use translucent surfaces over the page; use --surface-solid when opacity is required. */
   --background-secondary: rgba(255, 255, 255, 0.88);
   --background-secondary-alt: #e6e9f2;
   --background-trans: rgba(20, 24, 48, 0.06);
@@ -103,8 +92,7 @@
   --aurora-1: #12b8d6;
   --aurora-2: #5b3cff;
   --aurora-3: #f0288a;
-  /* On a near-white page the spill is coloured light on paper, not a spotlight:
-     pull the cyan right back or the top of the page blows out. */
+  /* Reduce the color intensity on light backgrounds. */
   --hero-spill: radial-gradient(70% 200% at 12% 0%, rgba(18, 184, 214, 0.16) 0%, rgba(18, 184, 214, 0) 56%),
     radial-gradient(84% 220% at 52% 0%, rgba(91, 60, 255, 0.2) 0%, rgba(91, 60, 255, 0) 58%),
     radial-gradient(64% 200% at 94% 0%, rgba(240, 40, 138, 0.16) 0%, rgba(240, 40, 138, 0) 56%);

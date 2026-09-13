@@ -112,7 +112,7 @@ export default defineComponent({
       api.bindingEmail(params).then(({ data }) => {
         if (data.flag) {
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '绑定成功',
             type: 'success'
           })
@@ -120,7 +120,7 @@ export default defineComponent({
           reactiveData.emailDialogVisible = false
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -132,13 +132,13 @@ export default defineComponent({
         if (data.flag) {
           userStore.userInfo.avatar = data.data
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '上传成功',
             type: 'success'
           })
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -154,13 +154,13 @@ export default defineComponent({
         api.updateUserSubscribe(params).then(({ data }) => {
           if (data.flag) {
             proxy.$notify({
-              title: 'Success',
+              title: '成功',
               message: '修改成功',
               type: 'success'
             })
           } else {
             proxy.$notify({
-              title: 'Error',
+              title: '错误',
               message: data.message,
               type: 'error'
             })
@@ -177,13 +177,13 @@ export default defineComponent({
       api.submitUserInfo(params).then(({ data }) => {
         if (data.flag) {
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '修改成功',
             type: 'success'
           })
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -194,13 +194,13 @@ export default defineComponent({
       api.sendValidationCode(reactiveData.email).then(({ data }) => {
         if (data.flag) {
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '验证码已发送',
             type: 'success'
           })
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -214,7 +214,7 @@ export default defineComponent({
         if (userStore.userInfo.email === '' || userStore.userInfo.email === null) {
           reactiveData.loading = false
           proxy.$notify({
-            title: 'Warning',
+            title: '提示',
             message: '邮箱未绑定,尽快绑定哦',
             type: 'warning'
           })

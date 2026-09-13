@@ -50,8 +50,7 @@ export default defineComponent({
 </script>
 
 <style lang="scss">
-/* Was a 210x434 empty column holding two lines of text — a whole grid track of
-   dead space. Now a normal section header, so the featured cards get full width. */
+/* Keep the featured section heading separate from the card grid. */
 .feature-block {
   padding: 32px 0 8px;
 }

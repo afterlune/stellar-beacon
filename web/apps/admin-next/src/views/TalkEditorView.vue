@@ -2,7 +2,7 @@
   <section class="admin-page">
     <AdminPageHeader
       :title="isEditing ? '编辑说说' : '发布说说'"
-      :description="isEditing ? '调整说说内容、图片与可见性。' : '记录那些不必写成文章的片刻。'"
+      :description="isEditing ? '设置说说内容、图片和可见范围。' : '发布短动态和图片。'"
       eyebrow="BENETNASCH / 说说" />
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>

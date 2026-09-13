@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="角色管理" description="用清晰的角色边界保护内容与后台操作。">
+    <AdminPageHeader title="角色管理" description="管理角色，并配置菜单和接口权限。">
       <template #actions>
         <a-input-search
           v-model="keywords"

@@ -1,6 +1,4 @@
-/* Sidebar boxes are content surfaces: glass with a top edge highlight and real
-   lift. No outline — the previous pass outlined every box on the page with the
-   same 1px hairline, which is what made everything look identical. */
+/* Sidebar content surface. */
 .sidebar-box {
   width: 100%;
   position: relative;

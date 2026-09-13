@@ -114,7 +114,7 @@ export default defineComponent({
       if (props.data.status === 2 && isAccess == false) {
         if (userStore.userInfo === '') {
           proxy.$notify({
-            title: 'Warning',
+            title: '提示',
             message: '该文章受密码保护,请登录后访问',
             type: 'warning'
           })
@@ -127,9 +127,7 @@ export default defineComponent({
     }
     return {
       article: toRefs(props).data,
-      // A missing cover used to fall back to the same stock image on every card,
-      // which made the home grid read as one picture repeated. Show the article's
-      // own category mark instead.
+      // Use the category or title initial instead of repeating a stock cover.
       fallbackLabel: computed(() => {
         const name = props.data?.categoryName || props.data?.articleTitle || ''
         return name ? String(name).trim().charAt(0) : '#'

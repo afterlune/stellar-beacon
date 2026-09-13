@@ -48,7 +48,7 @@ export default defineComponent({
     const saveComment = () => {
       if (userStore.userInfo === '') {
         proxy.$notify({
-          title: 'Warning',
+          title: '提示',
           message: '请登录后评论',
           type: 'warning'
         })
@@ -56,7 +56,7 @@ export default defineComponent({
       }
       if (reactiveData.commentContent.trim() == '') {
         proxy.$notify({
-          title: 'Warning',
+          title: '提示',
           message: '评论不能为空',
           type: 'warning'
         })
@@ -75,13 +75,13 @@ export default defineComponent({
           let isCommentReview = appStore.websiteConfig.isCommentReview
           if (isCommentReview) {
             proxy.$notify({
-              title: 'Warning',
+              title: '提示',
               message: '评论成功,正在审核中',
               type: 'warning'
             })
           } else {
             proxy.$notify({
-              title: 'Success',
+              title: '成功',
               message: '评论成功',
               type: 'success'
             })
@@ -89,7 +89,7 @@ export default defineComponent({
           reactiveData.commentContent = ''
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -133,8 +133,7 @@ export default defineComponent({
   outline: none;
   background: var(--main-gradient);
 }
-/* This is a divider, not a rule: it was drawing a near-black bar across the
-   form in the light theme. */
+/* Use the theme-aware border color for the divider. */
 .wire {
   border-color: var(--border-hairline);
 }

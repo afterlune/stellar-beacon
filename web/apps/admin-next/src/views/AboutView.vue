@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="关于我" description="写下希望访客了解的你，保存后会同步到博客展示页。">
+    <AdminPageHeader title="关于我" description="编辑展示在博客前台的个人介绍。">
       <template #actions>
         <a-button :disabled="!dirty" @click="reset">还原修改</a-button>
       </template>

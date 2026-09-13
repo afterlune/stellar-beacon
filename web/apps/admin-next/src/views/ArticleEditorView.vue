@@ -2,7 +2,7 @@
   <section class="admin-page">
     <AdminPageHeader
       :title="isEditing ? '修改文章' : '发布文章'"
-      :description="isEditing ? '调整内容、分类与发布状态，保存后立即生效。' : '写下新的内容，保存后会出现在文章列表中。'">
+      :description="isEditing ? '编辑文章内容、分类和发布状态。' : '创建文章并设置分类和发布状态。'">
       <template #actions>
         <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
         <a-button @click="router.push('/article-list')">返回列表</a-button>

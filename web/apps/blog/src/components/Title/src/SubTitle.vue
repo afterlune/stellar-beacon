@@ -89,7 +89,7 @@ export default defineComponent({
   margin-bottom: 14px;
   border-bottom: 1px solid var(--border-hairline);
 
-  /* The hairline is the separator here; the gradient rule would be noise. */
+  /* Use the border as the sidebar heading separator. */
   .brand-rule {
     display: none;
   }

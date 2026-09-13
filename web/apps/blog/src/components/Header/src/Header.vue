@@ -24,10 +24,7 @@ export default defineComponent({
     msg: String
   },
   setup() {
-    // Once the brand band has scrolled past, the bar has to carry the nav on its
-    // own surface instead of floating transparent over the page. Routes that hide
-    // the band (the 404 scene) have no dark backdrop at all, so the bar is always
-    // "stuck" there — otherwise the white nav sits on a near-white page.
+    // Use a solid surface after the banner scrolls away, or immediately on routes without a banner.
     const route = useRoute()
     const noBanner = computed(() => route.meta.hideBanner === true)
     const stuck = ref(false)

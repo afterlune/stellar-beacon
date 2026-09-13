@@ -280,7 +280,7 @@ export default defineComponent({
       api.getArticeById(reactiveData.articleId).then(({ data }) => {
         if (data.code === 52003) {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: '文章密码认证未通过',
             type: 'error'
           })

@@ -179,7 +179,7 @@ export default defineComponent({
     const login = () => {
       if (loginInfo.username.trim().length == 0 || loginInfo.password.trim().length == 0) {
         proxy.$notify({
-          title: 'Warning',
+          title: '提示',
           message: '账号或者密码不能为空',
           type: 'warning'
         })
@@ -194,14 +194,14 @@ export default defineComponent({
           sessionStorage.setItem('token', data.data.token)
           userStore.token = data.data.token
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '登录成功',
             type: 'success'
           })
           reactiveDate.loginDialogVisible = false
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -216,13 +216,13 @@ export default defineComponent({
           userStore.accessArticles = []
           sessionStorage.removeItem('token')
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '登出成功',
             type: 'success'
           })
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -254,13 +254,13 @@ export default defineComponent({
       api.sendValidationCode(loginInfo.username).then(({ data }) => {
         if (data.flag) {
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '验证码已发送',
             type: 'success'
           })
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -276,7 +276,7 @@ export default defineComponent({
       api.register(params).then(({ data }) => {
         if (data.flag) {
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '注册成功',
             type: 'success'
           })
@@ -284,7 +284,7 @@ export default defineComponent({
           reactiveDate.loginDialogVisible = true
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -305,7 +305,7 @@ export default defineComponent({
       api.updatePassword(loginInfo).then(({ data }) => {
         if (data.flag) {
           proxy.$notify({
-            title: 'Success',
+            title: '成功',
             message: '修改成功',
             type: 'success'
           })
@@ -313,7 +313,7 @@ export default defineComponent({
           reactiveDate.loginDialogVisible = true
         } else {
           proxy.$notify({
-            title: 'Error',
+            title: '错误',
             message: data.message,
             type: 'error'
           })
@@ -323,7 +323,7 @@ export default defineComponent({
     const accessArticle = () => {
       if (reactiveDate.articlePassword.trim().length == 0) {
         proxy.$notify({
-          title: 'Warning',
+          title: '提示',
           message: '密码不能为空',
           type: 'warning'
         })
@@ -341,7 +341,7 @@ export default defineComponent({
             router.push({ path: '/articles/' + reactiveDate.articleId })
           } else {
             proxy.$notify({
-              title: 'Error',
+              title: '错误',
               message: data.message,
               type: 'error'
             })

@@ -180,10 +180,7 @@ export default defineComponent({
 </script>
 
 <style lang="scss">
-/* This file used to redefine `.post-title` and `.post-stats` globally, so the
-   About page kept the old 64px heading and the override then leaked into every
-   page visited afterwards. The shared scale in components/article.scss owns
-   these now. */
+/* Keep Markdown body rules within the rendered About content. */
 .post-html {
   word-wrap: break-word;
   word-break: break-all;
