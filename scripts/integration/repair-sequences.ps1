@@ -12,7 +12,7 @@ $sql = Get-Content -LiteralPath $sqlPath -Raw
 Invoke-IntegrationCompose -Arguments @(
     'exec', '-T', 'postgresql', 'psql',
     '-U', 'postgres',
-    '-d', 'benetnasch',
+    '-d', 'stellar_beacon',
     '-v', 'ON_ERROR_STOP=1',
     '-c', $sql
 )
@@ -71,7 +71,7 @@ END $$;
 Invoke-IntegrationCompose -Arguments @(
     'exec', '-T', 'postgresql', 'psql',
     '-U', 'postgres',
-    '-d', 'benetnasch',
+    '-d', 'stellar_beacon',
     '-v', 'ON_ERROR_STOP=1',
     '-c', $verificationSql
 )

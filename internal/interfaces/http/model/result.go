@@ -1,8 +1,8 @@
 package model
 
 import (
-	apperrors "benetnasch/internal/domain/errors"
 	"encoding/json"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"log/slog"
 	"strconv"
 )

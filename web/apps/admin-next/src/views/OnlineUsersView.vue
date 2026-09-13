@@ -102,7 +102,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, initialOf } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminUser } from '@benetnasch/api-contract'
+import type { AdminUser } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'online-users'
 

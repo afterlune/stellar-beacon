@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"benetnasch/internal/domain/entity"
-	apperrors "benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/infrastructure/persistence/postgres/orm"
-	"benetnasch/internal/infrastructure/persistence/postgres/query"
 	"container/list"
 	"context"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
 
 	"xorm.io/xorm"
 )

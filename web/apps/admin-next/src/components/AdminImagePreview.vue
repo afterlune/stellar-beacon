@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { API_BASE_URL } from '@benetnasch/api-client'
+import { API_BASE_URL } from '@stellar-beacon/api-client'
 
 const props = withDefaults(defineProps<{
   src?: string

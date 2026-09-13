@@ -117,7 +117,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, isHttpUrl, plainText } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminTalk } from '@benetnasch/api-contract'
+import type { AdminTalk } from '@stellar-beacon/api-contract'
 
 // `commentCount` is intentionally absent: the admin talk DTO does not expose it
 // yet, so the column would always render an empty cell.

@@ -4,18 +4,18 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: benetnasch
+      POSTGRES_DB: stellar_beacon
       PGDATA: /var/lib/postgresql/data/pgdata
       TZ: Asia/Shanghai
     volumes:
       - integration-postgres-data:/var/lib/postgresql/data
-      - ./deploy/db/init/001-benetnasch.sql:/docker-entrypoint-initdb.d/001-benetnasch.sql:ro
+      - ./deploy/db/init/001-stellar-beacon.sql:/docker-entrypoint-initdb.d/001-stellar-beacon.sql:ro
       - ./deploy/db/integration/002-repair-sequences.sql:/docker-entrypoint-initdb.d/002-repair-sequences.sql:ro
       - ./deploy/db/integration/003-admin-next.sql:/docker-entrypoint-initdb.d/003-admin-next.sql:ro
     ports:
       - "15432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d benetnasch"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d stellar_beacon"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -66,7 +66,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      BENETNASCH_ENV: integration
+      STELLAR_BEACON_ENV: integration
       JWT_ALLOW_EPHEMERAL: "true"
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -101,7 +101,16 @@ services:
         condition: service_started
 
 volumes:
+  # Keep V17 data in place; old project containers remain available for rollback.
   integration-postgres-data:
+    external: true
+    name: stellar-beacon-integration-v17_integration-postgres-data
   integration-redis-data:
+    external: true
+    name: stellar-beacon-integration-v17_integration-redis-data
   integration-meili-data:
+    external: true
+    name: stellar-beacon-integration-v17_integration-meili-data
   integration-minio-data:
+    external: true
+    name: stellar-beacon-integration-v17_integration-minio-data

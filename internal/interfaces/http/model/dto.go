@@ -1,9 +1,9 @@
 package model
 
 import (
-	"benetnasch/internal/domain/port"
 	"container/list"
 	"encoding/json"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"time"
 )
 
@@ -29,7 +29,7 @@ type ArticleRankDTO struct {
 type ArticleSearchDTO = port.ArticleSearch
 type ArticleStatisticsDTO = port.ArticleStatistics
 
-type BenetnaschAdminInfoDTO struct {
+type StellarBeaconAdminInfoDTO struct {
 	ViewsCount            int       `json:"viewsCount"`
 	MessageCount          int64     `json:"messageCount"`
 	UserCount             int64     `json:"userCount"`
@@ -41,7 +41,7 @@ type BenetnaschAdminInfoDTO struct {
 	ArticleRankDTOs       list.List `json:"articleRankDTOs"`
 }
 
-type BenetnaschBackInfoDTO struct {
+type StellarBeaconBackInfoDTO struct {
 	ViewsCount            int                    `json:"viewsCount"`
 	MessageCount          int                    `json:"messageCount"`
 	UserCount             int                    `json:"userCount"`
@@ -107,7 +107,7 @@ type MediaAssetDTO struct {
 	Deletable    bool      `json:"deletable"`
 }
 
-type BenetnaschHomeInfoDTO struct {
+type StellarBeaconHomeInfoDTO struct {
 	ArticleCount    int64            `json:"articleCount"`
 	TalkCount       int64            `json:"talkCount"`
 	CategoryCount   int64            `json:"categoryCount"`

@@ -10,7 +10,7 @@
       <div class="admin-brand">
         <BrandMark />
         <span class="admin-brand-text">
-          <span class="admin-brand-name">Benetnasch</span>
+          <span class="admin-brand-name">星际信标</span>
           <span class="admin-brand-tagline">Editorial Admin</span>
         </span>
       </div>
@@ -186,7 +186,8 @@ const auth = useAuthStore()
 const menuStore = useMenuStore()
 const themeStore = useThemeStore()
 
-const STORAGE_KEY = 'benetnasch.admin.sider-collapsed'
+const STORAGE_KEY = 'stellar-beacon.admin.sider-collapsed'
+const LEGACY_STORAGE_KEY = 'benetnasch.admin.sider-collapsed'
 const collapsed = ref(readCollapsed())
 const paletteVisible = ref(false)
 
@@ -254,7 +255,12 @@ function singleWrapper(menu: NormalizedMenu): boolean {
 
 function readCollapsed(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) === '1'
+    let value = localStorage.getItem(STORAGE_KEY)
+    if (value === null) {
+      value = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (value !== null) localStorage.setItem(STORAGE_KEY, value)
+    }
+    return value === '1'
   } catch {
     return false
   }

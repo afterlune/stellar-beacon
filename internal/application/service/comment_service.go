@@ -1,12 +1,12 @@
 package service
 
 import (
-	"benetnasch/internal/domain/entity"
-	apperrors "benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/interfaces/http/model"
 	"container/list"
 	"context"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +24,7 @@ type CommentService interface {
 
 type MyCommentService struct {
 	repo    port.CommentRepository
-	website BenetnaschInfoService
+	website StellarBeaconInfoService
 }
 
 func NewCommentService(deps CommentServiceDeps) (*MyCommentService, error) {
@@ -38,7 +38,7 @@ func (c *MyCommentService) commentRepository() port.CommentRepository {
 	return c.repo
 }
 
-func (c *MyCommentService) websiteService() BenetnaschInfoService {
+func (c *MyCommentService) websiteService() StellarBeaconInfoService {
 	return c.website
 }
 

@@ -1,5 +1,5 @@
 {
-  "name": "@benetnasch/admin-next",
+  "name": "@stellar-beacon/admin-next",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@arco-design/web-vue": "^2.57.0",
-    "@benetnasch/api-client": "0.1.0",
-    "@benetnasch/api-contract": "0.1.0",
+    "@stellar-beacon/api-client": "0.1.0",
+    "@stellar-beacon/api-contract": "0.1.0",
     "axios": "^1.20.0",
     "echarts": "^6.1.0",
     "pinia": "^2.3.1",

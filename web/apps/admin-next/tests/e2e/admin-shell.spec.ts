@@ -19,15 +19,15 @@ let jobGroupsRequested = false
 let jobLogGroupsRequested = false
 
 const defaultWebsiteConfig = {
-  name: 'Benetnasch',
-  englishName: 'Benetnasch',
+  name: '星际信标',
+  englishName: 'Stellar Beacon',
   author: '测试作者',
   logo: 'https://example.com/logo.png',
   github: 'https://github.com/example',
   gitee: 'https://gitee.com/example',
-  notice: '欢迎来到 Benetnasch'
+  notice: '欢迎来到星际信标'
 }
-const defaultAboutContent = '关于 Benetnasch 的介绍'
+const defaultAboutContent = '关于星际信标的介绍'
 let websiteConfig = { ...defaultWebsiteConfig }
 let aboutContent = defaultAboutContent
 let profile = { nickname: '测试管理员', intro: '保持公开资料边界', website: 'https://example.com/admin' }
@@ -868,25 +868,25 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await expect(aboutMain.getByText('关于我')).toBeVisible()
   const aboutTextarea = aboutMain.locator('textarea')
   await expect(aboutTextarea).toHaveValue(defaultAboutContent)
-  await aboutTextarea.fill('关于 Benetnasch 的 E2E 更新')
+  await aboutTextarea.fill('关于星际信标的 E2E 更新')
   await aboutMain.getByRole('button', { name: '保存', exact: true }).click()
   await expect.poll(() => aboutUpdatedCalled).toBe(true)
   aboutUpdatedCalled = false
   await page.reload()
-  await expect(aboutMain.locator('textarea')).toHaveValue('关于 Benetnasch 的 E2E 更新')
+  await expect(aboutMain.locator('textarea')).toHaveValue('关于星际信标的 E2E 更新')
 
   await page.getByText('网站管理').click()
   await expect(page).toHaveURL(/\/website$/)
   const websiteMain = page.getByRole('main')
   await expect(websiteMain.getByText('网站配置')).toBeVisible()
-  await expect(websiteMain.locator('input').nth(0)).toHaveValue('Benetnasch')
-  await expect(websiteMain.locator('textarea')).toHaveValue('欢迎来到 Benetnasch')
-  await websiteMain.locator('input').nth(0).fill('Benetnasch E2E')
+  await expect(websiteMain.locator('input').nth(0)).toHaveValue('星际信标')
+  await expect(websiteMain.locator('textarea')).toHaveValue('欢迎来到星际信标')
+  await websiteMain.locator('input').nth(0).fill('星际信标 E2E')
   await websiteMain.getByRole('button', { name: '保存', exact: true }).click()
   await expect.poll(() => websiteConfigUpdatedCalled).toBe(true)
   websiteConfigUpdatedCalled = false
   await page.reload()
-  await expect(websiteMain.locator('input').nth(0)).toHaveValue('Benetnasch E2E')
+  await expect(websiteMain.locator('input').nth(0)).toHaveValue('星际信标 E2E')
 
   await page.getByText('个人中心').click()
   await expect(page).toHaveURL(/\/setting$/)
@@ -903,7 +903,7 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await expect.poll(() => profileUpdatedCalled).toBe(true)
   // 等待前端把更新写回 sessionStorage 后再 reload，避免与 mock 响应之间的竞态
   await expect.poll(() => page.evaluate(() => {
-    const raw = sessionStorage.getItem('benetnasch.admin.user')
+    const raw = sessionStorage.getItem('stellar-beacon.admin.user')
     if (!raw) return false
     try { return (JSON.parse(raw) as { nickname?: string }).nickname === '测试管理员 E2E' } catch { return false }
   })).toBe(true)
@@ -998,6 +998,31 @@ test('keeps a direct unknown route on an explicit 404 page', async ({ page }) =>
   await page.goto('/unknown-page')
   await expect(page.getByText('页面不存在')).toBeVisible()
   expect(pageErrors()).toEqual([])
+})
+
+test('migrates legacy-branded browser preferences', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('benetnasch.admin.theme', 'light')
+    localStorage.setItem('benetnasch.admin.sider-collapsed', '1')
+    localStorage.setItem('benetnasch.admin.table.article-list', JSON.stringify({ pageSize: 25, hiddenColumns: [] }))
+    sessionStorage.setItem('token', 'e2e-token')
+    sessionStorage.setItem('benetnasch.admin.user', JSON.stringify({ username: 'legacy-admin', nickname: '旧会话' }))
+  })
+
+  await page.goto('/article-list')
+  await expect(page.locator('.admin-shell')).toBeVisible()
+  await expect(page.getByRole('main').getByText('文章列表')).toBeVisible()
+
+  const migrated = await page.evaluate(() => ({
+    theme: localStorage.getItem('stellar-beacon.admin.theme'),
+    collapsed: localStorage.getItem('stellar-beacon.admin.sider-collapsed'),
+    table: localStorage.getItem('stellar-beacon.admin.table.article-list'),
+    user: sessionStorage.getItem('stellar-beacon.admin.user')
+  }))
+  expect(migrated.theme).toBe('light')
+  expect(migrated.collapsed).toBe('1')
+  expect(migrated.table).toBe(JSON.stringify({ pageSize: 25, hiddenColumns: [] }))
+  expect(JSON.parse(migrated.user || '{}').nickname).toBe('旧会话')
 })
 
 test('explains when an authenticated account has no visible menu', async ({ page }) => {

@@ -1,8 +1,8 @@
 package service
 
 import (
-	apperrors "benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 )
 
 // ArticleServiceDeps contains every dependency required by the article use
@@ -15,8 +15,8 @@ type ArticleServiceDeps struct {
 	Search  port.ArticleSearcher
 }
 
-// BenetnaschInfoServiceDeps contains the site-information use-case ports.
-type BenetnaschInfoServiceDeps struct {
+// StellarBeaconInfoServiceDeps contains the site-information use-case ports.
+type StellarBeaconInfoServiceDeps struct {
 	Site       port.SiteInfoRepository
 	Articles   port.ArticleRepository
 	Categories port.CategoryRepository
@@ -36,7 +36,7 @@ type UserInfoServiceDeps struct {
 // collaborator.
 type CommentServiceDeps struct {
 	Repo    port.CommentRepository
-	Website BenetnaschInfoService
+	Website StellarBeaconInfoService
 }
 
 // PhotoAlbumServiceDeps contains the album repository, photo repository and
@@ -67,7 +67,7 @@ type TalkServiceDeps struct {
 // account-protection flows.
 type UserAuthServiceDeps struct {
 	Repo    port.AuthRepository
-	Website BenetnaschInfoService
+	Website StellarBeaconInfoService
 	Cache   port.Cache
 	Mailer  port.Mailer
 	Visitor port.VisitorResolver
@@ -93,24 +93,24 @@ func (d ArticleServiceDeps) validate() error {
 	return nil
 }
 
-func (d BenetnaschInfoServiceDeps) validate() error {
+func (d StellarBeaconInfoServiceDeps) validate() error {
 	if d.Site == nil {
-		return missingServiceDependency("benetnasch_info", "site repository")
+		return missingServiceDependency("stellar_beacon_info", "site repository")
 	}
 	if d.Articles == nil {
-		return missingServiceDependency("benetnasch_info", "article repository")
+		return missingServiceDependency("stellar_beacon_info", "article repository")
 	}
 	if d.Categories == nil {
-		return missingServiceDependency("benetnasch_info", "category repository")
+		return missingServiceDependency("stellar_beacon_info", "category repository")
 	}
 	if d.Tags == nil {
-		return missingServiceDependency("benetnasch_info", "tag repository")
+		return missingServiceDependency("stellar_beacon_info", "tag repository")
 	}
 	if d.Cache == nil {
-		return missingServiceDependency("benetnasch_info", "cache")
+		return missingServiceDependency("stellar_beacon_info", "cache")
 	}
 	if d.Visitor == nil {
-		return missingServiceDependency("benetnasch_info", "visitor")
+		return missingServiceDependency("stellar_beacon_info", "visitor")
 	}
 	return nil
 }

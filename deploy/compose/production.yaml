@@ -1,6 +1,6 @@
 services:
-  benetnasch:
-    image: benetnasch:latest
+  stellar-beacon:
+    image: stellar-beacon:latest
     container_name: demo-user
     ports:
       - '7777:7777'
@@ -18,8 +18,8 @@ services:
       - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY:?JWT_PRIVATE_KEY is required}
       - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:?JWT_PUBLIC_KEY is required}
       - JWT_ALLOW_EPHEMERAL=false
-      - BENETNASCH_RESOURCE_DIR=/app/resources
-      - BENETNASCH_CONFIG_DIR=/app/config
+      - STELLAR_BEACON_RESOURCE_DIR=/app/resources
+      - STELLAR_BEACON_CONFIG_DIR=/app/config
     restart: always
   postgresql:
     image: postgres:16.15-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825

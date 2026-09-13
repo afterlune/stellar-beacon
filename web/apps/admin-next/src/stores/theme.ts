@@ -3,7 +3,8 @@ import { defineStore } from 'pinia'
 
 export type Theme = 'dark' | 'light'
 
-const STORAGE_KEY = 'benetnasch.admin.theme'
+const STORAGE_KEY = 'stellar-beacon.admin.theme'
+const LEGACY_STORAGE_KEY = 'benetnasch.admin.theme'
 
 export const useThemeStore = defineStore('admin-theme', () => {
   const theme = ref<Theme>(readTheme())
@@ -23,7 +24,12 @@ export const useThemeStore = defineStore('admin-theme', () => {
 
 function readTheme(): Theme {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : 'dark'
+    let value = localStorage.getItem(STORAGE_KEY)
+    if (value === null) {
+      value = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (value !== null) localStorage.setItem(STORAGE_KEY, value)
+    }
+    return value === 'light' ? 'light' : 'dark'
   } catch {
     return 'dark'
   }

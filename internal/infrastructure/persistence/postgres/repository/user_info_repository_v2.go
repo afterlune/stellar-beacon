@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"benetnasch/internal/domain/entity"
-	apperrors "benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
 	"context"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 
 	"xorm.io/xorm"
 )

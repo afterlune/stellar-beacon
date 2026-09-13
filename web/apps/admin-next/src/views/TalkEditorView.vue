@@ -3,7 +3,7 @@
     <AdminPageHeader
       :title="isEditing ? '编辑说说' : '发布说说'"
       :description="isEditing ? '设置说说内容、图片和可见范围。' : '发布短动态和图片。'"
-      eyebrow="BENETNASCH / 说说" />
+      eyebrow="STELLAR BEACON / 说说" />
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
       <a-spin v-if="!editorReady" class="talk-editor-loading" tip="正在加载说说…" />

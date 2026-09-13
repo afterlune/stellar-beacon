@@ -1,9 +1,9 @@
 package service
 
 import (
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/interfaces/http/model"
 	"context"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"io"
 	"net/http"
 	"testing"
@@ -79,34 +79,34 @@ func (fakeServiceVisitor) Resolve(context.Context, *http.Request) (port.VisitorI
 	return port.VisitorIdentity{}, nil
 }
 
-type fakeBenetnaschInfoService struct{}
+type fakeStellarBeaconInfoService struct{}
 
-func (fakeBenetnaschInfoService) Report(*http.Request) model.ResultVO { return model.ResultOk() }
-func (fakeBenetnaschInfoService) GetBlogHomeInfo(context.Context) model.ResultVO {
+func (fakeStellarBeaconInfoService) Report(*http.Request) model.ResultVO { return model.ResultOk() }
+func (fakeStellarBeaconInfoService) GetBlogHomeInfo(context.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) GetWebsiteConfig(context.Context) model.ResultVO {
+func (fakeStellarBeaconInfoService) GetWebsiteConfig(context.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) GetBlogBackInfo(context.Context) model.ResultVO {
+func (fakeStellarBeaconInfoService) GetBlogBackInfo(context.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) GetDashboardAnalytics(context.Context, string, string) model.ResultVO {
+func (fakeStellarBeaconInfoService) GetDashboardAnalytics(context.Context, string, string) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) UpdateWebsiteConfig(*gin.Context) model.ResultVO {
+func (fakeStellarBeaconInfoService) UpdateWebsiteConfig(*gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) GetAbout(context.Context) model.ResultVO {
+func (fakeStellarBeaconInfoService) GetAbout(context.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) UpdateAbout(*gin.Context) model.ResultVO {
+func (fakeStellarBeaconInfoService) UpdateAbout(*gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) SaveBlogPhotoAlbumCover(*gin.Context) model.ResultVO {
+func (fakeStellarBeaconInfoService) SaveBlogPhotoAlbumCover(*gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeBenetnaschInfoService) listArticleRank(context.Context, map[string]float64) ([]model.ArticleRankDTO, error) {
+func (fakeStellarBeaconInfoService) listArticleRank(context.Context, map[string]float64) ([]model.ArticleRankDTO, error) {
 	return nil, nil
 }
 
@@ -131,7 +131,7 @@ func mustCommentService(t *testing.T, repo port.CommentRepository) *MyCommentSer
 	t.Helper()
 	service, err := NewCommentService(CommentServiceDeps{
 		Repo:    repo,
-		Website: fakeBenetnaschInfoService{},
+		Website: fakeStellarBeaconInfoService{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func mustUserAuthService(t *testing.T, repo port.AuthRepository) *MyUserAuthServ
 	t.Helper()
 	service, err := NewUserAuthService(UserAuthServiceDeps{
 		Repo:    repo,
-		Website: fakeBenetnaschInfoService{},
+		Website: fakeStellarBeaconInfoService{},
 		Cache:   fakeServiceCache{},
 		Mailer:  fakeServiceMailer{},
 		Visitor: fakeServiceVisitor{},

@@ -1,7 +1,7 @@
 package port
 
 import (
-	"benetnasch/internal/domain/entity"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	"time"
 )
 

@@ -1,10 +1,10 @@
 package service
 
 import (
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/interfaces/http/model"
 	"context"
 	"errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -16,7 +16,7 @@ import (
 	"github.com/goccy/go-json"
 )
 
-type BenetnaschInfoService interface {
+type StellarBeaconInfoService interface {
 	Report(req *http.Request) model.ResultVO
 	GetBlogHomeInfo(ctx context.Context) model.ResultVO
 	GetWebsiteConfig(ctx context.Context) model.ResultVO
@@ -29,7 +29,7 @@ type BenetnaschInfoService interface {
 	listArticleRank(ctx context.Context, hm map[string]float64) ([]model.ArticleRankDTO, error)
 }
 
-type MyBenetnaschInfoService struct {
+type MyStellarBeaconInfoService struct {
 	site       port.SiteInfoRepository
 	articles   port.ArticleRepository
 	categories port.CategoryRepository
@@ -38,11 +38,11 @@ type MyBenetnaschInfoService struct {
 	visitor    port.VisitorResolver
 }
 
-func NewBenetnaschInfoService(deps BenetnaschInfoServiceDeps) (*MyBenetnaschInfoService, error) {
+func NewStellarBeaconInfoService(deps StellarBeaconInfoServiceDeps) (*MyStellarBeaconInfoService, error) {
 	if err := deps.validate(); err != nil {
 		return nil, err
 	}
-	return &MyBenetnaschInfoService{
+	return &MyStellarBeaconInfoService{
 		site:       deps.Site,
 		articles:   deps.Articles,
 		categories: deps.Categories,
@@ -52,23 +52,23 @@ func NewBenetnaschInfoService(deps BenetnaschInfoServiceDeps) (*MyBenetnaschInfo
 	}, nil
 }
 
-func (b *MyBenetnaschInfoService) siteRepository() port.SiteInfoRepository {
+func (b *MyStellarBeaconInfoService) siteRepository() port.SiteInfoRepository {
 	return b.site
 }
 
-func (b *MyBenetnaschInfoService) articleRepository() port.ArticleRepository {
+func (b *MyStellarBeaconInfoService) articleRepository() port.ArticleRepository {
 	return b.articles
 }
 
-func (b *MyBenetnaschInfoService) categoryRepository() port.CategoryRepository {
+func (b *MyStellarBeaconInfoService) categoryRepository() port.CategoryRepository {
 	return b.categories
 }
 
-func (b *MyBenetnaschInfoService) tagRepository() port.TagRepository {
+func (b *MyStellarBeaconInfoService) tagRepository() port.TagRepository {
 	return b.tags
 }
 
-func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
+func (b *MyStellarBeaconInfoService) Report(req *http.Request) model.ResultVO {
 	if b.cache == nil || b.visitor == nil {
 		return model.ResultFail()
 	}
@@ -124,7 +124,7 @@ func (b *MyBenetnaschInfoService) Report(req *http.Request) model.ResultVO {
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) GetBlogHomeInfo(ctx context.Context) model.ResultVO {
+func (b *MyStellarBeaconInfoService) GetBlogHomeInfo(ctx context.Context) model.ResultVO {
 	articles, err := b.siteRepository().CountArticles(ctx)
 	if err != nil {
 		return model.ResultFromError(err)
@@ -160,13 +160,13 @@ func (b *MyBenetnaschInfoService) GetBlogHomeInfo(ctx context.Context) model.Res
 	if !ok {
 		return model.ResultFail()
 	}
-	return model.ResultOkWithData(model.BenetnaschHomeInfoDTO{
+	return model.ResultOkWithData(model.StellarBeaconHomeInfoDTO{
 		ArticleCount: articles, CategoryCount: categories, TagCount: tags,
 		TalkCount: talks, ViewCount: views, WebsiteConfigDT: websiteConfig,
 	})
 }
 
-func (b *MyBenetnaschInfoService) GetWebsiteConfig(ctx context.Context) model.ResultVO {
+func (b *MyStellarBeaconInfoService) GetWebsiteConfig(ctx context.Context) model.ResultVO {
 	var configDTO model.WebsiteConfigDTO
 	var err error
 	config := ""
@@ -195,7 +195,7 @@ func (b *MyBenetnaschInfoService) GetWebsiteConfig(ctx context.Context) model.Re
 	return model.ResultOkWithData(configDTO)
 }
 
-func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.ResultVO {
+func (b *MyStellarBeaconInfoService) GetBlogBackInfo(ctx context.Context) model.ResultVO {
 	var err error
 	viewCount := "0"
 	if b.cache != nil {
@@ -250,7 +250,7 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.Res
 			articleMap = map[string]float64{}
 		}
 	}
-	data := model.BenetnaschBackInfoDTO{
+	data := model.StellarBeaconBackInfoDTO{
 		ArticleStatisticsDTOs: articleStatistics,
 		TagDTOs:               tagDTOs,
 		ViewsCount:            views,
@@ -269,7 +269,7 @@ func (b *MyBenetnaschInfoService) GetBlogBackInfo(ctx context.Context) model.Res
 	return model.ResultOkWithData(data)
 }
 
-func (b *MyBenetnaschInfoService) GetDashboardAnalytics(ctx context.Context, rangeValue, areaType string) model.ResultVO {
+func (b *MyStellarBeaconInfoService) GetDashboardAnalytics(ctx context.Context, rangeValue, areaType string) model.ResultVO {
 	if rangeValue != "30d" && rangeValue != "12m" {
 		rangeValue = "7d"
 	}
@@ -398,7 +398,7 @@ func (b *MyBenetnaschInfoService) GetDashboardAnalytics(ctx context.Context, ran
 	})
 }
 
-func (b *MyBenetnaschInfoService) dailyViews(ctx context.Context, day string, fallback int) int {
+func (b *MyStellarBeaconInfoService) dailyViews(ctx context.Context, day string, fallback int) int {
 	if raw, err := b.cache.Get(ctx, DailyViewsPrefix+day); err == nil {
 		value, parseErr := strconv.Atoi(raw)
 		if parseErr == nil {
@@ -408,7 +408,7 @@ func (b *MyBenetnaschInfoService) dailyViews(ctx context.Context, day string, fa
 	return fallback
 }
 
-func (b *MyBenetnaschInfoService) dashboardRegions(ctx context.Context, areaType string) []model.DashboardRegionDTO {
+func (b *MyStellarBeaconInfoService) dashboardRegions(ctx context.Context, areaType string) []model.DashboardRegionDTO {
 	if areaType != "visitors" {
 		areaType = "users"
 	}
@@ -465,7 +465,7 @@ func regionDTO(name, label string, value int64) model.DashboardRegionDTO {
 	return model.DashboardRegionDTO{Name: name, Label: label, Code: code, Value: value}
 }
 
-func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.ResultVO {
+func (b *MyStellarBeaconInfoService) UpdateWebsiteConfig(c *gin.Context) model.ResultVO {
 	var vo model.WebsiteConfigVO
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
@@ -485,7 +485,7 @@ func (b *MyBenetnaschInfoService) UpdateWebsiteConfig(c *gin.Context) model.Resu
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) GetAbout(ctx context.Context) model.ResultVO {
+func (b *MyStellarBeaconInfoService) GetAbout(ctx context.Context) model.ResultVO {
 	var about model.AboutDTO
 	var err error
 	content := ""
@@ -516,7 +516,7 @@ func (b *MyBenetnaschInfoService) GetAbout(ctx context.Context) model.ResultVO {
 	return model.ResultOkWithData(about)
 }
 
-func (b *MyBenetnaschInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
+func (b *MyStellarBeaconInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
 	var vo model.AboutVO
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
@@ -537,11 +537,11 @@ func (b *MyBenetnaschInfoService) UpdateAbout(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) SaveBlogPhotoAlbumCover(c *gin.Context) model.ResultVO {
+func (b *MyStellarBeaconInfoService) SaveBlogPhotoAlbumCover(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
-func (b *MyBenetnaschInfoService) listUniqueViews(ctx context.Context) ([]model.UniqueViewDTO, error) {
+func (b *MyStellarBeaconInfoService) listUniqueViews(ctx context.Context) ([]model.UniqueViewDTO, error) {
 	start := timeNow().Add(-7 * 24 * time.Hour).Format("2006-01-02")
 	end := timeNow().Format("2006-01-02")
 	views, err := b.siteRepository().ListUniqueViews(ctx, start, end)
@@ -555,7 +555,7 @@ func (b *MyBenetnaschInfoService) listUniqueViews(ctx context.Context) ([]model.
 	return result, nil
 }
 
-func (b *MyBenetnaschInfoService) listArticleRank(ctx context.Context, hm map[string]float64) ([]model.ArticleRankDTO, error) {
+func (b *MyStellarBeaconInfoService) listArticleRank(ctx context.Context, hm map[string]float64) ([]model.ArticleRankDTO, error) {
 	ids := make([]int, 0, len(hm))
 	for key := range hm {
 		id, err := strconv.Atoi(key)

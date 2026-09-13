@@ -1,4 +1,4 @@
-import type { AdminUser, UserMenu } from '@benetnasch/api-contract'
+import type { AdminUser, UserMenu } from '@stellar-beacon/api-contract'
 
 export type { AdminUser, UserMenu }
 

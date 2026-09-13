@@ -1,17 +1,17 @@
 package main
 
 import (
-	"benetnasch/internal/bootstrap"
-	"benetnasch/internal/infrastructure/config"
-	"benetnasch/internal/infrastructure/logging"
-	"benetnasch/internal/infrastructure/persistence/postgres/repository"
-	"benetnasch/internal/infrastructure/security/tls"
-	"benetnasch/internal/infrastructure/task"
-	httpapi "benetnasch/internal/interfaces/http"
-	"benetnasch/internal/interfaces/http/middleware"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/eternallyzzz/stellar-beacon/internal/bootstrap"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/logging"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/security/tls"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/task"
+	httpapi "github.com/eternallyzzz/stellar-beacon/internal/interfaces/http"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/middleware"
 	"io"
 	"log"
 	"log/slog"
@@ -28,7 +28,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "benetnasch",
+	Use:   "stellar-beacon",
 	Short: "",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := runServer(); err != nil {

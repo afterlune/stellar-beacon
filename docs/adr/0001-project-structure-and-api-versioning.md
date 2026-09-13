@@ -5,7 +5,7 @@
 
 ## 决策
 
-后端入口放在 `cmd/benetnasch`，核心代码放在 `internal`，并把 domain、application、interfaces/http、infrastructure 分开；前端统一放在 `web/apps`，可复用传输代码放在 `web/packages`；部署文件统一放在 `deploy`。
+后端入口放在 `cmd/stellar-beacon`，核心代码放在 `internal`，并把 domain、application、interfaces/http、infrastructure 分开；前端统一放在 `web/apps`，可复用传输代码放在 `web/packages`；部署文件统一放在 `deploy`。
 
 HTTP 外部入口固定为 `/api/v1/public`、`/api/v1/auth` 和 `/api/v1/admin`，旧 HTTP 路由不保留兼容别名。响应统一使用字符串 `code`、`message`、`data`，分页统一使用 `items`、`total`、`page`、`pageSize`。
 

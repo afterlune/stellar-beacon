@@ -188,7 +188,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminRole } from '@benetnasch/api-contract'
+import type { AdminRole } from '@stellar-beacon/api-contract'
 
 interface PermissionOption {
   id: number

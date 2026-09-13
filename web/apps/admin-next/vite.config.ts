@@ -20,8 +20,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@benetnasch/api-contract': fileURLToPath(new URL('../../packages/api-contract/src/index.ts', import.meta.url)),
-      '@benetnasch/api-client': fileURLToPath(new URL('../../packages/api-client/src/index.ts', import.meta.url))
+      '@stellar-beacon/api-contract': fileURLToPath(new URL('../../packages/api-contract/src/index.ts', import.meta.url)),
+      '@stellar-beacon/api-client': fileURLToPath(new URL('../../packages/api-client/src/index.ts', import.meta.url))
     }
   },
   server: {

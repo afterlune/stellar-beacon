@@ -4,12 +4,12 @@
 
 准备 Docker/Compose、PostgreSQL、Redis、Meilisearch、MinIO 和 Caddy。生产数据与容器属于发布资产，除非在明确发布窗口内，不执行重建、迁移或切换。
 
-复制 `.env.example` 为 `.env` 并填写密钥。运行时配置放在 `deploy/config/`：基础配置为 `base.yaml`，按 `BENETNASCH_ENV` 选择 `dev.yaml`、`integration.yaml` 或 `prod.yaml`。
+复制 `.env.example` 为 `.env` 并填写密钥。运行时配置放在 `deploy/config/`：基础配置为 `base.yaml`，按 `STELLAR_BEACON_ENV` 选择 `dev.yaml`、`integration.yaml` 或 `prod.yaml`。
 
 ## 构建
 
 ```shell
-docker build -t benetnasch:latest .
+docker build -t stellar-beacon:latest .
 ```
 
 前端在 workspace 根目录构建：
@@ -29,7 +29,7 @@ npm run build:admin
 - Caddy：`deploy/caddy/production.Caddyfile`
 - 运行时资源：`resources/`
 - 配置：`deploy/config/`
-- 数据库初始化：`deploy/db/init/001-benetnasch.sql`
+- 数据库初始化：`deploy/db/init/001-stellar-beacon.sql`
 
 生产 Compose 仍连接既有服务。修改数据库、Redis、搜索索引、对象存储或 Caddy 前，必须单独安排发布窗口并保留审计记录。
 

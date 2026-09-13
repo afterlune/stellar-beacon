@@ -66,7 +66,7 @@ go test -race ./...
 
 cd web && npm ci --no-audit --no-fund
 npm audit --registry=https://registry.npmjs.org
-npm run typecheck --workspace=@benetnasch/blog
+npm run typecheck --workspace=@stellar-beacon/blog
 npm run build:blog
 npm run build:admin
 ```

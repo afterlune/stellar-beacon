@@ -1,5 +1,5 @@
 {
-  "name": "@benetnasch/blog",
+  "name": "@stellar-beacon/blog",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,8 +8,8 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@benetnasch/api-client": "0.1.0",
-    "@benetnasch/api-contract": "0.1.0",
+    "@stellar-beacon/api-client": "0.1.0",
+    "@stellar-beacon/api-contract": "0.1.0",
     "@babel/runtime": "^7.29.7",
     "axios": "^1.20.0",
     "element-plus": "^2.14.5",

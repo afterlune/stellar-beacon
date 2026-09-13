@@ -1,10 +1,10 @@
 package task
 
 import (
-	"benetnasch/internal/domain/entity"
-	"benetnasch/internal/infrastructure/persistence/postgres/orm"
-	"benetnasch/internal/infrastructure/shared"
-	"benetnasch/internal/interfaces/http/model"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/shared"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"github.com/goccy/go-json"
 	"log/slog"
 	"strings"

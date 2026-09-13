@@ -1,9 +1,9 @@
 package shared
 
 import (
-	"benetnasch/internal/infrastructure/config"
 	"context"
 	"errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"log/slog"
 	"time"
 

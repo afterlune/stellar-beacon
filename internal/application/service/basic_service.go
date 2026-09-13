@@ -1,7 +1,7 @@
 package service
 
 import (
-	"benetnasch/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 )
 
 var (

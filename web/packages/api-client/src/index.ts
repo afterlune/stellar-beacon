@@ -7,7 +7,7 @@ import {
   parseResult,
   toLegacyResult,
   type ApiResponse
-} from '@benetnasch/api-contract'
+} from '@stellar-beacon/api-contract'
 
 export interface ApiClientOptions {
   baseURL?: string

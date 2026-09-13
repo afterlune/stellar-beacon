@@ -1,11 +1,11 @@
 package cache
 
 import (
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/infrastructure/config"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"time"
 
 	"github.com/redis/go-redis/v9"

@@ -113,7 +113,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminPhoto } from '@benetnasch/api-contract'
+import type { AdminPhoto } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'photo-trash'
 

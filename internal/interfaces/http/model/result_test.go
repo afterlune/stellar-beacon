@@ -1,7 +1,7 @@
 package model
 
 import (
-	apperrors "benetnasch/internal/domain/errors"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"testing"
 )
 

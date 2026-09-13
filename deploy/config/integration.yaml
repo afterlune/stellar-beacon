@@ -31,10 +31,10 @@ oss:
   provider: "minio"
   endPoint: "http://minio:9000"
   region: "us-east-1"
-  publicUrl: "https://example.invalid/removed"
+  publicUrl: "http://127.0.0.1:19000/stellar-beacon-integration"
   publicRead: true
   accessKeyID: "${MINIO_ROOT_USER}"
   accessKeySecret: "${MINIO_ROOT_PASSWORD}"
-  bucketName: "demo-user-integration"
+  bucketName: "stellar-beacon-integration"
 logger:
   env: integration

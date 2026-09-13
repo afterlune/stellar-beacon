@@ -179,7 +179,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminAlbum, AdminPhoto } from '@benetnasch/api-contract'
+import type { AdminAlbum, AdminPhoto } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'photos'
 

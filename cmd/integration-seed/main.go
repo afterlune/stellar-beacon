@@ -26,7 +26,7 @@ func main() {
 
 	host := envOr("INTEGRATION_DB_HOST", "127.0.0.1")
 	port := envOr("INTEGRATION_DB_PORT", "15432")
-	database := envOr("INTEGRATION_DB_NAME", "benetnasch")
+	database := envOr("INTEGRATION_DB_NAME", "stellar_beacon")
 	username := envOr("INTEGRATION_DB_USER", "postgres")
 	password := os.Getenv("POSTGRES_PASSWORD")
 	if password == "" {

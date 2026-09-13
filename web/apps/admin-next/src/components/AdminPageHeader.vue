@@ -21,6 +21,6 @@ withDefaults(defineProps<{
   eyebrow?: string
 }>(), {
   description: '',
-  eyebrow: 'BENETNASCH / 管理台'
+  eyebrow: 'STELLAR BEACON / 管理台'
 })
 </script>

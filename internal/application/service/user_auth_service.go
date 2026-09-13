@@ -1,14 +1,14 @@
 package service
 
 import (
-	"benetnasch/internal/domain/entity"
-	apperrors "benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/interfaces/http/model"
 	"container/list"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -35,7 +35,7 @@ type UserAuthService interface {
 
 type MyUserAuthService struct {
 	repo    port.AuthRepository
-	website BenetnaschInfoService
+	website StellarBeaconInfoService
 	cache   port.Cache
 	mailer  port.Mailer
 	visitor port.VisitorResolver
@@ -58,7 +58,7 @@ func (u *MyUserAuthService) authRepository() port.AuthRepository {
 	return u.repo
 }
 
-func (u *MyUserAuthService) websiteService() BenetnaschInfoService {
+func (u *MyUserAuthService) websiteService() StellarBeaconInfoService {
 	return u.website
 }
 

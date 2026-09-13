@@ -1,11 +1,11 @@
 <template>
   <main class="admin-login-page">
-    <section class="admin-login-layout" aria-label="Benetnasch 管理台登录">
+    <section class="admin-login-layout" aria-label="星际信标管理台登录">
       <aside class="admin-login-art">
         <div class="admin-login-art-copy">
           <div class="admin-login-brand">
             <BrandMark />
-            <span>Benetnasch 编辑台</span>
+            <span>星际信标编辑台</span>
           </div>
           <div class="admin-home-eyebrow">A QUIET PLACE TO CREATE</div>
           <h1>把博客，留在清爽的秩序里。</h1>
@@ -82,7 +82,7 @@
           <p class="admin-login-hint">
             忘记密码？请联系站点管理员在数据库或部署脚本中重置。
           </p>
-          <div class="admin-login-footer">BENETNASCH / EDITORIAL ADMIN</div>
+          <div class="admin-login-footer">STELLAR BEACON / EDITORIAL ADMIN</div>
         </div>
       </section>
     </section>

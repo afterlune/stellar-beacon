@@ -13,8 +13,8 @@ import * as echarts from 'echarts'
 export type ChartTheme = 'light' | 'dark'
 
 export const CHART_THEME_NAME: Record<ChartTheme, string> = {
-  light: 'benetnasch-light',
-  dark: 'benetnasch-dark'
+  light: 'stellar-beacon-light',
+  dark: 'stellar-beacon-dark'
 }
 
 /** 系列色板：品牌靛蓝领头，其余取自设计系统的语义色。 */

@@ -1,10 +1,10 @@
-# Benetnasch
+# 星际信标 · Stellar Beacon
 
-Benetnasch 是一个 Vue 博客前台 + Vue 管理端 + Go API 的博客系统。当前仓库采用按职责分层、按业务域组织的结构；博客前台保留原有视觉、素材和页面交互，管理端使用保留的 `admin-next`。
+星际信标（Stellar Beacon）是一个 Vue 博客前台 + Vue 管理端 + Go API 的博客系统。当前仓库采用按职责分层、按业务域组织的结构；博客前台保留原有视觉、素材和页面交互，管理端使用保留的 `admin-next`。
 
 ## 目录
 
-- `cmd/benetnasch`：生产 API 进程入口
+- `cmd/stellar-beacon`：生产 API 进程入口
 - `cmd/integration-seed`：仅供隔离联调使用的数据初始化程序
 - `internal/domain`：领域实体、端口和错误
 - `internal/application`：应用服务与业务编排
@@ -46,7 +46,7 @@ npm run build:admin
 
 ## 隔离联调
 
-联调栈使用独立 Compose 项目 `benetnasch-integration`，不会停止、重建或修改已有 PostgreSQL、Redis、Meilisearch、MinIO、Caddy 容器及其数据。
+联调栈使用 Compose 项目 `stellar-beacon-integration-v17`，复用当前 V17 的 PostgreSQL、Redis、Meilisearch、MinIO 数据卷；应用数据复制到新数据库 `stellar_beacon` 和新桶 `stellar-beacon-integration`。旧数据库 `benetnasch`、旧桶 `benetnasch-integration` 与旧容器保留作回退；生产数据库和 OSS 桶不迁移。
 
 ```powershell
 Copy-Item .env.integration.example .env.integration

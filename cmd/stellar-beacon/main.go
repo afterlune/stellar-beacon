@@ -10,7 +10,7 @@ import (
 // @contact.email  support@swagger.io
 // @license.name  Apache 2.0
 // @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
-// @Title benetnasch
+// @Title Stellar Beacon
 // @Version 1.0
 
 func main() {

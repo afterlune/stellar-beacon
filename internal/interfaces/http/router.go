@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	api "benetnasch/internal/interfaces/http/handlers"
+	api "github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/handlers"
 
 	"github.com/gin-gonic/gin"
 )

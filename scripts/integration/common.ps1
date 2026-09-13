@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:IntegrationRepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:IntegrationProject = if ([string]::IsNullOrWhiteSpace($env:INTEGRATION_COMPOSE_PROJECT)) {
-    'benetnasch-integration'
+    'stellar-beacon-integration-v17'
 } else {
     $env:INTEGRATION_COMPOSE_PROJECT
 }

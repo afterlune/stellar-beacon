@@ -1,13 +1,13 @@
 package search
 
 import (
-	"benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/infrastructure/config"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"io"
 	"net/http"
 	"strings"

@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"benetnasch/internal/interfaces/http/model"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 )
 
 func TestTokenRoundTripAndRefreshTokenStorage(t *testing.T) {

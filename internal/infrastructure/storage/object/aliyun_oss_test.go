@@ -1,9 +1,9 @@
 package oss
 
 import (
-	"benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
 	"context"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"strings"
 	"testing"
 )

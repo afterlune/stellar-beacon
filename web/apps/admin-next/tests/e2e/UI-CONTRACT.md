@@ -85,7 +85,7 @@ second checkbox (e.g. a per-row toggle) changes `locator('..')` semantics.
 | Fill values | `admin@example.com` / `password` (mocked flow); real env values in gated suites | 612-613 |
 | Post-login | `await expect(page).toHaveURL(/\/$/)` then `.admin-shell` visible, or `page.waitForURL((url) => url.pathname === '/')` | 616, 846, 861; integration-crud.spec.ts:63-64; integration-full-crud.spec.ts:65-66; integration.spec.ts:27-28 |
 | Storage | `sessionStorage.setItem('token', …)` pre-seeded by `page.addInitScript` for the 404 and read-only suites | 832; integration-readonly.spec.ts:78-80, 140-142 |
-| Storage | after login, `sessionStorage.getItem('token')` must be non-empty (integration-full-crud.spec.ts:32-33) and `sessionStorage.getItem('benetnasch.admin.user')` must hold JSON whose `nickname` equals the saved value (admin-shell.spec.ts:817-821) |
+| Storage | after login, `sessionStorage.getItem('token')` must be non-empty (integration-full-crud.spec.ts:32-33) and `sessionStorage.getItem('stellar-beacon.admin.user')` must hold JSON whose `nickname` equals the saved value (admin-shell.spec.ts:817-821) |
 
 **[verified]** live DOM: `[data-testid="login-username"]` → `SPAN.arco-input-wrapper` containing
 `<input class="arco-input …" type="text" id="admin-username">`; `[data-testid="login-password"]` → same with
@@ -94,7 +94,7 @@ second checkbox (e.g. a per-row toggle) changes `locator('..')` semantics.
 moved above a component that renders no `input` descendant.
 
 `sessionStorage` keys are hard asserts, not implementation details: `token` (integration-full-crud.spec.ts:32,
-integration-readonly.spec.ts:79) and `benetnasch.admin.user` with a `nickname` field (admin-shell.spec.ts:818-820).
+integration-readonly.spec.ts:79) and `stellar-beacon.admin.user` with a `nickname` field (admin-shell.spec.ts:818-820).
 
 ### 1.1 `/` — home inside the shell
 
@@ -422,8 +422,8 @@ containing real text content (Arco cells), and is another reason a non-`tr` tabl
 | --- | --- | --- |
 | Sider click / URL | `page.getByText('网站管理')`, `/website$` | 790-791 |
 | Main text | `websiteMain.getByText('网站配置')` visible | 793; integration-full-crud.spec.ts:276 |
-| Input ordinal **[FRAGILE]** | `websiteMain.locator('input').nth(0)` = 网站名称, asserted `Benetnasch`, refilled, re-asserted after reload | 794, 796, 801 |
-| Textarea singleton **[FRAGILE]** | `websiteMain.locator('textarea')` `toHaveValue('欢迎来到 Benetnasch')` — exactly one textarea inside `main` | 795 |
+| Input ordinal **[FRAGILE]** | `websiteMain.locator('input').nth(0)` = 网站名称, asserted `星际信标`, refilled, re-asserted after reload | 794, 796, 801 |
+| Textarea singleton **[FRAGILE]** | `websiteMain.locator('textarea')` `toHaveValue('欢迎来到星际信标')` — exactly one textarea inside `main` | 795 |
 | Save button | `websiteMain.getByRole('button', { name: '保存', exact: true })` → `PUT /api/v1/admin/site` | 797; integration-full-crud.spec.ts:280, 284 |
 | Full-CRUD variant | `main.locator('input').first()` = name; `main.getByRole('button', { name: '保存', exact: true })` | integration-full-crud.spec.ts:275-284 |
 
@@ -440,7 +440,7 @@ second textarea anywhere on these pages.
 | Filtered inputs **[FRAGILE]** | `settingMain.locator('input:not([type="file"])')`; `nth(0)` = 昵称, `nth(1)` = 个人网站 | 806, 808, 810, 811, 813, 824, 826 |
 | Textarea singleton **[FRAGILE]** | `settingMain.locator('textarea')` `toHaveValue('保持公开资料边界')`, filled, re-asserted after reload | 809, 812, 825 |
 | Save button | `settingMain.getByRole('button', { name: '保存资料', exact: true })` → `PUT /api/v1/auth/me` | 814 |
-| Storage round-trip | `sessionStorage['benetnasch.admin.user']` parsed, `nickname === '测试管理员 E2E'` | 817-821 |
+| Storage round-trip | `sessionStorage['stellar-beacon.admin.user']` parsed, `nickname === '测试管理员 E2E'` | 817-821 |
 | Full-CRUD variant | `main.locator('input')` `nth(0)`/`nth(1)` and `main.locator('textarea')` (all inside `main`) | integration-full-crud.spec.ts:308-325 |
 
 Note the difference between the two suites: admin-shell excludes `type="file"` from the input list (the avatar input
@@ -792,7 +792,7 @@ arrives, virtualization moving inputs) breaks the post-reload assertions.
    `.arco-input-wrapper.arco-input-search` structure with one non-clear `.arco-icon-hover`, `a-switch` the
    `.arco-switch` class.
 6. The three login testids, kept on the component wrappers (not on the inner `<input>`), and `sessionStorage` keys
-   `token` + `benetnasch.admin.user` (with `nickname`).
+   `token` + `stellar-beacon.admin.user` (with `nickname`).
 7. Field order and count inside every dialog and form (see F5/F6). Do not add, remove, or reorder inputs/textareas
    before the fields the tests fill, and do not introduce a second textarea into a scope that has one.
 8. Exact button labels: `新增`, `编辑`, `删除`, `移除`, `恢复`, `确定`, `保存`, `保存资料`, `通过审核`,
@@ -1046,4 +1046,3 @@ npx vue-tsc --noEmit -p apps/admin-next/tsconfig.json \
 npm run build:admin                                                         # vite build
 npm run test:admin                                                          # 6 passed / 5 skipped
 ```
-

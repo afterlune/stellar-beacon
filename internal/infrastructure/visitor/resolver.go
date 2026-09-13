@@ -1,12 +1,12 @@
 package visitor
 
 import (
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/infrastructure/config"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"io"
 	"log/slog"
 	"net"

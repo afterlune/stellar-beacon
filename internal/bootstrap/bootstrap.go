@@ -1,18 +1,18 @@
 package bootstrap
 
 import (
-	"benetnasch/internal/application/service"
-	"benetnasch/internal/domain/errors"
-	"benetnasch/internal/infrastructure/cache"
-	"benetnasch/internal/infrastructure/config"
-	"benetnasch/internal/infrastructure/mail/smtp"
-	"benetnasch/internal/infrastructure/persistence/postgres/orm"
-	"benetnasch/internal/infrastructure/persistence/postgres/repository"
-	"benetnasch/internal/infrastructure/search/meilisearch"
-	"benetnasch/internal/infrastructure/storage/object"
-	"benetnasch/internal/infrastructure/visitor"
-	"benetnasch/internal/interfaces/http/handlers"
-	"benetnasch/internal/interfaces/http/middleware"
+	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/cache"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/mail/smtp"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/search/meilisearch"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/storage/object"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/visitor"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/handlers"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/middleware"
 )
 
 // Initialize is the composition root for application services.  The only
@@ -53,7 +53,7 @@ func Initialize() error {
 	userInfo := repository.NewUserInfoRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
-	benetnasch, err := service.NewBenetnaschInfoService(service.BenetnaschInfoServiceDeps{
+	stellarBeacon, err := service.NewStellarBeaconInfoService(service.StellarBeaconInfoServiceDeps{
 		Site:       site,
 		Articles:   article,
 		Categories: category,
@@ -62,7 +62,7 @@ func Initialize() error {
 		Visitor:    visitorResolver,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.benetnasch_info", err)
+		return errors.Unavailable("bootstrap.service.stellar_beacon_info", err)
 	}
 	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
 		Repo:    article,
@@ -75,7 +75,7 @@ func Initialize() error {
 	}
 	commentService, err := service.NewCommentService(service.CommentServiceDeps{
 		Repo:    comment,
-		Website: benetnasch,
+		Website: stellarBeacon,
 	})
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.comment", err)
@@ -106,7 +106,7 @@ func Initialize() error {
 	}
 	userAuthService, err := service.NewUserAuthService(service.UserAuthServiceDeps{
 		Repo:    auth,
-		Website: benetnasch,
+		Website: stellarBeacon,
 		Cache:   redisCache,
 		Mailer:  smtpMailer,
 		Visitor: visitorResolver,
@@ -125,25 +125,25 @@ func Initialize() error {
 	mediaService := service.NewMediaService(ossStorage)
 
 	api.ConfigureServices(api.Services{
-		Article:      articleService,
-		Benetnasch:   benetnasch,
-		Category:     service.NewCategoryService(category),
-		Comment:      commentService,
-		ErrorLog:     service.NewErrorLogService(errorLog),
-		FriendLink:   service.NewFriendLinkService(friendLink),
-		JobLog:       service.NewJobLogService(jobLog),
-		Job:          service.NewJobService(job),
-		Menu:         service.NewMenuService(menu),
-		Media:        mediaService,
-		OperationLog: service.NewOperationLogService(operationLog),
-		PhotoAlbum:   photoAlbumService,
-		Photo:        photoService,
-		Resource:     service.NewResourceService(resource),
-		Role:         service.NewRoleService(role),
-		Tag:          service.NewTagService(tag),
-		Talk:         talkService,
-		UserAuth:     userAuthService,
-		UserInfo:     userInfoService,
+		Article:       articleService,
+		StellarBeacon: stellarBeacon,
+		Category:      service.NewCategoryService(category),
+		Comment:       commentService,
+		ErrorLog:      service.NewErrorLogService(errorLog),
+		FriendLink:    service.NewFriendLinkService(friendLink),
+		JobLog:        service.NewJobLogService(jobLog),
+		Job:           service.NewJobService(job),
+		Menu:          service.NewMenuService(menu),
+		Media:         mediaService,
+		OperationLog:  service.NewOperationLogService(operationLog),
+		PhotoAlbum:    photoAlbumService,
+		Photo:         photoService,
+		Resource:      service.NewResourceService(resource),
+		Role:          service.NewRoleService(role),
+		Tag:           service.NewTagService(tag),
+		Talk:          talkService,
+		UserAuth:      userAuthService,
+		UserInfo:      userInfoService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

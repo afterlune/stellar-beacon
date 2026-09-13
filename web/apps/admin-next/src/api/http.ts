@@ -1,9 +1,9 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { createApiClient } from '@benetnasch/api-client'
+import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type JobRunOutcome, type Page, type ResultVO, type UserMenu, type UserRole } from '@benetnasch/api-contract'
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type JobRunOutcome, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 
-export const AUTH_EXPIRED_EVENT = 'benetnasch-admin-auth-expired'
+export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
 
 /** `GET admin/albums/options`（服务端 `PhotoAlbumDTO`）的可用字段。 */
 export interface AdminAlbumOption {

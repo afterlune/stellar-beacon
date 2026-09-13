@@ -10,7 +10,7 @@ WORKDIR /build
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags '-w -s' -trimpath -a -o benetnasch ./cmd/benetnasch
+RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags '-w -s' -trimpath -a -o stellar-beacon ./cmd/stellar-beacon
 
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS final
 
@@ -20,7 +20,7 @@ ENV TZ="Asia/Shanghai"
 
 WORKDIR /app
 
-COPY --from=builder /build/benetnasch /app/
+COPY --from=builder /build/stellar-beacon /app/
 
 COPY ./resources /app/resources
 COPY ./deploy/config /app/config
@@ -28,9 +28,9 @@ COPY ./docs /app/docs
 
 ENV GIN_MODE=release \
     PORT=7777 \
-    BENETNASCH_RESOURCE_DIR=/app/resources \
-    BENETNASCH_CONFIG_DIR=/app/config
+    STELLAR_BEACON_RESOURCE_DIR=/app/resources \
+    STELLAR_BEACON_CONFIG_DIR=/app/config
 
 EXPOSE 7777
 
-CMD ["/app/benetnasch"]
+CMD ["/app/stellar-beacon"]

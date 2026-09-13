@@ -128,7 +128,7 @@ import { useThemeStore } from '@/stores/theme'
 import { chartSeriesColor, verticalFade, withAlpha } from '@/utils/chart-theme'
 import { formatNumber } from '@/utils/format'
 import worldMap from '@/assets/world.json'
-import type { AdminDashboardAnalytics, DashboardRange } from '@benetnasch/api-contract'
+import type { AdminDashboardAnalytics, DashboardRange } from '@stellar-beacon/api-contract'
 
 echarts.registerMap('world', worldMap as never)
 

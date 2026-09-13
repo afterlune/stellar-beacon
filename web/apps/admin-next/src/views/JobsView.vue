@@ -217,7 +217,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminJob } from '@benetnasch/api-contract'
+import type { AdminJob } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'jobs'
 

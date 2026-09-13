@@ -1,7 +1,7 @@
 package service
 
 import (
-	apperrors "benetnasch/internal/domain/errors"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"testing"
 )
 
@@ -14,8 +14,8 @@ func TestServiceConstructorsRejectMissingDependencies(t *testing.T) {
 			_, err := NewArticleService(ArticleServiceDeps{})
 			return err
 		}},
-		{name: "benetnasch info", construct: func() error {
-			_, err := NewBenetnaschInfoService(BenetnaschInfoServiceDeps{})
+		{name: "stellar beacon info", construct: func() error {
+			_, err := NewStellarBeaconInfoService(StellarBeaconInfoServiceDeps{})
 			return err
 		}},
 		{name: "user info", construct: func() error {

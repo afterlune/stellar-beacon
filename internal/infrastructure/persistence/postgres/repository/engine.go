@@ -1,8 +1,8 @@
 package repository
 
 import (
-	apperrors "benetnasch/internal/domain/errors"
 	"context"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 
 	"xorm.io/xorm"
 )

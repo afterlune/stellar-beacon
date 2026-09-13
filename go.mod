@@ -1,4 +1,4 @@
-module benetnasch
+module github.com/eternallyzzz/stellar-beacon
 
 go 1.27
 

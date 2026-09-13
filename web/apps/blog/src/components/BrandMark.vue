@@ -72,7 +72,7 @@ import { useId } from 'vue'
 
 withDefaults(defineProps<{ size?: number; label?: string }>(), {
   size: 38,
-  label: 'Benetnasch 摇光'
+  label: '星际信标 · Stellar Beacon'
 })
 
 // 每个实例一套渐变 ID，同页多枚图标互不覆盖。

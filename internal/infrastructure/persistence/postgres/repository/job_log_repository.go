@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"benetnasch/internal/infrastructure/persistence/postgres/orm"
-	"benetnasch/internal/infrastructure/persistence/postgres/query"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
 	"log/slog"
 )
 

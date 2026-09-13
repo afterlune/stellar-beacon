@@ -1,10 +1,10 @@
 package mailer
 
 import (
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/infrastructure/config"
 	"context"
 	"fmt"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"html/template"
 	"io"
 

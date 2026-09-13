@@ -117,9 +117,9 @@ const user = await signIn(context)
 await context.addInitScript(
   ([token, userJson, themeName, collapsed]) => {
     sessionStorage.setItem('token', token)
-    sessionStorage.setItem('benetnasch.admin.user', userJson)
-    localStorage.setItem('benetnasch.admin.theme', themeName)
-    localStorage.setItem('benetnasch.admin.sider-collapsed', collapsed ? '1' : '0')
+    sessionStorage.setItem('stellar-beacon.admin.user', userJson)
+    localStorage.setItem('stellar-beacon.admin.theme', themeName)
+    localStorage.setItem('stellar-beacon.admin.sider-collapsed', collapsed ? '1' : '0')
   },
   [user.token, JSON.stringify(user), theme, hasFlag('collapsed')]
 )

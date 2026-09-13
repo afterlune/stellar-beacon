@@ -1,7 +1,7 @@
 package ormInit
 
 import (
-	"benetnasch/internal/infrastructure/config"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	_ "github.com/lib/pq"
 	"log/slog"
 	"sync"

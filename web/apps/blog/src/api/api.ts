@@ -1,4 +1,4 @@
-import { createApiClient } from '@benetnasch/api-client'
+import { createApiClient } from '@stellar-beacon/api-client'
 
 // The presentation layer still reads `flag` while the shared client is being
 // adopted. The client converts the canonical server envelope at this one

@@ -145,7 +145,7 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
 import { useMenuStore } from '@/stores/menu'
 import { formatDateTime, formatNumber, initialOf } from '@/utils/format'
-import type { AdminDashboardAnalytics, AdminUser } from '@benetnasch/api-contract'
+import type { AdminDashboardAnalytics, AdminUser } from '@stellar-beacon/api-contract'
 
 const REFRESH_INTERVAL_MS = 30_000
 

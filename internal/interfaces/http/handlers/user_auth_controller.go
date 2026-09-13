@@ -1,7 +1,7 @@
 package api
 
 import (
-	"benetnasch/internal/interfaces/http/model"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )

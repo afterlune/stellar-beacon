@@ -2,9 +2,10 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { apiErrorMessage, login as loginRequest, logout as logoutRequest } from '@/api/http'
-import type { AdminUser } from '@benetnasch/api-contract'
+import type { AdminUser } from '@stellar-beacon/api-contract'
 
-const USER_KEY = 'benetnasch.admin.user'
+const USER_KEY = 'stellar-beacon.admin.user'
+const LEGACY_USER_KEY = 'benetnasch.admin.user'
 
 export const useAuthStore = defineStore('admin-auth', () => {
   const token = ref(sessionStorage.getItem('token') || '')
@@ -48,6 +49,7 @@ export const useAuthStore = defineStore('admin-auth', () => {
     user.value = null
     sessionStorage.removeItem('token')
     sessionStorage.removeItem(USER_KEY)
+    sessionStorage.removeItem(LEGACY_USER_KEY)
   }
 
   function updateUser(patch: Partial<AdminUser>): void {
@@ -60,7 +62,11 @@ export const useAuthStore = defineStore('admin-auth', () => {
 })
 
 function readUser(): AdminUser | null {
-  const raw = sessionStorage.getItem(USER_KEY)
+  let raw = sessionStorage.getItem(USER_KEY)
+  if (raw === null) {
+    raw = sessionStorage.getItem(LEGACY_USER_KEY)
+    if (raw !== null) sessionStorage.setItem(USER_KEY, raw)
+  }
   if (!raw) return null
   try {
     const value: unknown = JSON.parse(raw)

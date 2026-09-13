@@ -1,5 +1,5 @@
 {
-  "name": "@benetnasch/web",
+  "name": "@stellar-beacon/web",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -7,9 +7,9 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "build:blog": "npm run build --workspace=@benetnasch/blog",
-    "build:admin": "npm run build --workspace=@benetnasch/admin-next",
-    "test:admin": "npm run test:e2e:baseline --workspace=@benetnasch/admin-next",
-    "test:integration": "npm run test:e2e:integration --workspace=@benetnasch/admin-next"
+    "build:blog": "npm run build --workspace=@stellar-beacon/blog",
+    "build:admin": "npm run build --workspace=@stellar-beacon/admin-next",
+    "test:admin": "npm run test:e2e:baseline --workspace=@stellar-beacon/admin-next",
+    "test:integration": "npm run test:e2e:integration --workspace=@stellar-beacon/admin-next"
   }
 }

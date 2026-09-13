@@ -159,7 +159,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminAlbum } from '@benetnasch/api-contract'
+import type { AdminAlbum } from '@stellar-beacon/api-contract'
 
 const columns = [
   { title: '封面', dataIndex: 'albumCover', width: 116, slotName: 'cover' },

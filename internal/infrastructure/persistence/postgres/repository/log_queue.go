@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"benetnasch/internal/domain/entity"
 	"context"
 	"errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	"log/slog"
 	"net"
 	"sync"

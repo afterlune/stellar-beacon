@@ -2,7 +2,7 @@
   <section class="admin-page workplace-page">
     <div class="workplace-welcome">
       <div class="workplace-welcome-copy">
-        <div class="admin-page-eyebrow">BENETNASCH / WORKPLACE</div>
+        <div class="admin-page-eyebrow">STELLAR BEACON / WORKPLACE</div>
         <h2>{{ greeting }}，{{ auth.user?.nickname || auth.user?.username || '管理员' }}</h2>
         <p>常用管理入口与近 7 天访问数据。</p>
         <a-space wrap class="workplace-welcome-actions">
@@ -116,7 +116,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { chartSeriesColor, verticalFade, withAlpha } from '@/utils/chart-theme'
 import { formatDateTime, formatNumber } from '@/utils/format'
-import type { AdminDashboardAnalytics } from '@benetnasch/api-contract'
+import type { AdminDashboardAnalytics } from '@stellar-beacon/api-contract'
 
 const router = useRouter()
 const auth = useAuthStore()

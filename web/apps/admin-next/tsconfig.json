@@ -15,8 +15,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@benetnasch/api-contract": ["../../packages/api-contract/src/index.ts"],
-      "@benetnasch/api-client": ["../../packages/api-client/src/index.ts"]
+      "@stellar-beacon/api-contract": ["../../packages/api-contract/src/index.ts"],
+      "@stellar-beacon/api-client": ["../../packages/api-client/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "tests/**/*.ts", "../../packages/**/*.ts", "vite.config.ts"]

@@ -117,7 +117,7 @@ import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDate, formatFileSize } from '@/utils/format'
-import type { AdminMediaAsset } from '@benetnasch/api-contract'
+import type { AdminMediaAsset } from '@stellar-beacon/api-contract'
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 

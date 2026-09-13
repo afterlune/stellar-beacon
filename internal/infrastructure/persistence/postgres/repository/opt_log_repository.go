@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"benetnasch/internal/domain/entity"
-	"benetnasch/internal/infrastructure/persistence/postgres/orm"
 	"context"
 	"fmt"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 )
 
 func SaveOptLog(ctx context.Context, optLog entity.TOperationLog) (err error) {

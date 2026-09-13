@@ -1,4 +1,4 @@
-# Benetnasch Web Workspace
+# 星际信标前端工作区 · Stellar Beacon Web Workspace
 
 `apps/blog` 是保留原美术与交互的博客前台，`apps/admin-next` 是管理端；公共传输契约和请求客户端位于 `packages/`。
 
@@ -19,8 +19,8 @@ npm run build:admin
 ## 本地开发
 
 ```shell
-npm run serve --workspace=@benetnasch/blog
-npm run serve --workspace=@benetnasch/admin-next
+npm run serve --workspace=@stellar-beacon/blog
+npm run serve --workspace=@stellar-beacon/admin-next
 ```
 
 管理端默认使用 Vite 的 `8082` 端口；API 代理目标由 `VITE_ADMIN_API_TARGET` 或 `VITE_API_TARGET` 指定。两个应用均只请求版本化接口 `/api/v1/...`。

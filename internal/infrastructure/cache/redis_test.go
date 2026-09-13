@@ -1,9 +1,9 @@
 package cache
 
 import (
-	"benetnasch/internal/domain/port"
 	"context"
 	"errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"testing"
 	"time"
 

@@ -2,7 +2,7 @@
 Import-IntegrationEnv
 
 Wait-IntegrationHttp -Uri 'http://127.0.0.1:17700/health'
-Invoke-IntegrationCompose -Arguments @('exec', '-T', 'postgresql', 'pg_isready', '-U', 'postgres', '-d', 'benetnasch')
+Invoke-IntegrationCompose -Arguments @('exec', '-T', 'postgresql', 'pg_isready', '-U', 'postgres', '-d', 'stellar_beacon')
 
 # The dump contains historical identity sequence values.  Keep reseeding
 # idempotent when the integration volume already exists, too.
@@ -36,7 +36,7 @@ try {
 }
 
 $documents = @(
-    @{ id = 147; articleTitle = 'Integration smoke article'; articleContent = 'benetnasch integration search'; isDelete = 0; status = 1 },
+    @{ id = 147; articleTitle = 'Integration smoke article'; articleContent = 'stellar-beacon integration search'; isDelete = 0; status = 1 },
     @{ id = 152; articleTitle = 'Caddy integration article'; articleContent = 'frontend backend caddy minio'; isDelete = 0; status = 1 }
 )
 $documentsBody = $documents | ConvertTo-Json -Depth 5 -Compress

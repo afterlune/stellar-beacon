@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"benetnasch/internal/infrastructure/persistence/postgres/orm"
-	"benetnasch/internal/infrastructure/persistence/postgres/query"
-	"benetnasch/internal/interfaces/http/model"
 	"context"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
 )
 

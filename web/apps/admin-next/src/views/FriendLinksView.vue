@@ -150,7 +150,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { formatDateTime, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminFriendLink } from '@benetnasch/api-contract'
+import type { AdminFriendLink } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'friend-links'
 

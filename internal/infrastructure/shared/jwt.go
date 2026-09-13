@@ -1,13 +1,13 @@
 package shared
 
 import (
-	"benetnasch/internal/interfaces/http/model"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"os"
 	"strconv"
 	"strings"

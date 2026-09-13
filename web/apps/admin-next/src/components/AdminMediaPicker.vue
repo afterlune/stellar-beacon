@@ -69,7 +69,7 @@ import { apiErrorMessage, listAdminMedia, uploadAdminMedia } from '@/api/http'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import { formatFileSize } from '@/utils/format'
-import type { AdminMediaAsset } from '@benetnasch/api-contract'
+import type { AdminMediaAsset } from '@stellar-beacon/api-contract'
 
 const props = withDefaults(defineProps<{ modelValue: boolean; title?: string }>(), { title: '选择图片资源' })
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; select: [asset: AdminMediaAsset] }>()

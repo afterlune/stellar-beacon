@@ -1,8 +1,8 @@
 package api
 
 import (
-	"benetnasch/internal/interfaces/http/model"
 	"encoding/json"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"

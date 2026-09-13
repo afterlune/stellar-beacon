@@ -1,11 +1,11 @@
 package service
 
 import (
-	"benetnasch/internal/domain/entity"
-	apperrors "benetnasch/internal/domain/errors"
-	"benetnasch/internal/domain/port"
-	"benetnasch/internal/interfaces/http/model"
 	"container/list"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
 	"strconv"
 	"strings"

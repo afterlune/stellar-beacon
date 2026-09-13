@@ -129,10 +129,19 @@ func Validate() error {
 }
 
 func configuredEnvironment() string {
-	if env := strings.TrimSpace(os.Getenv("BENETNASCH_ENV")); env != "" {
+	if env := configuredValue("STELLAR_BEACON_ENV", "BENETNASCH_ENV"); env != "" {
 		return env
 	}
 	return viper.GetString("env")
+}
+
+// configuredValue prefers the renamed variable and accepts the former prefix
+// for deployments that have not rotated their environment yet.
+func configuredValue(name, legacyName string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return strings.TrimSpace(os.Getenv(legacyName))
 }
 
 func requiredEnvironmentVars() []string {
@@ -148,10 +157,11 @@ func requiredEnvironmentVars() []string {
 }
 
 // findDirectory locates repository assets independent of the process working
-// directory. BENETNASCH_*_DIR can point at an absolute container mount while
-// local tests use the repository defaults.
+// directory. STELLAR_BEACON_*_DIR can point at an absolute container mount;
+// the former environment prefix remains a compatibility fallback.
 func findDirectory(envName, defaultPath string) (string, bool) {
-	configured := strings.TrimSpace(os.Getenv(envName))
+	legacyEnvName := strings.Replace(envName, "STELLAR_BEACON", "BENETNASCH", 1)
+	configured := configuredValue(envName, legacyEnvName)
 	if configured != "" {
 		if !filepath.IsAbs(configured) {
 			if cwd, err := os.Getwd(); err == nil {
@@ -193,7 +203,7 @@ func findDirectory(envName, defaultPath string) (string, bool) {
 
 // findConfigFile locates a file below the configured configuration directory.
 func findConfigFile(name string) (string, bool) {
-	root, ok := findDirectory("BENETNASCH_CONFIG_DIR", filepath.Join("deploy", "config"))
+	root, ok := findDirectory("STELLAR_BEACON_CONFIG_DIR", filepath.Join("deploy", "config"))
 	if !ok {
 		return "", false
 	}
@@ -207,7 +217,7 @@ func findConfigFile(name string) (string, bool) {
 // ResourcePath resolves a path below the repository/container resources
 // directory without depending on the process working directory.
 func ResourcePath(name string) (string, error) {
-	root, ok := findDirectory("BENETNASCH_RESOURCE_DIR", "resources")
+	root, ok := findDirectory("STELLAR_BEACON_RESOURCE_DIR", "resources")
 	if !ok {
 		return "", fmt.Errorf("resources directory not found")
 	}

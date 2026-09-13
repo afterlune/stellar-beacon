@@ -1,9 +1,9 @@
 package service
 
 import (
-	"benetnasch/internal/domain/entity"
-	"benetnasch/internal/domain/port"
 	"context"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"net/http"
 	"net/http/httptest"
 	"testing"

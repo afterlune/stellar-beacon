@@ -1,6 +1,7 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 
-const STORAGE_PREFIX = 'benetnasch.admin.table.'
+const STORAGE_PREFIX = 'stellar-beacon.admin.table.'
+const LEGACY_STORAGE_PREFIX = 'benetnasch.admin.table.'
 
 interface TablePreferences {
   pageSize?: number
@@ -15,7 +16,12 @@ interface TablePreferences {
  */
 function read(viewKey: string): TablePreferences {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + viewKey)
+    const key = STORAGE_PREFIX + viewKey
+    let raw = localStorage.getItem(key)
+    if (raw === null) {
+      raw = localStorage.getItem(LEGACY_STORAGE_PREFIX + viewKey)
+      if (raw !== null) localStorage.setItem(key, raw)
+    }
     if (!raw) return {}
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return {}
