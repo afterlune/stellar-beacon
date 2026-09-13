@@ -4,7 +4,7 @@
       <aside class="admin-login-art">
         <div class="admin-login-art-copy">
           <div class="admin-login-brand">
-            <span class="admin-brand-mark" aria-hidden="true" />
+            <BrandMark />
             <span>Benetnasch 编辑台</span>
           </div>
           <div class="admin-home-eyebrow">A QUIET PLACE TO CREATE</div>
@@ -96,6 +96,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconArrowRight, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage } from '@/api/http'
+import BrandMark from '@/components/BrandMark.vue'
 import { resetMenuRoutes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'

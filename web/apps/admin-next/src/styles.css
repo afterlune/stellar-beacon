@@ -27,6 +27,15 @@
   color: var(--admin-ink);
   background: var(--admin-bg);
 
+  /* — 星空与毛玻璃 —
+     星点用内联 SVG 平铺（零请求、可无限循环），两层不同密度叠出景深。
+     浅色主题默认用墨蓝星点（白色星点在浅底上等于看不见），
+     深色主题再换成亮白星点，见第 8 节。 */
+  --admin-star-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Cg fill='%232a3557'%3E%3Ccircle cx='22' cy='31' r='.9' opacity='.5'/%3E%3Ccircle cx='78' cy='12' r='.7' opacity='.34'/%3E%3Ccircle cx='141' cy='52' r='1' opacity='.46'/%3E%3Ccircle cx='198' cy='25' r='.7' opacity='.3'/%3E%3Ccircle cx='252' cy='66' r='.9' opacity='.42'/%3E%3Ccircle cx='316' cy='38' r='.7' opacity='.32'/%3E%3Ccircle cx='44' cy='94' r='.7' opacity='.3'/%3E%3Ccircle cx='110' cy='122' r='.9' opacity='.4'/%3E%3Ccircle cx='176' cy='92' r='.7' opacity='.28'/%3E%3Ccircle cx='232' cy='136' r='1' opacity='.38'/%3E%3Ccircle cx='294' cy='108' r='.7' opacity='.3'/%3E%3Ccircle cx='28' cy='172' r='.9' opacity='.44'/%3E%3Ccircle cx='90' cy='202' r='.7' opacity='.3'/%3E%3Ccircle cx='154' cy='180' r='.9' opacity='.36'/%3E%3Ccircle cx='214' cy='222' r='.7' opacity='.28'/%3E%3Ccircle cx='272' cy='190' r='1' opacity='.4'/%3E%3Ccircle cx='334' cy='214' r='.7' opacity='.3'/%3E%3Ccircle cx='52' cy='252' r='.7' opacity='.32'/%3E%3Ccircle cx='122' cy='266' r='.9' opacity='.38'/%3E%3Ccircle cx='186' cy='248' r='.7' opacity='.26'/%3E%3Ccircle cx='244' cy='288' r='.9' opacity='.4'/%3E%3Ccircle cx='306' cy='262' r='.7' opacity='.28'/%3E%3Ccircle cx='36' cy='318' r='.9' opacity='.36'/%3E%3Ccircle cx='102' cy='338' r='.7' opacity='.3'/%3E%3Ccircle cx='168' cy='312' r='.9' opacity='.34'/%3E%3Ccircle cx='228' cy='342' r='.7' opacity='.26'/%3E%3Ccircle cx='290' cy='324' r='.9' opacity='.38'/%3E%3Ccircle cx='350' cy='300' r='.7' opacity='.3'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-star-bright: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='820' height='820'%3E%3Cg fill='%23222c4e'%3E%3Ccircle cx='118' cy='88' r='1.5' opacity='.5'/%3E%3Ccircle cx='436' cy='58' r='1.1' opacity='.34'/%3E%3Ccircle cx='678' cy='164' r='1.7' opacity='.48'/%3E%3Ccircle cx='246' cy='228' r='1.2' opacity='.38'/%3E%3Ccircle cx='572' cy='318' r='1.4' opacity='.44'/%3E%3Ccircle cx='86' cy='348' r='1.1' opacity='.32'/%3E%3Ccircle cx='338' cy='420' r='1.6' opacity='.48'/%3E%3Ccircle cx='722' cy='452' r='1.2' opacity='.34'/%3E%3Ccircle cx='172' cy='512' r='1.4' opacity='.42'/%3E%3Ccircle cx='492' cy='566' r='1.1' opacity='.32'/%3E%3Ccircle cx='296' cy='646' r='1.5' opacity='.46'/%3E%3Ccircle cx='36' cy='612' r='1.2' opacity='.32'/%3E%3Ccircle cx='644' cy='702' r='1.3' opacity='.4'/%3E%3Ccircle cx='398' cy='762' r='1.1' opacity='.34'/%3E%3Ccircle cx='128' cy='726' r='1.4' opacity='.42'/%3E%3Ccircle cx='772' cy='268' r='1.2' opacity='.34'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-glass-blur: blur(20px) saturate(150%);
+  --admin-glass-edge: inset 0 1px 0 rgb(255 255 255 / 55%);
+
   /* — 表面与文字 —（层级：bg < soft < sunken/surface） */
   --admin-bg: #f4f6fb;
   --admin-surface: #ffffff;
@@ -270,13 +279,25 @@ a:hover {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
-  background: var(--admin-bg);
+  /* 夜空：柔和的靛蓝天幕 + 两层星点。星点用 background-attachment: fixed，
+     这样滚动内容时星空不动，只有卡片在滑。 */
+  background-color: #e6ecfa;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(120% 95% at 88% -18%, rgb(140 164 255 / 46%) 0%, rgb(140 164 255 / 0%) 58%),
+    radial-gradient(105% 85% at 4% 106%, rgb(116 200 232 / 38%) 0%, rgb(116 200 232 / 0%) 56%),
+    linear-gradient(158deg, #e4eafa 0%, #dce5f8 46%, #d7e2f6 100%);
+  background-attachment: fixed, fixed, fixed, fixed, fixed;
+  background-size: 820px 820px, 360px 360px, auto, auto, auto;
 }
 
 .admin-sider {
   height: 100dvh;
   border-right: 1px solid var(--admin-border);
-  background: var(--admin-surface) !important;
+  background: rgb(255 255 255 / 56%) !important;
+  backdrop-filter: var(--admin-glass-blur);
+  box-shadow: var(--admin-glass-edge);
   transition: width var(--admin-duration) var(--admin-ease);
 }
 
@@ -354,38 +375,26 @@ a:hover {
   text-transform: uppercase;
 }
 
+/* 摇光：斗柄末星。图标本体是 SVG（components/BrandMark.vue），
+   这里只管尺寸、圆角与投影；深浅主题各有一版配色。 */
 .admin-brand-mark {
+  display: block;
   width: 32px;
   height: 32px;
   flex: 0 0 32px;
-  position: relative;
-  overflow: hidden;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #5f7ae0, #6fbfa4);
-  box-shadow: 0 6px 16px -6px rgb(79 107 216 / 55%), inset 0 1px 0 rgb(255 255 255 / 26%);
+  border-radius: 9px;
+  box-shadow: 0 6px 16px -7px rgb(79 107 216 / 48%), 0 1px 2px rgb(15 23 42 / 10%);
 }
 
-.admin-brand-mark::before,
-.admin-brand-mark::after {
-  content: "";
-  position: absolute;
-  border-radius: var(--admin-radius-pill);
-  background: rgb(255 255 255 / 44%);
-  transform: rotate(-24deg);
+.admin-sider.arco-layout-sider-collapsed .admin-brand-mark {
+  box-shadow: 0 4px 10px -5px rgb(79 107 216 / 45%);
 }
 
-.admin-brand-mark::before {
-  width: 21px;
-  height: 7px;
-  left: -2px;
-  top: 7px;
-}
-
-.admin-brand-mark::after {
-  width: 15px;
-  height: 5px;
-  right: -2px;
-  bottom: 7px;
+.admin-login-brand .admin-brand-mark {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  border-radius: 11px;
 }
 
 /* — 侧边导航滚动区 — */
@@ -724,8 +733,9 @@ a:hover {
   position: relative;
   z-index: 20;
   border-bottom: 1px solid var(--admin-border);
-  background: rgb(255 255 255 / 86%);
-  backdrop-filter: saturate(180%) blur(16px);
+  background: rgb(255 255 255 / 62%);
+  backdrop-filter: var(--admin-glass-blur);
+  box-shadow: var(--admin-glass-edge);
 }
 
 .admin-topbar-title {
@@ -2167,26 +2177,36 @@ a:hover {
   position: relative;
   overflow: hidden;
   padding: 28px;
-  background:
-    radial-gradient(circle at 8% 12%, rgb(224 230 255 / 72%) 0, transparent 26rem),
-    radial-gradient(circle at 92% 88%, rgb(215 244 233 / 66%) 0, transparent 24rem),
-    #f8faff;
+  background-color: #e8edfa;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(circle at 8% 12%, rgb(147 170 255 / 40%) 0, transparent 26rem),
+    radial-gradient(circle at 92% 88%, rgb(126 205 235 / 34%) 0, transparent 24rem);
+  background-size: 820px 820px, 360px 360px, auto, auto;
+  background-repeat: repeat, repeat, no-repeat, no-repeat;
+  background-attachment: fixed, fixed, fixed, fixed;
 }
 
 .admin-login-page::before,
 .admin-login-page::after {
   content: "";
   position: absolute;
-  border: 1px solid rgb(79 107 216 / 10%);
-  border-radius: 50%;
   pointer-events: none;
 }
 
+/* 北斗七星：斗柄末端的摇光被点亮成品牌色。
+   用 background-image 而不是 <svg>：尺寸随页面线性缩放，且不占 DOM。 */
 .admin-login-page::before {
-  width: 430px;
-  height: 430px;
-  top: -220px;
-  right: -120px;
+  width: min(40vw, 460px);
+  height: min(32vw, 372px);
+  bottom: 12%;
+  right: 0;
+  opacity: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 440 356'%3E%3Cg fill='none' stroke='%2327305a' stroke-opacity='.28' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M46 244 L150 272 L248 208 L286 264 L334 244'/%3E%3Cpath d='M334 244 L400 122'/%3E%3C/g%3E%3Cg fill='%2327305a'%3E%3Ccircle cx='46' cy='244' r='3.4' opacity='.5'/%3E%3Ccircle cx='150' cy='272' r='3.4' opacity='.5'/%3E%3Ccircle cx='248' cy='208' r='3.4' opacity='.5'/%3E%3Ccircle cx='286' cy='264' r='3.4' opacity='.5'/%3E%3Ccircle cx='334' cy='244' r='3.4' opacity='.5'/%3E%3Ccircle cx='379' cy='168' r='3.4' opacity='.5'/%3E%3C/g%3E%3Cg%3E%3Ccircle cx='400' cy='122' r='30' fill='%236d4bff' opacity='.22'/%3E%3Ccircle cx='400' cy='122' r='13' fill='%236d4bff' opacity='.2'/%3E%3Ccircle cx='400' cy='122' r='8' fill='%2322d3ee' opacity='.35'/%3E%3Ccircle cx='400' cy='122' r='5' fill='%23222b52'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
 }
 
 .admin-login-page::after {
@@ -2194,7 +2214,8 @@ a:hover {
   height: 300px;
   bottom: -180px;
   left: -100px;
-  border-color: rgb(47 158 119 / 18%);
+  border: 1px solid rgb(79 107 216 / 14%);
+  border-radius: 50%;
 }
 
 .admin-login-layout {
@@ -2207,9 +2228,9 @@ a:hover {
   overflow: hidden;
   border: 1px solid var(--admin-border);
   border-radius: 24px;
-  background: rgb(255 255 255 / 88%);
-  box-shadow: 0 26px 80px -28px rgb(52 72 117 / 34%);
-  backdrop-filter: blur(14px);
+  background: rgb(255 255 255 / 52%);
+  box-shadow: 0 30px 90px -30px rgb(52 72 117 / 40%), var(--admin-glass-edge);
+  backdrop-filter: blur(26px) saturate(160%);
 }
 
 .admin-login-art {
@@ -3130,8 +3151,21 @@ a:hover {
   --color-danger-light-2: rgb(248 113 113 / 24%);
 }
 
+/* 深色主题的星点换成亮白 / 冷蓝，比浅色主题更亮更显眼。 */
+[data-theme="dark"] {
+  --admin-star-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='22' cy='31' r='.9' opacity='.5'/%3E%3Ccircle cx='78' cy='12' r='.7' opacity='.34'/%3E%3Ccircle cx='141' cy='52' r='1' opacity='.46'/%3E%3Ccircle cx='198' cy='25' r='.7' opacity='.3'/%3E%3Ccircle cx='252' cy='66' r='.9' opacity='.42'/%3E%3Ccircle cx='316' cy='38' r='.7' opacity='.32'/%3E%3Ccircle cx='44' cy='94' r='.7' opacity='.3'/%3E%3Ccircle cx='110' cy='122' r='.9' opacity='.4'/%3E%3Ccircle cx='176' cy='92' r='.7' opacity='.28'/%3E%3Ccircle cx='232' cy='136' r='1' opacity='.38'/%3E%3Ccircle cx='294' cy='108' r='.7' opacity='.3'/%3E%3Ccircle cx='28' cy='172' r='.9' opacity='.44'/%3E%3Ccircle cx='90' cy='202' r='.7' opacity='.3'/%3E%3Ccircle cx='154' cy='180' r='.9' opacity='.36'/%3E%3Ccircle cx='214' cy='222' r='.7' opacity='.28'/%3E%3Ccircle cx='272' cy='190' r='1' opacity='.4'/%3E%3Ccircle cx='334' cy='214' r='.7' opacity='.3'/%3E%3Ccircle cx='52' cy='252' r='.7' opacity='.32'/%3E%3Ccircle cx='122' cy='266' r='.9' opacity='.38'/%3E%3Ccircle cx='186' cy='248' r='.7' opacity='.26'/%3E%3Ccircle cx='244' cy='288' r='.9' opacity='.4'/%3E%3Ccircle cx='306' cy='262' r='.7' opacity='.28'/%3E%3Ccircle cx='36' cy='318' r='.9' opacity='.36'/%3E%3Ccircle cx='102' cy='338' r='.7' opacity='.3'/%3E%3Ccircle cx='168' cy='312' r='.9' opacity='.34'/%3E%3Ccircle cx='228' cy='342' r='.7' opacity='.26'/%3E%3Ccircle cx='290' cy='324' r='.9' opacity='.38'/%3E%3Ccircle cx='350' cy='300' r='.7' opacity='.3'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-star-bright: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='820' height='820'%3E%3Cg fill='%23eaf2ff'%3E%3Ccircle cx='118' cy='88' r='1.5' opacity='.9'/%3E%3Ccircle cx='436' cy='58' r='1.1' opacity='.6'/%3E%3Ccircle cx='678' cy='164' r='1.7' opacity='.85'/%3E%3Ccircle cx='246' cy='228' r='1.2' opacity='.66'/%3E%3Ccircle cx='572' cy='318' r='1.4' opacity='.76'/%3E%3Ccircle cx='86' cy='348' r='1.1' opacity='.54'/%3E%3Ccircle cx='338' cy='420' r='1.6' opacity='.84'/%3E%3Ccircle cx='722' cy='452' r='1.2' opacity='.58'/%3E%3Ccircle cx='172' cy='512' r='1.4' opacity='.7'/%3E%3Ccircle cx='492' cy='566' r='1.1' opacity='.56'/%3E%3Ccircle cx='296' cy='646' r='1.5' opacity='.8'/%3E%3Ccircle cx='36' cy='612' r='1.2' opacity='.52'/%3E%3Ccircle cx='644' cy='702' r='1.3' opacity='.66'/%3E%3Ccircle cx='398' cy='762' r='1.1' opacity='.58'/%3E%3Ccircle cx='128' cy='726' r='1.4' opacity='.7'/%3E%3Ccircle cx='772' cy='268' r='1.2' opacity='.6'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-glass-edge: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
 [data-theme="dark"] .admin-shell {
-  background: transparent;
+  background-color: #070a14;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(120% 95% at 88% -18%, rgb(109 75 255 / 26%) 0%, rgb(109 75 255 / 0%) 58%),
+    radial-gradient(105% 85% at 4% 106%, rgb(34 211 238 / 14%) 0%, rgb(34 211 238 / 0%) 56%),
+    linear-gradient(168deg, #0b1020 0%, #080b16 52%, #0a0d1a 100%);
 }
 
 [data-theme="dark"] .admin-content {
@@ -3139,12 +3173,14 @@ a:hover {
 }
 
 [data-theme="dark"] .admin-topbar {
-  border-bottom-color: rgb(29 39 64 / 90%);
-  background: rgb(7 11 20 / 78%);
+  border-bottom-color: rgb(29 39 64 / 74%);
+  background: rgb(9 13 25 / 52%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 [data-theme="dark"] .admin-sider {
-  background: rgb(14 20 36 / 90%) !important;
+  background: rgb(12 17 32 / 56%) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 [data-theme="dark"] .admin-nav-footer {
@@ -3278,7 +3314,8 @@ a:hover {
 }
 
 [data-theme="dark"] .admin-brand-mark {
-  box-shadow: 0 6px 18px -6px rgb(125 149 255 / 60%), inset 0 1px 0 rgb(255 255 255 / 14%);
+  border-radius: 9px;
+  box-shadow: 0 6px 18px -7px rgb(109 75 255 / 62%), 0 1px 2px rgb(0 0 0 / 30%);
 }
 
 [data-theme="dark"] .admin-quick-link:hover,
@@ -3329,20 +3366,9 @@ a:hover {
   animation: aurora-drift-b 34s ease-in-out infinite alternate;
 }
 
+/* 星空换成真实星点图（原来的 radial-gradient 星点太少、太规整）。 */
 [data-theme="dark"] .admin-shell::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    radial-gradient(1.5px 1.5px at 12% 24%, rgb(255 255 255 / 40%), transparent 50%),
-    radial-gradient(1px 1px at 68% 12%, rgb(255 255 255 / 30%), transparent 50%),
-    radial-gradient(1px 1px at 38% 78%, rgb(160 180 255 / 36%), transparent 50%),
-    radial-gradient(1.5px 1.5px at 82% 62%, rgb(160 200 255 / 30%), transparent 50%),
-    radial-gradient(1px 1px at 52% 44%, rgb(255 255 255 / 22%), transparent 50%);
-  background-size: 480px 480px;
-  animation: star-drift 90s linear infinite;
+  content: none;
 }
 
 [data-theme="dark"] .workplace-welcome,
@@ -3368,22 +3394,32 @@ a:hover {
 }
 
 [data-theme="dark"] .admin-login-page {
-  background:
-    radial-gradient(circle at 8% 12%, rgb(125 149 255 / 18%) 0, transparent 30rem),
-    radial-gradient(circle at 92% 88%, rgb(56 189 248 / 12%) 0, transparent 26rem),
-    #080b16;
+  background-color: #070a14;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(circle at 8% 12%, rgb(109 75 255 / 24%) 0, transparent 30rem),
+    radial-gradient(circle at 92% 88%, rgb(34 211 238 / 15%) 0, transparent 26rem);
+  background-size: 820px 820px, 360px 360px, auto, auto;
+  background-attachment: fixed, fixed, fixed, fixed;
 }
 
 [data-theme="dark"] .admin-login-layout {
   border-color: var(--admin-border);
-  background: rgb(14 19 39 / 80%);
-  box-shadow: 0 26px 80px -28px rgb(0 0 0 / 80%);
+  background: rgb(11 16 32 / 46%);
+  box-shadow: 0 30px 90px -30px rgb(0 0 0 / 84%), inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
 [data-theme="dark"] .admin-login-art {
   background:
-    radial-gradient(circle at 70% 22%, rgb(125 149 255 / 17%) 0, transparent 14rem),
-    linear-gradient(145deg, rgb(125 149 255 / 12%) 0%, rgb(14 19 39 / 68%) 55%, rgb(52 211 153 / 10%) 100%);
+    radial-gradient(circle at 70% 22%, rgb(125 149 255 / 15%) 0, transparent 14rem),
+    linear-gradient(145deg, rgb(125 149 255 / 10%) 0%, rgb(11 16 32 / 34%) 55%, rgb(52 211 153 / 8%) 100%);
+}
+
+/* 深色主题下的北斗：线更亮、摇光换成极光色。 */
+[data-theme="dark"] .admin-login-page::before {
+  opacity: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 440 356'%3E%3Cg fill='none' stroke='%23cfe0ff' stroke-opacity='.34' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M46 244 L150 272 L248 208 L286 264 L334 244'/%3E%3Cpath d='M334 244 L400 122'/%3E%3C/g%3E%3Cg fill='%23e8f1ff'%3E%3Ccircle cx='46' cy='244' r='3.4' opacity='.7'/%3E%3Ccircle cx='150' cy='272' r='3.4' opacity='.7'/%3E%3Ccircle cx='248' cy='208' r='3.4' opacity='.7'/%3E%3Ccircle cx='286' cy='264' r='3.4' opacity='.7'/%3E%3Ccircle cx='334' cy='244' r='3.4' opacity='.7'/%3E%3Ccircle cx='379' cy='168' r='3.4' opacity='.7'/%3E%3C/g%3E%3Cg%3E%3Ccircle cx='400' cy='122' r='32' fill='%23ff2d95' opacity='.32'/%3E%3Ccircle cx='400' cy='122' r='14' fill='%23a78bfa' opacity='.34'/%3E%3Ccircle cx='400' cy='122' r='8' fill='%237ff0ff' opacity='.5'/%3E%3Ccircle cx='400' cy='122' r='5' fill='%23ffffff'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 [data-theme="dark"] .admin-login-art-copy p,

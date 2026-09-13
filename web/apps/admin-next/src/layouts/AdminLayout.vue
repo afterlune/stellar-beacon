@@ -8,7 +8,7 @@
       :collapsed-width="72"
       :trigger="null">
       <div class="admin-brand">
-        <span class="admin-brand-mark" aria-hidden="true" />
+        <BrandMark />
         <span class="admin-brand-text">
           <span class="admin-brand-name">Benetnasch</span>
           <span class="admin-brand-tagline">Editorial Admin</span>
@@ -172,6 +172,7 @@ import {
 } from '@arco-design/web-vue/es/icon'
 
 import AdminCommandPalette from '@/components/AdminCommandPalette.vue'
+import BrandMark from '@/components/BrandMark.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
 import { useThemeStore } from '@/stores/theme'

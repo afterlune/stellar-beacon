@@ -12,6 +12,8 @@
         <div class="app-banner app-banner-aurora" />
         <div class="app-banner app-banner-grain" />
         <div class="app-banner app-banner-veil" />
+        <div class="app-banner app-banner-stars" />
+        <div class="app-banner app-banner-dipper" />
         <div class="app-banner-rule" />
         <div class="app-banner-spill" />
       </template>
@@ -260,6 +262,30 @@ body {
   background-image: var(--hero-veil);
 }
 
+/* Star field. Sits above the veil so the veil cannot dim it. */
+.app-banner-stars {
+  z-index: 6;
+  background-image: var(--hero-star);
+  background-size: 420px 420px;
+  background-repeat: repeat;
+  opacity: 0.9;
+}
+
+/* The Big Dipper. Alkaid, at the end of the handle, is the lit star.
+   Only the band above the content card is free, so the asterism is sized to
+   finish inside it rather than run under the card or off the top edge.
+   The radial mask keeps it from ending on a hard edge. */
+.app-banner-dipper {
+  z-index: 7;
+  background-image: var(--dipper);
+  background-repeat: no-repeat;
+  background-position: right 3% top 104px;
+  background-size: min(22vw, 196px) auto;
+  opacity: 0.94;
+  -webkit-mask-image: radial-gradient(64% 90% at 72% 74%, #000 0%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(64% 90% at 72% 74%, #000 0%, rgba(0, 0, 0, 0) 100%);
+}
+
 /* Brand divider below the banner. */
 .app-banner-rule {
   position: absolute;
@@ -298,6 +324,12 @@ body {
   .app-banner-spill {
     top: var(--banner-h-sm);
     height: 130px;
+  }
+  /* The short banner has no room for the full asterism next to the title. */
+  .app-banner-dipper {
+    background-size: min(34vw, 132px) auto;
+    background-position: right 3% top 96px;
+    opacity: 0.75;
   }
 }
 #footer {
