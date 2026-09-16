@@ -22,6 +22,9 @@ var (
 	talkService          service.TalkService              = new(service.MyTalkService)
 	userAuthService      service.UserAuthService          = new(service.MyUserAuthService)
 	userInfoService      service.UserInfoService          = new(service.MyUserInfoService)
+	seoService           service.SeoService               = new(service.MySeoService)
+	newsletterService    service.NewsletterService        = new(service.MyNewsletterService)
+	growthService        service.GrowthService            = new(service.MyGrowthService)
 )
 
 type Services struct {
@@ -44,6 +47,9 @@ type Services struct {
 	Talk          service.TalkService
 	UserAuth      service.UserAuthService
 	UserInfo      service.UserInfoService
+	Seo           service.SeoService
+	Newsletter    service.NewsletterService
+	Growth        service.GrowthService
 }
 
 func ConfigureServices(s Services) {
@@ -66,4 +72,7 @@ func ConfigureServices(s Services) {
 	talkService = s.Talk
 	userAuthService = s.UserAuth
 	userInfoService = s.UserInfo
+	seoService = s.Seo
+	newsletterService = s.Newsletter
+	growthService = s.Growth
 }

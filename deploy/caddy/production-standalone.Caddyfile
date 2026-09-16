@@ -31,6 +31,37 @@
 		reverse_proxy minio:9000
 	}
 
+	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot)
+	handle @seoCrawler {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /sitemap.xml {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+	handle /robots.txt {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+	handle /feed.xml {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
 	handle {
 		root * /srv/vue/blog
 		try_files {path} {path}/ /index.html

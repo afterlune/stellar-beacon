@@ -62,6 +62,36 @@
       </a-card>
     </div>
 
+    <a-card class="admin-panel dashboard-growth-panel" :bordered="false" :title="t('dashboard.growth.title')">
+      <template #extra>
+        <span class="admin-muted-cell">{{ t('dashboard.growth.caption') }}</span>
+      </template>
+      <div class="dashboard-growth-summary">
+        <div class="dashboard-growth-metric">
+          <span>{{ t('dashboard.growth.activeSubscribers') }}</span>
+          <strong>{{ formatNumber(analytics.growth.subscribers.active) }}</strong>
+        </div>
+        <div class="dashboard-growth-metric">
+          <span>{{ t('dashboard.growth.confirmationRate') }}</span>
+          <strong>{{ formatPercent(analytics.growth.subscribers.confirmationRate) }}</strong>
+        </div>
+        <div class="dashboard-growth-metric">
+          <span>{{ t('dashboard.growth.sentDeliveries') }}</span>
+          <strong>{{ formatNumber(analytics.growth.deliveries.sent) }}</strong>
+        </div>
+        <div class="dashboard-growth-metric">
+          <span>{{ t('dashboard.growth.failedDeliveries') }}</span>
+          <strong :class="{ 'dashboard-growth-danger': analytics.growth.deliveries.failed > 0 }">{{ formatNumber(analytics.growth.deliveries.failed) }}</strong>
+        </div>
+      </div>
+      <AdminEChart v-if="analytics.growth.trend.length" :option="growthTrendOption" height="300px" />
+      <AdminEmptyState
+        v-else
+        :icon="IconBarChart"
+        :title="t('dashboard.growth.emptyTitle')"
+        :description="t('dashboard.growth.emptyDescription')" />
+    </a-card>
+
     <div class="dashboard-grid dashboard-grid-three">
       <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.regions')">
         <template #extra>
@@ -230,6 +260,27 @@ const regionOption = computed(() => {
 const categoryOption = computed(() => distributionOption(analytics.categories))
 const tagOption = computed(() => distributionOption(analytics.tags))
 
+const growthTrendOption = computed(() => {
+  const labels = analytics.growth.trend.map((item) => (range.value === '12m' ? item.period : item.period.slice(5)))
+  const confirmColor = chartSeriesColor(themeStore.theme, 0)
+  const shareColor = chartSeriesColor(themeStore.theme, 1)
+  const sentColor = chartSeriesColor(themeStore.theme, 2)
+  const failedColor = chartSeriesColor(themeStore.theme, 3)
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { top: 0, right: 0, itemGap: 14 },
+    grid: { left: 4, right: 16, top: 34, bottom: 2, containLabel: true },
+    xAxis: { type: 'category', boundaryGap: false, data: labels, axisLabel: { hideOverlap: true } },
+    yAxis: { type: 'value', minInterval: 1 },
+    series: [
+      growthLine(t('dashboard.growth.confirmed'), confirmColor, analytics.growth.trend.map((item) => item.subscribeConfirms)),
+      growthLine(t('dashboard.growth.shares'), shareColor, analytics.growth.trend.map((item) => item.shareClicks)),
+      growthLine(t('dashboard.growth.sent'), sentColor, analytics.growth.trend.map((item) => item.deliverySent)),
+      growthLine(t('dashboard.growth.failed'), failedColor, analytics.growth.trend.map((item) => item.deliveryFailed))
+    ]
+  }
+})
+
 const regionMapData = computed(() => {
   const values = new Map<string, number>()
   for (const region of analytics.regions) {
@@ -295,6 +346,23 @@ function distributionOption(items: AdminDashboardAnalytics['categories']): Recor
   }
 }
 
+function growthLine(name: string, color: string, data: number[]): Record<string, unknown> {
+  return {
+    name,
+    type: 'line',
+    showSymbol: false,
+    smooth: true,
+    lineStyle: { width: 2, color },
+    itemStyle: { color },
+    areaStyle: { color: verticalFade(color, 0.04) },
+    data
+  }
+}
+
+function formatPercent(value: number): string {
+  return `${Number(value || 0).toFixed(1)}%`
+}
+
 function continentFor(code: string, name: string): string {
   const value = `${code} ${name}`.toLowerCase()
   if (/(cn|jp|kr|asia|中国|日本|韩国)/.test(value)) return 'Asia'
@@ -316,6 +384,11 @@ function emptyAnalytics(): AdminDashboardAnalytics {
     categories: [],
     tags: [],
     articleRank: [],
+    growth: {
+      subscribers: { total: 0, active: 0, pending: 0, unsubscribed: 0, confirmationRate: 0 },
+      deliveries: { queued: 0, sending: 0, sent: 0, failed: 0, successRate: 0 },
+      trend: []
+    },
     generatedAt: ''
   }
 }
@@ -329,5 +402,49 @@ function emptyAnalytics(): AdminDashboardAnalytics {
 .dashboard-rank-scroll {
   max-height: 330px;
   overflow-y: auto;
+}
+
+.dashboard-growth-panel {
+  margin-top: 18px;
+}
+
+.dashboard-growth-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.dashboard-growth-metric {
+  padding: 14px 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface-soft);
+}
+
+.dashboard-growth-metric span,
+.dashboard-growth-metric strong {
+  display: block;
+}
+
+.dashboard-growth-metric span {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.dashboard-growth-metric strong {
+  margin-top: 5px;
+  color: var(--admin-text);
+  font-size: 22px;
+}
+
+.dashboard-growth-danger {
+  color: var(--admin-danger) !important;
+}
+
+@media (max-width: 900px) {
+  .dashboard-growth-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

@@ -37,6 +37,7 @@
     <Feature v-if="themeConfig.feature">
       <FeatureList />
     </Feature>
+    <NewsletterSubscribe />
     <span v-if="themeConfig.feature">
       <Title id="article-list" :title="'titles.articles'" icon="article" />
     </span>
@@ -116,6 +117,8 @@ import { useI18n } from 'vue-i18n'
 import Paginator from '@/components/Paginator.vue'
 import MarkdownIt from 'markdown-it'
 import api from '@/api/api'
+import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
+import { useSeoMeta } from '@/composables/useSeoMeta'
 
 export default defineComponent({
   name: 'Home',
@@ -131,7 +134,8 @@ export default defineComponent({
     RecentComment,
     TagBox,
     Notice,
-    WebsiteInfo
+    WebsiteInfo,
+    NewsletterSubscribe
   },
   setup() {
     const appStore = useAppStore()
@@ -139,6 +143,7 @@ export default defineComponent({
     const articleStore = useArticleStore()
     const categoryStore = useCategoryStore()
     const { t } = useI18n()
+    const { setSeo } = useSeoMeta()
     const expanderClass = ref({
       'tab-expander': true,
       expanded: false
@@ -160,6 +165,11 @@ export default defineComponent({
     let nowCategoryId = 0
     const md = new MarkdownIt()
     onMounted(() => {
+      setSeo({
+        title: 'Stellar Beacon · 技术与思考',
+        description: '记录后端工程、系统实践与仍在发生的思考。',
+        canonical: window.location.href
+      })
       fetchTopAndFeatured()
       fetchCategories()
       fetchArticles()

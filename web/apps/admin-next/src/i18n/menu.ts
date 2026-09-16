@@ -76,7 +76,8 @@ const NAME_KEYS: Record<string, string> = {
   发布说说: 'talk',
   仪表盘: 'dashboard',
   工作台: 'workplace',
-  监控: 'monitor'
+  监控: 'monitor',
+  订阅与增长: 'growth'
 }
 
 /**

@@ -39,6 +39,13 @@ type Cache interface {
 	ZRangeWithScores(context.Context, string) (map[string]float64, error)
 }
 
+// RateLimiter provides short-lived counters for public actions. Keys are
+// expected to be opaque hashes; implementations must not persist them beyond
+// the configured window.
+type RateLimiter interface {
+	Allow(context.Context, string, int64, time.Duration) (bool, error)
+}
+
 // ObjectRef is the public result of an object-storage upload.
 type ObjectRef struct {
 	Key string
@@ -94,6 +101,31 @@ type EmailMessage struct {
 // Mailer sends HTML email using an infrastructure-specific provider.
 type Mailer interface {
 	SendHTML(context.Context, EmailMessage) error
+}
+
+// MailerHealthChecker is an optional operational extension. It deliberately
+// stays separate from Mailer so existing test doubles and other providers do
+// not need to implement an SMTP-specific diagnostic operation.
+type MailerHealthChecker interface {
+	Check(context.Context) MailerHealth
+}
+
+type MailerHealth struct {
+	Configured bool
+	Reachable  bool
+	Host       string
+	Port       int
+	TLS        bool
+	Auth       bool
+	CheckedAt  time.Time
+	Message    string
+}
+
+// NewsletterEnqueuer is the small collaboration needed by article
+// publication. Keeping it separate from the mailer prevents article saves
+// from depending on SMTP availability.
+type NewsletterEnqueuer interface {
+	EnqueueArticle(context.Context, int) error
 }
 
 // VisitorIdentity contains request-derived information used by rate limiting

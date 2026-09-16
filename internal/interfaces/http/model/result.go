@@ -187,6 +187,10 @@ func ResultOkWithDataAndMessage(data interface{}, message string) ResultVO {
 	}
 	return ResultVO{Flag: true, Code: code, Message: message, Data: data}
 }
+
+func ResultOkWithMessage(data interface{}, message string) ResultVO {
+	return ResultOkWithDataAndMessage(data, message)
+}
 func ResultFail() ResultVO {
 	info := ResultInfo(FAIL)
 	code, err := strconv.Atoi(info["code"])

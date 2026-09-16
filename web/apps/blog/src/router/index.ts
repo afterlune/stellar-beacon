@@ -57,6 +57,18 @@ const routes = [
     component: () => import('../views/Photos.vue')
   },
   {
+    path: '/subscribe/confirm',
+    name: 'SubscriptionConfirm',
+    component: () => import('../views/SubscriptionConfirm.vue'),
+    meta: { hideBanner: true }
+  },
+  {
+    path: '/subscribe/unsubscribe',
+    name: 'SubscriptionUnsubscribe',
+    component: () => import('../views/SubscriptionUnsubscribe.vue'),
+    meta: { hideBanner: true }
+  },
+  {
     path: '/404',
     name: '404',
     component: () => import('../views/404.vue'),

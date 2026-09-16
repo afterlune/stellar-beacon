@@ -254,3 +254,43 @@ type TWebsiteConfig struct {
 	CreateTime time.Time `xorm:"created not null comment('创建时间') DATETIME"`
 	UpdateTime time.Time `xorm:"updated comment('更新时间') DATETIME"`
 }
+
+// TNewsletterSubscriber is deliberately independent from TUserInfo. Public
+// readers can subscribe without creating an account, while existing account
+// subscriptions remain supported by the legacy user field.
+type TNewsletterSubscriber struct {
+	Id                    int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	Email                 string    `xorm:"not null unique VARCHAR(254)" json:"email"`
+	Status                string    `xorm:"not null index VARCHAR(20)" json:"status"`
+	ConfirmTokenHash      string    `xorm:"not null VARCHAR(64)"`
+	ConfirmTokenExpiresAt time.Time `xorm:"not null DATETIME"`
+	UnsubscribeTokenHash  string    `xorm:"not null VARCHAR(64)"`
+	ConfirmedAt           time.Time `xorm:"DATETIME" json:"confirmedAt"`
+	CreatedAt             time.Time `xorm:"created not null DATETIME" json:"createdAt"`
+	UpdatedAt             time.Time `xorm:"updated DATETIME" json:"updatedAt"`
+}
+
+type TNewsletterDelivery struct {
+	Id              int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	SubscriberId    int       `xorm:"not null index INTEGER" json:"subscriberId"`
+	ArticleId       int       `xorm:"not null index INTEGER" json:"articleId"`
+	Status          string    `xorm:"not null index VARCHAR(20)" json:"status"`
+	Attempts        int       `xorm:"not null INTEGER" json:"attempts"`
+	LastError       string    `xorm:"TEXT" json:"lastError"`
+	SentAt          time.Time `xorm:"DATETIME" json:"sentAt"`
+	CreatedAt       time.Time `xorm:"created not null DATETIME" json:"createdAt"`
+	UpdatedAt       time.Time `xorm:"updated DATETIME" json:"updatedAt"`
+	SubscriberEmail string    `json:"subscriberEmail"`
+	ArticleTitle    string    `json:"articleTitle"`
+}
+
+// TGrowthEvent stores only an allow-listed event, an optional article id and
+// a coarse path. It intentionally has no IP, user-agent, referrer or account
+// identifier so the first-party analytics remain privacy-friendly.
+type TGrowthEvent struct {
+	Id        int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	EventName string    `xorm:"not null index VARCHAR(32)" json:"eventName"`
+	ArticleId int       `xorm:"index INTEGER" json:"articleId"`
+	Path      string    `xorm:"VARCHAR(255)" json:"path"`
+	CreatedAt time.Time `xorm:"created not null index DATETIME" json:"createdAt"`
+}

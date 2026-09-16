@@ -9,10 +9,11 @@ import (
 // cases. Keeping the fields named prevents accidental argument reordering at
 // the composition root.
 type ArticleServiceDeps struct {
-	Repo    port.ArticleRepository
-	Cache   port.Cache
-	Storage port.ObjectStorage
-	Search  port.ArticleSearcher
+	Repo       port.ArticleRepository
+	Cache      port.Cache
+	Storage    port.ObjectStorage
+	Search     port.ArticleSearcher
+	Newsletter port.NewsletterEnqueuer
 }
 
 // StellarBeaconInfoServiceDeps contains the site-information use-case ports.
@@ -23,6 +24,8 @@ type StellarBeaconInfoServiceDeps struct {
 	Tags       port.TagRepository
 	Cache      port.Cache
 	Visitor    port.VisitorResolver
+	Newsletter port.NewsletterRepository
+	Growth     port.GrowthRepository
 }
 
 // UserInfoServiceDeps contains the user-profile use-case ports.

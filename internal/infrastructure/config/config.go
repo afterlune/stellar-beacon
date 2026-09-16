@@ -22,6 +22,7 @@ var (
 	// Verification referer host
 	Verification   string
 	AllowedOrigins []string
+	PublicSiteURL  string
 	configLoadErr  error
 	missingEnvVars = make(map[string]struct{})
 )
@@ -63,6 +64,13 @@ func init() {
 
 	Verification = viper.GetString("verification")
 	AllowedOrigins = viper.GetStringSlice("cors.allowed_origins")
+	PublicSiteURL = strings.TrimRight(viper.GetString("public.site_url"), "/")
+	if configured := strings.TrimSpace(os.Getenv("PUBLIC_SITE_URL")); configured != "" {
+		PublicSiteURL = strings.TrimRight(configured, "/")
+	}
+	if PublicSiteURL == "" {
+		PublicSiteURL = "http://127.0.0.1:18080"
+	}
 	if len(AllowedOrigins) == 0 && Verification != "" {
 		AllowedOrigins = []string{"http://" + Verification}
 	}
@@ -380,6 +388,8 @@ type Email struct {
 	Password     string
 	SmtpPort     int
 	SmtpName     string
+	TLS          bool
+	Auth         bool
 }
 
 func (e *Email) Email() *Email {
@@ -387,6 +397,8 @@ func (e *Email) Email() *Email {
 	e.Password = viper.GetString("emailSmtp.password")
 	e.SmtpPort = viper.GetInt("emailSmtp.port")
 	e.SmtpName = viper.GetString("emailSmtp.smtp")
+	e.TLS = viper.GetBool("emailSmtp.tls")
+	e.Auth = viper.GetBool("emailSmtp.auth")
 	return e
 }
 

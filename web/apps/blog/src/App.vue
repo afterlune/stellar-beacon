@@ -33,17 +33,13 @@
   <AuroraNavigator />
   <Dia v-if="!isMobile" />
   <UserCenter />
-  <teleport to="head">
-    <title>{{ title }}</title>
-  </teleport>
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onBeforeMount, onUnmounted, ref } from 'vue'
+import { computed, defineComponent, onBeforeMount, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useCommonStore } from '@/stores/common'
-import { useMetaStore } from '@/stores/meta'
 import HeaderMain from '@/components/Header/src/Header.vue'
 import Footer from '@/components/Footer.vue'
 import MobileMenu from '@/components/MobileMenu.vue'
@@ -52,6 +48,7 @@ import AuroraNavigator from '@/components/AuroraNavigator.vue'
 import UserCenter from '@/components/UserCenter.vue'
 import AmbientGrid from '@/components/AmbientGrid.vue'
 import api from './api/api'
+import { useSeoMeta } from '@/composables/useSeoMeta'
 export default defineComponent({
   name: 'App',
   components: {
@@ -66,8 +63,8 @@ export default defineComponent({
   setup() {
     const appStore = useAppStore()
     const commonStore = useCommonStore()
-    const metaStore = useMetaStore()
     const route = useRoute()
+    const { setSeo } = useSeoMeta()
     const MOBILE_WITH = 996
     const appWrapperClass = 'app-wrapper'
     const loadingBarClass = ref({
@@ -78,7 +75,9 @@ export default defineComponent({
     })
     onBeforeMount(() => {
       initialApp()
+      applyRouteSeo()
     })
+    watch(() => route.fullPath, applyRouteSeo)
     onUnmounted(() => {
       document.removeEventListener('copy', copyEventHandler)
       window.removeEventListener('resize', resizeHander)
@@ -98,6 +97,14 @@ export default defineComponent({
         appStore.categoryCount = data.data.categoryCount
         appStore.tagCount = data.data.tagCount
         appStore.websiteConfig = data.data.websiteConfigDTO
+      })
+    }
+    function applyRouteSeo(): void {
+      if (route.path.startsWith('/articles/')) return
+      setSeo({
+        title: route.path === '/' ? 'Stellar Beacon · 技术与思考' : 'Stellar Beacon · ' + String(route.name || ''),
+        description: '记录后端工程、系统实践与仍在发生的思考。',
+        canonical: window.location.href
       })
     }
     const copyEventHandler = (event: any) => {
@@ -130,7 +137,6 @@ export default defineComponent({
       }
     }
     return {
-      title: metaStore.title,
       theme: computed(() => appStore.themeConfig.theme),
       hideBanner: computed(() => route.meta.hideBanner === true),
       // The cover is a homepage treatment. Inner pages use a clear heading

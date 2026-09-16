@@ -60,6 +60,7 @@ export default {
   'nav.dashboard': 'Dashboard',
   'nav.workplace': 'Workplace',
   'nav.monitor': 'Monitoring',
+  'nav.growth': 'Subscriptions & growth',
   'nav.unknownMenu': 'Untitled menu',
 
   /** Command palette (AdminCommandPalette). */

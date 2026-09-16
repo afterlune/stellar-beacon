@@ -61,6 +61,7 @@ export default {
   'nav.dashboard': '仪表盘',
   'nav.workplace': '工作台',
   'nav.monitor': '监控',
+  'nav.growth': '订阅与增长',
   'nav.unknownMenu': '未命名菜单',
 
   /** 快速跳转面板（AdminCommandPalette）。 */

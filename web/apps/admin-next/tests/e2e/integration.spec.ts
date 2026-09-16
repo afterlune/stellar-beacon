@@ -33,6 +33,7 @@ test.describe('admin-next isolated integration', () => {
     await expect(home).toContainText('RBAC')
 
     const routes = [
+      '/growth',
       '/article-list',
       '/categories',
       '/tags',

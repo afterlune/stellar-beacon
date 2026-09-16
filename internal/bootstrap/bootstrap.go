@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/cache"
@@ -51,6 +52,8 @@ func Initialize() error {
 	talk := repository.NewTalkRepo(engine)
 	auth := repository.NewUserAuthRepo(engine)
 	userInfo := repository.NewUserInfoRepo(engine)
+	newsletterRepo := repository.NewNewsletterRepo(engine)
+	growthRepo := repository.NewGrowthRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	stellarBeacon, err := service.NewStellarBeaconInfoService(service.StellarBeaconInfoServiceDeps{
@@ -60,15 +63,32 @@ func Initialize() error {
 		Tags:       tag,
 		Cache:      redisCache,
 		Visitor:    visitorResolver,
+		Newsletter: newsletterRepo,
+		Growth:     growthRepo,
 	})
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.stellar_beacon_info", err)
 	}
+	newsletterService, err := service.NewNewsletterService(service.NewsletterServiceDeps{
+		Repo: newsletterRepo, Articles: article, Mailer: smtpMailer, Limiter: redisCache, Growth: growthRepo,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.newsletter", err)
+	}
+	growthService, err := service.NewGrowthService(service.GrowthServiceDeps{Repo: growthRepo, Limiter: redisCache})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.growth", err)
+	}
+	seoService, err := service.NewSeoService(article)
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.seo", err)
+	}
 	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
-		Repo:    article,
-		Cache:   redisCache,
-		Storage: ossStorage,
-		Search:  searcher,
+		Repo:       article,
+		Cache:      redisCache,
+		Storage:    ossStorage,
+		Search:     searcher,
+		Newsletter: newsletterService,
 	})
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.article", err)
@@ -144,8 +164,12 @@ func Initialize() error {
 		Talk:          talkService,
 		UserAuth:      userAuthService,
 		UserInfo:      userInfoService,
+		Seo:           seoService,
+		Newsletter:    newsletterService,
+		Growth:        growthService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)
+	go newsletterService.Run(context.Background())
 	return nil
 }

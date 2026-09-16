@@ -104,6 +104,22 @@
           <br />
           <ob-skeleton tag="div" :count="25" height="16px" width="100px" class="mr-2" />
         </div>
+        <div class="article-actions" v-if="article.articleTitle">
+          <span class="article-actions__label">{{ t('newsletter.share') }}</span>
+          <button type="button" @click="shareArticle">{{ navigatorShareAvailable ? t('newsletter.native') : t('newsletter.copy') }}</button>
+          <button type="button" @click="copyArticleLink">{{ t('newsletter.copy') }}</button>
+          <span v-if="shareMessage" class="article-actions__message">{{ shareMessage }}</span>
+        </div>
+        <section v-if="article.relatedArticles && article.relatedArticles.length" class="related-articles" :aria-labelledby="'related-title-' + articleId">
+          <h2 :id="'related-title-' + articleId">{{ t('newsletter.related') }}</h2>
+          <div class="related-articles__grid">
+            <router-link v-for="related in article.relatedArticles" :key="related.id" :to="'/articles/' + related.id" class="related-article">
+              <span>{{ related.categoryName || t('settings.default-category') }}</span>
+              <strong>{{ related.articleTitle }}</strong>
+            </router-link>
+          </div>
+        </section>
+        <NewsletterSubscribe />
         <div class="flex flex-col lg:flex-row justify-start items-end my-8 my-gap">
           <div class="w-full h-full self-stretch mr-0 lg:mr-4" v-if="preArticleCard">
             <SubTitle title="settings.paginator.pre" icon="arrow-left-circle" />
@@ -168,10 +184,12 @@ import api from '@/api/api'
 import markdownToHtml from '@/utils/markdown'
 import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 import { pageCount, pageRecords } from '@/utils/page'
+import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
+import { useSeoMeta } from '@/composables/useSeoMeta'
 
 export default defineComponent({
   name: 'Article',
-  components: { Sidebar, Comment, SubTitle, ArticleCard, Profile, Sticky, Navigator },
+  components: { Sidebar, Comment, SubTitle, ArticleCard, Profile, Sticky, Navigator, NewsletterSubscribe },
   setup() {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
     const commonStore = useCommonStore()
@@ -179,6 +197,7 @@ export default defineComponent({
     const route = useRoute()
     const router = useRouter()
     const { t } = useI18n()
+    const { setSeo } = useSeoMeta()
     const loading = ref(true)
     const articleRef = ref()
     const md = new MarkdownIt()
@@ -194,6 +213,8 @@ export default defineComponent({
       haveMore: false as any,
       isReload: false as any
     })
+    const shareMessage = ref('')
+    const navigatorShareAvailable = computed(() => typeof navigator !== 'undefined' && typeof navigator.share === 'function')
     const pageInfo = reactive({
       current: 1,
       size: 7
@@ -218,6 +239,7 @@ export default defineComponent({
       reactiveData.images = []
       reactiveData.preArticleCard = ''
       reactiveData.nextArticleCard = ''
+      shareMessage.value = ''
       reactiveData.articleId = to.params.articleId
       pageInfo.current = 1
       reactiveData.isReload = true
@@ -297,6 +319,21 @@ export default defineComponent({
           resolve(data.data)
         }).then((article: any) => {
           reactiveData.article = article
+          setSeo({
+            title: `${article.articleTitle} · Stellar Beacon`,
+            description: deleteHTMLTag(article.articleContent).slice(0, 180),
+            canonical: window.location.href,
+            image: article.articleCover,
+            type: 'article',
+            jsonLd: {
+              '@context': 'https://schema.org',
+              '@type': 'Article',
+              headline: article.articleTitle,
+              datePublished: article.createTime,
+              dateModified: article.updateTime,
+              mainEntityOfPage: window.location.href
+            }
+          })
           reactiveData.wordNum = Math.round(deleteHTMLTag(article.articleContent).length / 100) / 10 + 'k'
           reactiveData.readTime = Math.round(deleteHTMLTag(article.articleContent).length / 400) + 'mins'
           loading.value = false
@@ -370,6 +407,28 @@ export default defineComponent({
         top: 0
       })
     }
+    const copyArticleLink = async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href)
+        shareMessage.value = t('newsletter.copied')
+      } catch {
+        shareMessage.value = window.location.href
+      }
+      void api.trackGrowthEvent({ eventName: 'share_click', articleId: Number(reactiveData.articleId), path: window.location.pathname })
+    }
+    const shareArticle = async () => {
+      if (!navigator.share) {
+        await copyArticleLink()
+        return
+      }
+      try {
+        await navigator.share({ title: reactiveData.article.articleTitle, url: window.location.href })
+        shareMessage.value = t('newsletter.native')
+        void api.trackGrowthEvent({ eventName: 'share_click', articleId: Number(reactiveData.articleId), path: window.location.pathname })
+      } catch {
+        // A cancelled native share is not a failed page action.
+      }
+    }
     const deleteHTMLTag = (content: any) => {
       return content
         .replace(/<\/?[^>]*>/g, '')
@@ -384,7 +443,11 @@ export default defineComponent({
       handleImageError,
       avatarPlaceholder,
       loading,
-      t
+      t,
+      shareMessage,
+      navigatorShareAvailable,
+      copyArticleLink,
+      shareArticle
     }
   }
 })
@@ -484,6 +547,27 @@ export default defineComponent({
     }
   }
 }
+.article-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .65rem;
+  margin: 1.5rem 0 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--text-ob-dim) 22%, transparent);
+}
+.article-actions__label { margin-right: .35rem; font-size: .8rem; opacity: .58; }
+.article-actions button { padding: .5rem .85rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 28%, transparent); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.article-actions button:hover { border-color: var(--color-ob); color: var(--color-ob); }
+.article-actions__message { color: var(--color-ob); font-size: .82rem; }
+.related-articles { margin: 2.5rem 0; }
+.related-articles h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.45rem; }
+.related-articles__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
+.related-article { display: flex; min-height: 108px; flex-direction: column; justify-content: space-between; padding: 1rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 22%, transparent); border-radius: .9rem; color: inherit; text-decoration: none; transition: transform .2s ease, border-color .2s ease; }
+.related-article:hover { transform: translateY(-3px); border-color: var(--color-ob); }
+.related-article span { font-size: .72rem; color: var(--color-ob); text-transform: uppercase; }
+.related-article strong { line-height: 1.45; }
+@media (max-width: 800px) { .related-articles__grid { grid-template-columns: 1fr; } }
 </style>
 <style lang="scss" scoped>
 .my-gap {

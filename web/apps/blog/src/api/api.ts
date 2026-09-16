@@ -111,5 +111,17 @@ export default {
   },
   accessArticle: (params: any) => {
     return http.post('/public/articles/' + encodeURIComponent(params.articleId) + '/access', params)
+  },
+  subscribeNewsletter: (params: { email: string }) => {
+    return http.post('/public/subscriptions', params)
+  },
+  confirmNewsletter: (params: { token: string }) => {
+    return http.post('/public/subscriptions/confirm', params)
+  },
+  unsubscribeNewsletter: (params: { token: string }) => {
+    return http.post('/public/subscriptions/unsubscribe', params)
+  },
+  trackGrowthEvent: (params: { eventName: string; articleId?: number; path?: string }) => {
+    return http.post('/public/growth/events', params)
   }
 }

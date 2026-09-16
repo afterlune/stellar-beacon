@@ -94,7 +94,58 @@ type DashboardAnalyticsDTO struct {
 	Categories  []DashboardDistributionDTO `json:"categories"`
 	Tags        []DashboardDistributionDTO `json:"tags"`
 	ArticleRank []DashboardArticleRankDTO  `json:"articleRank"`
+	Growth      DashboardGrowthDTO         `json:"growth"`
 	GeneratedAt time.Time                  `json:"generatedAt"`
+}
+
+type GrowthSubscriberStatsDTO struct {
+	Total            int64   `json:"total"`
+	Active           int64   `json:"active"`
+	Pending          int64   `json:"pending"`
+	Unsubscribed     int64   `json:"unsubscribed"`
+	ConfirmationRate float64 `json:"confirmationRate"`
+}
+
+type GrowthDeliveryStatsDTO struct {
+	Queued      int64   `json:"queued"`
+	Sending     int64   `json:"sending"`
+	Sent        int64   `json:"sent"`
+	Failed      int64   `json:"failed"`
+	SuccessRate float64 `json:"successRate"`
+}
+
+type DashboardGrowthTrendDTO struct {
+	Period            string `json:"period"`
+	ShareClicks       int64  `json:"shareClicks"`
+	SubscribeStarts   int64  `json:"subscribeStarts"`
+	SubscribeConfirms int64  `json:"subscribeConfirms"`
+	Unsubscribes      int64  `json:"unsubscribes"`
+	DeliverySent      int64  `json:"deliverySent"`
+	DeliveryFailed    int64  `json:"deliveryFailed"`
+}
+
+type DashboardGrowthDTO struct {
+	Subscribers GrowthSubscriberStatsDTO  `json:"subscribers"`
+	Deliveries  GrowthDeliveryStatsDTO    `json:"deliveries"`
+	Trend       []DashboardGrowthTrendDTO `json:"trend"`
+}
+
+type SMTPHealthDTO struct {
+	Configured bool      `json:"configured"`
+	Reachable  bool      `json:"reachable"`
+	Host       string    `json:"host"`
+	Port       int       `json:"port"`
+	TLS        bool      `json:"tls"`
+	Auth       bool      `json:"auth"`
+	CheckedAt  time.Time `json:"checkedAt"`
+	Message    string    `json:"message"`
+}
+
+type NewsletterHealthDTO struct {
+	Subscribers GrowthSubscriberStatsDTO `json:"subscribers"`
+	Deliveries  GrowthDeliveryStatsDTO   `json:"deliveries"`
+	SMTP        SMTPHealthDTO            `json:"smtp"`
+	GeneratedAt time.Time                `json:"generatedAt"`
 }
 
 type MediaAssetDTO struct {

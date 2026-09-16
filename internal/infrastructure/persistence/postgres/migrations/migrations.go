@@ -42,6 +42,12 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applySystemDefaults(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyGrowthSchema(ctx, engine); err != nil {
+		return err
+	}
+	if err := applyGrowthOperationsSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -53,6 +59,25 @@ func applySchema(engine *xorm.Engine) error {
 		return fmt.Errorf("check baseline schema migration: %w", err)
 	}
 	if applied {
+		return nil
+	}
+	var legacySchema bool
+	if _, err := checkSession.SQL("SELECT to_regclass('public.t_article') IS NOT NULL").Get(&legacySchema); err != nil {
+		return fmt.Errorf("check legacy schema: %w", err)
+	}
+	if legacySchema {
+		// Existing installations already own the application tables. Running
+		// xorm.Sync2 against them can rewrite historical constraints and
+		// indexes, so baseline them without diffing the old schema.
+		var casbinSchema bool
+		if _, err := checkSession.SQL("SELECT to_regclass('public.casbin_rule') IS NOT NULL").Get(&casbinSchema); err != nil {
+			return fmt.Errorf("check Casbin policy table: %w", err)
+		}
+		if !casbinSchema {
+			if _, err := xormadapter.NewAdapterByEngine(engine); err != nil {
+				return fmt.Errorf("create Casbin policy table: %w", err)
+			}
+		}
 		return nil
 	}
 	models := []any{
@@ -158,7 +183,7 @@ func seedRoles(session *xorm.Session) error {
 		if found {
 			return fmt.Errorf("role id %d is already occupied", role.id)
 		}
-		if _, err := session.Exec("INSERT INTO t_role (id, role_name, is_disable, create_time) VALUES (?, ?, 0, ?)", role.id, role.name, time.Now()); err != nil {
+		if _, err := session.Exec("INSERT INTO t_role (id, role_name, is_disable, create_time) OVERRIDING SYSTEM VALUE VALUES (?, ?, 0, ?)", role.id, role.name, time.Now()); err != nil {
 			return fmt.Errorf("insert default role %q: %w", role.name, err)
 		}
 	}
@@ -192,6 +217,7 @@ var defaultMenus = []menuSeed{
 	{name: "权限管理", path: "/permission-submenu", component: "Layout", icon: "permissions", order: 11},
 	{name: "日志管理", path: "/log-submenu", component: "Layout", icon: "logs", order: 12},
 	{name: "个人中心", path: "/setting", component: "/setting/Setting.vue", icon: "profile", order: 13},
+	{name: "订阅与增长", path: "/growth", component: "/growth/Newsletter.vue", icon: "notification", order: 14},
 	{name: "发布文章", path: "/articles", component: "/article/Article.vue", icon: "pen", order: 1, parentPath: "/article-submenu"},
 	{name: "修改文章", path: "/articles/:articleId", component: "/article/Article.vue", icon: "pen", order: 2, parentPath: "/article-submenu", hidden: 1},
 	{name: "文章列表", path: "/article-list", component: "/article/ArticleList.vue", icon: "list", order: 3, parentPath: "/article-submenu"},
@@ -216,6 +242,114 @@ var defaultMenus = []menuSeed{
 	{name: "操作日志", path: "/operation/log", component: "/log/OperationLog.vue", icon: "logs", order: 1, parentPath: "/log-submenu"},
 	{name: "异常日志", path: "/exception/log", component: "/log/ExceptionLog.vue", icon: "errors", order: 2, parentPath: "/log-submenu"},
 	{name: "定时任务日志", path: "/quartz/log/:quartzId", component: "/log/QuartzLog.vue", icon: "schedule", order: 3, parentPath: "/log-submenu", hidden: 1},
+}
+
+// applyGrowthSchema is an additive migration. It uses explicit PostgreSQL DDL
+// so databases created by older releases receive the same tables as a fresh
+// install without relying on xorm's schema diff behavior.
+func applyGrowthSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 3)").Get(&applied); err != nil {
+		return fmt.Errorf("check growth migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin growth migration: %w", err)
+	}
+	defer session.Rollback()
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS t_newsletter_subscriber (
+			id SERIAL PRIMARY KEY,
+			email VARCHAR(254) NOT NULL UNIQUE,
+			status VARCHAR(20) NOT NULL DEFAULT 'pending',
+			confirm_token_hash VARCHAR(64) NOT NULL DEFAULT '',
+			confirm_token_expires_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			unsubscribe_token_hash VARCHAR(64) NOT NULL DEFAULT '',
+			confirmed_at TIMESTAMPTZ NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_newsletter_subscriber_status ON t_newsletter_subscriber(status)`,
+		`CREATE TABLE IF NOT EXISTS t_newsletter_delivery (
+			id SERIAL PRIMARY KEY,
+			subscriber_id INTEGER NOT NULL REFERENCES t_newsletter_subscriber(id) ON DELETE CASCADE,
+			article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			status VARCHAR(20) NOT NULL DEFAULT 'queued',
+			attempts INTEGER NOT NULL DEFAULT 0,
+			last_error TEXT NOT NULL DEFAULT '',
+			sent_at TIMESTAMPTZ NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (subscriber_id, article_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_newsletter_delivery_status ON t_newsletter_delivery(status, id)`,
+		`CREATE TABLE IF NOT EXISTS t_growth_event (
+			id SERIAL PRIMARY KEY,
+			event_name VARCHAR(32) NOT NULL,
+			article_id INTEGER NULL REFERENCES t_article(id) ON DELETE SET NULL,
+			path VARCHAR(255) NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_growth_event_created ON t_growth_event(created_at, event_name)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply growth schema: %w", err)
+		}
+	}
+	if err := seedMenus(session); err != nil {
+		return err
+	}
+	if err := seedResourcesAndPolicies(session); err != nil {
+		return err
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 3, "newsletter-and-growth"); err != nil {
+		return fmt.Errorf("record growth migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit growth migration: %w", err)
+	}
+	return nil
+}
+
+func applyGrowthOperationsSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 4)").Get(&applied); err != nil {
+		return fmt.Errorf("check growth operations migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin growth operations migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_newsletter_delivery_updated ON t_newsletter_delivery(status, updated_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_newsletter_delivery_sent ON t_newsletter_delivery(sent_at)`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply growth operations schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 4, "growth-operations"); err != nil {
+		return fmt.Errorf("record growth operations migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit growth operations migration: %w", err)
+	}
+	return nil
 }
 
 func seedMenus(session *xorm.Session) error {
@@ -331,7 +465,7 @@ func seedSiteContent(session *xorm.Session) error {
 		return fmt.Errorf("encode default website configuration: %w", err)
 	}
 	if _, err := session.Exec(`
-		INSERT INTO t_website_config (id, config, create_time)
+		INSERT INTO t_website_config (id, config, create_time) OVERRIDING SYSTEM VALUE
 		VALUES (1, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT (id) DO NOTHING
 	`, string(configJSON)); err != nil {
@@ -342,7 +476,7 @@ func seedSiteContent(session *xorm.Session) error {
 		return fmt.Errorf("encode default about content: %w", err)
 	}
 	if _, err := session.Exec(`
-		INSERT INTO t_about (id, content, create_time)
+		INSERT INTO t_about (id, content, create_time) OVERRIDING SYSTEM VALUE
 		VALUES (1, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT (id) DO NOTHING
 	`, string(aboutJSON)); err != nil {

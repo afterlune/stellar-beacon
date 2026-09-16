@@ -51,6 +51,7 @@ export interface MenuLike {
 const PATH_ICONS: Record<string, Component> = {
   '/': IconHome,
   '/dashboard': IconDashboard,
+	'/growth': IconNotification,
 
   '/article-submenu': IconBook,
   '/articles': IconPen,

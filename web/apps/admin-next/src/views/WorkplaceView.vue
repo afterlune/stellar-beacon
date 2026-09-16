@@ -135,6 +135,11 @@ const analytics = reactive<AdminDashboardAnalytics>({
   categories: [],
   tags: [],
   articleRank: [],
+  growth: {
+    subscribers: { total: 0, active: 0, pending: 0, unsubscribed: 0, confirmationRate: 0 },
+    deliveries: { queued: 0, sending: 0, sent: 0, failed: 0, successRate: 0 },
+    trend: []
+  },
   generatedAt: ''
 })
 

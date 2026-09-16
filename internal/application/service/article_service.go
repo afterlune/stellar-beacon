@@ -42,10 +42,11 @@ type ArticleService interface {
 }
 
 type MyArticleService struct {
-	repo    port.ArticleRepository
-	cache   port.Cache
-	storage port.ObjectStorage
-	search  port.ArticleSearcher
+	repo       port.ArticleRepository
+	cache      port.Cache
+	storage    port.ObjectStorage
+	search     port.ArticleSearcher
+	newsletter port.NewsletterEnqueuer
 }
 
 func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
@@ -53,10 +54,11 @@ func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
 		return nil, err
 	}
 	return &MyArticleService{
-		repo:    deps.Repo,
-		cache:   deps.Cache,
-		storage: deps.Storage,
-		search:  deps.Search,
+		repo:       deps.Repo,
+		cache:      deps.Cache,
+		storage:    deps.Storage,
+		search:     deps.Search,
+		newsletter: deps.Newsletter,
 	}, nil
 }
 
@@ -211,6 +213,20 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 		if err != nil {
 			return model.ResultFromError(err)
 		}
+	}
+	if related, _, relatedErr := a.articleRepository().ListArticles(c.Request.Context(), 1, 6); relatedErr == nil {
+		data.RelatedArticles = make([]port.ArticleCard, 0, 3)
+		for _, candidate := range related {
+			if candidate == nil || candidate.Id == data.Id || candidate.Status != 1 {
+				continue
+			}
+			data.RelatedArticles = append(data.RelatedArticles, *candidate)
+			if len(data.RelatedArticles) == 3 {
+				break
+			}
+		}
+	} else {
+		slog.WarnContext(c.Request.Context(), "load related articles failed", "error", relatedErr)
 	}
 	if data.Id == 0 {
 		return model.ResultOk()
@@ -433,11 +449,26 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	article.UserId = dto.UserInfoId
+	previousStatus := 0
+	if article.Id != 0 {
+		if previous, previousErr := a.articleRepository().GetArticleRecord(c.Request.Context(), article.Id); previousErr == nil {
+			previousStatus = previous.Status
+		} else if !apperrors.IsKind(previousErr, apperrors.KindNotFound) {
+			return model.ResultFromError(previousErr)
+		}
+	}
 	articlebase, err := a.articleRepository().SaveOrUpdate(c.Request.Context(), article, articleVO.CategoryName, articleVO.TagNames)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	if articlebase.Id != 0 {
+		if a.newsletter != nil && previousStatus != 1 && articlebase.Status == 1 && articlebase.IsDelete == 0 {
+			if err := a.newsletter.EnqueueArticle(c.Request.Context(), articlebase.Id); err != nil {
+				// Publishing the article must not fail because the notification
+				// outbox is temporarily unavailable; the admin can re-enqueue later.
+				slog.ErrorContext(c.Request.Context(), "enqueue newsletter article failed", "articleId", articlebase.Id, "error", err)
+			}
+		}
 		marsha, err := json.Marshal(articlebase)
 		if err != nil {
 			slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)

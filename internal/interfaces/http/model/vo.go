@@ -193,6 +193,42 @@ type SubscribeVO struct {
 	IsSubscribe int `json:"isSubscribe"`
 }
 
+type NewsletterSubscribeVO struct {
+	Email string `json:"email"`
+}
+
+type NewsletterTokenVO struct {
+	Token string `json:"token"`
+}
+
+type NewsletterFilterVO struct {
+	Current int    `form:"current" json:"current"`
+	Size    int    `form:"size" json:"size"`
+	Status  string `form:"status" json:"status"`
+	Keyword string `form:"keyword" json:"keyword"`
+}
+
+type NewsletterStatusVO struct {
+	Id     int    `json:"id"`
+	Status string `json:"status"`
+}
+
+type NewsletterDeliveryFilterVO struct {
+	Current int    `form:"current" json:"current"`
+	Size    int    `form:"size" json:"size"`
+	Status  string `form:"status" json:"status"`
+}
+
+type NewsletterDeliveryRetryVO struct {
+	Id int `json:"id"`
+}
+
+type GrowthEventVO struct {
+	EventName string `json:"eventName"`
+	ArticleId int    `json:"articleId"`
+	Path      string `json:"path"`
+}
+
 type TagVO struct {
 	Id      int    `json:"id"`
 	TagName string `json:"tagName"`

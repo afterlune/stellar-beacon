@@ -22,6 +22,7 @@ export type MenuViewComponent = NonNullable<RouteRecordRaw['component']>
 const VIEWS = {
   workplace: () => import('@/views/WorkplaceView.vue'),
   dashboard: () => import('@/views/DashboardView.vue'),
+  growth: () => import('@/views/GrowthView.vue'),
   monitor: () => import('@/views/MonitorView.vue'),
   media: () => import('@/views/MediaView.vue'),
   articleList: () => import('@/views/ArticleListView.vue'),
@@ -54,6 +55,7 @@ const componentRegistry: Record<string, MenuViewComponent> = {
   '/home/Home.vue': VIEWS.workplace,
   '/dashboard/Workplace.vue': VIEWS.workplace,
   '/dashboard/Dashboard.vue': VIEWS.dashboard,
+  '/growth/Newsletter.vue': VIEWS.growth,
   '/dashboard/Monitor.vue': VIEWS.monitor,
   '/media/Media.vue': VIEWS.media,
   '/article/ArticleList.vue': VIEWS.articleList,

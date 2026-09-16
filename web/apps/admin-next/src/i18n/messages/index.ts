@@ -16,6 +16,7 @@ import rbacZh from './zh-CN/rbac'
 import logsZh from './zh-CN/logs'
 import siteZh from './zh-CN/site'
 import accountZh from './zh-CN/account'
+import growthZh from './zh-CN/growth'
 
 import commonEn from './en-US/common'
 import shellEn from './en-US/shell'
@@ -29,6 +30,7 @@ import rbacEn from './en-US/rbac'
 import logsEn from './en-US/logs'
 import siteEn from './en-US/site'
 import accountEn from './en-US/account'
+import growthEn from './en-US/growth'
 
 export const messages = {
   'zh-CN': {
@@ -43,7 +45,8 @@ export const messages = {
     ...rbacZh,
     ...logsZh,
     ...siteZh,
-    ...accountZh
+    ...accountZh,
+    ...growthZh
   },
   'en-US': {
     ...commonEn,
@@ -57,7 +60,8 @@ export const messages = {
     ...rbacEn,
     ...logsEn,
     ...siteEn,
-    ...accountEn
+    ...accountEn,
+    ...growthEn
   }
 } as const
 

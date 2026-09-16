@@ -40,6 +40,7 @@ type Article struct {
 	ViewCount       int              `json:"viewCount"`
 	PreArticleCard  ArticleCard      `json:"preArticleCard"`
 	NextArticleCard ArticleCard      `json:"nextArticleCard"`
+	RelatedArticles []ArticleCard    `json:"relatedArticles"`
 	Tags            any              `json:"tags"`
 }
 

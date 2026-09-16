@@ -310,7 +310,7 @@ func Log() gin.HandlerFunc {
 
 func SpiderReject() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.URL.Path == "/healthz" {
+		if c.Request.URL.Path == "/healthz" || isSeoRoute(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -320,6 +320,11 @@ func SpiderReject() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func isSeoRoute(path string) bool {
+	return path == "/sitemap.xml" || path == "/robots.txt" || path == "/feed.xml" ||
+		strings.HasPrefix(path, "/articles/")
 }
 
 func Cors() gin.HandlerFunc {

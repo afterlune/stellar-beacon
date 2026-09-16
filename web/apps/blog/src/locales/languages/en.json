@@ -71,5 +71,25 @@
     "personal-center":"Personal Center",
     "running-time":"Running Time",
     "view-count":"View Count"
+  },
+  "newsletter": {
+    "eyebrow": "SUBSCRIPTION SIGNAL",
+    "title": "Get a note when the next article ships",
+    "description": "Only new articles. No email tracking, no noise. A confirmation link will arrive first.",
+    "placeholder": "Your email address",
+    "submit": "Subscribe",
+    "submitting": "Sending…",
+    "success": "Confirmation sent. Check your inbox.",
+    "error": "Subscription failed for now. Please try again.",
+    "share": "Share this article",
+    "copy": "Copy link",
+    "copied": "Link copied",
+    "native": "Share",
+    "related": "Keep reading",
+    "confirmTitle": "Confirm subscription",
+    "unsubscribeTitle": "Stop subscription",
+    "processing": "Processing…",
+    "done": "Done",
+    "failed": "This link is invalid or expired"
   }
 }

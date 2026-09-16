@@ -76,6 +76,17 @@ return count
 	return script.Run(cacheContext(ctx), r.client, []string{key}, seconds).Int64()
 }
 
+// Allow increments an expiring counter and accepts requests until the
+// configured limit is reached. The counter is atomic in Redis, so the same
+// limit works consistently across backend replicas.
+func (r *RedisCache) Allow(ctx context.Context, key string, limit int64, window time.Duration) (bool, error) {
+	count, err := r.IncrementWithExpiry(ctx, key, window)
+	if err != nil {
+		return false, err
+	}
+	return count <= limit, nil
+}
+
 func (r *RedisCache) Expire(ctx context.Context, key string, ttl time.Duration) (bool, error) {
 	return r.client.Expire(cacheContext(ctx), key, ttl).Result()
 }
@@ -166,3 +177,4 @@ func scoresByMember(values []redis.Z) map[string]float64 {
 }
 
 var _ port.Cache = (*RedisCache)(nil)
+var _ port.RateLimiter = (*RedisCache)(nil)

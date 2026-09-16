@@ -71,5 +71,25 @@
     "personal-center":"个人中心",
     "running-time":"运行时间",
     "view-count":"总访问量"
+  },
+  "newsletter": {
+    "eyebrow": "订阅信号",
+    "title": "在下一篇文章发布时收到通知",
+    "description": "只发送新文章，不追踪邮箱，不打扰。确认邮件会先发到你的收件箱。",
+    "placeholder": "你的邮箱地址",
+    "submit": "订阅",
+    "submitting": "发送中…",
+    "success": "确认邮件已发送，请查收邮箱。",
+    "error": "订阅暂时失败，请稍后再试。",
+    "share": "分享这篇文章",
+    "copy": "复制链接",
+    "copied": "链接已复制",
+    "native": "分享",
+    "related": "继续阅读",
+    "confirmTitle": "确认订阅",
+    "unsubscribeTitle": "停止订阅",
+    "processing": "正在处理…",
+    "done": "操作完成",
+    "failed": "链接无效或已过期"
   }
 }

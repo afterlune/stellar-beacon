@@ -47,6 +47,20 @@ export default {
   'dashboard.panels.recentOperations': '最近操作',
   'dashboard.panels.exceptionAlerts': '异常提醒',
 
+  // 增长概览
+  'dashboard.growth.title': '订阅增长',
+  'dashboard.growth.caption': '与当前仪表盘区间同步',
+  'dashboard.growth.activeSubscribers': '已确认订阅',
+  'dashboard.growth.confirmationRate': '确认率',
+  'dashboard.growth.sentDeliveries': '已发送通知',
+  'dashboard.growth.failedDeliveries': '失败通知',
+  'dashboard.growth.confirmed': '确认订阅',
+  'dashboard.growth.shares': '分享点击',
+  'dashboard.growth.sent': '投递成功',
+  'dashboard.growth.failed': '投递失败',
+  'dashboard.growth.emptyTitle': '暂无增长数据',
+  'dashboard.growth.emptyDescription': '读者订阅或分享后，这里会显示增长趋势。',
+
   // 空态
   'dashboard.empty.trend.title': '该区间暂无访问数据',
   'dashboard.empty.trend.description': '换一个时间区间，或等待博客产生新的访问。',

@@ -2,6 +2,8 @@ listen:
   host: ""
   port: 7777
 verification: "127.0.0.1"
+public:
+  site_url: "http://127.0.0.1:18080"
 cors:
   allowed_origins:
     - "http://127.0.0.1:18080"
@@ -16,10 +18,12 @@ redis:
   port: 6379
   db: 1
 emailSmtp:
-  smtp: "smtp.invalid"
+  smtp: "mailpit"
   email: "integration@example.test"
   password: "${SMTP_PASSWORD}"
-  port: 465
+  port: 1025
+  tls: false
+  auth: false
 database:
   driverName: "postgres"
   host: "postgresql"

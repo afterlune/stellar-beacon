@@ -78,3 +78,28 @@ func TestRedisCacheIncrementWithExpiry(t *testing.T) {
 		t.Fatalf("TTL = %s, want a positive value no greater than one minute", ttl)
 	}
 }
+
+func TestRedisCacheAllowUsesAtomicWindowCounter(t *testing.T) {
+	cache, server, cleanup := newTestCache(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	first, err := cache.Allow(ctx, "growth:test", 2, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := cache.Allow(ctx, "growth:test", 2, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := cache.Allow(ctx, "growth:test", 2, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first || !second || third {
+		t.Fatalf("allow results = (%v, %v, %v), want (true, true, false)", first, second, third)
+	}
+	if ttl := server.TTL("growth:test"); ttl <= 0 || ttl > time.Minute {
+		t.Fatalf("TTL = %s, want a positive value no greater than one minute", ttl)
+	}
+}

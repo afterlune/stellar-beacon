@@ -144,6 +144,37 @@ export interface AdminUser {
   [key: string]: unknown
 }
 
+export interface NewsletterSubscriber {
+  id: number
+  email: string
+  status: 'pending' | 'active' | 'unsubscribed' | string
+  confirmedAt?: string
+  createdAt?: string
+  updatedAt?: string
+  [key: string]: unknown
+}
+
+export interface NewsletterDelivery {
+  id: number
+  subscriberId: number
+  articleId: number
+  status: 'queued' | 'sending' | 'sent' | 'failed' | string
+  attempts: number
+  lastError?: string
+  sentAt?: string
+  createdAt?: string
+  subscriberEmail?: string
+  articleTitle?: string
+  [key: string]: unknown
+}
+
+export interface GrowthSummaryItem {
+  eventName: string
+  day: string
+  count: number
+  createdAt?: string
+}
+
 export type DashboardRange = '7d' | '30d' | '12m'
 
 export interface DashboardOverview {
@@ -178,6 +209,56 @@ export interface DashboardArticleRank {
   views: number
 }
 
+export interface GrowthSubscriberStats {
+  total: number
+  active: number
+  pending: number
+  unsubscribed: number
+  confirmationRate: number
+}
+
+export interface GrowthDeliveryStats {
+  queued: number
+  sending: number
+  sent: number
+  failed: number
+  successRate: number
+}
+
+export interface DashboardGrowthTrend {
+  period: string
+  shareClicks: number
+  subscribeStarts: number
+  subscribeConfirms: number
+  unsubscribes: number
+  deliverySent: number
+  deliveryFailed: number
+}
+
+export interface DashboardGrowth {
+  subscribers: GrowthSubscriberStats
+  deliveries: GrowthDeliveryStats
+  trend: DashboardGrowthTrend[]
+}
+
+export interface SMTPHealth {
+  configured: boolean
+  reachable: boolean
+  host: string
+  port: number
+  tls: boolean
+  auth: boolean
+  checkedAt?: string
+  message: string
+}
+
+export interface NewsletterHealth {
+  subscribers: GrowthSubscriberStats
+  deliveries: GrowthDeliveryStats
+  smtp: SMTPHealth
+  generatedAt?: string
+}
+
 export interface AdminDashboardAnalytics {
   range: DashboardRange
   unit: 'day' | 'month'
@@ -187,6 +268,7 @@ export interface AdminDashboardAnalytics {
   categories: DashboardDistribution[]
   tags: DashboardDistribution[]
   articleRank: DashboardArticleRank[]
+  growth: DashboardGrowth
   generatedAt: string
 }
 

@@ -47,6 +47,20 @@ export default {
   'dashboard.panels.recentOperations': 'Recent activity',
   'dashboard.panels.exceptionAlerts': 'Exception alerts',
 
+  // Growth overview
+  'dashboard.growth.title': 'Subscription growth',
+  'dashboard.growth.caption': 'Synced with the selected dashboard range',
+  'dashboard.growth.activeSubscribers': 'Confirmed subscribers',
+  'dashboard.growth.confirmationRate': 'Confirmation rate',
+  'dashboard.growth.sentDeliveries': 'Notifications sent',
+  'dashboard.growth.failedDeliveries': 'Failed notifications',
+  'dashboard.growth.confirmed': 'Confirmed',
+  'dashboard.growth.shares': 'Share clicks',
+  'dashboard.growth.sent': 'Delivered',
+  'dashboard.growth.failed': 'Failed',
+  'dashboard.growth.emptyTitle': 'No growth data yet',
+  'dashboard.growth.emptyDescription': 'Subscription and sharing activity will appear here as readers engage.',
+
   // Empty states
   'dashboard.empty.trend.title': 'No traffic in this range',
   'dashboard.empty.trend.description': 'Pick another range, or wait for the blog to collect new visits.',

@@ -36,6 +36,8 @@ type MyStellarBeaconInfoService struct {
 	tags       port.TagRepository
 	cache      port.Cache
 	visitor    port.VisitorResolver
+	newsletter port.NewsletterRepository
+	growth     port.GrowthRepository
 }
 
 func NewStellarBeaconInfoService(deps StellarBeaconInfoServiceDeps) (*MyStellarBeaconInfoService, error) {
@@ -49,6 +51,8 @@ func NewStellarBeaconInfoService(deps StellarBeaconInfoServiceDeps) (*MyStellarB
 		tags:       deps.Tags,
 		cache:      deps.Cache,
 		visitor:    deps.Visitor,
+		newsletter: deps.Newsletter,
+		growth:     deps.Growth,
 	}, nil
 }
 
@@ -378,6 +382,22 @@ func (b *MyStellarBeaconInfoService) GetDashboardAnalytics(ctx context.Context, 
 			sort.Slice(articleRank, func(i, j int) bool { return articleRank[i].Views > articleRank[j].Views })
 		}
 	}
+	growth := model.DashboardGrowthDTO{Trend: make([]model.DashboardGrowthTrendDTO, 0)}
+	if b.newsletter != nil && b.growth != nil {
+		newsletterStats, statsErr := b.newsletter.Stats(ctx)
+		if statsErr != nil {
+			return model.ResultFromError(statsErr)
+		}
+		growthRows, growthErr := b.growth.SummaryByPeriod(ctx, start, unit)
+		if growthErr != nil {
+			return model.ResultFromError(growthErr)
+		}
+		deliveryRows, deliveryErr := b.newsletter.DeliveryTrend(ctx, start, unit)
+		if deliveryErr != nil {
+			return model.ResultFromError(deliveryErr)
+		}
+		growth = dashboardGrowthDTO(newsletterStats, growthRows, deliveryRows, start, now, unit)
+	}
 	return model.ResultOkWithData(model.DashboardAnalyticsDTO{
 		Range: rangeValue,
 		Unit:  unit,
@@ -394,6 +414,7 @@ func (b *MyStellarBeaconInfoService) GetDashboardAnalytics(ctx context.Context, 
 		Categories:  categoryStats,
 		Tags:        tagStats,
 		ArticleRank: articleRank,
+		Growth:      growth,
 		GeneratedAt: now,
 	})
 }

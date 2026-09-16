@@ -3,6 +3,8 @@ listen:
   host: ""
   port: 7777
 verification: "${SITE_DOMAIN}"
+public:
+  site_url: "https://${SITE_DOMAIN}"
 cors:
   allowed_origins:
     - "https://${SITE_DOMAIN}"
@@ -21,6 +23,8 @@ emailSmtp:
   email: "${SMTP_EMAIL}"
   password: "${SMTP_PASSWORD}"
   port: ${SMTP_PORT}
+  tls: true
+  auth: true
 database:
   driverName: "postgres"
   host: "postgresql"

@@ -1,7 +1,7 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type JobRunOutcome, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
 export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
@@ -47,6 +47,44 @@ export async function getAdminDashboardAnalytics(
     ...config,
     params: { range, areaType }
   })
+  return responseData(response)
+}
+
+export async function listNewsletterSubscribers(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<NewsletterSubscriber>> {
+  return listAdminPage<NewsletterSubscriber>('admin/newsletter/subscribers', params, config)
+}
+
+export async function updateNewsletterSubscriberStatus(id: number, status: string): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>('admin/newsletter/subscribers/status', { id, status })
+  responseData(response)
+}
+
+export async function resendNewsletterConfirmation(id: number): Promise<void> {
+  const response = await http.post<ResultVO<unknown>>(`admin/newsletter/subscribers/${encodeURIComponent(id)}/resend`)
+  responseData(response)
+}
+
+export async function listNewsletterDeliveries(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<NewsletterDelivery>> {
+  return listAdminPage<NewsletterDelivery>('admin/newsletter/deliveries', params, config)
+}
+
+export async function retryNewsletterDelivery(id: number): Promise<void> {
+  const response = await http.post<ResultVO<unknown>>('admin/newsletter/deliveries/retry', { id })
+  responseData(response)
+}
+
+export async function retryFailedNewsletterDeliveries(): Promise<number> {
+  const response = await http.post<ResultVO<{ count: number }>>('admin/newsletter/deliveries/retry-failed')
+  return Number(responseData(response)?.count || 0)
+}
+
+export async function getNewsletterHealth(): Promise<NewsletterHealth> {
+  const response = await http.get<ResultVO<NewsletterHealth>>('admin/newsletter/health')
+  return responseData(response)
+}
+
+export async function getGrowthSummary(days = 30): Promise<GrowthSummaryItem[]> {
+  const response = await http.get<ResultVO<GrowthSummaryItem[]>>('admin/growth/summary', { params: { days } })
   return responseData(response)
 }
 
