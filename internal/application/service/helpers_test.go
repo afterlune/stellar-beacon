@@ -1,6 +1,10 @@
 package service
 
-import "testing"
+import (
+	"mime/multipart"
+	"net/textproto"
+	"testing"
+)
 
 func TestObjectKeyPreservesExtensionAndPrefix(t *testing.T) {
 	key, err := ObjectKey("cover.png", "photos/")
@@ -33,5 +37,20 @@ func TestUnmarshRejectsCorruptedJSON(t *testing.T) {
 	}
 	if err := Unmarsh("{", &value); err == nil {
 		t.Fatal("expected corrupted JSON to be rejected")
+	}
+}
+
+func TestIsImageUploadChecksTypeAndSize(t *testing.T) {
+	if !isImageUpload(&multipart.FileHeader{
+		Filename: "cover.png",
+		Header:   textproto.MIMEHeader{"Content-Type": []string{"application/octet-stream"}},
+	}) {
+		t.Fatal("expected image extension to be accepted")
+	}
+	if isImageUpload(&multipart.FileHeader{Filename: "notes.txt"}) {
+		t.Fatal("expected non-image extension to be rejected")
+	}
+	if maxImageUploadBytes != 10<<20 {
+		t.Fatalf("unexpected image upload limit: %d", maxImageUploadBytes)
 	}
 }

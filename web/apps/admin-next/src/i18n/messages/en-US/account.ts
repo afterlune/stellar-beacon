@@ -48,6 +48,7 @@ export default {
   'account.password.note': 'Changing your password keeps this session alive; if you suspect a leak, change the same password on your other sites too.',
 
   'account.avatar.wrongType': 'Please choose an image file as the avatar',
+  'account.avatar.tooLarge': 'The avatar image must be 10MB or smaller',
   'account.avatar.updated': 'Avatar updated',
   'account.avatar.failed': 'Avatar upload failed'
 }

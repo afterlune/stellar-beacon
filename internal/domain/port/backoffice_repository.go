@@ -146,7 +146,7 @@ type PhotoAlbumRepository interface {
 }
 
 type PhotoRepository interface {
-	List(ctx context.Context, current, size, albumID, isDelete int) ([]entity.TPhoto, int64, error)
+	List(ctx context.Context, current, size, albumID, isDelete int, keywords string) ([]entity.TPhoto, int64, error)
 	Update(ctx context.Context, photo entity.TPhoto) error
 	InsertMany(ctx context.Context, photos []entity.TPhoto) error
 	UpdateAlbum(ctx context.Context, ids []int, albumID int) error

@@ -98,13 +98,45 @@
           field="articleContent"
           :label="t('articles.editor.content')"
           :rules="[{ required: true, message: t('articles.editor.contentRequired') }]">
-          <a-textarea
-            v-model="form.articleContent"
-            class="article-content-editor"
-            :max-length="100000"
-            show-word-limit
-            :auto-size="{ minRows: 16, maxRows: 32 }"
-            :placeholder="t('articles.editor.contentPlaceholder')" />
+          <div class="article-editor-head">
+            <a-radio-group :model-value="contentMode" type="button" size="small" @change="switchContentMode">
+              <a-radio value="visual">{{ t('articles.editor.visualMode') }}</a-radio>
+              <a-radio value="source">{{ t('articles.editor.sourceMode') }}</a-radio>
+            </a-radio-group>
+            <a-button
+              v-if="contentMode === 'source' && form.articleContent.trim()"
+              type="text"
+              size="small"
+              @click="convertSourceToVisual">
+              {{ t('articles.editor.convertToRich') }}
+            </a-button>
+            <span class="admin-field-hint">{{ t('articles.editor.contentHint') }}</span>
+          </div>
+
+          <div v-if="contentMode === 'visual'" class="rich-editor-shell">
+            <Toolbar :editor="editorInstance" :default-config="toolbarConfig" mode="default" />
+            <Editor
+              v-model="form.articleContentHtml"
+              class="rich-editor"
+              mode="default"
+              :default-config="editorConfig"
+              @on-created="handleEditorCreated"
+              @on-change="handleEditorChange" />
+          </div>
+
+          <div v-else class="article-source-shell">
+            <a-textarea
+              v-model="form.articleContent"
+              class="article-content-editor"
+              :max-length="100000"
+              show-word-limit
+              :auto-size="{ minRows: 16, maxRows: 32 }"
+              :placeholder="t('articles.editor.sourcePlaceholder')" />
+            <div class="article-source-preview">
+              <div class="article-source-preview-head">{{ t('articles.editor.preview') }}</div>
+              <div class="post-html" v-html="sourcePreviewHtml" />
+            </div>
+          </div>
         </a-form-item>
 
         <div class="article-meta-row">
@@ -136,8 +168,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { Editor, Toolbar } from '@wangeditor-next/editor-for-vue'
+import type { IDomEditor, IEditorConfig, IToolbarConfig } from '@wangeditor-next/editor'
+import '@wangeditor-next/editor/dist/css/style.css'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -156,7 +191,9 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { t } from '@/i18n'
 import { plainText } from '@/utils/format'
+import { markdownToHtml, sanitizePreviewHtml } from '@/utils/markdown'
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const route = useRoute()
 const router = useRouter()
 
@@ -168,11 +205,14 @@ const taxonomyLoading = ref(false)
 const mediaPickerVisible = ref(false)
 const coverInput = ref<HTMLInputElement | null>(null)
 const formRef = ref<{ validate: () => Promise<Record<string, unknown> | undefined> } | null>(null)
+const editorInstance = shallowRef<IDomEditor>()
+const contentMode = ref<'visual' | 'source'>('visual')
 
 const form = reactive({
   id: 0,
   articleTitle: '',
   articleContent: '',
+  articleContentHtml: '',
   articleCover: '',
   categoryName: '',
   tagNames: [] as string[],
@@ -195,6 +235,8 @@ const isEditing = computed(() => /^\d+$/.test(articleId.value))
 const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsavedGuard(() => JSON.stringify([
   form.articleTitle,
   form.articleContent,
+  form.articleContentHtml,
+  contentMode.value,
   form.articleCover,
   form.categoryName,
   form.tagNames,
@@ -207,6 +249,7 @@ const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsav
 ]))
 
 const wordCount = computed(() => plainText(form.articleContent).replace(/\s/g, '').length)
+const sourcePreviewHtml = computed(() => sanitizePreviewHtml(markdownToHtml(form.articleContent)))
 const summary = computed(() => {
   const parts = [t('articles.editor.wordCount', { count: wordCount.value })]
   if (form.categoryName) parts.push(form.categoryName)
@@ -223,12 +266,84 @@ onMounted(() => {
   }
 })
 
+const toolbarConfig: Partial<IToolbarConfig> = {
+  excludeKeys: ['group-video']
+}
+
+const editorConfig: Partial<IEditorConfig> = {
+  placeholder: t('articles.editor.richPlaceholder'),
+  maxLength: 100000,
+  sanitizeHtml: (html) => sanitizePreviewHtml(html),
+  MENU_CONF: {
+    uploadImage: {
+      maxFileSize: MAX_UPLOAD_BYTES,
+      allowedFileTypes: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
+      customUpload(file, insertFn) {
+        void uploadEditorImage(file, insertFn)
+      }
+    }
+  }
+}
+
+function handleEditorCreated(editor: IDomEditor): void {
+  editorInstance.value = editor
+}
+
+function handleEditorChange(editor: IDomEditor): void {
+  form.articleContentHtml = editor.getHtml()
+  form.articleContent = form.articleContentHtml
+}
+
+async function uploadEditorImage(file: File, insertFn: (url: string, poster?: string, alt?: string) => void): Promise<void> {
+  if (!file.type.startsWith('image/')) {
+    Message.error(t('articles.editor.imageTypeInvalid'))
+    return
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    Message.error(t('articles.editor.imageTooLarge'))
+    return
+  }
+  try {
+    const url = await uploadAdminArticleImage(file)
+    insertFn(url, '', file.name)
+  } catch (error) {
+    Message.error(apiErrorMessage(error, t('articles.editor.imageUploadFailed')))
+  }
+}
+
+function switchContentMode(value: string | number | boolean): void {
+  const next = String(value) as 'visual' | 'source'
+  if (next === contentMode.value) return
+  if (next === 'source') {
+    form.articleContent = form.articleContentHtml || form.articleContent
+    form.articleContentHtml = ''
+  } else {
+    form.articleContentHtml = sanitizePreviewHtml(markdownToHtml(form.articleContent))
+    form.articleContent = form.articleContentHtml
+  }
+  contentMode.value = next
+}
+
+function convertSourceToVisual(): void {
+  form.articleContentHtml = sanitizePreviewHtml(markdownToHtml(form.articleContent))
+  form.articleContent = form.articleContentHtml
+  contentMode.value = 'visual'
+  Message.success(t('articles.editor.convertedToRich'))
+}
+
 async function load(): Promise<void> {
   try {
     const article = await getAdminArticle(articleId.value)
     form.id = Number(article.id || article.articleId || 0)
     form.articleTitle = String(article.articleTitle || '')
     form.articleContent = String(article.articleContent || '')
+    form.articleContentHtml = String(article.articleContentHtml || '')
+    if (form.articleContentHtml) {
+      form.articleContent = form.articleContentHtml
+      contentMode.value = 'visual'
+    } else {
+      contentMode.value = 'source'
+    }
     form.articleCover = String(article.articleCover || '')
     form.categoryName = String(article.categoryName || '')
     form.tagNames = normalizeTags(article.tagNames)
@@ -273,6 +388,7 @@ async function save(): Promise<void> {
       id: form.id || undefined,
       articleTitle: form.articleTitle.trim(),
       articleContent: form.articleContent,
+      ...(contentMode.value === 'visual' ? { articleContentHtml: form.articleContentHtml } : {}),
       articleCover: form.articleCover.trim(),
       categoryName: form.categoryName,
       tagNames: form.tagNames,
@@ -329,6 +445,14 @@ async function selectCover(event: Event): Promise<void> {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  if (!file.type.startsWith('image/')) {
+    Message.warning(t('articles.editor.imageTypeInvalid'))
+    return
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    Message.warning(t('articles.editor.imageTooLarge'))
+    return
+  }
   coverUploading.value = true
   try {
     form.articleCover = await uploadAdminArticleImage(file)
@@ -371,6 +495,11 @@ function normalizeTags(value: unknown): string[] {
   }
   return []
 }
+
+onBeforeUnmount(() => {
+  editorInstance.value?.destroy()
+  editorInstance.value = undefined
+})
 </script>
 
 <style scoped>
@@ -378,6 +507,77 @@ function normalizeTags(value: unknown): string[] {
   display: flex;
   justify-content: center;
   padding: 72px 0;
+}
+
+.article-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.rich-editor-shell,
+.article-source-shell {
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface);
+}
+
+.rich-editor-shell :deep(.w-e-toolbar) {
+  border-color: var(--admin-border);
+  background: var(--admin-surface-soft);
+}
+
+.rich-editor-shell :deep(.w-e-text-container) {
+  min-height: 430px;
+  border-color: var(--admin-border);
+  background: var(--admin-surface);
+}
+
+.rich-editor-shell :deep(.w-e-text-container [data-slate-editor]) {
+  min-height: 390px;
+  padding: 18px 20px;
+}
+
+.article-source-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.article-source-shell .article-content-editor {
+  min-height: 470px;
+  border: 0;
+  border-right: 1px solid var(--admin-border);
+  border-radius: 0;
+}
+
+.article-source-preview {
+  min-height: 470px;
+  padding: 14px 18px;
+  overflow: auto;
+  background: var(--admin-surface-soft);
+}
+
+.article-source-preview-head {
+  margin-bottom: 14px;
+  color: var(--admin-subtle);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .article-source-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .article-source-shell .article-content-editor {
+    border-right: 0;
+    border-bottom: 1px solid var(--admin-border);
+  }
 }
 
 .article-meta-row {

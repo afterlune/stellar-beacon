@@ -36,7 +36,7 @@ export default defineComponent({
   components: { PageHeader, ArticleCard, Paginator },
   setup() {
     const route = useRoute()
-    const md = new MarkdownIt()
+    const md = new MarkdownIt({ html: true })
     const pagination = reactive({
       size: 12,
       total: 0,

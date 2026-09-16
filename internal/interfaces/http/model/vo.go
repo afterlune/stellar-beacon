@@ -20,18 +20,19 @@ type ArticleTopFeaturedVO struct {
 }
 
 type ArticleVO struct {
-	Id             int      `json:"id" form:"id"`
-	CategoryName   string   `json:"categoryName" form:"categoryName"`
-	ArticleCover   string   `json:"articleCover" form:"articleCover"`
-	ArticleTitle   string   `json:"articleTitle" form:"articleTitle"`
-	ArticleContent string   `json:"articleContent" from:"articleContent"`
-	TagNames       []string `json:"tagNames" form:"tagNames"`
-	IsTop          int      `json:"isTop" from:"isTop"`
-	IsFeatured     int      `json:"isFeatured" form:"isFeatured"`
-	Status         int      `json:"status" from:"status"`
-	Type           int      `json:"type" form:"type"`
-	Password       string   `json:"password" form:"password"`
-	OriginalUrl    string   `json:"originalUrl" from:"originalUrl"`
+	Id                 int      `json:"id" form:"id"`
+	CategoryName       string   `json:"categoryName" form:"categoryName"`
+	ArticleCover       string   `json:"articleCover" form:"articleCover"`
+	ArticleTitle       string   `json:"articleTitle" form:"articleTitle"`
+	ArticleContent     string   `json:"articleContent" from:"articleContent"`
+	ArticleContentHTML string   `json:"articleContentHtml" form:"articleContentHtml"`
+	TagNames           []string `json:"tagNames" form:"tagNames"`
+	IsTop              int      `json:"isTop" from:"isTop"`
+	IsFeatured         int      `json:"isFeatured" form:"isFeatured"`
+	Status             int      `json:"status" from:"status"`
+	Type               int      `json:"type" form:"type"`
+	Password           string   `json:"password" form:"password"`
+	OriginalUrl        string   `json:"originalUrl" from:"originalUrl"`
 }
 
 type CategoryVO struct {

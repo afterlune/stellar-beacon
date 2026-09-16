@@ -103,7 +103,8 @@ CREATE TABLE t_photo_album (id INTEGER PRIMARY KEY, album_name VARCHAR(50) NOT N
 CREATE TABLE t_photo (id INTEGER PRIMARY KEY, album_id INTEGER NOT NULL, photo_name VARCHAR(50) NOT NULL, photo_desc VARCHAR(100), photo_src VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_article (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, category_id INTEGER, article_cover VARCHAR(1024),
-    article_title VARCHAR(50) NOT NULL, article_content TEXT NOT NULL, is_top SMALLINT NOT NULL,
+    article_title VARCHAR(50) NOT NULL, article_content TEXT NOT NULL, article_content_html TEXT,
+    is_top SMALLINT NOT NULL,
     is_featured SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL,
     type SMALLINT NOT NULL, password VARCHAR(255), original_url VARCHAR(255),
     create_time TIMESTAMP, update_time TIMESTAMP

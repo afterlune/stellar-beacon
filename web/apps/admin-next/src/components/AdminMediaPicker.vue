@@ -28,17 +28,20 @@
     </div>
 
     <div v-else-if="assets.length" class="media-picker-grid">
-      <button
+      <div
         v-for="asset in assets"
         :key="asset.key"
-        type="button"
         class="media-picker-item"
+        role="button"
+        tabindex="0"
         :title="asset.name"
-        @click="select(asset)">
+        @click="select(asset)"
+        @keydown.enter="select(asset)"
+        @keydown.space.prevent="select(asset)">
         <AdminImagePreview :src="asset.url" :alt="asset.name" :width="150" :height="104" />
         <span class="media-picker-item-name">{{ asset.name }}</span>
         <small>{{ formatFileSize(asset.size) }}</small>
-      </button>
+      </div>
     </div>
 
     <AdminEmptyState
@@ -71,6 +74,8 @@ import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import { t } from '@/i18n'
 import { formatFileSize } from '@/utils/format'
 import type { AdminMediaAsset } from '@stellar-beacon/api-contract'
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 const props = withDefaults(defineProps<{ modelValue: boolean; title?: string }>(), { title: '' })
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; select: [asset: AdminMediaAsset] }>()
@@ -139,21 +144,35 @@ async function upload(event: Event): Promise<void> {
   const files = Array.from(input.files || [])
   input.value = ''
   if (!files.length) return
+  const rejected = files.filter((file) => !file.type.startsWith('image/') || file.size > MAX_UPLOAD_BYTES)
+  const accepted = files.filter((file) => !rejected.includes(file))
+  if (rejected.length) Message.warning(t('mediaPicker.skipped', { count: rejected.length }))
+  if (!accepted.length) return
   uploading.value = true
   let uploaded: AdminMediaAsset | null = null
+  let uploadedCount = 0
+  const failures: string[] = []
   try {
-    for (const file of files) uploaded = await uploadAdminMedia(file)
-    // Jump back to page 1 so the newest upload is visible, then auto-select it.
-    current.value = 1
-    await load()
-    if (uploaded) {
-      Message.success(t('mediaPicker.uploaded'))
-      select(uploaded)
-    } else {
-      Message.success(t('mediaPicker.uploadedCount', { count: files.length }))
+    for (const file of accepted) {
+      try {
+        uploaded = await uploadAdminMedia(file)
+        uploadedCount += 1
+      } catch (error) {
+        failures.push(`${file.name}：${apiErrorMessage(error, t('upload.failed'))}`)
+      }
     }
-  } catch (error) {
-    Message.error(apiErrorMessage(error, t('upload.failed')))
+    // Jump back to page 1 so the newest upload is visible, then auto-select it.
+    if (uploadedCount > 0) {
+      current.value = 1
+      await load()
+      Message.success(uploadedCount === 1
+        ? t('mediaPicker.uploaded')
+        : t('mediaPicker.uploadedCount', { count: uploadedCount }))
+      if (uploaded) select(uploaded)
+    }
+    if (failures.length) {
+      Message.error(t('mediaPicker.uploadFailedCount', { count: failures.length, detail: failures[0] }))
+    }
   } finally {
     uploading.value = false
   }

@@ -8,6 +8,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
@@ -135,6 +136,13 @@ func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
+	if vo.Images != "" {
+		images, err := normalizeTalkImages(vo.Images)
+		if err != nil {
+			return model.ResultFailWithMessage("说说图片格式不正确")
+		}
+		vo.Images = images
+	}
 	value, ok := c.Get("userInfo")
 	if !ok {
 		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
@@ -148,6 +156,29 @@ func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
+}
+
+const maxTalkImages = 9
+
+func normalizeTalkImages(raw string) (string, error) {
+	var images []string
+	if err := json.Unmarshal([]byte(raw), &images); err != nil {
+		return "", err
+	}
+	if len(images) > maxTalkImages {
+		return "", apperrors.Invalid("talk.images", "too many images")
+	}
+	cleaned := make([]string, 0, len(images))
+	for _, image := range images {
+		if value := strings.TrimSpace(image); value != "" {
+			cleaned = append(cleaned, value)
+		}
+	}
+	data, err := json.Marshal(cleaned)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func (t *MyTalkService) DeleteTalks(c *gin.Context) model.ResultVO {

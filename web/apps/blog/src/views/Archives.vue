@@ -56,7 +56,7 @@ export default defineComponent({
     const commonStore = useCommonStore()
     const articleStore = useArticleStore()
     const { t } = useI18n()
-    const md = new MarkdownIt()
+    const md = new MarkdownIt({ html: true })
     const pagination = reactive({
       current: 1,
       total: 0,

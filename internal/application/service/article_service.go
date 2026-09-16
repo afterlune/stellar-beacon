@@ -142,6 +142,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	if get != "" {
 		var dto model.ArticleDTO
 		if err := Unmarsh(get, &dto); err == nil {
+			sanitizePublicArticle(&dto)
 			if a.cache != nil {
 				if _, err := a.cache.Expire(c.Request.Context(), articleId, time.Hour*1); err != nil {
 					slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
@@ -243,6 +244,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	}
 	data.PreArticleCard = preData
 	data.NextArticleCard = nextData
+	sanitizePublicArticle(&data)
 	marshal, err := json.Marshal(data)
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
@@ -439,6 +441,17 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 	dto, ok := value.(model.UserDetailsDTO)
 	if !ok {
 		return model.ResultFailWithMessage("用户信息无效")
+	}
+	if strings.TrimSpace(articleVO.ArticleContentHTML) != "" {
+		articleVO.ArticleContentHTML = sanitizeArticleHTML(articleVO.ArticleContentHTML)
+		if !articleHTMLHasContent(articleVO.ArticleContentHTML) {
+			return model.ResultFailWithMessage("文章内容不能为空")
+		}
+		// Keep the legacy field populated so older readers and Markdown exports
+		// continue to receive a renderable article body.
+		articleVO.ArticleContent = articleVO.ArticleContentHTML
+	} else if strings.TrimSpace(articleVO.ArticleContent) == "" {
+		return model.ResultFailWithMessage("文章内容不能为空")
 	}
 	var article entity.TArticle
 	marshal, err := json.Marshal(articleVO)

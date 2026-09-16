@@ -49,7 +49,7 @@ export default {
   'media.albums.coverAlt': '{name} cover',
   'media.albums.photoCount': 'Photos',
   'media.albums.photos': 'Photos',
-  'media.albums.deleteConfirm': 'Delete the album “{name}”? Its photos will be moved to the trash as well.',
+  'media.albums.deleteConfirm': 'Delete the album “{name}”? Move and clear all photos from it first.',
   'media.albums.emptyFiltered': 'No matching albums',
   'media.albums.empty': 'No albums yet',
   'media.albums.emptyFilteredHint': 'Try another keyword, or reset the filters.',
@@ -74,6 +74,8 @@ export default {
   'media.albums.deleteFailed': 'Could not delete the album',
   'media.albums.coverUploaded': 'Cover uploaded',
   'media.albums.coverUploadFailed': 'Could not upload the cover',
+  'media.albums.imageTypeInvalid': 'Please choose an image file as the cover',
+  'media.albums.imageTooLarge': 'The cover image must be 10MB or smaller',
 
   // Photo management (PhotoView.vue).
   'media.photos.title': 'Photo management',
@@ -84,13 +86,13 @@ export default {
   'media.photos.album': 'Album',
   'media.photos.count': 'Photo count',
   'media.photos.visibility': 'Visibility',
-  'media.photos.searchPlaceholder': 'Search photo names on this page',
+  'media.photos.searchPlaceholder': 'Search photo names or descriptions',
   'media.photos.pageCount': '{count} on this page',
   'media.photos.loadFailed': 'Could not load the photo',
   'media.photos.move': 'Move to album',
   'media.photos.trash': 'Move to trash',
   'media.photos.removeConfirm': 'Removed photos go to the trash and can be restored there. Remove anyway?',
-  'media.photos.emptyFiltered': 'No matching photos on this page',
+  'media.photos.emptyFiltered': 'No matching photos',
   'media.photos.empty': 'No photos in this album yet',
   'media.photos.emptyHint': 'Upload photos and they will appear here in upload order.',
   'media.photos.edit': 'Edit photo',
@@ -117,6 +119,9 @@ export default {
   'media.photos.moveFailed': 'Could not move the photos',
   'media.photos.uploaded': 'Uploaded {count} photo(s)',
   'media.photos.uploadFailed': 'Photo upload failed',
+  'media.photos.uploadFailedCount': '{count} photo(s) failed to upload: {detail}',
+  'media.photos.skipped': 'Skipped {count} file(s): only images up to 10MB are supported',
+  'media.photos.select': 'Select photo {name}',
 
   // Photo trash (PhotoTrashView.vue).
   'media.trash.title': 'Photo trash',

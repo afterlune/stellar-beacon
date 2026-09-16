@@ -37,7 +37,7 @@
             class="admin-filter-input"
             :placeholder="t('media.photos.searchPlaceholder')"
             allow-clear />
-          <span class="admin-toolbar-caption">{{ t('media.photos.pageCount', { count: filteredPhotos.length }) }}</span>
+          <span class="admin-toolbar-caption">{{ t('media.photos.pageCount', { count: photos.length }) }}</span>
         </div>
         <div class="admin-table-toolbar-actions">
           <a-button :loading="loading" size="small" @click="reloadAll">
@@ -49,58 +49,66 @@
 
       <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('media.photos.loadFailed')" @retry="reloadAll" />
 
-      <AdminBatchBar :count="selectedIds.length" :hint="t('media.photos.pageCount', { count: filteredPhotos.length })" @clear="clearSelection">
+      <AdminBatchBar :count="selectedIds.length" :hint="t('media.photos.pageCount', { count: photos.length })" @clear="clearSelection">
         <a-button size="small" @click="openMove">{{ t('media.photos.move') }}</a-button>
         <a-button size="small" status="danger" @click="batchRemove">{{ t('media.photos.trash') }}</a-button>
       </AdminBatchBar>
 
-      <div class="admin-table-shell">
-        <a-table
-          v-model:selected-keys="selectedKeys"
-          :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
-          :data="filteredPhotos"
-          :columns="columns"
-          :loading="loading"
-          :pagination="pagination"
-          row-key="id"
-          @page-change="changePage"
-          @page-size-change="changePageSize">
-          <template #source="{ record }">
-            <AdminImagePreview
-              v-if="isHttpUrl(record.photoSrc)"
-              :src="String(record.photoSrc)"
-              :alt="String(record.photoName || t('image.alt'))"
-              :width="84"
-              :height="58" />
-            <span v-else class="admin-cover-cell" aria-hidden="true"><IconImage /></span>
-          </template>
-          <template #photoName="{ record }">
-            <span class="admin-title-cell">{{ record.photoName || t('media.shared.unnamedPhoto') }}</span>
-          </template>
-          <template #photoDesc="{ record }">
-            <span class="admin-muted-cell" :title="String(record.photoDesc || '')">{{ record.photoDesc || t('media.shared.noDescription') }}</span>
-          </template>
-          <template #actions="{ record }">
-            <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
-              <a-popconfirm
-                :content="t('media.photos.removeConfirm')"
-                @ok="removePhoto(record.id)">
-                <a-button type="text" status="danger" size="small">{{ t('common.remove') }}</a-button>
-              </a-popconfirm>
-            </a-space>
-          </template>
-          <template #empty>
-            <AdminEmptyState
-              :icon="IconImage"
-              :title="keywords.trim() ? t('media.photos.emptyFiltered') : t('media.photos.empty')"
-              :description="keywords.trim() ? t('media.shared.searchAgain') : t('media.photos.emptyHint')">
-              <a-button v-if="keywords.trim()" size="small" @click="keywords = ''">{{ t('media.shared.clearSearch') }}</a-button>
-              <a-button v-else type="primary" size="small" @click="photoInput?.click()">{{ t('media.photos.upload') }}</a-button>
-            </AdminEmptyState>
-          </template>
-        </a-table>
+      <div v-if="loading" class="photo-wall-skeleton" aria-hidden="true">
+        <div v-for="index in 8" :key="index" class="admin-skeleton photo-wall-skeleton-tile" />
       </div>
+      <div v-else-if="photos.length" class="photo-masonry">
+        <article
+          v-for="photo in photos"
+          :key="photo.id"
+          role="row"
+          class="photo-tile"
+          :class="{ 'photo-tile-selected': selectedIds.includes(Number(photo.id)) }">
+          <label class="photo-tile-select">
+            <input
+              v-model="selectedKeys"
+              type="checkbox"
+              :value="photo.id"
+              :aria-label="t('media.photos.select', { name: String(photo.photoName || t('media.shared.unnamedPhoto')) })" />
+          </label>
+          <AdminImagePreview
+            v-if="isHttpUrl(photo.photoSrc)"
+            :src="String(photo.photoSrc)"
+            :alt="String(photo.photoName || t('image.alt'))"
+            width="100%"
+            height="auto"
+            fit="natural" />
+          <div v-else class="photo-tile-fallback"><IconImage /></div>
+          <div class="photo-tile-copy">
+            <strong :title="String(photo.photoName || '')">{{ photo.photoName || t('media.shared.unnamedPhoto') }}</strong>
+            <span :title="String(photo.photoDesc || '')">{{ photo.photoDesc || t('media.shared.noDescription') }}</span>
+          </div>
+          <div class="photo-tile-actions">
+            <a-button type="text" size="small" @click="openEditor(photo)">{{ t('common.edit') }}</a-button>
+            <a-popconfirm :content="t('media.photos.removeConfirm')" @ok="removePhoto(photo.id)">
+              <a-button type="text" status="danger" size="small">{{ t('common.remove') }}</a-button>
+            </a-popconfirm>
+          </div>
+        </article>
+      </div>
+      <AdminEmptyState
+        v-else
+        :icon="IconImage"
+        :title="keywords.trim() ? t('media.photos.emptyFiltered') : t('media.photos.empty')"
+        :description="keywords.trim() ? t('media.shared.searchAgain') : t('media.photos.emptyHint')">
+        <a-button v-if="keywords.trim()" size="small" @click="keywords = ''; reloadPhotos()">{{ t('media.shared.clearSearch') }}</a-button>
+        <a-button v-else type="primary" size="small" @click="photoInput?.click()">{{ t('media.photos.upload') }}</a-button>
+      </AdminEmptyState>
+      <a-pagination
+        v-if="total > pageSize"
+        class="photo-pagination"
+        :total="total"
+        :current="current"
+        :page-size="pageSize"
+        show-total
+        show-jumper
+        @change="changePage"
+        @page-size-change="changePageSize" />
     </a-card>
 
     <a-modal
@@ -151,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconImage, IconLeft, IconRefresh, IconUpload } from '@arco-design/web-vue/es/icon'
 import { useRoute, useRouter } from 'vue-router'
@@ -179,9 +187,9 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { t } from '@/i18n'
 import { formatNumber, isHttpUrl } from '@/utils/format'
-import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum, AdminPhoto } from '@stellar-beacon/api-contract'
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const VIEW_KEY = 'photos'
 
 const route = useRoute()
@@ -194,14 +202,6 @@ const pageTitle = computed(() => (album.value.albumName
 const albumDescription = computed(() => (album.value.albumName
   ? t('media.photos.description')
   : t('media.photos.loading')))
-
-// 列定义随语言切换重算，所以用 computed 而不是模块级常量。
-const columns = computed(() => [
-  { title: t('common.preview'), dataIndex: 'photoSrc', width: 108, slotName: 'source' },
-  { title: t('media.shared.photoName'), dataIndex: 'photoName', slotName: 'photoName', minWidth: 180 },
-  { title: t('common.description'), dataIndex: 'photoDesc', slotName: 'photoDesc', ellipsis: true, tooltip: true },
-  { title: t('common.actions'), dataIndex: 'actions', width: 156, slotName: 'actions' }
-])
 
 const album = ref<AdminAlbum>({ id: 0, albumName: '' })
 const keywords = ref('')
@@ -227,6 +227,7 @@ const {
   loading,
   error: listError,
   load: loadPhotos,
+  reload: reloadPhotos,
   changePage: gotoPage,
   changePageSize: applyPageSize
 } = useAsyncList<AdminPhoto>(
@@ -234,7 +235,8 @@ const {
     current: page,
     size,
     albumId: albumId.value,
-    isDelete: 0
+    isDelete: 0,
+    keywords: keywords.value.trim()
   }, { signal }),
   { pageSize: readStoredPageSize(VIEW_KEY, 18), fallbackMessage: t('media.photos.listLoadFailed'), immediate: false }
 )
@@ -243,21 +245,18 @@ useStoredPageSize(VIEW_KEY, pageSize)
 useQueryFilters([
   { key: 'keywords', ref: keywords, debounce: true },
   { key: 'page', ref: current }
-], { onRestore: () => void loadPhotos() })
+], { onRestore: () => { clearSelection(); void loadPhotos() }, onSearch: () => { clearSelection(); void reloadPhotos() } })
 
 onMounted(() => void reloadAll())
 
 const errorMessage = computed(() => listError.value || albumError.value)
-const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value, [18, 36, 72]))
 const selectedIds = computed(() => selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))
-const filteredPhotos = computed(() => {
-  const query = keywords.value.trim().toLowerCase()
-  if (!query) return photos.value
-  return photos.value.filter((photo) =>
-    `${photo.photoName || ''} ${photo.photoDesc || ''}`.toLowerCase().includes(query)
-  )
-})
 const editorPreview = computed(() => (isHttpUrl(editor.photoSrc) ? editor.photoSrc : ''))
+
+watch(photos, (list) => {
+  const available = new Set(list.map((photo) => Number(photo.id)))
+  selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
+})
 
 async function reloadAll(): Promise<void> {
   albumError.value = ''
@@ -382,13 +381,29 @@ async function selectPhotos(event: Event): Promise<void> {
   const files = Array.from(input.files || [])
   input.value = ''
   if (!files.length || !albumId.value) return
+  const rejected = files.filter((file) => !file.type.startsWith('image/') || file.size > MAX_UPLOAD_BYTES)
+  const accepted = files.filter((file) => !rejected.includes(file))
+  if (rejected.length) Message.warning(t('media.photos.skipped', { count: rejected.length }))
+  if (!accepted.length) return
   uploading.value = true
+  const failures: string[] = []
   try {
     const urls: string[] = []
-    for (const file of files) urls.push(await uploadAdminPhoto(file))
-    await saveAdminPhotos(albumId.value, urls)
-    Message.success(t('media.photos.uploaded', { count: urls.length }))
-    await Promise.all([loadPhotos(), loadAlbum()])
+    for (const file of accepted) {
+      try {
+        urls.push(await uploadAdminPhoto(file))
+      } catch (error) {
+        failures.push(`${file.name}：${apiErrorMessage(error, t('media.photos.uploadFailed'))}`)
+      }
+    }
+    if (urls.length) {
+      await saveAdminPhotos(albumId.value, urls)
+      Message.success(t('media.photos.uploaded', { count: urls.length }))
+      await Promise.all([loadPhotos(), loadAlbum()])
+    }
+    if (failures.length) {
+      Message.error(t('media.photos.uploadFailedCount', { count: failures.length, detail: failures[0] }))
+    }
   } catch (error) {
     Message.error(apiErrorMessage(error, t('media.photos.uploadFailed')))
   } finally {
@@ -436,5 +451,84 @@ async function selectPhotos(event: Event): Promise<void> {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-control);
   background: var(--admin-surface-soft);
+}
+
+.photo-wall-skeleton,
+.photo-masonry {
+  column-count: 4;
+  column-gap: var(--admin-gap);
+}
+
+.photo-wall-skeleton-tile {
+  min-height: 220px;
+  margin-bottom: var(--admin-gap);
+  break-inside: avoid;
+  border-radius: var(--admin-radius-card);
+}
+
+.photo-tile {
+  position: relative;
+  overflow: hidden;
+}
+
+.photo-tile :deep(.admin-image-preview-natural) {
+  max-width: 100%;
+  border-radius: var(--admin-radius-control);
+}
+
+.photo-tile-select {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 8px;
+  background: rgb(15 23 42 / 68%);
+  box-shadow: 0 4px 12px rgb(15 23 42 / 16%);
+}
+
+.photo-tile-select input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--admin-brand);
+}
+
+.photo-tile-selected {
+  border-color: var(--admin-brand);
+  box-shadow: 0 0 0 2px var(--admin-brand-soft);
+}
+
+.photo-tile-fallback {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  color: var(--admin-muted);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface-soft);
+}
+
+@media (max-width: 1280px) {
+  .photo-wall-skeleton,
+  .photo-masonry {
+    column-count: 3;
+  }
+}
+
+@media (max-width: 860px) {
+  .photo-wall-skeleton,
+  .photo-masonry {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 560px) {
+  .photo-wall-skeleton,
+  .photo-masonry {
+    column-count: 1;
+  }
 }
 </style>

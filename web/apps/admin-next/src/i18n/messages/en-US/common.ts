@@ -115,6 +115,8 @@ export default {
   'mediaPicker.filterHint': 'Filter by folder, e.g. media/',
   'mediaPicker.uploaded': 'Uploaded and selected',
   'mediaPicker.uploadedCount': 'Uploaded {count} image(s)',
+  'mediaPicker.skipped': 'Skipped {count} file(s): only images up to 10MB are supported',
+  'mediaPicker.uploadFailedCount': '{count} image(s) failed to upload: {detail}',
   'mediaPicker.loadFailed': 'Failed to load media assets',
   'image.unavailable': 'Image unavailable',
   'image.none': 'No image',

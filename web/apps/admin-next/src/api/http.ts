@@ -1,7 +1,7 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticleView, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
 export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
@@ -361,8 +361,8 @@ export async function listAdminCollection<T>(
   return Array.isArray(value) ? value as T[] : []
 }
 
-export async function getAdminArticle(id: string): Promise<Record<string, unknown>> {
-  const response = await http.get<ResultVO<Record<string, unknown>>>(`admin/articles/${encodeURIComponent(id)}`)
+export async function getAdminArticle(id: string): Promise<AdminArticleView> {
+  const response = await http.get<ResultVO<AdminArticleView>>(`admin/articles/${encodeURIComponent(id)}`)
   return responseData(response)
 }
 

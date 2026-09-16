@@ -163,7 +163,7 @@ export default defineComponent({
       current: 1
     })
     let nowCategoryId = 0
-    const md = new MarkdownIt()
+    const md = new MarkdownIt({ html: true })
     onMounted(() => {
       setSeo({
         title: 'Stellar Beacon · 技术与思考',

@@ -119,6 +119,7 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { t } from '@/i18n'
 import { formatDate, initialOf } from '@/utils/format'
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -231,6 +232,10 @@ async function selectAvatar(event: Event): Promise<void> {
   if (!file) return
   if (!file.type.startsWith('image/')) {
     Message.warning(t('account.avatar.wrongType'))
+    return
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    Message.warning(t('account.avatar.tooLarge'))
     return
   }
   avatarUploading.value = true

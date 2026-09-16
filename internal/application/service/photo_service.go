@@ -59,7 +59,7 @@ func (p *MyPhotoService) ListPhotos(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	photos, count, err := p.photoRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.AlbumId, vo.IsDelete)
+	photos, count, err := p.photoRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.AlbumId, vo.IsDelete, vo.Keywords)
 	if err != nil {
 		return model.ResultFromError(err)
 	}

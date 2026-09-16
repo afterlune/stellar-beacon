@@ -1,6 +1,7 @@
 <template>
   <button
     class="admin-image-preview"
+    :class="{ 'admin-image-preview-natural': fit === 'natural', 'admin-image-preview-contain': fit === 'contain' }"
     type="button"
     :style="style"
     :aria-label="t('image.previewOf', { alt: altLabel })"
@@ -36,11 +37,13 @@ const props = withDefaults(defineProps<{
   alt?: string
   width?: number | string
   height?: number | string
+  fit?: 'cover' | 'contain' | 'natural'
 }>(), {
   src: '',
   alt: '',
   width: 96,
-  height: 64
+  height: 64,
+  fit: 'cover'
 })
 
 /** 未传 alt 时用词条兜底，保证无障碍标签也跟着语言走。 */
@@ -135,6 +138,21 @@ async function copySrc(): Promise<void> {
   height: 100%;
   object-fit: cover;
   transition: transform 180ms var(--admin-ease);
+}
+
+.admin-image-preview-contain img {
+  object-fit: contain;
+}
+
+.admin-image-preview-natural {
+  height: auto !important;
+  display: block;
+}
+
+.admin-image-preview-natural img {
+  height: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .admin-image-preview:not(:disabled):hover img {

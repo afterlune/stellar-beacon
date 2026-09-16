@@ -120,7 +120,7 @@ func (p *MyPhotoAlbumService) GetPhotoAlbumBackById(c *gin.Context) model.Result
 		}
 		return model.ResultFromError(err)
 	}
-	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, False)
+	_, count, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, False, "")
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -134,6 +134,17 @@ func (p *MyPhotoAlbumService) DeletePhotoAlbumById(c *gin.Context) model.ResultV
 	id, err := strconv.Atoi(c.Param("albumId"))
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	_, activeCount, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, False, "")
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	_, deletedCount, err := p.photoRepository().List(c.Request.Context(), 1, 1, id, True, "")
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if activeCount+deletedCount > 0 {
+		return model.ResultFailWithMessage("相册中还有照片，请先移走并清理")
 	}
 	if err := p.photoAlbumRepository().Delete(c.Request.Context(), id); err != nil {
 		return model.ResultFromError(err)

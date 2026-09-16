@@ -52,7 +52,7 @@
         <a-table
           v-model:selected-keys="selectedKeys"
           :row-selection="{ type: 'checkbox', showCheckedAll: true, onlyCurrent: true }"
-          :data="filteredPhotos"
+          :data="photos"
           :columns="columns"
           :loading="loading"
           :pagination="pagination"
@@ -140,33 +140,25 @@ const {
   loading,
   error: errorMessage,
   load,
+  reload,
   changePage: gotoPage,
   changePageSize: applyPageSize
 } = useAsyncList<AdminPhoto>(
   ({ current: page, pageSize: size, signal }) =>
-    listAdminPage<AdminPhoto>('admin/photos', { current: page, size, isDelete: 1 }, { signal }),
+    listAdminPage<AdminPhoto>('admin/photos', { current: page, size, isDelete: 1, keywords: keywords.value.trim() }, { signal }),
   { pageSize: readStoredPageSize(VIEW_KEY, 18), fallbackMessage: t('media.trash.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
-// 回收站的关键词是页内过滤，这里只把条件写进地址栏，方便刷新后保留。
 useQueryFilters([
   { key: 'keywords', ref: keywords, debounce: true },
   { key: 'page', ref: current }
-], { onRestore: () => void load() })
+], { onRestore: () => void load(), onSearch: () => void reload() })
 
 const selectedIds = computed(() =>
   [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
 )
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value, [18, 36, 72]))
-/** The photos endpoint has no keyword filter, so search stays within the page. */
-const filteredPhotos = computed(() => {
-  const query = keywords.value.trim().toLowerCase()
-  if (!query) return photos.value
-  return photos.value.filter((photo) =>
-    `${photo.photoName || ''} ${photo.photoDesc || ''}`.toLowerCase().includes(query)
-  )
-})
 
 // 分页后丢弃已不在当前页的选中项，保持工具栏的计数与列表一致。
 watch(photos, (list) => {

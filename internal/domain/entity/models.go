@@ -12,21 +12,22 @@ type TAbout struct {
 }
 
 type TArticle struct {
-	Id             int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
-	UserId         int       `xorm:"not null comment('作者') INTEGER" json:"userId"`
-	CategoryId     int       `xorm:"comment('文章分类') INTEGER" json:"categoryId"`
-	ArticleCover   string    `xorm:"comment('文章缩略图') VARCHAR(1024)" json:"articleCover"`
-	ArticleTitle   string    `xorm:"not null comment('标题') VARCHAR(50)" json:"articleTitle"`
-	ArticleContent string    `xorm:"not null comment('内容') TEXT" json:"articleContent"`
-	IsTop          int       `xorm:"not null comment('是否置顶 0否 1是') SMALLINT" json:"isTop"`
-	IsFeatured     int       `xorm:"not null comment('是否推荐 0否 1是') SMALLINT" json:"isFeatured"`
-	IsDelete       int       `xorm:"not null comment('是否删除  0否 1是') SMALLINT" json:"isDelete"`
-	Status         int       `xorm:"not null comment('状态值 1公开 2私密 3草稿') SMALLINT" json:"status"`
-	Type           int       `xorm:"not null comment('文章类型 1原创 2转载 3翻译') SMALLINT" json:"type"`
-	Password       string    `xorm:"comment('访问密码') VARCHAR(255)" json:"password"`
-	OriginalUrl    string    `xorm:"comment('原文链接') VARCHAR(255)" json:"originalUrl"`
-	CreateTime     time.Time `xorm:"created not null comment('发表时间') DATETIME" json:"createTime"`
-	UpdateTime     time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
+	Id                 int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	UserId             int       `xorm:"not null comment('作者') INTEGER" json:"userId"`
+	CategoryId         int       `xorm:"comment('文章分类') INTEGER" json:"categoryId"`
+	ArticleCover       string    `xorm:"comment('文章缩略图') VARCHAR(1024)" json:"articleCover"`
+	ArticleTitle       string    `xorm:"not null comment('标题') VARCHAR(50)" json:"articleTitle"`
+	ArticleContent     string    `xorm:"not null comment('内容') TEXT" json:"articleContent"`
+	ArticleContentHTML string    `xorm:"comment('富文本 HTML 内容') TEXT" json:"articleContentHtml,omitempty"`
+	IsTop              int       `xorm:"not null comment('是否置顶 0否 1是') SMALLINT" json:"isTop"`
+	IsFeatured         int       `xorm:"not null comment('是否推荐 0否 1是') SMALLINT" json:"isFeatured"`
+	IsDelete           int       `xorm:"not null comment('是否删除  0否 1是') SMALLINT" json:"isDelete"`
+	Status             int       `xorm:"not null comment('状态值 1公开 2私密 3草稿') SMALLINT" json:"status"`
+	Type               int       `xorm:"not null comment('文章类型 1原创 2转载 3翻译') SMALLINT" json:"type"`
+	Password           string    `xorm:"comment('访问密码') VARCHAR(255)" json:"password"`
+	OriginalUrl        string    `xorm:"comment('原文链接') VARCHAR(255)" json:"originalUrl"`
+	CreateTime         time.Time `xorm:"created not null comment('发表时间') DATETIME" json:"createTime"`
+	UpdateTime         time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
 type TArticleTag struct {

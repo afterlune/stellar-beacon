@@ -125,7 +125,7 @@ func NewPhotoRepository(engine *xorm.Engine) *MyPhotoRepository {
 	return &MyPhotoRepository{engine: engine}
 }
 
-func (r *MyPhotoRepository) List(ctx context.Context, current, size, albumID, isDelete int) ([]entity.TPhoto, int64, error) {
+func (r *MyPhotoRepository) List(ctx context.Context, current, size, albumID, isDelete int, keywords string) ([]entity.TPhoto, int64, error) {
 	session, err := repoSession(r.engine, ctx, "photo.list")
 	if err != nil {
 		return nil, 0, err
@@ -135,6 +135,11 @@ func (r *MyPhotoRepository) List(ctx context.Context, current, size, albumID, is
 	if albumID != 0 {
 		where += " AND album_id = ?"
 		args = append(args, albumID)
+	}
+	if strings.TrimSpace(keywords) != "" {
+		where += " AND (photo_name LIKE ? ESCAPE '\\' OR COALESCE(photo_desc, '') LIKE ? ESCAPE '\\')"
+		pattern := pgsql.ContainsPattern(keywords)
+		args = append(args, pattern, pattern)
 	}
 	var count int64
 	if _, err := session.SQL("SELECT count(0) FROM t_photo"+where, args...).Get(&count); err != nil {

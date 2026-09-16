@@ -200,7 +200,7 @@ export default defineComponent({
     const { setSeo } = useSeoMeta()
     const loading = ref(true)
     const articleRef = ref()
-    const md = new MarkdownIt()
+    const md = new MarkdownIt({ html: true })
     const reactiveData = reactive({
       articleId: '' as any,
       article: '' as any,
@@ -315,7 +315,7 @@ export default defineComponent({
         }
         commonStore.setHeaderImage(data.data.articleCover)
         new Promise((resolve) => {
-          data.data.articleContent = markdownToHtml(data.data.articleContent)
+          data.data.articleContent = data.data.articleContentHtml || markdownToHtml(data.data.articleContent)
           resolve(data.data)
         }).then((article: any) => {
           reactiveData.article = article

@@ -14,19 +14,28 @@
         <a-form-item :label="t('common.image')">
           <a-space direction="vertical" fill>
             <div v-if="editor.images.length" class="talk-image-grid">
-              <AdminImagePreview
-                v-for="image in editor.images"
+              <div
+                v-for="(image, index) in editor.images"
                 :key="image"
-                :src="image"
-                :alt="t('comments.talks.imageAlt')"
-                :width="112"
-                :height="78" />
+                class="talk-image-item"
+                draggable="true"
+                @dragstart="draggingIndex = index"
+                @dragover.prevent
+                @drop="dropImage(index)"
+                @dragend="draggingIndex = -1">
+                <AdminImagePreview
+                  :src="image"
+                  :alt="t('comments.talks.imageAlt')"
+                  :width="132"
+                  :height="92" />
+                <button type="button" class="talk-image-remove" :aria-label="t('comments.talks.removeImage')" @click="removeImage(image)">×</button>
+              </div>
             </div>
             <template v-else>
               <span class="field-hint">{{ t('comments.talks.noImages') }}</span>
             </template>
             <a-space wrap>
-              <input ref="imageInput" type="file" accept="image/*" hidden @change="selectImage" />
+              <input ref="imageInput" type="file" accept="image/*" multiple hidden @change="selectImage" />
               <a-button :loading="uploading" @click="imageInput?.click()">{{ t('comments.talks.uploadImage') }}</a-button>
               <a-button v-if="editor.images.length" @click="editor.images = []">{{ t('comments.talks.clearImages') }}</a-button>
               <span class="field-hint">{{ t('comments.talks.uploadHint') }}</span>
@@ -76,10 +85,13 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { t } from '@/i18n'
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const MAX_IMAGES = 9
 const route = useRoute()
 const router = useRouter()
 const saving = ref(false)
 const uploading = ref(false)
+const draggingIndex = ref(-1)
 const errorMessage = ref('')
 const imageInput = ref<HTMLInputElement | null>(null)
 const editorReady = ref(false)
@@ -172,18 +184,46 @@ function shortenUrl(url: string): string {
 
 async function selectImage(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
+  const files = Array.from(input.files || [])
   input.value = ''
-  if (!file) return
+  if (!files.length) return
   uploading.value = true
+  let uploaded = 0
+  const failures: string[] = []
   try {
-    editor.images.push(await uploadAdminTalkImage(file))
-    Message.success(t('comments.talks.uploadSuccess'))
-  } catch (error) {
-    Message.error(apiErrorMessage(error, t('upload.failed')))
+    for (const file of files) {
+      if (editor.images.length + uploaded >= MAX_IMAGES) {
+        failures.push(`${file.name}：${t('comments.talks.imageLimit')}`)
+        continue
+      }
+      if (!file.type.startsWith('image/')) {
+        failures.push(`${file.name}：${t('comments.talks.imageTypeInvalid')}`)
+        continue
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        failures.push(`${file.name}：${t('comments.talks.imageTooLarge')}`)
+        continue
+      }
+      try {
+        editor.images.push(await uploadAdminTalkImage(file))
+        uploaded += 1
+      } catch (error) {
+        failures.push(`${file.name}：${apiErrorMessage(error, t('upload.failed'))}`)
+      }
+    }
+    if (uploaded > 0) Message.success(t('comments.talks.uploadSuccessCount', { count: uploaded }))
+    if (failures.length) Message.error(failures.join('；'))
   } finally {
     uploading.value = false
   }
+}
+
+function dropImage(index: number): void {
+  const from = draggingIndex.value
+  draggingIndex.value = -1
+  if (from < 0 || from === index) return
+  const [image] = editor.images.splice(from, 1)
+  if (image) editor.images.splice(index, 0, image)
 }
 
 function normalizeImages(images: unknown, serialized: unknown): string[] {
@@ -206,5 +246,29 @@ function normalizeImages(images: unknown, serialized: unknown): string[] {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.talk-image-item {
+  position: relative;
+  cursor: grab;
+}
+
+.talk-image-item:active {
+  cursor: grabbing;
+}
+
+.talk-image-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--admin-surface);
+  border-radius: 50%;
+  color: #fff;
+  background: var(--admin-danger, #d14b58);
+  cursor: pointer;
 }
 </style>

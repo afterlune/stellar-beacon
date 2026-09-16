@@ -162,6 +162,8 @@ import { formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum } from '@stellar-beacon/api-contract'
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
 // 列定义随语言切换重算，所以用 computed 而不是模块级常量。
 const columns = computed(() => [
   { title: t('media.albums.cover'), dataIndex: 'albumCover', width: 116, slotName: 'cover' },
@@ -287,6 +289,14 @@ async function selectCover(event: Event): Promise<void> {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  if (!file.type.startsWith('image/')) {
+    Message.warning(t('media.albums.imageTypeInvalid'))
+    return
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    Message.warning(t('media.albums.imageTooLarge'))
+    return
+  }
   uploading.value = true
   try {
     editor.albumCover = await uploadAdminAlbumCover(file)

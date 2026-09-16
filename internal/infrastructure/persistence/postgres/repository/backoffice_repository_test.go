@@ -23,7 +23,7 @@ func TestBackofficeRepositoriesRequireInjectedEngine(t *testing.T) {
 		{name: "resource", call: func() error { _, err := NewResourceRepo(nil).List(ctx, ""); return err }},
 		{name: "role", call: func() error { _, err := NewRoleRepository(nil).ListUserRoles(ctx); return err }},
 		{name: "photo album", call: func() error { _, err := NewPhotoAlbumRepository(nil).ListPublic(ctx); return err }},
-		{name: "photo", call: func() error { _, _, err := NewPhotoRepository(nil).List(ctx, 1, 10, 0, 0); return err }},
+		{name: "photo", call: func() error { _, _, err := NewPhotoRepository(nil).List(ctx, 1, 10, 0, 0, ""); return err }},
 		{name: "user info", call: func() error { _, err := NewUserInfoRepo(nil).GetByID(ctx, 1); return err }},
 		{name: "article", call: func() error { _, _, err := NewArticleRepo(nil).ListArchives(ctx, 1, 10); return err }},
 		{name: "category", call: func() error { _, err := NewCategoryRepo(nil).List(ctx); return err }},

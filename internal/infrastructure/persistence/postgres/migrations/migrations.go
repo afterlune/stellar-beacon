@@ -48,6 +48,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyGrowthOperationsSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyArticleContentSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -348,6 +351,37 @@ func applyGrowthOperationsSchema(ctx context.Context, engine *xorm.Engine) error
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit growth operations migration: %w", err)
+	}
+	return nil
+}
+
+// applyArticleContentSchema adds the optional HTML representation used by the
+// new editor. Legacy Markdown stays in article_content and is intentionally
+// not rewritten during deployment; the public API can fall back to it.
+func applyArticleContentSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 5)").Get(&applied); err != nil {
+		return fmt.Errorf("check article content migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin article content migration: %w", err)
+	}
+	defer session.Rollback()
+	if _, err := session.Exec(`ALTER TABLE t_article ADD COLUMN IF NOT EXISTS article_content_html TEXT NULL`); err != nil {
+		return fmt.Errorf("apply article content migration: %w", err)
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 5, "article-content-html"); err != nil {
+		return fmt.Errorf("record article content migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit article content migration: %w", err)
 	}
 	return nil
 }

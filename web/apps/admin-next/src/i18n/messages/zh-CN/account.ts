@@ -48,6 +48,7 @@ export default {
   'account.password.note': '修改密码后当前会话保持有效；如怀疑账号泄露，请同时更换其他站点的同款密码。',
 
   'account.avatar.wrongType': '请选择图片文件作为头像',
+  'account.avatar.tooLarge': '头像图片不能超过 10MB',
   'account.avatar.updated': '头像已更新',
   'account.avatar.failed': '头像上传失败'
 }

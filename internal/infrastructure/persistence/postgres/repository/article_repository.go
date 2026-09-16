@@ -319,7 +319,7 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 			article.CategoryId = category.Id
 		}
 		if article.Id != 0 {
-			if _, err := session.ID(article.Id).Update(&article); err != nil {
+			if _, err := session.ID(article.Id).MustCols("article_content_html").Update(&article); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.update", err)
 			}
 		} else if _, err := session.Insert(&article); err != nil {

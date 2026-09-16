@@ -115,6 +115,8 @@ export default {
   'mediaPicker.filterHint': '按目录筛选，例如 media/',
   'mediaPicker.uploaded': '图片已上传并选中',
   'mediaPicker.uploadedCount': '已上传 {count} 张图片',
+  'mediaPicker.skipped': '已跳过 {count} 个文件：仅支持 10MB 以内的图片',
+  'mediaPicker.uploadFailedCount': '{count} 张图片上传失败：{detail}',
   'mediaPicker.loadFailed': '图片资源加载失败',
   'image.unavailable': '图片不可用',
   'image.none': '暂无图片',

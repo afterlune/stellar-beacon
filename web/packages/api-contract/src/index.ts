@@ -86,6 +86,23 @@ export interface AdminPhoto {
   [key: string]: unknown
 }
 
+export interface AdminArticleView {
+	id: number
+	articleTitle?: string
+	articleContent?: string
+	articleContentHtml?: string
+	articleCover?: string
+	categoryName?: string
+	tagNames?: string[]
+	status?: number
+	type?: number
+	isTop?: number
+	isFeatured?: number
+	password?: string
+	originalUrl?: string
+	[key: string]: unknown
+}
+
 export interface AdminRole {
   id: number
   roleName: string

@@ -8,40 +8,42 @@ import (
 // ArticleCard is the application-facing read model for article cards. It is
 // deliberately independent of the HTTP facade package.
 type ArticleCard struct {
-	Id             int              `json:"id"`
-	ArticleCover   string           `json:"articleCover"`
-	ArticleTitle   string           `json:"articleTitle"`
-	ArticleContent string           `json:"articleContent"`
-	IsTop          int              `json:"isTop"`
-	IsFeatured     int              `json:"isFeatured"`
-	CategoryName   string           `json:"categoryName"`
-	Status         int              `json:"status"`
-	CreateTime     time.Time        `json:"createTime"`
-	UpdateTime     time.Time        `json:"updateTime"`
-	Author         entity.TUserInfo `json:"author"`
-	Tags           any              `json:"tags"`
+	Id                 int              `json:"id"`
+	ArticleCover       string           `json:"articleCover"`
+	ArticleTitle       string           `json:"articleTitle"`
+	ArticleContent     string           `json:"articleContent"`
+	ArticleContentHTML string           `json:"articleContentHtml,omitempty"`
+	IsTop              int              `json:"isTop"`
+	IsFeatured         int              `json:"isFeatured"`
+	CategoryName       string           `json:"categoryName"`
+	Status             int              `json:"status"`
+	CreateTime         time.Time        `json:"createTime"`
+	UpdateTime         time.Time        `json:"updateTime"`
+	Author             entity.TUserInfo `json:"author"`
+	Tags               any              `json:"tags"`
 }
 
 type Article struct {
-	Id              int              `json:"id"`
-	ArticleCover    string           `json:"articleCover"`
-	ArticleTitle    string           `json:"articleTitle"`
-	ArticleContent  string           `json:"articleContent"`
-	IsTop           int              `json:"isTop"`
-	IsFeatured      int              `json:"isFeatured"`
-	CategoryName    string           `json:"categoryName"`
-	Status          int              `json:"status"`
-	CreateTime      time.Time        `json:"createTime"`
-	UpdateTime      time.Time        `json:"updateTime"`
-	Author          entity.TUserInfo `json:"author"`
-	Type            int              `json:"type"`
-	OriginalUrl     string           `json:"originalUrl"`
-	IsDelete        int              `json:"isDelete"`
-	ViewCount       int              `json:"viewCount"`
-	PreArticleCard  ArticleCard      `json:"preArticleCard"`
-	NextArticleCard ArticleCard      `json:"nextArticleCard"`
-	RelatedArticles []ArticleCard    `json:"relatedArticles"`
-	Tags            any              `json:"tags"`
+	Id                 int              `json:"id"`
+	ArticleCover       string           `json:"articleCover"`
+	ArticleTitle       string           `json:"articleTitle"`
+	ArticleContent     string           `json:"articleContent"`
+	ArticleContentHTML string           `json:"articleContentHtml,omitempty"`
+	IsTop              int              `json:"isTop"`
+	IsFeatured         int              `json:"isFeatured"`
+	CategoryName       string           `json:"categoryName"`
+	Status             int              `json:"status"`
+	CreateTime         time.Time        `json:"createTime"`
+	UpdateTime         time.Time        `json:"updateTime"`
+	Author             entity.TUserInfo `json:"author"`
+	Type               int              `json:"type"`
+	OriginalUrl        string           `json:"originalUrl"`
+	IsDelete           int              `json:"isDelete"`
+	ViewCount          int              `json:"viewCount"`
+	PreArticleCard     ArticleCard      `json:"preArticleCard"`
+	NextArticleCard    ArticleCard      `json:"nextArticleCard"`
+	RelatedArticles    []ArticleCard    `json:"relatedArticles"`
+	Tags               any              `json:"tags"`
 }
 
 type ArticleAdmin struct {
@@ -60,18 +62,19 @@ type ArticleAdmin struct {
 }
 
 type ArticleAdminView struct {
-	Id             int    `json:"id"`
-	ArticleCover   string `json:"articleCover"`
-	ArticleTitle   string `json:"articleTitle"`
-	ArticleContent string `json:"articleContent"`
-	IsTop          int    `json:"isTop"`
-	IsFeatured     int    `json:"isFeatured"`
-	CategoryName   string `json:"categoryName"`
-	TagNames       any    `json:"tagNames"`
-	Status         int    `json:"status"`
-	Type           int    `json:"type"`
-	Password       string `json:"password"`
-	OriginalUrl    string `json:"originalUrl"`
+	Id                 int    `json:"id"`
+	ArticleCover       string `json:"articleCover"`
+	ArticleTitle       string `json:"articleTitle"`
+	ArticleContent     string `json:"articleContent"`
+	ArticleContentHTML string `json:"articleContentHtml,omitempty"`
+	IsTop              int    `json:"isTop"`
+	IsFeatured         int    `json:"isFeatured"`
+	CategoryName       string `json:"categoryName"`
+	TagNames           any    `json:"tagNames"`
+	Status             int    `json:"status"`
+	Type               int    `json:"type"`
+	Password           string `json:"password"`
+	OriginalUrl        string `json:"originalUrl"`
 }
 
 type ArticleSearch struct {
