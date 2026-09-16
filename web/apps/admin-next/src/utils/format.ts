@@ -5,6 +5,7 @@
  * pre-formatted strings. These helpers keep rendering deterministic so table
  * columns, cards and detail panels never leak `2026-08-29T10:00:00Z` to users.
  */
+import { locale, t } from '@/i18n'
 
 /** Matches `2026-08-29T10:00:00`, optionally followed by `.123` and/or `Z`/offset. */
 const TIMESTAMP_PATTERN = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/
@@ -50,13 +51,13 @@ export function formatCell(value: unknown): string {
 export function formatNumber(value: unknown): string {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return EMPTY
-  return new Intl.NumberFormat('zh-CN').format(numeric)
+  return new Intl.NumberFormat(locale.value).format(numeric)
 }
 
 /** Byte sizes for the media library. */
 export function formatFileSize(value: unknown): string {
   const bytes = Number(value)
-  if (!Number.isFinite(bytes) || bytes <= 0) return '未知大小'
+  if (!Number.isFinite(bytes) || bytes <= 0) return t('format.unknownSize')
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -85,6 +86,7 @@ export function isHttpUrl(value: unknown): value is string {
 }
 
 /** First grapheme-ish character of a display name, for avatar fallbacks. */
-export function initialOf(value: unknown, fallback = '管'): string {
-  return String(value || fallback).trim().slice(0, 1).toUpperCase() || fallback
+export function initialOf(value: unknown, fallback = ''): string {
+  const base = fallback || t('shell.adminFallback')
+  return String(value || base).trim().slice(0, 1).toUpperCase() || base
 }

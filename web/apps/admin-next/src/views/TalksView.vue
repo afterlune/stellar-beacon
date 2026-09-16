@@ -1,16 +1,16 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="说说管理" description="发布和管理说说。">
+    <AdminPageHeader :title="t('comments.talks.title')" :description="t('comments.talks.description')">
       <template #actions>
         <a-input-search
           v-model="keywords"
           class="admin-filter-input"
-          placeholder="在本页搜索说说内容"
+          :placeholder="t('comments.talks.searchPlaceholder')"
           allow-clear />
-        <a-button v-if="keywords.trim()" @click="keywords = ''">清空搜索</a-button>
+        <a-button v-if="keywords.trim()" @click="keywords = ''">{{ t('comments.common.clearSearch') }}</a-button>
         <a-button type="primary" @click="router.push('/talks')">
           <template #icon><IconPlus /></template>
-          新增
+          {{ t('common.create') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -19,25 +19,25 @@
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
           <a-radio-group v-model="statusFilter" type="button" size="small" @change="reload">
-            <a-radio value="all">全部</a-radio>
-            <a-radio value="1">公开</a-radio>
-            <a-radio value="2">私密</a-radio>
+            <a-radio value="all">{{ t('common.all') }}</a-radio>
+            <a-radio value="1">{{ t('status.published') }}</a-radio>
+            <a-radio value="2">{{ t('status.private') }}</a-radio>
           </a-radio-group>
-          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">重置筛选</a-button>
+          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">{{ t('comments.talks.resetFilters') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 条说说 · 本页 {{ visibleTalks.length }} 条</span>
+          <span class="admin-toolbar-caption">{{ t('comments.talks.total', { total, count: visibleTalks.length }) }}</span>
           <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
-            刷新
+            {{ t('common.refresh') }}
           </a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="说说列表加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('comments.talks.loadFailed')" @retry="load" />
 
-      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${visibleTalks.length} 条`" @clear="clearSelection">
-        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      <AdminBatchBar :count="selectedIds.length" :hint="t('comments.common.pageCount', { count: visibleTalks.length })" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('comments.common.batchDelete') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -57,8 +57,8 @@
           </template>
           <template #images="{ record }">
             <div v-if="talkImages(record).length" class="talk-images">
-              <AdminImagePreview :src="talkImages(record)[0]" alt="说说图片" :width="76" :height="54" />
-              <a-tooltip v-if="talkImages(record).length > 1" :content="`共 ${talkImages(record).length} 张图片`">
+              <AdminImagePreview :src="talkImages(record)[0]" :alt="t('comments.talks.imageAlt')" :width="76" :height="54" />
+              <a-tooltip v-if="talkImages(record).length > 1" :content="t('comments.talks.imageCount', { count: talkImages(record).length })">
                 <span class="talk-image-count">+{{ talkImages(record).length - 1 }}</span>
               </a-tooltip>
             </div>
@@ -68,7 +68,7 @@
             <AdminStatusTag :kind="Number(record.status) === 1 ? 'public' : 'private'" />
           </template>
           <template #top="{ record }">
-            <a-tooltip :content="Number(record.isTop) === 1 ? '点击取消置顶' : '点击置顶这条说说'">
+            <a-tooltip :content="Number(record.isTop) === 1 ? t('comments.talks.unpinHint') : t('comments.talks.pinHint')">
               <a-switch
                 :model-value="Number(record.isTop) === 1"
                 :loading="pendingTopId === Number(record.id)"
@@ -78,19 +78,19 @@
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="router.push(`/talks/${record.id}`)">编辑</a-button>
-              <a-popconfirm content="确定删除这条说说吗？删除后无法恢复。" @ok="deleteTalk(record.id)">
-                <a-button type="text" status="danger" size="small">删除</a-button>
+              <a-button type="text" size="small" @click="router.push(`/talks/${record.id}`)">{{ t('common.edit') }}</a-button>
+              <a-popconfirm :content="t('comments.talks.deleteConfirm')" @ok="deleteTalk(record.id)">
+                <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconMessage"
-              :title="hasFilters ? '没有匹配的说说' : '还没有说说'"
-              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '发布说说后，会显示在这里。'">
-              <a-button v-if="hasFilters" size="small" @click="resetFilters">重置筛选</a-button>
-              <a-button v-else type="primary" size="small" @click="router.push('/talks')">发布说说</a-button>
+              :title="hasFilters ? t('comments.talks.emptySearch') : t('comments.talks.empty')"
+              :description="hasFilters ? t('comments.talks.emptySearchHint') : t('comments.talks.emptyHint')">
+              <a-button v-if="hasFilters" size="small" @click="resetFilters">{{ t('comments.talks.resetFilters') }}</a-button>
+              <a-button v-else type="primary" size="small" @click="router.push('/talks')">{{ t('comments.talks.create') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -115,22 +115,24 @@ import AdminStatusTag from '@/components/AdminStatusTag.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatDateTime, isHttpUrl, plainText } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminTalk } from '@stellar-beacon/api-contract'
 
 // `commentCount` is intentionally absent: the admin talk DTO does not expose it
 // yet, so the column would always render an empty cell.
-const columns = [
+// 列定义必须在 computed 里生成：它只在 setup 时求值一次，语言切换后不会再更新。
+const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', width: 78, slotName: 'id' },
-  { title: '内容', dataIndex: 'content', minWidth: 260, slotName: 'content' },
-  { title: '图片', dataIndex: 'images', width: 112, slotName: 'images' },
-  { title: '作者', dataIndex: 'nickname', width: 130, ellipsis: true, tooltip: true },
-  { title: '置顶', dataIndex: 'isTop', width: 86, slotName: 'top' },
-  { title: '状态', dataIndex: 'status', width: 96, slotName: 'status' },
-  { title: '创建时间', dataIndex: 'createTime', width: 184, slotName: 'time' },
-  { title: '操作', dataIndex: 'actions', width: 150, slotName: 'actions' }
-]
+  { title: t('comments.common.content'), dataIndex: 'content', minWidth: 260, slotName: 'content' },
+  { title: t('common.image'), dataIndex: 'images', width: 112, slotName: 'images' },
+  { title: t('comments.talks.author'), dataIndex: 'nickname', width: 130, ellipsis: true, tooltip: true },
+  { title: t('status.pinned'), dataIndex: 'isTop', width: 86, slotName: 'top' },
+  { title: t('common.status'), dataIndex: 'status', width: 96, slotName: 'status' },
+  { title: t('comments.common.createdAt'), dataIndex: 'createTime', width: 184, slotName: 'time' },
+  { title: t('common.actions'), dataIndex: 'actions', width: 150, slotName: 'actions' }
+])
 
 const VIEW_KEY = 'talks'
 
@@ -154,7 +156,9 @@ const {
   changePageSize: applyPageSize
 } = useAsyncList<AdminTalk>(
   ({ current: page, pageSize: size, signal }) => listAdminPage<AdminTalk>('admin/talks', { current: page, size }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '说说列表加载失败' }
+  // fallbackMessage 只在 setup 时取一次值（useAsyncList 的参数是普通字符串），
+  // 因此这里保留当前语言的快照；错误块的标题会跟着语言切换重新渲染。
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('comments.talks.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -207,20 +211,20 @@ function batchDelete(): void {
   const ids = selectedIds.value
   if (ids.length === 0) return
   Modal.confirm({
-    title: '批量删除',
-    content: `删除选中的 ${ids.length} 条说说后无法恢复，确定继续吗？`,
-    okText: '批量删除',
-    cancelText: '取消',
+    title: t('comments.common.batchDelete'),
+    content: t('comments.talks.batchDeleteConfirm', { count: ids.length }),
+    okText: t('comments.common.batchDelete'),
+    cancelText: t('common.cancel'),
     okButtonProps: { status: 'danger' },
     onOk: async () => {
       batchDeleting.value = true
       try {
         await deleteAdminTalks(ids)
-        Message.success(`已删除 ${ids.length} 条说说`)
+        Message.success(t('comments.talks.deletedCount', { count: ids.length }))
         clearSelection()
         await load()
       } catch (error) {
-        Message.error(apiErrorMessage(error, '批量删除失败'))
+        Message.error(apiErrorMessage(error, t('comments.common.batchDeleteFailed')))
       } finally {
         batchDeleting.value = false
       }
@@ -247,9 +251,9 @@ async function toggleTop(talk: AdminTalk, value: boolean | string | number): Pro
       status: Number(full.status ?? 1)
     })
     talk.isTop = next
-    Message.success(next === 1 ? '说说已置顶' : '已取消置顶')
+    Message.success(next === 1 ? t('comments.talks.pinned') : t('comments.talks.unpinned'))
   } catch (error) {
-    Message.error(apiErrorMessage(error, '置顶状态更新失败'))
+    Message.error(apiErrorMessage(error, t('comments.talks.pinFailed')))
   } finally {
     pendingTopId.value = 0
   }
@@ -261,10 +265,10 @@ async function deleteTalk(id: unknown): Promise<void> {
   try {
     await deleteAdminTalks([talkId])
     if (talks.value.length === 1 && current.value > 1) current.value -= 1
-    Message.success('说说已删除')
+    Message.success(t('comments.talks.deleted'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '说说删除失败'))
+    Message.error(apiErrorMessage(error, t('comments.talks.deleteFailed')))
   }
 }
 

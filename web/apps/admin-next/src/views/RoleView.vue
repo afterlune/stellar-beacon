@@ -1,16 +1,16 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="角色管理" description="管理角色，并配置菜单和接口权限。">
+    <AdminPageHeader :title="t('rbac.roles.title')" :description="t('rbac.roles.description')">
       <template #actions>
         <a-input-search
           v-model="keywords"
           class="admin-filter-input"
-          placeholder="搜索角色名"
+          :placeholder="t('rbac.roles.searchPlaceholder')"
           allow-clear
           @search="reload" />
         <a-button type="primary" @click="openEditor()">
           <template #icon><IconPlus /></template>
-          新增
+          {{ t('common.create') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -18,22 +18,22 @@
     <a-card class="admin-panel" :bordered="false">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
-          <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
-          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+          <a-tag v-if="keywords.trim()" color="arcoblue">{{ t('rbac.shared.keywords', { keywords: keywords.trim() }) }}</a-tag>
+          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">{{ t('rbac.shared.clearSearch') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 个角色</span>
+          <span class="admin-toolbar-caption">{{ t('rbac.roles.total', { total }) }}</span>
           <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
-            刷新
+            {{ t('common.refresh') }}
           </a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="角色列表加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('rbac.roles.loadFailed')" @retry="load" />
 
-      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${roles.length} 个`" @clear="clearSelection">
-        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      <AdminBatchBar :count="selectedIds.length" :hint="t('rbac.roles.pageCount', { count: roles.length })" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('rbac.roles.batchDelete') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -49,35 +49,35 @@
           @page-size-change="changePageSize">
           <template #id="{ record }"><span class="admin-id-cell">#{{ record.id }}</span></template>
           <template #roleName="{ record }">
-            <span class="admin-title-cell">{{ record.roleName || '未命名角色' }}</span>
+            <span class="admin-title-cell">{{ record.roleName || t('rbac.roles.unnamed') }}</span>
           </template>
           <template #status="{ record }">
             <AdminStatusTag :kind="Number(record.isDisable) === 1 ? 'disabled' : 'enabled'" />
           </template>
           <template #permissions="{ record }">
             <a-space :size="4" wrap>
-              <a-tag>{{ countOf(record.menuIds) }} 菜单</a-tag>
-              <a-tag>{{ countOf(record.resourceIds) }} 接口</a-tag>
+              <a-tag>{{ t('rbac.roles.menuCount', { count: countOf(record.menuIds) }) }}</a-tag>
+              <a-tag>{{ t('rbac.roles.resourceCount', { count: countOf(record.resourceIds) }) }}</a-tag>
             </a-space>
           </template>
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openEditor(record)">编辑权限</a-button>
+              <a-button type="text" size="small" @click="openEditor(record)">{{ t('rbac.roles.editPermissions') }}</a-button>
               <a-popconfirm
-                :content="`删除角色「${record.roleName}」后，拥有该角色的账号会立即失去对应权限，确认删除吗？`"
+                :content="t('rbac.roles.deleteConfirm', { name: record.roleName })"
                 @ok="deleteRole(record.id)">
-                <a-button type="text" status="danger" size="small">删除</a-button>
+                <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconLock"
-              :title="keywords.trim() ? '没有匹配的角色' : '还没有角色'"
-              :description="keywords.trim() ? '换个关键词再试一次。' : '创建角色并分配菜单与接口权限，再把它授予用户。'">
-              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
-              <a-button v-else type="primary" size="small" @click="openEditor()">新增角色</a-button>
+              :title="keywords.trim() ? t('rbac.roles.emptySearchTitle') : t('rbac.roles.emptyTitle')"
+              :description="keywords.trim() ? t('rbac.shared.searchHint') : t('rbac.roles.emptyHint')">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">{{ t('rbac.shared.clearSearch') }}</a-button>
+              <a-button v-else type="primary" size="small" @click="openEditor()">{{ t('rbac.roles.create') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -86,24 +86,24 @@
 
     <a-modal
       v-model:visible="editorVisible"
-      :title="editor.id ? '编辑角色' : '新增角色'"
+      :title="editor.id ? t('rbac.roles.edit') : t('rbac.roles.create')"
       :ok-loading="saving"
       :mask-closable="false"
       width="760px"
       @ok="saveEditor">
       <a-form :model="editor" layout="vertical">
-        <a-form-item field="roleName" label="角色名" required>
-          <a-input v-model="editor.roleName" maxlength="20" show-word-limit placeholder="例如：内容编辑" />
-          <template #help>角色名用于标识一组权限，建议使用岗位或职责命名。</template>
+        <a-form-item field="roleName" :label="t('rbac.roles.name')" required>
+          <a-input v-model="editor.roleName" maxlength="20" show-word-limit :placeholder="t('rbac.roles.namePlaceholder')" />
+          <template #help>{{ t('rbac.roles.nameHelp') }}</template>
         </a-form-item>
 
-        <a-form-item label="菜单权限">
+        <a-form-item :label="t('rbac.roles.menuPermissions')">
           <div class="permission-panel">
             <div class="permission-panel-head">
-              <span>已选 {{ editor.menuIds.length }} 项</span>
+              <span>{{ t('rbac.roles.selectedCount', { count: editor.menuIds.length }) }}</span>
               <a-space :size="4">
-                <a-button type="text" size="mini" :disabled="menuOptions.length === 0" @click="selectAll('menu')">全选</a-button>
-                <a-button type="text" size="mini" :disabled="editor.menuIds.length === 0" @click="clearAll('menu')">清空</a-button>
+                <a-button type="text" size="mini" :disabled="menuOptions.length === 0" @click="selectAll('menu')">{{ t('common.selectAll') }}</a-button>
+                <a-button type="text" size="mini" :disabled="editor.menuIds.length === 0" @click="clearAll('menu')">{{ t('common.clear') }}</a-button>
               </a-space>
             </div>
             <div v-if="menuOptions.length" class="permission-groups">
@@ -125,17 +125,17 @@
                 </div>
               </div>
             </div>
-            <a-empty v-else description="暂无菜单权限选项" />
+            <a-empty v-else :description="t('rbac.roles.noMenuOptions')" />
           </div>
         </a-form-item>
 
-        <a-form-item label="接口权限">
+        <a-form-item :label="t('rbac.roles.resourcePermissions')">
           <div class="permission-panel">
             <div class="permission-panel-head">
-              <span>已选 {{ editor.resourceIds.length }} 项</span>
+              <span>{{ t('rbac.roles.selectedCount', { count: editor.resourceIds.length }) }}</span>
               <a-space :size="4">
-                <a-button type="text" size="mini" :disabled="resourceOptions.length === 0" @click="selectAll('resource')">全选</a-button>
-                <a-button type="text" size="mini" :disabled="editor.resourceIds.length === 0" @click="clearAll('resource')">清空</a-button>
+                <a-button type="text" size="mini" :disabled="resourceOptions.length === 0" @click="selectAll('resource')">{{ t('common.selectAll') }}</a-button>
+                <a-button type="text" size="mini" :disabled="editor.resourceIds.length === 0" @click="clearAll('resource')">{{ t('common.clear') }}</a-button>
               </a-space>
             </div>
             <div v-if="resourceOptions.length" class="permission-groups">
@@ -157,7 +157,7 @@
                 </div>
               </div>
             </div>
-            <a-empty v-else description="暂无接口权限选项" />
+            <a-empty v-else :description="t('rbac.roles.noResourceOptions')" />
           </div>
         </a-form-item>
       </a-form>
@@ -186,6 +186,7 @@ import AdminStatusTag from '@/components/AdminStatusTag.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminRole } from '@stellar-beacon/api-contract'
@@ -200,14 +201,14 @@ type Scope = 'menu' | 'resource'
 
 const VIEW_KEY = 'roles'
 
-const columns = [
+const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', width: 84, slotName: 'id' },
-  { title: '角色名', dataIndex: 'roleName', slotName: 'roleName', minWidth: 180 },
-  { title: '状态', dataIndex: 'isDisable', width: 100, slotName: 'status' },
-  { title: '权限范围', dataIndex: 'permissions', width: 180, slotName: 'permissions' },
-  { title: '创建时间', dataIndex: 'createTime', width: 180, slotName: 'time' },
-  { title: '操作', dataIndex: 'actions', width: 176, slotName: 'actions' }
-]
+  { title: t('rbac.roles.name'), dataIndex: 'roleName', slotName: 'roleName', minWidth: 180 },
+  { title: t('common.status'), dataIndex: 'isDisable', width: 100, slotName: 'status' },
+  { title: t('rbac.roles.scope'), dataIndex: 'permissions', width: 180, slotName: 'permissions' },
+  { title: t('rbac.roles.createTime'), dataIndex: 'createTime', width: 180, slotName: 'time' },
+  { title: t('common.actions'), dataIndex: 'actions', width: 176, slotName: 'actions' }
+])
 
 const menuOptions = ref<PermissionOption[]>([])
 const resourceOptions = ref<PermissionOption[]>([])
@@ -235,7 +236,7 @@ const {
     size,
     keywords: keywords.value.trim()
   }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '角色列表加载失败' }
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('rbac.roles.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -264,7 +265,7 @@ async function loadPermissionOptions(): Promise<void> {
     menuOptions.value = normalizeOptions(menus)
     resourceOptions.value = normalizeOptions(resources)
   } catch (error) {
-    Message.error(apiErrorMessage(error, '权限选项加载失败'))
+    Message.error(apiErrorMessage(error, t('rbac.roles.optionsLoadFailed')))
   }
 }
 
@@ -286,20 +287,20 @@ function batchDelete(): void {
   const ids = selectedIds.value
   if (ids.length === 0) return
   Modal.confirm({
-    title: '批量删除',
-    content: `删除选中的 ${ids.length} 个角色后，拥有这些角色的账号会立即失去对应权限，确定继续吗？`,
-    okText: '批量删除',
-    cancelText: '取消',
+    title: t('rbac.roles.batchDelete'),
+    content: t('rbac.roles.batchDeleteConfirm', { count: ids.length }),
+    okText: t('rbac.roles.batchDelete'),
+    cancelText: t('common.cancel'),
     okButtonProps: { status: 'danger' },
     onOk: async () => {
       batchDeleting.value = true
       try {
         await deleteAdminRoles(ids)
-        Message.success(`已删除 ${ids.length} 个角色`)
+        Message.success(t('rbac.roles.batchDeleted', { count: ids.length }))
         clearSelection()
         await load()
       } catch (error) {
-        Message.error(apiErrorMessage(error, '批量删除失败'))
+        Message.error(apiErrorMessage(error, t('rbac.roles.batchDeleteFailed')))
       } finally {
         batchDeleting.value = false
       }
@@ -317,7 +318,7 @@ function openEditor(role?: AdminRole): void {
 
 async function saveEditor(): Promise<void> {
   if (!editor.roleName.trim()) {
-    Message.error('角色名不能为空')
+    Message.error(t('rbac.roles.nameRequired'))
     return
   }
   saving.value = true
@@ -329,10 +330,10 @@ async function saveEditor(): Promise<void> {
       resourceIds: editor.resourceIds
     })
     editorVisible.value = false
-    Message.success(editor.id ? '角色已更新' : '角色已创建')
+    Message.success(editor.id ? t('rbac.roles.updated') : t('rbac.roles.created'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '角色保存失败'))
+    Message.error(apiErrorMessage(error, t('rbac.roles.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -344,10 +345,10 @@ async function deleteRole(id: unknown): Promise<void> {
   try {
     await deleteAdminRoles([roleId])
     if (roles.value.length === 1 && current.value > 1) current.value -= 1
-    Message.success('角色已删除')
+    Message.success(t('rbac.roles.deleted'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '角色删除失败'))
+    Message.error(apiErrorMessage(error, t('rbac.roles.deleteFailed')))
   }
 }
 
@@ -414,7 +415,7 @@ function normalizeOptions(value: unknown): PermissionOption[] {
     if (!Number.isFinite(id) || id <= 0) return []
     return [{
       id,
-      label: String(source.label || source.name || '未命名权限'),
+      label: String(source.label || source.name || t('rbac.roles.unnamedPermission')),
       children: normalizeOptions(source.children)
     }]
   })

@@ -1,30 +1,30 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="照片回收站" description="恢复误删的照片，或永久清理不再需要的内容。">
+    <AdminPageHeader :title="t('media.trash.title')" :description="t('media.trash.description')">
       <template #actions>
         <a-button :disabled="selectedIds.length === 0" :loading="restoring" @click="restoreSelected">
           <template #icon><IconUndo /></template>
-          批量恢复
+          {{ t('media.trash.restoreSelected') }}
         </a-button>
         <a-popconfirm
-          content="永久删除选中的照片？此操作不可撤销。"
+          :content="t('media.trash.deleteSelectedConfirm')"
           :disabled="selectedIds.length === 0"
           @ok="deleteSelected">
           <a-button status="danger" :disabled="selectedIds.length === 0" :loading="deleting">
             <template #icon><IconDelete /></template>
-            批量删除
+            {{ t('media.trash.deleteSelected') }}
           </a-button>
         </a-popconfirm>
         <a-button @click="router.push('/albums')">
           <template #icon><IconLeft /></template>
-          返回相册
+          {{ t('media.shared.backToAlbums') }}
         </a-button>
       </template>
     </AdminPageHeader>
 
     <a-alert v-if="selectedIds.length > 0" type="info" class="recycle-selection">
-      已选中 {{ selectedIds.length }} 张照片：可以批量恢复到原相册，或永久删除。
-      <a-button type="text" size="mini" @click="selectedKeys = []">取消选择</a-button>
+      {{ t('media.trash.selectionHint', { count: selectedIds.length }) }}
+      <a-button type="text" size="mini" @click="selectedKeys = []">{{ t('common.deselect') }}</a-button>
     </a-alert>
 
     <a-card class="admin-panel" :bordered="false">
@@ -33,20 +33,20 @@
           <a-input-search
             v-model="keywords"
             class="admin-filter-input"
-            placeholder="在本页搜索照片名称或描述"
+            :placeholder="t('media.trash.searchPlaceholder')"
             allow-clear />
-          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">{{ t('media.shared.clearSearch') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 张已删除照片</span>
+          <span class="admin-toolbar-caption">{{ t('media.trash.total', { total }) }}</span>
           <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
-            刷新
+            {{ t('common.refresh') }}
           </a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="回收站加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('media.trash.loadFailed')" @retry="load" />
 
       <div class="admin-table-shell">
         <a-table
@@ -63,32 +63,32 @@
             <AdminImagePreview
               v-if="isHttpUrl(record.photoSrc)"
               :src="String(record.photoSrc)"
-              :alt="String(record.photoName || '照片')"
+              :alt="String(record.photoName || t('image.alt'))"
               :width="84"
               :height="58" />
             <span v-else class="admin-cover-cell" aria-hidden="true"><IconImage /></span>
           </template>
           <template #photoName="{ record }">
-            <span class="admin-title-cell">{{ record.photoName || '未命名照片' }}</span>
+            <span class="admin-title-cell">{{ record.photoName || t('media.shared.unnamedPhoto') }}</span>
           </template>
           <template #photoDesc="{ record }">
-            <span class="admin-muted-cell" :title="String(record.photoDesc || '')">{{ record.photoDesc || '暂无描述' }}</span>
+            <span class="admin-muted-cell" :title="String(record.photoDesc || '')">{{ record.photoDesc || t('media.shared.noDescription') }}</span>
           </template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="restore([Number(record.id)])">恢复</a-button>
-              <a-popconfirm content="永久删除这张照片？此操作不可撤销。" @ok="deletePermanently([Number(record.id)])">
-                <a-button type="text" status="danger" size="small">永久删除</a-button>
+              <a-button type="text" size="small" @click="restore([Number(record.id)])">{{ t('media.trash.restore') }}</a-button>
+              <a-popconfirm :content="t('media.trash.deleteConfirm')" @ok="deletePermanently([Number(record.id)])">
+                <a-button type="text" status="danger" size="small">{{ t('media.trash.deletePermanently') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconUndo"
-              :title="keywords.trim() ? '没有匹配的照片' : '回收站是空的'"
-              :description="keywords.trim() ? '换个关键词再试一次。' : '从相册里移除的照片会先放到这里，确认无误后再永久删除。'">
-              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
-              <a-button v-else size="small" @click="router.push('/albums')">返回相册</a-button>
+              :title="keywords.trim() ? t('media.trash.emptyFiltered') : t('media.trash.empty')"
+              :description="keywords.trim() ? t('media.shared.searchAgain') : t('media.trash.emptyHint')">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">{{ t('media.shared.clearSearch') }}</a-button>
+              <a-button v-else size="small" @click="router.push('/albums')">{{ t('media.shared.backToAlbums') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -111,18 +111,20 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminPhoto } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'photo-trash'
 
-const columns = [
-  { title: '预览', dataIndex: 'photoSrc', width: 108, slotName: 'source' },
-  { title: '照片名称', dataIndex: 'photoName', slotName: 'photoName', minWidth: 180 },
-  { title: '描述', dataIndex: 'photoDesc', slotName: 'photoDesc', ellipsis: true, tooltip: true },
-  { title: '操作', dataIndex: 'actions', width: 176, slotName: 'actions' }
-]
+// 列定义随语言切换重算，所以用 computed 而不是模块级常量。
+const columns = computed(() => [
+  { title: t('common.preview'), dataIndex: 'photoSrc', width: 108, slotName: 'source' },
+  { title: t('media.shared.photoName'), dataIndex: 'photoName', slotName: 'photoName', minWidth: 180 },
+  { title: t('common.description'), dataIndex: 'photoDesc', slotName: 'photoDesc', ellipsis: true, tooltip: true },
+  { title: t('common.actions'), dataIndex: 'actions', width: 176, slotName: 'actions' }
+])
 
 const router = useRouter()
 const selectedKeys = ref<Array<string | number>>([])
@@ -143,7 +145,7 @@ const {
 } = useAsyncList<AdminPhoto>(
   ({ current: page, pageSize: size, signal }) =>
     listAdminPage<AdminPhoto>('admin/photos', { current: page, size, isDelete: 1 }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY, 18), fallbackMessage: '回收站加载失败' }
+  { pageSize: readStoredPageSize(VIEW_KEY, 18), fallbackMessage: t('media.trash.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -191,10 +193,10 @@ async function restore(ids: number[]): Promise<void> {
   try {
     await updateAdminPhotoDelete(validIds, 0)
     selectedKeys.value = []
-    Message.success(`已恢复 ${validIds.length} 张照片`)
+    Message.success(t('media.trash.restored', { count: validIds.length }))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '照片恢复失败'))
+    Message.error(apiErrorMessage(error, t('media.trash.restoreFailed')))
   } finally {
     restoring.value = false
   }
@@ -207,10 +209,10 @@ async function deletePermanently(ids: number[]): Promise<void> {
   try {
     await deleteAdminPhotos(validIds)
     selectedKeys.value = []
-    Message.success(`已永久删除 ${validIds.length} 张照片`)
+    Message.success(t('media.trash.deleted', { count: validIds.length }))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '照片删除失败'))
+    Message.error(apiErrorMessage(error, t('media.trash.deleteFailed')))
   } finally {
     deleting.value = false
   }

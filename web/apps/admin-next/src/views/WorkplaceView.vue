@@ -3,21 +3,21 @@
     <div class="workplace-welcome">
       <div class="workplace-welcome-copy">
         <div class="admin-page-eyebrow">STELLAR BEACON / WORKPLACE</div>
-        <h2>{{ greeting }}，{{ auth.user?.nickname || auth.user?.username || '管理员' }}</h2>
-        <p>常用管理入口与近 7 天访问数据。</p>
+        <h2>{{ t('dashboard.workplace.greetingLine', { greeting, name: auth.user?.nickname || auth.user?.username || t('dashboard.role.admin') }) }}</h2>
+        <p>{{ t('dashboard.workplace.subtitle') }}</p>
         <a-space wrap class="workplace-welcome-actions">
           <a-button type="primary" @click="router.push('/articles')">
             <template #icon><IconPlus /></template>
-            发布文章
+            {{ t('dashboard.actions.publishArticle') }}
           </a-button>
-          <a-button @click="router.push('/talks')">发布说说</a-button>
-          <a-button @click="router.push('/dashboard')">查看仪表盘</a-button>
+          <a-button @click="router.push('/talks')">{{ t('dashboard.actions.publishTalk') }}</a-button>
+          <a-button @click="router.push('/dashboard')">{{ t('dashboard.actions.viewDashboard') }}</a-button>
         </a-space>
       </div>
       <div class="workplace-welcome-aside">
-        <span class="workplace-welcome-label">数据更新于</span>
-        <strong>{{ updatedAt }}</strong>
-        <span class="admin-muted-cell">近 7 天访问 {{ formatNumber(trendTotal) }} 次</span>
+        <span class="workplace-welcome-label">{{ t('dashboard.workplace.updatedAt') }}</span>
+        <strong>{{ updatedAt || t('common.loading') }}</strong>
+        <span class="admin-muted-cell">{{ t('dashboard.workplace.weekViews', { total: formatNumber(trendTotal) }) }}</span>
       </div>
     </div>
 
@@ -35,40 +35,40 @@
     </div>
 
     <div class="workplace-grid-main">
-      <a-card class="admin-panel" :bordered="false" title="访问趋势">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.trend')">
         <template #extra>
           <a-space :size="8">
-            <span class="admin-muted-cell">近 7 天</span>
-            <a-button type="text" size="small" @click="router.push('/dashboard')">详细分析</a-button>
+            <span class="admin-muted-cell">{{ t('dashboard.range.days7') }}</span>
+            <a-button type="text" size="small" @click="router.push('/dashboard')">{{ t('dashboard.workplace.detailAnalysis') }}</a-button>
           </a-space>
         </template>
         <AdminEChart v-if="analytics.trend.length" :option="trendOption" height="320px" />
         <AdminEmptyState
           v-else
           :icon="IconBarChart"
-          title="暂无访问数据"
-          description="有访问记录后，这里会显示每日访问量。" />
+          :title="t('dashboard.empty.workplaceTrend.title')"
+          :description="t('dashboard.empty.workplaceTrend.description')" />
       </a-card>
 
-      <a-card class="admin-panel" :bordered="false" title="热门文章">
-        <template #extra><span class="admin-muted-cell">浏览量排行</span></template>
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.hotArticles')">
+        <template #extra><span class="admin-muted-cell">{{ t('dashboard.panels.viewRank') }}</span></template>
         <div v-if="analytics.articleRank.length" class="admin-rank-list">
           <div v-for="(article, index) in analytics.articleRank.slice(0, 6)" :key="article.id" class="admin-rank-item">
             <span class="admin-rank-index">{{ String(index + 1).padStart(2, '0') }}</span>
-            <span class="admin-rank-title" :title="article.title">{{ article.title || '未命名文章' }}</span>
+            <span class="admin-rank-title" :title="article.title">{{ article.title || t('dashboard.untitledArticle') }}</span>
             <span class="admin-rank-metric">{{ formatNumber(article.views) }}</span>
           </div>
         </div>
         <AdminEmptyState
           v-else
           :icon="IconBook"
-          title="暂无浏览数据"
-          description="有文章浏览记录后，这里会显示浏览量排行。" />
+          :title="t('dashboard.empty.workplaceRank.title')"
+          :description="t('dashboard.empty.workplaceRank.description')" />
       </a-card>
     </div>
 
     <div class="workplace-grid-bottom">
-      <a-card class="admin-panel" :bordered="false" title="快速入口">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.shortcuts')">
         <div class="workplace-shortcuts">
           <button v-for="item in shortcuts" :key="item.path" type="button" class="workplace-shortcut" @click="router.push(item.path)">
             <span class="workplace-shortcut-icon" aria-hidden="true"><component :is="item.icon" /></span>
@@ -80,13 +80,13 @@
         </div>
       </a-card>
 
-      <a-card class="admin-panel" :bordered="false" title="今日状态">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.todayStatus')">
         <div class="workplace-status-list">
-          <div><span>账号状态</span><AdminStatusTag kind="enabled" label="已认证" /></div>
-          <div><span>权限来源</span><a-tag color="arcoblue">RBAC</a-tag></div>
-          <div><span>今日访问</span><strong class="admin-num-cell">{{ formatNumber(analytics.overview.todayViews) }}</strong></div>
-          <div><span>待审核评论</span><strong class="admin-num-cell">{{ formatNumber(analytics.overview.messageCount) }}</strong></div>
-          <div><span>数据更新时间</span><span class="admin-muted-cell">{{ updatedAt }}</span></div>
+          <div><span>{{ t('dashboard.workplace.accountStatus') }}</span><AdminStatusTag kind="enabled" :label="t('dashboard.workplace.verified')" /></div>
+          <div><span>{{ t('dashboard.workplace.permissionSource') }}</span><a-tag color="arcoblue">RBAC</a-tag></div>
+          <div><span>{{ t('dashboard.stats.todayViews') }}</span><strong class="admin-num-cell">{{ formatNumber(analytics.overview.todayViews) }}</strong></div>
+          <div><span>{{ t('dashboard.stats.pendingComments') }}</span><strong class="admin-num-cell">{{ formatNumber(analytics.overview.messageCount) }}</strong></div>
+          <div><span>{{ t('dashboard.workplace.dataUpdatedAt') }}</span><span class="admin-muted-cell">{{ updatedAt || t('common.loading') }}</span></div>
         </div>
       </a-card>
     </div>
@@ -112,6 +112,7 @@ import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminEChart from '@/components/AdminEChart.vue'
 import AdminStatCard from '@/components/AdminStatCard.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { chartSeriesColor, verticalFade, withAlpha } from '@/utils/chart-theme'
@@ -124,7 +125,7 @@ const themeStore = useThemeStore()
 
 const loading = ref(false)
 const errorMessage = ref('')
-const updatedAt = ref('加载中…')
+const updatedAt = ref('')
 const analytics = reactive<AdminDashboardAnalytics>({
   range: '7d',
   unit: 'day',
@@ -139,27 +140,27 @@ const analytics = reactive<AdminDashboardAnalytics>({
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
-  if (hour < 6) return '夜深了'
-  if (hour < 12) return '早上好'
-  if (hour < 14) return '中午好'
-  if (hour < 18) return '下午好'
-  return '晚上好'
+  if (hour < 6) return t('dashboard.workplace.greeting.night')
+  if (hour < 12) return t('dashboard.workplace.greeting.morning')
+  if (hour < 14) return t('dashboard.workplace.greeting.noon')
+  if (hour < 18) return t('dashboard.workplace.greeting.afternoon')
+  return t('dashboard.workplace.greeting.evening')
 })
 
 const stats = computed(() => [
-  { label: '累计访问', value: formatNumber(analytics.overview.totalViews), caption: '站点历史访问量', icon: IconDashboard, tone: 'blue' as const },
-  { label: '今日访问', value: formatNumber(analytics.overview.todayViews), caption: '今日独立访客访问', icon: IconBarChart, tone: 'green' as const },
-  { label: '文章数量', value: formatNumber(analytics.overview.articleCount), caption: '已发布与草稿内容', icon: IconBook, tone: 'warm' as const },
-  { label: '注册用户', value: formatNumber(analytics.overview.userCount), caption: '站点用户总数', icon: IconUserGroup, tone: 'violet' as const }
+  { label: t('dashboard.stats.totalViews'), value: formatNumber(analytics.overview.totalViews), caption: t('dashboard.stats.totalViewsCaption'), icon: IconDashboard, tone: 'blue' as const },
+  { label: t('dashboard.stats.todayViews'), value: formatNumber(analytics.overview.todayViews), caption: t('dashboard.stats.todayViewsCaption'), icon: IconBarChart, tone: 'green' as const },
+  { label: t('dashboard.stats.articles'), value: formatNumber(analytics.overview.articleCount), caption: t('dashboard.stats.articlesCaptionPublished'), icon: IconBook, tone: 'warm' as const },
+  { label: t('dashboard.stats.users'), value: formatNumber(analytics.overview.userCount), caption: t('dashboard.stats.usersCaption'), icon: IconUserGroup, tone: 'violet' as const }
 ])
 
 const trendTotal = computed(() => analytics.trend.reduce((total, item) => total + Number(item.views || 0), 0))
 
 const shortcuts = computed(() => [
-  { path: '/article-list', label: '文章管理', caption: '整理发布内容', icon: IconBook },
-  { path: '/talk-list', label: '说说管理', caption: '维护动态和图片', icon: IconMessage },
-  { path: '/albums', label: '相册管理', caption: '管理照片资源', icon: IconImage },
-  { path: '/setting', label: '个人中心', caption: '更新个人资料', icon: IconSettings }
+  { path: '/article-list', label: t('dashboard.workplace.shortcut.articles'), caption: t('dashboard.workplace.shortcut.articlesCaption'), icon: IconBook },
+  { path: '/talk-list', label: t('dashboard.workplace.shortcut.talks'), caption: t('dashboard.workplace.shortcut.talksCaption'), icon: IconMessage },
+  { path: '/albums', label: t('dashboard.workplace.shortcut.albums'), caption: t('dashboard.workplace.shortcut.albumsCaption'), icon: IconImage },
+  { path: '/setting', label: t('dashboard.workplace.shortcut.profile'), caption: t('dashboard.workplace.shortcut.profileCaption'), icon: IconSettings }
 ])
 
 const trendOption = computed(() => {
@@ -175,7 +176,7 @@ const trendOption = computed(() => {
     },
     yAxis: { type: 'value', minInterval: 1 },
     series: [{
-      name: '访问量',
+      name: t('dashboard.chart.views'),
       type: 'line',
       showSymbol: false,
       symbolSize: 7,
@@ -202,10 +203,10 @@ async function load(): Promise<void> {
   try {
     const value = await getAdminDashboardAnalytics('7d')
     Object.assign(analytics, value)
-    updatedAt.value = value.generatedAt ? formatDateTime(value.generatedAt) : '刚刚'
+    updatedAt.value = value.generatedAt ? formatDateTime(value.generatedAt) : t('dashboard.workplace.justNow')
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '工作台数据加载失败，可以先使用快速入口继续工作')
-    updatedAt.value = '暂不可用'
+    errorMessage.value = apiErrorMessage(error, t('dashboard.workplace.loadFailed'))
+    updatedAt.value = t('dashboard.workplace.unavailable')
   } finally {
     loading.value = false
   }

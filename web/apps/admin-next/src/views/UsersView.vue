@@ -1,16 +1,16 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="用户管理" description="查看用户、角色及登录状态。">
+    <AdminPageHeader :title="t('rbac.users.title')" :description="t('rbac.users.description')">
       <template #actions>
         <a-input-search
           v-model="keywords"
           class="admin-filter-input"
-          placeholder="搜索昵称"
+          :placeholder="t('rbac.users.searchPlaceholder')"
           allow-clear
           @search="reload" />
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          刷新
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -18,22 +18,22 @@
     <a-card class="admin-panel" :bordered="false">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
-          <a-select v-model="loginType" placeholder="全部登录方式" allow-clear style="width: 160px" @change="reload">
-            <a-option :value="1">邮箱</a-option>
+          <a-select v-model="loginType" :placeholder="t('rbac.users.allLoginTypes')" allow-clear style="width: 160px" @change="reload">
+            <a-option :value="1">{{ t('rbac.users.loginTypeEmail') }}</a-option>
             <a-option :value="2">QQ</a-option>
           </a-select>
-          <a-select v-model="disableFilter" placeholder="全部状态" allow-clear style="width: 140px" @change="reload">
-            <a-option :value="0">正常</a-option>
-            <a-option :value="1">已禁用</a-option>
+          <a-select v-model="disableFilter" :placeholder="t('rbac.users.allStatuses')" allow-clear style="width: 140px" @change="reload">
+            <a-option :value="0">{{ t('rbac.users.statusActive') }}</a-option>
+            <a-option :value="1">{{ t('rbac.users.statusDisabled') }}</a-option>
           </a-select>
-          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">重置筛选</a-button>
+          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">{{ t('rbac.users.resetFilters') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 位用户</span>
+          <span class="admin-toolbar-caption">{{ t('rbac.users.total', { total }) }}</span>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="用户列表加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('rbac.users.loadFailed')" @retry="load" />
 
       <div class="admin-table-shell">
         <a-table
@@ -48,27 +48,27 @@
             <div class="user-cell">
               <a-avatar :size="32" :image-url="record.avatar">{{ initialOf(record.nickname) }}</a-avatar>
               <span class="user-cell-copy">
-                <strong :title="String(record.nickname || '')">{{ record.nickname || '未命名用户' }}</strong>
+                <strong :title="String(record.nickname || '')">{{ record.nickname || t('rbac.users.unnamed') }}</strong>
                 <small
                   v-if="record.email || record.username"
                   :title="String(record.email || record.username || '')">{{ record.email || record.username }}</small>
-                <small v-else class="admin-muted-cell">未绑定邮箱</small>
+                <small v-else class="admin-muted-cell">{{ t('rbac.users.noEmail') }}</small>
               </span>
             </div>
           </template>
           <template #roles="{ record }">
             <a-space v-if="roleNames(record).length" wrap :size="4">
               <a-tag v-for="role in roleNames(record).slice(0, 2)" :key="role" color="arcoblue">{{ role }}</a-tag>
-              <a-tooltip v-if="roleNames(record).length > 2" :content="roleNames(record).join('、')">
+              <a-tooltip v-if="roleNames(record).length > 2" :content="roleNames(record).join(t('rbac.users.roleSeparator'))">
                 <a-tag>+{{ roleNames(record).length - 2 }}</a-tag>
               </a-tooltip>
             </a-space>
-            <span v-else class="admin-muted-cell">未分配角色</span>
+            <span v-else class="admin-muted-cell">{{ t('rbac.users.noRoles') }}</span>
           </template>
           <template #loginType="{ record }">{{ loginTypeLabel(record.loginType) }}</template>
           <template #disable="{ record }">
             <div class="admin-status-switch">
-              <a-tooltip :content="Number(record.isDisable) === 1 ? '点击启用该账号' : '点击禁用该账号'">
+              <a-tooltip :content="Number(record.isDisable) === 1 ? t('rbac.users.clickEnable') : t('rbac.users.clickDisable')">
                 <a-switch
                   :model-value="Number(record.isDisable) === 1"
                   :loading="pendingDisableId === userId(record)"
@@ -76,20 +76,20 @@
                   @change="(value) => toggleDisable(record, value)" />
               </a-tooltip>
               <span :class="['admin-status-switch-label', Number(record.isDisable) === 1 ? 'is-disabled' : 'is-active']">
-                {{ Number(record.isDisable) === 1 ? '已禁用' : '正常' }}
+                {{ Number(record.isDisable) === 1 ? t('rbac.users.statusDisabled') : t('rbac.users.statusActive') }}
               </span>
             </div>
           </template>
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.lastLoginTime) }}</span></template>
           <template #actions="{ record }">
-            <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+            <a-button type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconUserGroup"
-              :title="hasFilters ? '没有匹配的用户' : '暂无用户'"
-              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '当访客注册成为站点用户后，会出现在这里。'">
-              <a-button v-if="hasFilters" size="small" @click="resetFilters">重置筛选</a-button>
+              :title="hasFilters ? t('rbac.users.emptySearchTitle') : t('rbac.users.emptyTitle')"
+              :description="hasFilters ? t('rbac.users.emptySearchHint') : t('rbac.users.emptyHint')">
+              <a-button v-if="hasFilters" size="small" @click="resetFilters">{{ t('rbac.users.resetFilters') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -98,24 +98,24 @@
 
     <a-modal
       v-model:visible="editorVisible"
-      title="修改用户"
+      :title="t('rbac.users.editTitle')"
       :ok-loading="saving"
       :mask-closable="false"
       width="560px"
       @ok="saveEditor">
       <a-form :model="editor" layout="vertical">
-        <a-form-item field="nickname" label="昵称" required>
-          <a-input v-model="editor.nickname" maxlength="50" show-word-limit placeholder="展示给其他用户的名字" />
+        <a-form-item field="nickname" :label="t('rbac.users.nickname')" required>
+          <a-input v-model="editor.nickname" maxlength="50" show-word-limit :placeholder="t('rbac.users.nicknamePlaceholder')" />
         </a-form-item>
-        <a-form-item field="roleIds" label="角色">
-          <a-select v-model="editor.roleIds" multiple allow-clear placeholder="请选择角色" :loading="rolesLoading">
+        <a-form-item field="roleIds" :label="t('rbac.roles.label')">
+          <a-select v-model="editor.roleIds" multiple allow-clear :placeholder="t('rbac.users.selectRoles')" :loading="rolesLoading">
             <a-option v-for="role in roleOptions" :key="role.id" :value="role.id">{{ role.roleName }}</a-option>
           </a-select>
-          <template #help>角色决定该账号可以访问的后台菜单与接口。留空表示不分配任何角色。</template>
+          <template #help>{{ t('rbac.users.rolesHelp') }}</template>
         </a-form-item>
         <a-descriptions :column="2" size="small" bordered class="user-editor-meta">
-          <a-descriptions-item label="用户 ID">{{ editor.userInfoId || '—' }}</a-descriptions-item>
-          <a-descriptions-item label="登录方式">{{ loginTypeLabel(editor.loginType) }}</a-descriptions-item>
+          <a-descriptions-item :label="t('rbac.users.userId')">{{ editor.userInfoId || '—' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('rbac.users.loginType')">{{ loginTypeLabel(editor.loginType) }}</a-descriptions-item>
         </a-descriptions>
       </a-form>
     </a-modal>
@@ -140,21 +140,22 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatDateTime, initialOf } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminUser, UserRole } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'users'
 
-const columns = [
-  { title: '用户', dataIndex: 'nickname', slotName: 'nickname', minWidth: 210 },
-  { title: '登录方式', dataIndex: 'loginType', slotName: 'loginType', width: 108 },
-  { title: '角色', dataIndex: 'roles', slotName: 'roles', width: 190 },
-  { title: '登录 IP', dataIndex: 'ipAddress', width: 148, ellipsis: true, tooltip: true },
-  { title: '状态', dataIndex: 'isDisable', width: 132, slotName: 'disable' },
-  { title: '最后登录', dataIndex: 'lastLoginTime', width: 184, slotName: 'time' },
-  { title: '操作', dataIndex: 'actions', width: 88, slotName: 'actions' }
-]
+const columns = computed(() => [
+  { title: t('rbac.users.columnUser'), dataIndex: 'nickname', slotName: 'nickname', minWidth: 210 },
+  { title: t('rbac.users.loginType'), dataIndex: 'loginType', slotName: 'loginType', width: 108 },
+  { title: t('rbac.roles.label'), dataIndex: 'roles', slotName: 'roles', width: 190 },
+  { title: t('rbac.users.loginIp'), dataIndex: 'ipAddress', width: 148, ellipsis: true, tooltip: true },
+  { title: t('common.status'), dataIndex: 'isDisable', width: 132, slotName: 'disable' },
+  { title: t('rbac.users.lastLogin'), dataIndex: 'lastLoginTime', width: 184, slotName: 'time' },
+  { title: t('common.actions'), dataIndex: 'actions', width: 88, slotName: 'actions' }
+])
 
 const roleOptions = ref<UserRole[]>([])
 const rolesLoading = ref(false)
@@ -184,7 +185,7 @@ const {
     keywords: keywords.value.trim(),
     loginType: loginType.value ?? 0
   }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '用户列表加载失败' }
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('rbac.users.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -223,7 +224,7 @@ async function loadRoles(): Promise<void> {
   try {
     roleOptions.value = await listUserRoles()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '角色选项加载失败'))
+    Message.error(apiErrorMessage(error, t('rbac.users.rolesLoadFailed')))
   } finally {
     rolesLoading.value = false
   }
@@ -247,7 +248,7 @@ function openEditor(user: AdminUser): void {
 
 async function saveEditor(): Promise<void> {
   if (!editor.userInfoId || !editor.nickname.trim()) {
-    Message.error('用户 ID 和昵称不能为空')
+    Message.error(t('rbac.users.idNicknameRequired'))
     return
   }
   saving.value = true
@@ -257,11 +258,11 @@ async function saveEditor(): Promise<void> {
       nickname: editor.nickname.trim(),
       roleIds: editor.roleIds
     })
-    Message.success('用户信息已保存')
+    Message.success(t('rbac.users.saved'))
     editorVisible.value = false
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '用户信息保存失败'))
+    Message.error(apiErrorMessage(error, t('rbac.users.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -276,10 +277,10 @@ async function toggleDisable(user: AdminUser, value: boolean | string | number):
   pendingDisableId.value = id
   try {
     await updateAdminUserDisable(id, next)
-    Message.success(next === 1 ? '用户已禁用' : '用户已启用')
+    Message.success(next === 1 ? t('rbac.users.disabled') : t('rbac.users.enabled'))
   } catch (error) {
     user.isDisable = previous
-    Message.error(apiErrorMessage(error, '用户状态更新失败'))
+    Message.error(apiErrorMessage(error, t('rbac.users.statusUpdateFailed')))
   } finally {
     pendingDisableId.value = 0
   }
@@ -306,9 +307,9 @@ function roleNames(user: AdminUser): string[] {
 }
 
 function loginTypeLabel(value: unknown): string {
-  if (Number(value) === 1) return '邮箱'
+  if (Number(value) === 1) return t('rbac.users.loginTypeEmail')
   if (Number(value) === 2) return 'QQ'
-  return '其他'
+  return t('rbac.users.loginTypeOther')
 }
 </script>
 

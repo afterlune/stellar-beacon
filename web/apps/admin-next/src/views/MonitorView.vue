@@ -1,6 +1,6 @@
 <template>
   <section class="admin-page monitor-page">
-    <AdminPageHeader title="实时监控" description="查看在线会话、操作记录和异常日志。">
+    <AdminPageHeader :title="t('dashboard.monitor.title')" :description="t('dashboard.monitor.description')">
       <template #actions>
         <button
           class="monitor-live-badge"
@@ -8,11 +8,11 @@
           :aria-pressed="autoRefresh"
           @click="toggleAutoRefresh">
           <span class="admin-live-dot" aria-hidden="true" />
-          {{ autoRefresh ? '自动刷新 30 秒' : '自动刷新已暂停' }}
+          {{ autoRefresh ? t('dashboard.monitor.autoRefreshOn') : t('dashboard.monitor.autoRefreshOff') }}
         </button>
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          立即刷新
+          {{ t('dashboard.actions.refreshNow') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -23,96 +23,107 @@
       <a-card class="admin-card admin-stat-card" :bordered="false">
         <span class="admin-stat-icon admin-tone-blue" aria-hidden="true"><IconUserGroup /></span>
         <span class="admin-stat-copy">
-          <span class="admin-stat-label">当前在线用户</span>
+          <span class="admin-stat-label">{{ t('dashboard.monitor.onlineNow') }}</span>
           <strong class="admin-stat-value">{{ formatNumber(onlineTotal) }}</strong>
-          <span class="admin-stat-caption">活跃登录会话</span>
+          <span class="admin-stat-caption">{{ t('dashboard.monitor.onlineNowCaption') }}</span>
         </span>
       </a-card>
       <a-card class="admin-card admin-stat-card" :bordered="false">
         <span class="admin-stat-icon admin-tone-green" aria-hidden="true"><IconDashboard /></span>
         <span class="admin-stat-copy">
-          <span class="admin-stat-label">今日访问</span>
+          <span class="admin-stat-label">{{ t('dashboard.stats.todayViews') }}</span>
           <strong class="admin-stat-value">{{ formatNumber(analytics.overview.todayViews) }}</strong>
-          <span class="admin-stat-caption">按日实时统计</span>
+          <span class="admin-stat-caption">{{ t('dashboard.monitor.todayViewsCaption') }}</span>
         </span>
       </a-card>
       <a-card class="admin-card admin-stat-card" :bordered="false">
         <span class="admin-stat-icon admin-tone-info" aria-hidden="true"><IconBarChart /></span>
         <span class="admin-stat-copy">
-          <span class="admin-stat-label">近 7 日访问</span>
+          <span class="admin-stat-label">{{ t('dashboard.stats.weekViews') }}</span>
           <strong class="admin-stat-value">{{ formatNumber(trendTotal) }}</strong>
-          <span class="admin-stat-caption">访问趋势合计</span>
+          <span class="admin-stat-caption">{{ t('dashboard.stats.weekViewsCaption') }}</span>
         </span>
       </a-card>
       <a-card class="admin-card admin-stat-card" :bordered="false">
         <span class="admin-stat-icon admin-tone-danger" aria-hidden="true"><IconExclamationCircle /></span>
         <span class="admin-stat-copy">
-          <span class="admin-stat-label">累计异常</span>
+          <span class="admin-stat-label">{{ t('dashboard.stats.exceptions') }}</span>
           <strong class="admin-stat-value">{{ formatNumber(exceptionTotal) }}</strong>
-          <span class="admin-stat-caption">可进入异常日志定位</span>
+          <span class="admin-stat-caption">{{ t('dashboard.stats.exceptionsCaption') }}</span>
         </span>
       </a-card>
     </div>
 
     <div class="monitor-grid">
-      <a-card class="admin-panel" :bordered="false" title="在线用户">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.onlineUsers')">
         <template #extra>
-          <a-button v-if="onlineUsersPath" type="text" size="small" @click="router.push(onlineUsersPath)">查看全部</a-button>
+          <a-button v-if="onlineUsersPath" type="text" size="small" @click="router.push(onlineUsersPath)">{{ t('dashboard.actions.viewAll') }}</a-button>
         </template>
         <div class="admin-table-shell">
           <a-table :data="onlineUsers" :columns="onlineColumns" :pagination="false" :loading="loading">
             <template #user="{ record }">
               <div class="online-user-cell">
                 <a-avatar :size="28" :image-url="record.avatar">{{ initialOf(record.nickname || record.username) }}</a-avatar>
-                <strong>{{ record.nickname || record.username || '未命名用户' }}</strong>
+                <strong>{{ record.nickname || record.username || t('dashboard.untitledUser') }}</strong>
               </div>
             </template>
-            <template #status><AdminStatusTag kind="enabled" label="在线" /></template>
+            <template #status><AdminStatusTag kind="enabled" :label="t('dashboard.monitor.online')" /></template>
             <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.lastLoginTime) }}</span></template>
             <template #empty>
-              <AdminEmptyState :icon="IconUser" title="当前没有在线用户" description="当有用户登录并保持会话时，会出现在这里。" />
+              <AdminEmptyState
+                :icon="IconUser"
+                :title="t('dashboard.empty.online.title')"
+                :description="t('dashboard.empty.online.description')" />
             </template>
           </a-table>
         </div>
       </a-card>
 
-      <a-card class="admin-panel" :bordered="false" title="访问趋势">
-        <template #extra><span class="admin-muted-cell">近 7 天</span></template>
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.trend')">
+        <template #extra><span class="admin-muted-cell">{{ t('dashboard.range.days7') }}</span></template>
         <AdminEChart :option="trendOption" height="300px" />
       </a-card>
     </div>
 
     <div class="monitor-grid monitor-grid-bottom">
-      <a-card class="admin-panel" :bordered="false" title="最近操作">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.recentOperations')">
         <template #extra>
-          <a-button v-if="operationLogsPath" type="text" size="small" @click="router.push(operationLogsPath)">日志中心</a-button>
+          <a-button v-if="operationLogsPath" type="text" size="small" @click="router.push(operationLogsPath)">{{ t('dashboard.actions.logCenter') }}</a-button>
         </template>
         <div v-if="operationLogs.length" class="admin-feed-list">
           <div v-for="record in operationLogs.slice(0, 8)" :key="String(record.id)" class="admin-feed-item">
             <span class="admin-feed-dot admin-feed-dot-success" aria-hidden="true" />
             <div class="admin-feed-copy">
               <strong :title="operationTitle(record)">{{ operationTitle(record) }}</strong>
-              <small>{{ formatDateTime(record.createTime) }} · {{ record.nickname || '管理员' }}</small>
+              <small>{{ formatDateTime(record.createTime) }} · {{ record.nickname || t('dashboard.role.admin') }}</small>
             </div>
           </div>
         </div>
-        <AdminEmptyState v-else :icon="IconHistory" title="暂无操作记录" description="后台的写操作会记录在这里。" />
+        <AdminEmptyState
+          v-else
+          :icon="IconHistory"
+          :title="t('dashboard.empty.operations.title')"
+          :description="t('dashboard.empty.operations.description')" />
       </a-card>
 
-      <a-card class="admin-panel" :bordered="false" title="异常提醒">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.exceptionAlerts')">
         <template #extra>
-          <a-button v-if="exceptionLogsPath" type="text" status="danger" size="small" @click="router.push(exceptionLogsPath)">查看异常</a-button>
+          <a-button v-if="exceptionLogsPath" type="text" status="danger" size="small" @click="router.push(exceptionLogsPath)">{{ t('dashboard.actions.viewExceptions') }}</a-button>
         </template>
         <div v-if="exceptionLogs.length" class="admin-feed-list">
           <div v-for="record in exceptionLogs.slice(0, 8)" :key="String(record.id)" class="admin-feed-item">
             <span class="admin-feed-dot admin-feed-dot-danger" aria-hidden="true" />
             <div class="admin-feed-copy">
               <strong :title="exceptionTitle(record)">{{ exceptionTitle(record) }}</strong>
-              <small>{{ formatDateTime(record.createTime) }} · {{ record.optUri || '未知接口' }}</small>
+              <small>{{ formatDateTime(record.createTime) }} · {{ record.optUri || t('dashboard.fallback.unknownEndpoint') }}</small>
             </div>
           </div>
         </div>
-        <AdminEmptyState v-else :icon="IconEmpty" title="暂无异常记录" description="未捕获的后端异常会记录在这里。" />
+        <AdminEmptyState
+          v-else
+          :icon="IconEmpty"
+          :title="t('dashboard.empty.exceptions.title')"
+          :description="t('dashboard.empty.exceptions.description')" />
       </a-card>
     </div>
   </section>
@@ -143,6 +154,7 @@ import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminEChart from '@/components/AdminEChart.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { t } from '@/i18n'
 import { useMenuStore } from '@/stores/menu'
 import { formatDateTime, formatNumber, initialOf } from '@/utils/format'
 import type { AdminDashboardAnalytics, AdminUser } from '@stellar-beacon/api-contract'
@@ -174,13 +186,14 @@ const analytics = reactive<AdminDashboardAnalytics>({
 let timer: ReturnType<typeof setInterval> | undefined
 let inFlight = false
 
-const onlineColumns = [
-  { title: '用户', dataIndex: 'nickname', slotName: 'user', minWidth: 160 },
+// 列标题走 computed：模块级常量不会跟着语言切换重算。
+const onlineColumns = computed(() => [
+  { title: t('dashboard.area.users'), dataIndex: 'nickname', slotName: 'user', minWidth: 160 },
   { title: 'IP', dataIndex: 'ipAddress', width: 140 },
-  { title: '浏览器', dataIndex: 'browser', width: 130, ellipsis: true, tooltip: true },
-  { title: '状态', dataIndex: 'status', slotName: 'status', width: 84 },
-  { title: '最近活跃', dataIndex: 'lastLoginTime', slotName: 'time', width: 168 }
-]
+  { title: t('dashboard.table.browser'), dataIndex: 'browser', width: 130, ellipsis: true, tooltip: true },
+  { title: t('common.status'), dataIndex: 'status', slotName: 'status', width: 84 },
+  { title: t('dashboard.table.lastActive'), dataIndex: 'lastLoginTime', slotName: 'time', width: 168 }
+])
 
 const trendTotal = computed(() => analytics.trend.reduce((total, item) => total + Number(item.views || 0), 0))
 const trendOption = computed(() => ({
@@ -190,7 +203,7 @@ const trendOption = computed(() => ({
   xAxis: { type: 'category', boundaryGap: false, data: analytics.trend.map((item) => item.period.slice(5)) },
   yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: 'rgba(127,127,127,.14)' } } },
   series: [{
-    name: '访问量',
+    name: t('dashboard.chart.views'),
     type: 'line',
     smooth: true,
     symbol: 'circle',
@@ -255,7 +268,7 @@ async function load(): Promise<void> {
     exceptionTotal.value = exceptions.total
     Object.assign(analytics, dashboard)
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '监控数据加载失败')
+    errorMessage.value = apiErrorMessage(error, t('dashboard.monitor.loadFailed'))
   } finally {
     loading.value = false
     inFlight = false
@@ -277,11 +290,11 @@ function findMenuPath(keywords: string[]): string {
 }
 
 function operationTitle(record: Record<string, unknown>): string {
-  return String(record.optDesc || record.optModule || record.optUri || '后台操作')
+  return String(record.optDesc || record.optModule || record.optUri || t('dashboard.fallback.operation'))
 }
 
 function exceptionTitle(record: Record<string, unknown>): string {
-  return String(record.exceptionInfo || record.optDesc || record.optUri || '请求异常')
+  return String(record.exceptionInfo || record.optDesc || record.optUri || t('dashboard.fallback.exception'))
 }
 </script>
 

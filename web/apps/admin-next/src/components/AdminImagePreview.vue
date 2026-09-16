@@ -3,23 +3,23 @@
     class="admin-image-preview"
     type="button"
     :style="style"
-    :aria-label="`预览${alt}`"
+    :aria-label="t('image.previewOf', { alt: altLabel })"
     :disabled="!activeSrc"
     @click="open">
-    <img v-if="activeSrc && !broken" :src="activeSrc" :alt="alt" loading="lazy" decoding="async" @error="handleError" />
+    <img v-if="activeSrc && !broken" :src="activeSrc" :alt="altLabel" loading="lazy" decoding="async" @error="handleError" />
     <span v-if="!activeSrc || broken" class="admin-image-preview-fallback">
-      {{ broken ? '图片不可用' : '暂无图片' }}
+      {{ broken ? t('image.unavailable') : t('image.none') }}
     </span>
   </button>
 
-  <a-modal v-model:visible="visible" :title="alt" :footer="false" width="min(92vw, 1000px)">
+  <a-modal v-model:visible="visible" :title="altLabel" :footer="false" width="min(92vw, 1000px)">
     <div class="admin-image-preview-large">
-      <img v-if="activeSrc && !broken" :src="activeSrc" :alt="alt" @error="handleError" />
-      <span v-else class="admin-image-preview-fallback">图片不可用</span>
+      <img v-if="activeSrc && !broken" :src="activeSrc" :alt="altLabel" @error="handleError" />
+      <span v-else class="admin-image-preview-fallback">{{ t('image.unavailable') }}</span>
     </div>
     <div v-if="activeSrc" class="admin-image-preview-meta">
       <span class="admin-muted-cell">{{ displaySrc }}</span>
-      <a-button size="mini" @click="copySrc">复制地址</a-button>
+      <a-button size="mini" @click="copySrc">{{ t('image.copyUrl') }}</a-button>
     </div>
   </a-modal>
 </template>
@@ -29,6 +29,8 @@ import { computed, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { API_BASE_URL } from '@stellar-beacon/api-client'
 
+import { t } from '@/i18n'
+
 const props = withDefaults(defineProps<{
   src?: string
   alt?: string
@@ -36,10 +38,13 @@ const props = withDefaults(defineProps<{
   height?: number | string
 }>(), {
   src: '',
-  alt: '图片',
+  alt: '',
   width: 96,
   height: 64
 })
+
+/** 未传 alt 时用词条兜底，保证无障碍标签也跟着语言走。 */
+const altLabel = computed(() => props.alt || t('image.alt'))
 
 const visible = ref(false)
 const broken = ref(false)
@@ -102,9 +107,9 @@ function open(): void {
 async function copySrc(): Promise<void> {
   try {
     await navigator.clipboard.writeText(displaySrc.value)
-    Message.success('图片地址已复制')
+    Message.success(t('image.copied'))
   } catch {
-    Message.warning('浏览器不允许自动复制，请手动选择文本')
+    Message.warning(t('common.copyFailed'))
   }
 }
 </script>

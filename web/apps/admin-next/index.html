@@ -11,11 +11,12 @@
             theme = localStorage.getItem('benetnasch.admin.theme')
             if (theme !== null) localStorage.setItem(key, theme)
           }
-          var value = theme === 'light' ? 'light' : 'dark'
+          // 默认浅色：只有明确选过深色的人才留在深色。
+          var value = theme === 'dark' ? 'dark' : 'light'
           document.documentElement.setAttribute('data-theme', value)
           document.documentElement.style.colorScheme = value
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'dark')
+          document.documentElement.setAttribute('data-theme', 'light')
         }
       })()
     </script>

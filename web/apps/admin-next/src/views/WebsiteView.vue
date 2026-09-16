@@ -1,10 +1,10 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="网站配置" description="配置站点名称、作者信息、外链和互动选项。">
+    <AdminPageHeader :title="t('site.website.title')" :description="t('site.website.description')">
       <template #actions>
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          重新载入
+          {{ t('site.website.reload') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -12,16 +12,16 @@
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
       <a-alert v-if="unknownFieldCount > 0" type="info" :closable="false">
-        后端还返回了 {{ unknownFieldCount }} 个未在此表单展示的配置项，保存时会原样保留。
+        {{ t('site.website.unknownFields', { count: unknownFieldCount }) }}
       </a-alert>
 
-      <a-spin v-if="!ready" class="website-loading" tip="正在加载站点配置…" />
+      <a-spin v-if="!ready" class="website-loading" :tip="t('site.website.loading')" />
       <template v-else>
         <!-- A hand-rolled panel instead of `a-tabs`: Arco keeps every tab pane
              mounted (hidden with CSS), which would leave several textareas in
              the document and break keyboard/AT ordering. Only the active
              section is rendered here. -->
-        <div class="config-sections" role="tablist" aria-label="网站配置分区">
+        <div class="config-sections" role="tablist" :aria-label="t('site.website.sectionsLabel')">
           <button
             v-for="section in sections"
             :key="section.key"
@@ -40,42 +40,42 @@
         <div :id="`config-panel-${activeSection}`" role="tabpanel" class="config-panel">
           <a-form v-if="activeSection === 'basic'" class="config-form" :model="form" layout="vertical" @submit-success="save">
             <div class="config-grid">
-              <a-form-item field="name" label="网站名称">
-                <a-input v-model="form.name" placeholder="展示在浏览器标签与页头" />
+              <a-form-item field="name" :label="t('site.website.name')">
+                <a-input v-model="form.name" :placeholder="t('site.website.namePlaceholder')" />
               </a-form-item>
-              <a-form-item field="englishName" label="英文名称">
-                <a-input v-model="form.englishName" placeholder="用于 Logo 与国际化展示" />
+              <a-form-item field="englishName" :label="t('site.website.englishName')">
+                <a-input v-model="form.englishName" :placeholder="t('site.website.englishNamePlaceholder')" />
               </a-form-item>
             </div>
-            <a-form-item field="notice" label="公告">
-              <a-textarea v-model="form.notice" :auto-size="{ minRows: 3, maxRows: 8 }" placeholder="展示在博客顶部的公告内容" />
+            <a-form-item field="notice" :label="t('site.website.notice')">
+              <a-textarea v-model="form.notice" :auto-size="{ minRows: 3, maxRows: 8 }" :placeholder="t('site.website.noticePlaceholder')" />
             </a-form-item>
             <div class="config-grid">
-              <a-form-item field="websiteCreateTime" label="建站时间">
-                <a-input v-model="form.websiteCreateTime" placeholder="例如 2024-01-01" />
-                <template #help>用于前台展示站点运行时长。</template>
+              <a-form-item field="websiteCreateTime" :label="t('site.website.createTime')">
+                <a-input v-model="form.websiteCreateTime" :placeholder="t('site.website.createTimePlaceholder')" />
+                <template #help>{{ t('site.website.createTimeHelp') }}</template>
               </a-form-item>
-              <a-form-item field="beianNumber" label="备案号">
-                <a-input v-model="form.beianNumber" placeholder="例如 京ICP备00000000号" />
+              <a-form-item field="beianNumber" :label="t('site.website.beian')">
+                <a-input v-model="form.beianNumber" :placeholder="t('site.website.beianPlaceholder')" />
               </a-form-item>
-              <a-form-item field="multiLanguage" label="多语言">
+              <a-form-item field="multiLanguage" :label="t('site.website.multiLanguage')">
                 <a-switch v-model="switches.multiLanguage" :checked-value="1" :unchecked-value="0" />
-                <template #help>开启后前台展示语言切换入口。</template>
+                <template #help>{{ t('site.website.multiLanguageHelp') }}</template>
               </a-form-item>
             </div>
           </a-form>
 
           <a-form v-else-if="activeSection === 'author'" class="config-form" :model="form" layout="vertical" @submit-success="save">
             <div class="config-grid">
-              <a-form-item field="author" label="作者">
-                <a-input v-model="form.author" placeholder="站点作者名" />
+              <a-form-item field="author" :label="t('site.website.author')">
+                <a-input v-model="form.author" :placeholder="t('site.website.authorPlaceholder')" />
               </a-form-item>
-              <a-form-item field="authorAvatar" label="作者头像">
-                <a-input v-model="form.authorAvatar" placeholder="HTTPS 图片地址" />
+              <a-form-item field="authorAvatar" :label="t('site.website.authorAvatar')">
+                <a-input v-model="form.authorAvatar" :placeholder="t('site.website.imageUrlPlaceholder')" />
               </a-form-item>
             </div>
-            <a-form-item field="authorIntro" label="作者简介">
-              <a-textarea v-model="form.authorIntro" :auto-size="{ minRows: 2, maxRows: 5 }" placeholder="一句话介绍作者" />
+            <a-form-item field="authorIntro" :label="t('site.website.authorIntro')">
+              <a-textarea v-model="form.authorIntro" :auto-size="{ minRows: 2, maxRows: 5 }" :placeholder="t('site.website.authorIntroPlaceholder')" />
             </a-form-item>
             <div class="config-grid">
               <a-form-item v-for="field in socialFields" :key="field.key" :label="field.label">
@@ -85,23 +85,23 @@
           </a-form>
 
           <a-form v-else-if="activeSection === 'images'" class="config-form" :model="form" layout="vertical" @submit-success="save">
-            <a-form-item field="logo" label="站点 Logo">
+            <a-form-item field="logo" :label="t('site.website.logo')">
               <div class="config-image-field">
-                <AdminImagePreview v-if="isHttpUrl(form.logo)" :src="form.logo" alt="站点 Logo" :width="120" :height="80" />
+                <AdminImagePreview v-if="isHttpUrl(form.logo)" :src="form.logo" :alt="t('site.website.logo')" :width="120" :height="80" />
                 <div class="config-image-input">
-                  <a-input v-model="form.logo" placeholder="HTTPS 图片地址" />
+                  <a-input v-model="form.logo" :placeholder="t('site.website.imageUrlPlaceholder')" />
                   <a-space wrap>
-                    <a-button @click="openPicker('logo')">从资源库选择</a-button>
-                    <a-button :disabled="!form.logo" @click="form.logo = ''">清除</a-button>
+                    <a-button @click="openPicker('logo')">{{ t('site.website.pickFromLibrary') }}</a-button>
+                    <a-button :disabled="!form.logo" @click="form.logo = ''">{{ t('site.website.clear') }}</a-button>
                   </a-space>
-                  <span class="admin-field-hint">先在「图片资源」上传文件，再从这里选择，地址会自动填入。</span>
+                  <span class="admin-field-hint">{{ t('site.website.pickHint') }}</span>
                 </div>
               </div>
             </a-form-item>
             <div class="config-grid">
               <a-form-item v-for="field in imageFields" :key="field.key" :label="field.label">
-                <a-input v-model="form[field.key]" placeholder="HTTPS 图片地址" />
-                <a-button type="text" size="mini" @click="openPicker(field.key)">从资源库选择</a-button>
+                <a-input v-model="form[field.key]" :placeholder="t('site.website.imageUrlPlaceholder')" />
+                <a-button type="text" size="mini" @click="openPicker(field.key)">{{ t('site.website.pickFromLibrary') }}</a-button>
               </a-form-item>
             </div>
           </a-form>
@@ -110,22 +110,22 @@
             <div class="config-switch-list">
               <div class="config-switch-item">
                 <div>
-                  <strong>评论需要审核</strong>
-                  <small>开启后，新评论需要管理员审核才会公开展示。</small>
+                  <strong>{{ t('site.website.commentReview') }}</strong>
+                  <small>{{ t('site.website.commentReviewHint') }}</small>
                 </div>
                 <a-switch v-model="switches.isCommentReview" :checked-value="1" :unchecked-value="0" />
               </div>
               <div class="config-switch-item">
                 <div>
-                  <strong>邮件通知</strong>
-                  <small>收到新评论或留言时发送邮件提醒。</small>
+                  <strong>{{ t('site.website.emailNotice') }}</strong>
+                  <small>{{ t('site.website.emailNoticeHint') }}</small>
                 </div>
                 <a-switch v-model="switches.isEmailNotice" :checked-value="1" :unchecked-value="0" />
               </div>
               <div class="config-switch-item">
                 <div>
-                  <strong>开启赞赏</strong>
-                  <small>在文章底部展示赞赏二维码。</small>
+                  <strong>{{ t('site.website.reward') }}</strong>
+                  <small>{{ t('site.website.rewardHint') }}</small>
                 </div>
                 <a-switch v-model="switches.isReward" :checked-value="1" :unchecked-value="0" />
               </div>
@@ -135,11 +135,11 @@
       </template>
 
       <div v-if="ready" class="admin-form-actions website-actions">
-        <a-button type="primary" :loading="saving" @click="save">保存</a-button>
-        <a-button :disabled="saving || !dirty" @click="reset">还原修改</a-button>
+        <a-button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</a-button>
+        <a-button :disabled="saving || !dirty" @click="reset">{{ t('site.revert') }}</a-button>
         <span class="website-status">
-          <template v-if="dirty">有未保存的修改</template>
-          <template v-else>已与服务器同步</template>
+          <template v-if="dirty">{{ t('site.unsavedChanges') }}</template>
+          <template v-else>{{ t('site.synced') }}</template>
         </span>
       </div>
     </a-card>
@@ -157,6 +157,7 @@ import { apiErrorMessage, getWebsiteConfig, updateWebsiteConfig } from '@/api/ht
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminMediaPicker from '@/components/AdminMediaPicker.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { t } from '@/i18n'
 import { isHttpUrl } from '@/utils/format'
 
 /**
@@ -173,34 +174,39 @@ const TEXT_FIELDS = [
 
 const SWITCH_FIELDS = ['multiLanguage', 'isCommentReview', 'isEmailNotice', 'isReward'] as const
 
-const socialFields = [
+// 标签与提示都取自词典，因此这三个列表必须是 computed，语言切换后才会重新求值。
+const socialFields = computed<SocialField[]>(() => [
   { key: 'github', label: 'GitHub', placeholder: 'https://github.com/…' },
   { key: 'gitee', label: 'Gitee', placeholder: 'https://gitee.com/…' },
-  { key: 'qq', label: 'QQ', placeholder: 'QQ 号或链接' },
-  { key: 'weChat', label: '微信', placeholder: '微信号' },
-  { key: 'weibo', label: '微博', placeholder: 'https://weibo.com/…' },
+  { key: 'qq', label: 'QQ', placeholder: t('site.website.qqPlaceholder') },
+  { key: 'weChat', label: t('site.website.wechat'), placeholder: t('site.website.wechatPlaceholder') },
+  { key: 'weibo', label: t('site.website.weibo'), placeholder: 'https://weibo.com/…' },
   { key: 'csdn', label: 'CSDN', placeholder: 'https://blog.csdn.net/…' },
-  { key: 'zhihu', label: '知乎', placeholder: 'https://www.zhihu.com/…' },
-  { key: 'juejin', label: '掘金', placeholder: 'https://juejin.cn/…' },
+  { key: 'zhihu', label: t('site.website.zhihu'), placeholder: 'https://www.zhihu.com/…' },
+  { key: 'juejin', label: t('site.website.juejin'), placeholder: 'https://juejin.cn/…' },
   { key: 'twitter', label: 'Twitter', placeholder: 'https://twitter.com/…' },
   { key: 'stackoverflow', label: 'Stack Overflow', placeholder: 'https://stackoverflow.com/…' }
-] as const
+])
 
-const imageFields = [
-  { key: 'userAvatar', label: '默认用户头像' },
-  { key: 'touristAvatar', label: '游客头像' },
-  { key: 'weiXinQRCode', label: '微信二维码' },
-  { key: 'alipayQRCode', label: '支付宝二维码' }
-] as const
+const imageFields = computed<ImageField[]>(() => [
+  { key: 'userAvatar', label: t('site.website.userAvatar') },
+  { key: 'touristAvatar', label: t('site.website.touristAvatar') },
+  { key: 'weiXinQRCode', label: t('site.website.wechatQr') },
+  { key: 'alipayQRCode', label: t('site.website.alipayQr') }
+])
 
-const sections = [
-  { key: 'basic', label: '基础信息', hint: '站点名称、公告与备案' },
-  { key: 'author', label: '作者与社交', hint: '作者资料与外部链接' },
-  { key: 'images', label: '图片资源', hint: 'Logo、头像与二维码' },
-  { key: 'interaction', label: '互动与功能', hint: '评论审核与通知开关' }
-] as const
+const sections = computed<SectionDef[]>(() => [
+  { key: 'basic', label: t('site.website.sectionBasic'), hint: t('site.website.sectionBasicHint') },
+  { key: 'author', label: t('site.website.sectionAuthor'), hint: t('site.website.sectionAuthorHint') },
+  { key: 'images', label: t('site.website.sectionImages'), hint: t('site.website.sectionImagesHint') },
+  { key: 'interaction', label: t('site.website.sectionInteraction'), hint: t('site.website.sectionInteractionHint') }
+])
 
-type SectionKey = (typeof sections)[number]['key']
+type SectionKey = 'basic' | 'author' | 'images' | 'interaction'
+
+type SocialField = { key: TextField; label: string; placeholder: string }
+type ImageField = { key: TextField; label: string }
+type SectionDef = { key: SectionKey; label: string; hint: string }
 
 type TextField = (typeof TEXT_FIELDS)[number]
 type SwitchField = (typeof SWITCH_FIELDS)[number]
@@ -246,7 +252,7 @@ async function load(): Promise<void> {
     passthrough.value = rest
     snapshot.value = JSON.stringify(currentPayload())
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '网站配置加载失败')
+    errorMessage.value = apiErrorMessage(error, t('site.website.loadFailed'))
   } finally {
     loading.value = false
     ready.value = true
@@ -275,9 +281,9 @@ async function save(): Promise<void> {
     const payload = currentPayload()
     await updateWebsiteConfig(payload)
     snapshot.value = JSON.stringify(payload)
-    Message.success('网站配置已保存')
+    Message.success(t('site.website.saveSuccess'))
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '网站配置保存失败')
+    errorMessage.value = apiErrorMessage(error, t('site.website.saveFailed'))
     Message.error(errorMessage.value)
   } finally {
     saving.value = false
@@ -292,7 +298,7 @@ function openPicker(target: TextField): void {
 /** Media-library selection fills whichever image field opened the picker. */
 function applyPickedImage(asset: { url: string }): void {
   form[pickerTarget.value] = asset.url
-  Message.success('已填入图片地址')
+  Message.success(t('site.website.imageApplied'))
 }
 </script>
 

@@ -129,3 +129,8 @@ div::-webkit-scrollbar-track {
 .is-collapsed {
   max-height: 0;
 }
+
+/* The current front-end visual system. It intentionally loads last so the
+   legacy utility-driven selectors remain functional while the new shell owns
+   the final presentation. */
+@import './future.scss';

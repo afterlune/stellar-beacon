@@ -1,5 +1,7 @@
 import { Message } from '@arco-design/web-vue'
 
+import { t } from '@/i18n'
+
 /**
  * 复制文本到剪贴板。
  *
@@ -12,10 +14,10 @@ export async function copyText(
 ): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)
-    Message.success(options.success ?? '已复制到剪贴板')
+    Message.success(options.success ?? t('common.copySuccess'))
     return true
   } catch {
-    Message.warning(options.failure ?? '浏览器不允许自动复制，请手动复制')
+    Message.warning(options.failure ?? t('common.copyFailed'))
     return false
   }
 }

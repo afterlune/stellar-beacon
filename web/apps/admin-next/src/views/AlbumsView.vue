@@ -1,20 +1,20 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="相册管理" description="管理相册并上传照片。">
+    <AdminPageHeader :title="t('media.albums.title')" :description="t('media.albums.description')">
       <template #actions>
         <a-input-search
           v-model="keywords"
           class="admin-filter-input"
-          placeholder="搜索相册名"
+          :placeholder="t('media.albums.searchPlaceholder')"
           allow-clear
           @search="reload" />
         <a-button @click="router.push('/photos/delete')">
           <template #icon><IconDelete /></template>
-          回收站
+          {{ t('media.albums.trash') }}
         </a-button>
         <a-button type="primary" @click="openEditor()">
           <template #icon><IconPlus /></template>
-          新增
+          {{ t('common.create') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -23,22 +23,22 @@
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
           <a-radio-group v-model="statusFilter" type="button" size="small" @change="reload">
-            <a-radio value="all">全部</a-radio>
-            <a-radio value="1">公开</a-radio>
-            <a-radio value="2">私密</a-radio>
+            <a-radio value="all">{{ t('common.all') }}</a-radio>
+            <a-radio value="1">{{ t('status.published') }}</a-radio>
+            <a-radio value="2">{{ t('status.private') }}</a-radio>
           </a-radio-group>
-          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">重置筛选</a-button>
+          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">{{ t('media.albums.resetFilters') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ filteredAlbums.length }} 个相册 · {{ totalPhotos }} 张照片</span>
+          <span class="admin-toolbar-caption">{{ t('media.albums.total', { albums: filteredAlbums.length, photos: totalPhotos }) }}</span>
           <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
-            刷新
+            {{ t('common.refresh') }}
           </a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="相册加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('media.albums.loadFailed')" @retry="load" />
 
       <div class="admin-table-shell">
         <a-table
@@ -53,43 +53,43 @@
             <AdminImagePreview
               v-if="isHttpUrl(record.albumCover)"
               :src="String(record.albumCover)"
-              :alt="`${String(record.albumName || '相册')} 封面`"
+              :alt="t('media.albums.coverAlt', { name: String(record.albumName || t('media.albums.unnamed')) })"
               :width="92"
               :height="62" />
             <span v-else class="admin-cover-cell" aria-hidden="true"><IconImage /></span>
           </template>
           <template #albumName="{ record }">
             <button class="album-name-link" type="button" @click="openPhotos(record)">
-              {{ record.albumName || '未命名相册' }}
+              {{ record.albumName || t('media.albums.unnamed') }}
             </button>
           </template>
           <template #albumDesc="{ record }">
-            <span class="admin-muted-cell" :title="String(record.albumDesc || '')">{{ record.albumDesc || '暂无描述' }}</span>
+            <span class="admin-muted-cell" :title="String(record.albumDesc || '')">{{ record.albumDesc || t('media.shared.noDescription') }}</span>
           </template>
           <template #photoCount="{ record }">
-            <a-tag :color="Number(record.photoCount) > 0 ? 'arcoblue' : 'gray'">{{ formatNumber(record.photoCount ?? 0) }} 张</a-tag>
+            <a-tag :color="Number(record.photoCount) > 0 ? 'arcoblue' : 'gray'">{{ t('media.shared.photoCount', { count: formatNumber(record.photoCount ?? 0) }) }}</a-tag>
           </template>
           <template #status="{ record }">
             <AdminStatusTag :kind="Number(record.status) === 1 ? 'public' : 'private'" />
           </template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openPhotos(record)">照片</a-button>
-              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
+              <a-button type="text" size="small" @click="openPhotos(record)">{{ t('media.albums.photos') }}</a-button>
+              <a-button type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
               <a-popconfirm
-                :content="`确定删除相册「${record.albumName}」吗？相册内的照片会一并移入回收站。`"
+                :content="t('media.albums.deleteConfirm', { name: String(record.albumName) })"
                 @ok="deleteAlbum(record.id)">
-                <a-button type="text" status="danger" size="small">删除</a-button>
+                <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconImage"
-              :title="hasFilters ? '没有匹配的相册' : '还没有相册'"
-              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '创建相册后即可上传照片。'">
-              <a-button v-if="hasFilters" size="small" @click="resetFilters">重置筛选</a-button>
-              <a-button v-else type="primary" size="small" @click="openEditor()">新增相册</a-button>
+              :title="hasFilters ? t('media.albums.emptyFiltered') : t('media.albums.empty')"
+              :description="hasFilters ? t('media.albums.emptyFilteredHint') : t('media.albums.emptyHint')">
+              <a-button v-if="hasFilters" size="small" @click="resetFilters">{{ t('media.albums.resetFilters') }}</a-button>
+              <a-button v-else type="primary" size="small" @click="openEditor()">{{ t('media.albums.create') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -98,38 +98,38 @@
 
     <a-modal
       v-model:visible="editorVisible"
-      :title="editor.id ? '编辑相册' : '新增相册'"
+      :title="editor.id ? t('media.albums.edit') : t('media.albums.create')"
       :ok-loading="saving"
       :mask-closable="false"
       width="620px"
       @ok="saveEditor">
       <a-form :model="editor" layout="vertical">
-        <a-form-item field="albumName" label="相册名称" required>
-          <a-input v-model="editor.albumName" maxlength="20" show-word-limit placeholder="例如：项目截图" />
+        <a-form-item field="albumName" :label="t('media.albums.name')" required>
+          <a-input v-model="editor.albumName" maxlength="20" show-word-limit :placeholder="t('media.albums.namePlaceholder')" />
         </a-form-item>
-        <a-form-item field="albumDesc" label="相册描述" required>
-          <a-textarea v-model="editor.albumDesc" maxlength="50" show-word-limit :auto-size="{ minRows: 2, maxRows: 4 }" placeholder="一句话说明这个相册记录了什么" />
+        <a-form-item field="albumDesc" :label="t('media.albums.desc')" required>
+          <a-textarea v-model="editor.albumDesc" maxlength="50" show-word-limit :auto-size="{ minRows: 2, maxRows: 4 }" :placeholder="t('media.albums.descPlaceholder')" />
         </a-form-item>
-        <a-form-item field="albumCover" label="封面 URL" required>
+        <a-form-item field="albumCover" :label="t('media.albums.coverUrl')" required>
           <a-space direction="vertical" fill>
-            <a-input v-model="editor.albumCover" placeholder="也可以直接填写 HTTPS 图片地址" />
+            <a-input v-model="editor.albumCover" :placeholder="t('media.albums.coverPlaceholder')" />
             <a-space wrap>
               <input ref="coverInput" type="file" accept="image/*" hidden @change="selectCover" />
-              <a-button :loading="uploading" @click="coverInput?.click()">上传封面</a-button>
-              <a-button :disabled="!editor.albumCover.trim()" @click="editor.albumCover = ''">清除</a-button>
+              <a-button :loading="uploading" @click="coverInput?.click()">{{ t('media.albums.uploadCover') }}</a-button>
+              <a-button :disabled="!editor.albumCover.trim()" @click="editor.albumCover = ''">{{ t('common.clear') }}</a-button>
             </a-space>
           </a-space>
         </a-form-item>
         <div v-if="isHttpUrl(editor.albumCover)" class="album-cover-preview">
-          <AdminImagePreview :src="editor.albumCover" alt="封面预览" :width="150" :height="100" />
-          <span class="admin-field-hint">封面会以 16:10 的比例显示在相册卡片上。</span>
+          <AdminImagePreview :src="editor.albumCover" :alt="t('media.albums.coverPreview')" :width="150" :height="100" />
+          <span class="admin-field-hint">{{ t('media.albums.coverHint') }}</span>
         </div>
-        <a-form-item field="status" label="发布状态">
+        <a-form-item field="status" :label="t('media.albums.publishStatus')">
           <a-radio-group v-model="editor.status">
-            <a-radio :value="1">公开</a-radio>
-            <a-radio :value="2">私密</a-radio>
+            <a-radio :value="1">{{ t('status.published') }}</a-radio>
+            <a-radio :value="2">{{ t('status.private') }}</a-radio>
           </a-radio-group>
-          <template #help>私密相册不会出现在博客前台的相册列表中。</template>
+          <template #help>{{ t('media.albums.privateHint') }}</template>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -157,18 +157,20 @@ import AdminStatusTag from '@/components/AdminStatusTag.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminAlbum } from '@stellar-beacon/api-contract'
 
-const columns = [
-  { title: '封面', dataIndex: 'albumCover', width: 116, slotName: 'cover' },
-  { title: '相册名称', dataIndex: 'albumName', slotName: 'albumName', minWidth: 170 },
-  { title: '描述', dataIndex: 'albumDesc', slotName: 'albumDesc', ellipsis: true, tooltip: true },
-  { title: '照片数', dataIndex: 'photoCount', width: 106, slotName: 'photoCount' },
-  { title: '状态', dataIndex: 'status', width: 96, slotName: 'status' },
-  { title: '操作', dataIndex: 'actions', width: 176, slotName: 'actions' }
-]
+// 列定义随语言切换重算，所以用 computed 而不是模块级常量。
+const columns = computed(() => [
+  { title: t('media.albums.cover'), dataIndex: 'albumCover', width: 116, slotName: 'cover' },
+  { title: t('media.albums.name'), dataIndex: 'albumName', slotName: 'albumName', minWidth: 170 },
+  { title: t('common.description'), dataIndex: 'albumDesc', slotName: 'albumDesc', ellipsis: true, tooltip: true },
+  { title: t('media.albums.photoCount'), dataIndex: 'photoCount', width: 106, slotName: 'photoCount' },
+  { title: t('common.status'), dataIndex: 'status', width: 96, slotName: 'status' },
+  { title: t('common.actions'), dataIndex: 'actions', width: 176, slotName: 'actions' }
+])
 
 const VIEW_KEY = 'albums'
 
@@ -198,7 +200,7 @@ const {
     size,
     keywords: keywords.value.trim()
   }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY, 8), fallbackMessage: '相册加载失败' }
+  { pageSize: readStoredPageSize(VIEW_KEY, 8), fallbackMessage: t('media.albums.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -245,7 +247,7 @@ function openPhotos(album: AdminAlbum): void {
 
 async function saveEditor(): Promise<void> {
   if (!editor.albumName.trim() || !editor.albumDesc.trim() || !editor.albumCover.trim()) {
-    Message.error('相册名称、描述和封面不能为空')
+    Message.error(t('media.albums.requiredFields'))
     return
   }
   saving.value = true
@@ -258,10 +260,10 @@ async function saveEditor(): Promise<void> {
       status: editor.status
     })
     editorVisible.value = false
-    Message.success(editor.id ? '相册已更新' : '相册已创建')
+    Message.success(editor.id ? t('media.albums.updated') : t('media.albums.created'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '相册保存失败'))
+    Message.error(apiErrorMessage(error, t('media.albums.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -273,10 +275,10 @@ async function deleteAlbum(id: unknown): Promise<void> {
   try {
     await deleteAdminAlbum(albumId)
     if (albums.value.length === 1 && current.value > 1) current.value -= 1
-    Message.success('相册已删除')
+    Message.success(t('media.albums.deleted'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '相册删除失败'))
+    Message.error(apiErrorMessage(error, t('media.albums.deleteFailed')))
   }
 }
 
@@ -288,9 +290,9 @@ async function selectCover(event: Event): Promise<void> {
   uploading.value = true
   try {
     editor.albumCover = await uploadAdminAlbumCover(file)
-    Message.success('封面上传成功')
+    Message.success(t('media.albums.coverUploaded'))
   } catch (error) {
-    Message.error(apiErrorMessage(error, '封面上传失败'))
+    Message.error(apiErrorMessage(error, t('media.albums.coverUploadFailed')))
   } finally {
     uploading.value = false
   }

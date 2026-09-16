@@ -1,19 +1,19 @@
 <template>
-  <a-result class="admin-placeholder" status="warning" :title="String(route.meta.title || '页面未接入')">
+  <a-result class="admin-placeholder" status="warning" :title="String(route.meta.title || t('dashboard.placeholder.title'))">
     <template #subtitle>
-      <p>这个菜单指向的视图还没有在前端注册，因此暂时无法展示业务内容。</p>
+      <p>{{ t('dashboard.placeholder.description') }}</p>
       <a-descriptions :column="1" size="small" bordered class="placeholder-meta">
-        <a-descriptions-item label="菜单路径">{{ route.path }}</a-descriptions-item>
-        <a-descriptions-item label="后端组件">{{ String(route.meta.menuComponent || '未提供') }}</a-descriptions-item>
+        <a-descriptions-item :label="t('dashboard.placeholder.menuPath')">{{ route.path }}</a-descriptions-item>
+        <a-descriptions-item :label="t('dashboard.placeholder.backendComponent')">{{ String(route.meta.menuComponent || t('dashboard.placeholder.notProvided')) }}</a-descriptions-item>
       </a-descriptions>
       <p class="placeholder-hint">
-        请联系管理员在「菜单管理」中把组件路径改为已注册的视图，或在前端补充对应实现。
+        {{ t('dashboard.placeholder.hint') }}
       </p>
     </template>
     <template #extra>
       <a-space>
-        <a-button type="primary" @click="router.push('/')">返回首页</a-button>
-        <a-button @click="copyPath">复制菜单路径</a-button>
+        <a-button type="primary" @click="router.push('/')">{{ t('dashboard.placeholder.backHome') }}</a-button>
+        <a-button @click="copyPath">{{ t('dashboard.placeholder.copyPath') }}</a-button>
       </a-space>
     </template>
   </a-result>
@@ -23,15 +23,17 @@
 import { Message } from '@arco-design/web-vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { t } from '@/i18n'
+
 const route = useRoute()
 const router = useRouter()
 
 async function copyPath(): Promise<void> {
   try {
     await navigator.clipboard.writeText(String(route.meta.menuComponent || route.path))
-    Message.success('已复制组件路径')
+    Message.success(t('dashboard.placeholder.copied'))
   } catch {
-    Message.warning('浏览器不允许自动复制，请手动选择文本')
+    Message.warning(t('common.copyFailed'))
   }
 }
 </script>

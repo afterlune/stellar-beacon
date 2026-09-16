@@ -1,30 +1,30 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="关于我" description="编辑展示在博客前台的个人介绍。">
+    <AdminPageHeader :title="t('site.about.title')" :description="t('site.about.description')">
       <template #actions>
-        <a-button :disabled="!dirty" @click="reset">还原修改</a-button>
+        <a-button :disabled="!dirty" @click="reset">{{ t('site.revert') }}</a-button>
       </template>
     </AdminPageHeader>
 
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-spin v-if="!ready" class="about-loading" tip="正在加载关于内容…" />
+      <a-spin v-if="!ready" class="about-loading" :tip="t('site.about.loading')" />
       <a-form v-else class="config-form" :model="form" layout="vertical" @submit-success="save">
-        <a-form-item label="内容">
+        <a-form-item :label="t('site.about.content')">
           <a-textarea
             v-model="form.content"
             :max-length="100000"
             show-word-limit
             :auto-size="{ minRows: 16, maxRows: 32 }"
-            placeholder="支持 Markdown / HTML，保存后由前台渲染到「关于我」页面。" />
-          <template #help>这段内容会直接展示在博客的关于页面上。</template>
+            :placeholder="t('site.about.contentPlaceholder')" />
+          <template #help>{{ t('site.about.contentHelp') }}</template>
         </a-form-item>
         <div class="admin-form-actions">
-          <a-button type="primary" html-type="submit" :loading="saving">保存</a-button>
+          <a-button type="primary" html-type="submit" :loading="saving">{{ t('common.save') }}</a-button>
           <span class="about-status">
-            <template v-if="saving">正在保存…</template>
-            <template v-else-if="dirty">有未保存的修改</template>
-            <template v-else>已与服务器同步 · {{ lastSavedLabel }}</template>
+            <template v-if="saving">{{ t('site.about.saving') }}</template>
+            <template v-else-if="dirty">{{ t('site.unsavedChanges') }}</template>
+            <template v-else>{{ t('site.about.syncedAt', { time: lastSavedLabel }) }}</template>
           </span>
         </div>
       </a-form>
@@ -38,6 +38,7 @@ import { Message } from '@arco-design/web-vue'
 
 import { apiErrorMessage, getAbout, updateAbout } from '@/api/http'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { t } from '@/i18n'
 import { formatDateTime } from '@/utils/format'
 
 const form = reactive({ content: '' })
@@ -48,7 +49,7 @@ const ready = ref(false)
 const lastSaved = ref('')
 
 const dirty = computed(() => form.content !== original.value)
-const lastSavedLabel = computed(() => (lastSaved.value ? formatDateTime(lastSaved.value) : '尚未保存'))
+const lastSavedLabel = computed(() => (lastSaved.value ? formatDateTime(lastSaved.value) : t('site.about.neverSaved')))
 
 onMounted(() => void load())
 
@@ -58,7 +59,7 @@ async function load(): Promise<void> {
     form.content = String(value.content || '')
     original.value = form.content
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '关于内容加载失败')
+    errorMessage.value = apiErrorMessage(error, t('site.about.loadFailed'))
   } finally {
     ready.value = true
   }
@@ -75,9 +76,9 @@ async function save(): Promise<void> {
     await updateAbout(form.content)
     original.value = form.content
     lastSaved.value = new Date().toISOString()
-    Message.success('关于内容已保存')
+    Message.success(t('site.about.saveSuccess'))
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '关于内容保存失败')
+    errorMessage.value = apiErrorMessage(error, t('site.about.saveFailed'))
     Message.error(errorMessage.value)
   } finally {
     saving.value = false

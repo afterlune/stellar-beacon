@@ -1,119 +1,136 @@
 <template>
   <section class="admin-page">
     <AdminPageHeader
-      :title="isEditing ? '修改文章' : '发布文章'"
-      :description="isEditing ? '编辑文章内容、分类和发布状态。' : '创建文章并设置分类和发布状态。'">
+      :title="isEditing ? t('articles.editor.editTitle') : t('articles.actions.publish')"
+      :description="isEditing ? t('articles.editor.editDescription') : t('articles.editor.createDescription')">
       <template #actions>
-        <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
-        <a-button @click="router.push('/article-list')">返回列表</a-button>
+        <a-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</a-button>
+        <a-button @click="router.push('/article-list')">{{ t('articles.editor.backToList') }}</a-button>
       </template>
     </AdminPageHeader>
 
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-spin v-if="!editorReady" class="article-editor-loading" tip="正在加载文章…" />
+      <a-spin v-if="!editorReady" class="article-editor-loading" :tip="t('articles.editor.loading')" />
       <a-form v-else ref="formRef" class="article-form" :model="form" layout="vertical">
-        <a-form-item field="articleTitle" label="标题" :rules="[{ required: true, message: '标题不能为空' }]">
-          <a-input v-model="form.articleTitle" :max-length="256" show-word-limit placeholder="一句话说清这篇文章讲什么" />
+        <a-form-item
+          field="articleTitle"
+          :label="t('common.title')"
+          :rules="[{ required: true, message: t('articles.editor.titleRequired') }]">
+          <a-input v-model="form.articleTitle" :max-length="256" show-word-limit :placeholder="t('articles.editor.titlePlaceholder')" />
         </a-form-item>
 
         <div class="article-form-grid">
-          <a-form-item field="categoryName" label="分类">
+          <a-form-item field="categoryName" :label="t('articles.category')">
             <a-select
               v-model="form.categoryName"
               allow-search
               allow-clear
               :loading="taxonomyLoading"
-              placeholder="从分类表选择"
+              :placeholder="t('articles.editor.categoryPlaceholder')"
               @search="searchCategories">
               <a-option v-for="category in categories" :key="category" :value="category">{{ category }}</a-option>
             </a-select>
           </a-form-item>
-          <a-form-item field="tagNames" label="标签">
+          <a-form-item field="tagNames" :label="t('articles.tags')">
             <a-select
               v-model="form.tagNames"
               multiple
               allow-search
               allow-clear
               :loading="taxonomyLoading"
-              placeholder="从标签表选择"
+              :placeholder="t('articles.editor.tagPlaceholder')"
               @search="searchTags">
               <a-option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</a-option>
             </a-select>
           </a-form-item>
-          <a-form-item field="status" label="状态">
+          <a-form-item field="status" :label="t('common.status')">
             <a-select v-model="form.status">
-              <a-option :value="1">公开</a-option>
-              <a-option :value="2">私密</a-option>
-              <a-option :value="3">草稿</a-option>
+              <a-option :value="1">{{ t('status.published') }}</a-option>
+              <a-option :value="2">{{ t('status.private') }}</a-option>
+              <a-option :value="3">{{ t('status.draft') }}</a-option>
             </a-select>
           </a-form-item>
-          <a-form-item field="type" label="类型">
+          <a-form-item field="type" :label="t('common.type')">
             <a-select v-model="form.type">
-              <a-option :value="1">原创</a-option>
-              <a-option :value="2">转载</a-option>
-              <a-option :value="3">翻译</a-option>
+              <a-option :value="1">{{ t('status.original') }}</a-option>
+              <a-option :value="2">{{ t('status.reprint') }}</a-option>
+              <a-option :value="3">{{ t('status.translate') }}</a-option>
             </a-select>
           </a-form-item>
         </div>
 
         <!-- password / originalUrl render only when relevant so the article form
              keeps a stable, predictable field set for keyboard and E2E flows. -->
-        <a-form-item v-if="form.status === 2" field="password" label="访问密码">
-          <a-input-password v-model="form.password" maxlength="255" placeholder="留空表示不加访问限制" />
-          <template #help>状态为「私密」时生效，读者需要输入该密码才能查看正文。</template>
+        <a-form-item v-if="form.status === 2" field="password" :label="t('articles.editor.password')">
+          <a-input-password v-model="form.password" maxlength="255" :placeholder="t('articles.editor.passwordPlaceholder')" />
+          <template #help>{{ t('articles.editor.passwordHelp') }}</template>
         </a-form-item>
         <a-form-item
           v-if="form.type === 2 || form.type === 3"
           field="originalUrl"
-          label="原文链接"
-          :rules="[{ required: true, message: '转载或翻译的文章需要填写原文链接' }]">
-          <a-input v-model="form.originalUrl" maxlength="255" placeholder="https://原文地址" />
+          :label="t('articles.editor.originalUrl')"
+          :rules="[{ required: true, message: t('articles.editor.originalUrlRequired') }]">
+          <a-input v-model="form.originalUrl" maxlength="255" :placeholder="t('articles.editor.originalUrlPlaceholder')" />
         </a-form-item>
 
-        <a-form-item field="articleCover" label="文章封面">
+        <a-form-item field="articleCover" :label="t('articles.editor.cover')">
           <div class="article-cover-control">
-            <AdminImagePreview v-if="form.articleCover" :src="form.articleCover" alt="文章封面" :width="160" :height="104" />
+            <AdminImagePreview
+              v-if="form.articleCover"
+              :src="form.articleCover"
+              :alt="t('articles.editor.cover')"
+              :width="160"
+              :height="104" />
             <div class="article-cover-actions">
-              <a-input v-model="form.articleCover" placeholder="可选，也可以粘贴 HTTPS 图片地址" />
+              <a-input v-model="form.articleCover" :placeholder="t('articles.editor.coverPlaceholder')" />
               <a-space wrap>
                 <input ref="coverInput" type="file" accept="image/*" hidden @change="selectCover" />
-                <a-button :loading="coverUploading" @click="coverInput?.click()">上传封面</a-button>
-                <a-button @click="mediaPickerVisible = true">从资源库选择</a-button>
-                <a-button :disabled="!form.articleCover" @click="form.articleCover = ''">清除封面</a-button>
+                <a-button :loading="coverUploading" @click="coverInput?.click()">{{ t('articles.editor.uploadCover') }}</a-button>
+                <a-button @click="mediaPickerVisible = true">{{ t('articles.editor.pickFromLibrary') }}</a-button>
+                <a-button :disabled="!form.articleCover" @click="form.articleCover = ''">{{ t('articles.editor.clearCover') }}</a-button>
               </a-space>
             </div>
           </div>
         </a-form-item>
 
-        <a-form-item field="articleContent" label="正文" :rules="[{ required: true, message: '正文不能为空' }]">
+        <a-form-item
+          field="articleContent"
+          :label="t('articles.editor.content')"
+          :rules="[{ required: true, message: t('articles.editor.contentRequired') }]">
           <a-textarea
             v-model="form.articleContent"
             class="article-content-editor"
             :max-length="100000"
             show-word-limit
             :auto-size="{ minRows: 16, maxRows: 32 }"
-            placeholder="支持 Markdown / HTML，保存后由前台渲染" />
+            :placeholder="t('articles.editor.contentPlaceholder')" />
         </a-form-item>
 
         <div class="article-meta-row">
-          <span class="article-meta-label">展示选项</span>
-          <AdminFlagCheckbox v-model="form.isTop">置顶</AdminFlagCheckbox>
-          <AdminFlagCheckbox v-model="form.isFeatured">精选</AdminFlagCheckbox>
+          <span class="article-meta-label">{{ t('articles.editor.displayOptions') }}</span>
+          <AdminFlagCheckbox v-model="form.isTop">{{ t('status.pinned') }}</AdminFlagCheckbox>
+          <AdminFlagCheckbox v-model="form.isFeatured">{{ t('articles.featured') }}</AdminFlagCheckbox>
           <span class="article-meta-summary">{{ summary }}</span>
         </div>
 
         <div class="admin-form-actions">
-          <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
-          <a-button :disabled="saving" @click="router.push('/article-list')">取消</a-button>
+          <a-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</a-button>
+          <a-button :disabled="saving" @click="router.push('/article-list')">{{ t('common.cancel') }}</a-button>
         </div>
       </a-form>
     </a-card>
 
     <AdminMediaPicker v-model="mediaPickerVisible" @select="selectMedia" />
 
-    <AdminLeaveGuard :visible="leaveVisible" @ok="confirmLeave" @cancel="cancelLeave">
-      当前页面还有未保存的修改，离开后这些内容会丢失。
+    <AdminLeaveGuard
+      :visible="leaveVisible"
+      :title="t('common.unsavedTitle')"
+      :ok-text="t('common.unsavedLeave')"
+      :cancel-text="t('common.unsavedStay')"
+      @ok="confirmLeave"
+      @cancel="cancelLeave">
+      {{ t('articles.editor.leaveGuard') }}
     </AdminLeaveGuard>
   </section>
 </template>
@@ -137,6 +154,7 @@ import AdminLeaveGuard from '@/components/AdminLeaveGuard.vue'
 import AdminMediaPicker from '@/components/AdminMediaPicker.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
+import { t } from '@/i18n'
 import { plainText } from '@/utils/format'
 
 const route = useRoute()
@@ -190,9 +208,9 @@ const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsav
 
 const wordCount = computed(() => plainText(form.articleContent).replace(/\s/g, '').length)
 const summary = computed(() => {
-  const parts = [`约 ${wordCount.value} 字`]
+  const parts = [t('articles.editor.wordCount', { count: wordCount.value })]
   if (form.categoryName) parts.push(form.categoryName)
-  if (form.tagNames.length) parts.push(`${form.tagNames.length} 个标签`)
+  if (form.tagNames.length) parts.push(t('articles.editor.tagCount', { count: form.tagNames.length }))
   return parts.join(' · ')
 })
 
@@ -227,7 +245,7 @@ async function load(): Promise<void> {
     const missingTags = form.tagNames.filter((tag) => !tags.value.includes(tag))
     if (missingTags.length) tags.value = [...missingTags, ...tags.value]
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '文章加载失败')
+    errorMessage.value = apiErrorMessage(error, t('articles.editor.loadFailed'))
     Message.error(errorMessage.value)
   } finally {
     editorReady.value = true
@@ -240,7 +258,7 @@ async function submit(): Promise<void> {
   if (saving.value) return
   const errors = await formRef.value?.validate()
   if (errors) {
-    Message.error('请先修正表单中标红的字段')
+    Message.error(t('articles.editor.fixErrors'))
     return
   }
   await save()
@@ -265,11 +283,11 @@ async function save(): Promise<void> {
       password: form.status === 2 ? form.password : '',
       originalUrl: form.type === 1 ? '' : form.originalUrl.trim()
     })
-    Message.success(isEditing.value ? '文章已更新' : '文章已发布')
+    Message.success(isEditing.value ? t('articles.editor.saved') : t('articles.editor.published'))
     markClean()
     await router.push('/article-list')
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '文章保存失败')
+    errorMessage.value = apiErrorMessage(error, t('articles.editor.saveFailed'))
     Message.error(errorMessage.value)
   } finally {
     saving.value = false
@@ -283,7 +301,7 @@ async function loadTaxonomy(): Promise<void> {
     categories.value = mergeOptions(categoryItems.map(taxonomyName), categories.value)
     tags.value = mergeOptions(tagItems.map(taxonomyName), tags.value)
   } catch (error) {
-    Message.warning(apiErrorMessage(error, '分类和标签加载失败，可稍后重试'))
+    Message.warning(apiErrorMessage(error, t('articles.editor.taxonomyLoadFailed')))
   } finally {
     taxonomyLoading.value = false
   }
@@ -294,7 +312,7 @@ async function searchCategories(value: string): Promise<void> {
     categories.value = mergeOptions((await listAdminCategories(value)).map(taxonomyName), categories.value)
   } catch (error) {
     // Keep the previous options but tell the author why the list may be stale.
-    Message.warning(apiErrorMessage(error, '分类搜索失败，仍显示上一次的结果'))
+    Message.warning(apiErrorMessage(error, t('articles.editor.categorySearchFailed')))
   }
 }
 
@@ -302,7 +320,7 @@ async function searchTags(value: string): Promise<void> {
   try {
     tags.value = mergeOptions((await listAdminTags(value)).map(taxonomyName), tags.value)
   } catch (error) {
-    Message.warning(apiErrorMessage(error, '标签搜索失败，仍显示上一次的结果'))
+    Message.warning(apiErrorMessage(error, t('articles.editor.tagSearchFailed')))
   }
 }
 
@@ -314,9 +332,9 @@ async function selectCover(event: Event): Promise<void> {
   coverUploading.value = true
   try {
     form.articleCover = await uploadAdminArticleImage(file)
-    Message.success('封面上传成功')
+    Message.success(t('articles.editor.coverUploaded'))
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '封面上传失败')
+    errorMessage.value = apiErrorMessage(error, t('articles.editor.coverUploadFailed'))
     Message.error(errorMessage.value)
   } finally {
     coverUploading.value = false
@@ -325,7 +343,7 @@ async function selectCover(event: Event): Promise<void> {
 
 function selectMedia(asset: { url: string }): void {
   form.articleCover = asset.url
-  Message.success('已选择封面')
+  Message.success(t('articles.editor.coverSelected'))
 }
 
 /** Union of the freshly searched options and any value already present. */

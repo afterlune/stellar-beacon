@@ -104,22 +104,24 @@ export default defineComponent({
 </script>
 <style lang="scss" scoped>
 .photo-wrap {
-  display: flex;
-  flex-wrap: wrap;
+  display: block;
+  column-count: 4;
+  column-gap: 6px;
 }
 .photo {
-  margin: 3px;
-  cursor: pointer;
-  flex-grow: 1;
-  object-fit: cover;
-  height: 200px;
-}
-.photo-wrap::after {
-  content: '';
   display: block;
-  flex-grow: 9999;
+  width: 100%;
+  height: auto;
+  margin: 0 0 6px;
+  cursor: pointer;
+  object-fit: contain;
+  object-position: center;
+  break-inside: avoid;
 }
 @media (max-width: 759px) {
+  .photo-wrap {
+    column-count: 2;
+  }
   .photo {
     width: 100%;
   }

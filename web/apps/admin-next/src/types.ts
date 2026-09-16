@@ -29,7 +29,9 @@ export function normalizeMenus(menus: UserMenu[] | undefined): NormalizedMenu[] 
   if (!Array.isArray(menus)) return []
   return menus.map((menu) => ({
     ...menu,
-    name: menu.name || '未命名菜单',
+    // 后端没给名字时留空：显示层用 menuLabel() 兜底成当前语言的「未命名菜单」，
+    // 这里不能写死中文，否则语言切换后不会变。
+    name: menu.name || '',
     path: normalizeRoutePath(menu.path),
     children: normalizeMenus(menu.children)
   }))

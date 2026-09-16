@@ -15,6 +15,10 @@ export default defineConfig({
   reporter: [['line'], ['html', { outputFolder: 'test-results/playwright-report', open: 'never' }]],
   use: {
     baseURL,
+    // 后台的默认界面语言跟随浏览器语言，而 E2E 断言用的是中文选择器
+    // （`getByRole('button', { name: '新增' })` 等）。显式钉住 browser locale，
+    // 否则 Desktop Chrome 的 en-US 会让整个套件渲染成英文而全部失败。
+    locale: 'zh-CN',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'

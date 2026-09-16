@@ -10,7 +10,7 @@
           @search="load" />
         <a-button type="primary" @click="openEditor()">
           <template #icon><IconPlus /></template>
-          新增
+          {{ t('common.create') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -18,17 +18,20 @@
     <a-card class="admin-panel" :bordered="false">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
-          <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
-          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+          <a-tag v-if="keywords.trim()" color="arcoblue">{{ t('rbac.shared.keywords', { keywords: keywords.trim() }) }}</a-tag>
+          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">{{ t('rbac.shared.clearSearch') }}</a-button>
           <span class="admin-toolbar-caption">
-            {{ nodes.length }} 个{{ mode === 'menus' ? '顶级菜单' : '顶级资源组' }} · 共 {{ totalNodes }} 条记录
+            {{ mode === 'menus'
+              ? t('rbac.tree.topLevelMenus', { count: nodes.length })
+              : t('rbac.tree.topLevelResources', { count: nodes.length }) }}
+            · {{ t('rbac.tree.totalRecords', { total: totalNodes }) }}
           </span>
         </div>
         <div class="admin-table-toolbar-actions">
-          <a-button size="small" @click="toggleAll">{{ allExpanded ? '全部折叠' : '全部展开' }}</a-button>
+          <a-button size="small" @click="toggleAll">{{ allExpanded ? t('rbac.shared.collapseAll') : t('rbac.shared.expandAll') }}</a-button>
           <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
-            刷新
+            {{ t('common.refresh') }}
           </a-button>
         </div>
       </div>
@@ -45,7 +48,7 @@
                 class="admin-tree-toggle"
                 type="button"
                 :aria-expanded="isExpanded(record.id)"
-                :aria-label="isExpanded(record.id) ? `折叠 ${record.name}` : `展开 ${record.name}`"
+                :aria-label="isExpanded(record.id) ? t('rbac.tree.collapseNode', { name: record.name }) : t('rbac.tree.expandNode', { name: record.name })"
                 @click="toggle(record.id)">
                 <IconCaretDown v-if="isExpanded(record.id)" />
                 <IconCaretRight v-else />
@@ -58,7 +61,7 @@
             <span class="admin-mono-cell" :title="record.path">{{ record.path || '—' }}</span>
           </template>
           <template #component="{ record }">
-            <a-tooltip v-if="isUnknownComponent(record.component)" :content="`未注册的组件会回退到占位页：${record.component}`">
+            <a-tooltip v-if="isUnknownComponent(record.component)" :content="t('rbac.tree.unknownComponent', { component: record.component })">
               <a-tag color="orange">{{ record.component }}</a-tag>
             </a-tooltip>
             <span v-else class="admin-mono-cell" :title="String(record.component || '')">{{ record.component || '—' }}</span>
@@ -67,7 +70,7 @@
             <span class="admin-num-cell">{{ record.orderNum ?? 0 }}</span>
           </template>
           <template #hidden="{ record }">
-            <a-tooltip :content="Number(record.isHidden) === 1 ? '点击在侧边栏显示' : '点击在侧边栏隐藏'">
+            <a-tooltip :content="Number(record.isHidden) === 1 ? t('rbac.tree.clickShow') : t('rbac.tree.clickHide')">
               <a-switch
                 :model-value="Number(record.isHidden) === 1"
                 :loading="pendingHiddenId === record.id"
@@ -82,19 +85,19 @@
           </template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-              <a-popconfirm :content="`确定删除${record.name}吗？此操作不可撤销。`" @ok="deleteItem(record.id)">
-                <a-button type="text" status="danger" size="small">删除</a-button>
+              <a-button type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
+              <a-popconfirm :content="t('rbac.tree.deleteConfirm', { name: record.name })" @ok="deleteItem(record.id)">
+                <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="props.mode === 'menus' ? IconMenu : IconCode"
-              :title="keywords.trim() ? '没有匹配的记录' : `暂无${title}`"
-              :description="keywords.trim() ? '换个关键词再试一次。' : `创建第一条记录，它会立即出现在这里。`">
-              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
-              <a-button v-else type="primary" size="small" @click="openEditor()">新增{{ mode === 'menus' ? '菜单' : '资源' }}</a-button>
+              :title="keywords.trim() ? t('rbac.tree.emptySearchTitle') : emptyTitle"
+              :description="keywords.trim() ? t('rbac.shared.searchHint') : t('rbac.tree.emptyHint')">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">{{ t('rbac.shared.clearSearch') }}</a-button>
+              <a-button v-else type="primary" size="small" @click="openEditor()">{{ t(props.mode === 'menus' ? 'rbac.tree.createMenu' : 'rbac.tree.createResource') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -103,7 +106,7 @@
 
     <a-modal
       v-model:visible="editorVisible"
-      :title="form.id ? `编辑${title}` : `新增${title}`"
+      :title="editorTitle"
       :ok-loading="saving"
       :mask-closable="false"
       width="660px"
@@ -111,60 +114,60 @@
       <a-form :model="form" layout="vertical">
         <template v-if="mode === 'menus'">
           <div class="admin-form-grid">
-            <a-form-item field="name" label="菜单名称" required>
-              <a-input v-model="form.name" maxlength="20" show-word-limit placeholder="例如：文章列表" />
+            <a-form-item field="name" :label="t('rbac.tree.menuName')" required>
+              <a-input v-model="form.name" maxlength="20" show-word-limit :placeholder="t('rbac.tree.menuNamePlaceholder')" />
             </a-form-item>
-            <a-form-item field="orderNum" label="排序">
-              <a-input-number v-model="form.orderNum" :min="0" :max="9999" placeholder="数字越小越靠前" />
+            <a-form-item field="orderNum" :label="t('common.sort')">
+              <a-input-number v-model="form.orderNum" :min="0" :max="9999" :placeholder="t('rbac.tree.orderHint')" />
             </a-form-item>
           </div>
-          <a-form-item field="path" label="路径" required>
-            <a-input v-model="form.path" maxlength="100" placeholder="例如 /article-list" />
-            <template #help>路径必须唯一，并与前端路由保持一致。</template>
+          <a-form-item field="path" :label="t('rbac.tree.path')" required>
+            <a-input v-model="form.path" maxlength="100" :placeholder="t('rbac.tree.pathPlaceholder')" />
+            <template #help>{{ t('rbac.tree.pathHelp') }}</template>
           </a-form-item>
-          <a-form-item field="component" label="组件路径" required>
-            <a-input v-model="form.component" maxlength="100" placeholder="例如 /article/ArticleList.vue" />
+          <a-form-item field="component" :label="t('rbac.tree.componentPath')" required>
+            <a-input v-model="form.component" maxlength="100" :placeholder="t('rbac.tree.componentPlaceholder')" />
             <template #help>
               <span v-if="isUnknownComponent(form.component)" class="component-warning">
-                该组件未在前端注册，页面会回退到占位视图。
+                {{ t('rbac.tree.componentUnknown') }}
               </span>
-              <span v-else>使用前端已注册的视图文件路径，例如 /article/ArticleList.vue。</span>
+              <span v-else>{{ t('rbac.tree.componentHelp') }}</span>
             </template>
           </a-form-item>
-          <a-form-item field="icon" label="图标">
-            <a-input v-model="form.icon" maxlength="50" placeholder="可选，沿用后端图标标识" />
+          <a-form-item field="icon" :label="t('rbac.tree.icon')">
+            <a-input v-model="form.icon" maxlength="50" :placeholder="t('rbac.tree.iconPlaceholder')" />
           </a-form-item>
         </template>
 
         <template v-else>
-          <a-form-item field="resourceName" label="资源名称" required>
-            <a-input v-model="form.resourceName" maxlength="50" placeholder="例如：文章读取" />
+          <a-form-item field="resourceName" :label="t('rbac.tree.resourceName')" required>
+            <a-input v-model="form.resourceName" maxlength="50" :placeholder="t('rbac.tree.resourceNamePlaceholder')" />
           </a-form-item>
           <a-form-item field="url" label="URL" required>
-            <a-input v-model="form.url" maxlength="255" placeholder="例如 /admin/articles" />
+            <a-input v-model="form.url" maxlength="255" :placeholder="t('rbac.tree.urlPlaceholder')" />
           </a-form-item>
-          <a-form-item field="requestMethod" label="请求方法" required>
+          <a-form-item field="requestMethod" :label="t('rbac.tree.requestMethod')" required>
             <a-select v-model="form.requestMethod">
               <a-option v-for="method in methods" :key="method" :value="method">{{ method }}</a-option>
             </a-select>
           </a-form-item>
         </template>
 
-        <a-form-item field="parentId" :label="mode === 'menus' ? '父菜单' : '父资源'">
-          <a-select v-model="form.parentId" placeholder="顶级">
-            <a-option :value="0">顶级{{ mode === 'menus' ? '菜单' : '资源' }}</a-option>
+        <a-form-item field="parentId" :label="mode === 'menus' ? t('rbac.tree.parentMenu') : t('rbac.tree.parentResource')">
+          <a-select v-model="form.parentId" :placeholder="t('rbac.tree.topLevel')">
+            <a-option :value="0">{{ t(mode === 'menus' ? 'rbac.tree.topLevelMenu' : 'rbac.tree.topLevelResource') }}</a-option>
             <a-option v-for="parent in parentOptions" :key="parent.id" :value="parent.id">{{ parent.label }}</a-option>
           </a-select>
-          <template #help>不能选择自己或自己的子节点，否则会形成循环层级。</template>
+          <template #help>{{ t('rbac.tree.parentHelp') }}</template>
         </a-form-item>
 
-        <a-form-item v-if="mode === 'menus'" label="在侧边栏隐藏">
+        <a-form-item v-if="mode === 'menus'" :label="t('rbac.tree.hideInSidebar')">
           <a-switch v-model="form.isHidden" :checked-value="1" :unchecked-value="0" />
-          <template #help>隐藏后菜单仍然可访问，但不会出现在导航中。</template>
+          <template #help>{{ t('rbac.tree.hideHelp') }}</template>
         </a-form-item>
-        <a-form-item v-else label="允许匿名访问">
+        <a-form-item v-else :label="t('rbac.tree.allowAnonymous')">
           <a-switch v-model="form.isAnonymous" :checked-value="1" :unchecked-value="0" />
-          <template #help>开启后，未登录用户也可以调用该接口。</template>
+          <template #help>{{ t('rbac.tree.anonymousHelp') }}</template>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -196,6 +199,7 @@ import {
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatusTag from '@/components/AdminStatusTag.vue'
+import { t } from '@/i18n'
 import { isRegisteredComponent } from '@/router/menu'
 
 type PermissionMode = 'menus' | 'resources'
@@ -228,27 +232,28 @@ const props = defineProps<{ mode: PermissionMode }>()
 
 const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 
-const title = computed(() => (props.mode === 'menus' ? '菜单管理' : '接口资源管理'))
-const description = computed(() => (props.mode === 'menus'
-  ? '维护页面入口、层级和可见性，让每个角色只看到该看到的入口。'
-  : '查看后台接口资源与访问边界，明确哪些接口允许匿名调用。'))
-const placeholder = computed(() => (props.mode === 'menus' ? '搜索菜单名或路径' : '搜索资源名或 URL'))
+const title = computed(() => t(props.mode === 'menus' ? 'rbac.tree.menusTitle' : 'rbac.tree.resourcesTitle'))
+const description = computed(() => t(props.mode === 'menus'
+  ? 'rbac.tree.menusDescription'
+  : 'rbac.tree.resourcesDescription'))
+const placeholder = computed(() => t(props.mode === 'menus' ? 'rbac.tree.searchMenus' : 'rbac.tree.searchResources'))
+const emptyTitle = computed(() => t(props.mode === 'menus' ? 'rbac.tree.emptyMenus' : 'rbac.tree.emptyResources'))
 
 const columns = computed(() => (props.mode === 'menus'
   ? [
-      { title: '菜单', dataIndex: 'name', slotName: 'name', minWidth: 240 },
-      { title: '路径', dataIndex: 'path', slotName: 'path', width: 180 },
-      { title: '组件', dataIndex: 'component', slotName: 'component', width: 210 },
-      { title: '排序', dataIndex: 'orderNum', slotName: 'orderNum', width: 80 },
-      { title: '隐藏', dataIndex: 'isHidden', slotName: 'hidden', width: 84 },
-      { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
+      { title: t('rbac.tree.menu'), dataIndex: 'name', slotName: 'name', minWidth: 240 },
+      { title: t('rbac.tree.path'), dataIndex: 'path', slotName: 'path', width: 180 },
+      { title: t('rbac.tree.component'), dataIndex: 'component', slotName: 'component', width: 210 },
+      { title: t('common.sort'), dataIndex: 'orderNum', slotName: 'orderNum', width: 80 },
+      { title: t('rbac.tree.hidden'), dataIndex: 'isHidden', slotName: 'hidden', width: 84 },
+      { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]
   : [
-      { title: '资源', dataIndex: 'name', slotName: 'name', minWidth: 240 },
+      { title: t('rbac.tree.resource'), dataIndex: 'name', slotName: 'name', minWidth: 240 },
       { title: 'URL', dataIndex: 'url', slotName: 'path', width: 250 },
-      { title: '方法', dataIndex: 'requestMethod', slotName: 'method', width: 100 },
-      { title: '访问', dataIndex: 'isAnonymous', slotName: 'anonymous', width: 100 },
-      { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
+      { title: t('rbac.tree.method'), dataIndex: 'requestMethod', slotName: 'method', width: 100 },
+      { title: t('rbac.tree.access'), dataIndex: 'isAnonymous', slotName: 'anonymous', width: 100 },
+      { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]))
 
 const nodes = ref<PermissionNode[]>([])
@@ -274,6 +279,12 @@ const form = reactive({
   isAnonymous: 0
 })
 
+/** 新增/编辑弹窗标题随语言与模式变化，且要跟着表单里的 id 走。 */
+const editorTitle = computed(() => {
+  if (props.mode === 'menus') return t(form.id ? 'rbac.tree.editMenu' : 'rbac.tree.createMenu')
+  return t(form.id ? 'rbac.tree.editResource' : 'rbac.tree.createResource')
+})
+
 const totalNodes = computed(() => countNodes(nodes.value))
 const allExpanded = computed(() => nodes.value.length > 0 && nodes.value.every((node) => expanded.value.has(node.id)))
 
@@ -290,7 +301,7 @@ const parentOptions = computed(() => {
   const walk = (items: PermissionNode[], depth: number): void => {
     for (const item of items) {
       if (excluded.has(item.id)) continue
-      const label = item.name || item.resourceName || '未命名'
+      const label = item.name || item.resourceName || t('rbac.shared.unnamed')
       options.push({ id: item.id, label: `${'　'.repeat(depth)}${depth > 0 ? '└ ' : ''}${label}` })
       walk(item.children || [], depth + 1)
     }
@@ -331,7 +342,7 @@ async function load(): Promise<void> {
     // Default to fully expanded: the tree is small and seeing the hierarchy helps.
     if (expanded.value.size === 0) expanded.value = new Set(collectIds(nodes.value))
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '权限数据加载失败')
+    errorMessage.value = apiErrorMessage(error, t('rbac.tree.loadFailed'))
     Message.error(errorMessage.value)
   } finally {
     loading.value = false
@@ -362,15 +373,15 @@ function openEditor(node?: PermissionNode): void {
 async function save(): Promise<void> {
   if (props.mode === 'menus') {
     if (!form.name.trim() || !form.path.trim() || !form.component.trim()) {
-      Message.error('菜单名称、路径和组件路径不能为空')
+      Message.error(t('rbac.tree.menuRequired'))
       return
     }
   } else if (!form.resourceName.trim() || !form.url.trim() || !form.requestMethod) {
-    Message.error('资源名称、URL 和请求方法不能为空')
+    Message.error(t('rbac.tree.resourceRequired'))
     return
   }
   if (form.id && form.parentId === form.id) {
-    Message.error('不能把记录设为自己的父节点')
+    Message.error(t('rbac.tree.selfParent'))
     return
   }
   saving.value = true
@@ -397,10 +408,10 @@ async function save(): Promise<void> {
       })
     }
     editorVisible.value = false
-    Message.success(`${title.value}已保存`)
+    Message.success(t('rbac.tree.saved', { title: title.value }))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, `${title.value}保存失败`))
+    Message.error(apiErrorMessage(error, t('rbac.tree.saveFailed', { title: title.value })))
   } finally {
     saving.value = false
   }
@@ -412,10 +423,10 @@ async function deleteItem(id: unknown): Promise<void> {
   try {
     if (props.mode === 'menus') await deleteAdminMenu(itemId)
     else await deleteAdminResource(itemId)
-    Message.success(`${title.value}已删除`)
+    Message.success(t('rbac.tree.deleted', { title: title.value }))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, `${title.value}删除失败`))
+    Message.error(apiErrorMessage(error, t('rbac.tree.deleteFailed', { title: title.value })))
   }
 }
 
@@ -427,10 +438,10 @@ async function toggleHidden(node: PermissionNode, value: boolean | string | numb
   pendingHiddenId.value = node.id
   try {
     await updateAdminMenuHidden(node.id, next)
-    Message.success(next === 1 ? '菜单已在侧边栏隐藏' : '菜单已在侧边栏显示')
+    Message.success(next === 1 ? t('rbac.tree.menuHidden') : t('rbac.tree.menuShown'))
   } catch (error) {
     node.isHidden = previous
-    Message.error(apiErrorMessage(error, '菜单可见性更新失败'))
+    Message.error(apiErrorMessage(error, t('rbac.tree.visibilityFailed')))
   } finally {
     pendingHiddenId.value = 0
   }
@@ -441,8 +452,8 @@ function flatten(items: PermissionNode[], depth: number, forceExpand: boolean): 
   for (const item of items) {
     const children = Array.isArray(item.children) ? item.children : []
     const name = props.mode === 'menus'
-      ? item.name || '未命名菜单'
-      : item.resourceName || item.name || '未命名资源'
+      ? item.name || t('rbac.tree.unnamedMenu')
+      : item.resourceName || item.name || t('rbac.tree.unnamedResource')
     result.push({ ...item, name, depth, hasChildren: children.length > 0 })
     if (children.length > 0 && (forceExpand || isExpanded(item.id))) {
       result.push(...flatten(children, depth + 1, forceExpand))

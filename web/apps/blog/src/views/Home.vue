@@ -1,5 +1,39 @@
 <template>
-  <div class="block">
+  <div class="block home-page">
+    <section class="home-hero" aria-labelledby="home-hero-title">
+      <div class="home-hero__copy">
+        <p class="home-hero__eyebrow">STELLAR BEACON <span>/</span> PERSONAL LOG</p>
+        <h1 id="home-hero-title">在复杂系统里，<br /><em>寻找清晰的答案。</em></h1>
+        <p
+          class="home-hero__intro"
+          v-html="websiteConfig.authorIntro || '记录后端工程、系统实践与仍在发生的思考。这里不追逐热词，只记录值得反复推敲的技术细节。'" />
+        <div class="home-hero__actions">
+          <button type="button" class="home-hero__action" @click="scrollToArticles">
+            <span>浏览文章</span>
+            <span aria-hidden="true">↘</span>
+          </button>
+          <span class="home-hero__readout">{{ articleCount }} POSTS · {{ viewCount }} VIEWS</span>
+        </div>
+      </div>
+      <div class="home-hero__console" aria-label="站点状态">
+        <div class="home-hero__console-head">
+          <span>LIVE CHANNEL</span>
+          <span class="home-hero__status-dot">ONLINE</span>
+        </div>
+        <div class="home-hero__signal-mark" aria-hidden="true">
+          <span v-for="n in 7" :key="n" :style="{ '--i': n }" />
+        </div>
+        <div class="home-hero__console-title">
+          <span>最新置顶</span>
+          <strong>{{ topArticle.articleTitle || '等待下一条信号' }}</strong>
+        </div>
+        <div class="home-hero__console-meta">
+          <span>CHANNEL 01</span>
+          <span>{{ categoryCount }} CATEGORIES</span>
+          <span>{{ tagCount }} TAGS</span>
+        </div>
+      </div>
+    </section>
     <Feature v-if="themeConfig.feature">
       <FeatureList />
     </Feature>
@@ -210,6 +244,9 @@ export default defineComponent({
       expanderClass.value.expanded = !expanderClass.value.expanded
       tabClass.value['expanded-tab'] = !tabClass.value['expanded-tab']
     }
+    const scrollToArticles = () => {
+      document.getElementById('article-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
     const handleTabChange = (categoryId: any) => {
       userStore.tab = categoryId
       userStore.page = 1
@@ -245,6 +282,12 @@ export default defineComponent({
       categories: toRef(categoryStore.$state, 'categories'),
 
       themeConfig: computed(() => appStore.themeConfig),
+      websiteConfig: computed(() => appStore.websiteConfig),
+      articleCount: computed(() => appStore.articleCount),
+      categoryCount: computed(() => appStore.categoryCount),
+      tagCount: computed(() => appStore.tagCount),
+      viewCount: computed(() => appStore.viewCount),
+      scrollToArticles,
       expanderClass,
       tabClass,
       expandHandler,

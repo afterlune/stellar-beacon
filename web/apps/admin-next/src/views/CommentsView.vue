@@ -1,16 +1,16 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="评论管理" description="审核和管理读者评论。">
+    <AdminPageHeader :title="t('comments.comments.title')" :description="t('comments.comments.description')">
       <template #actions>
         <a-input-search
           v-model="keywords"
           class="admin-filter-input"
-          placeholder="搜索评论内容"
+          :placeholder="t('comments.comments.searchPlaceholder')"
           allow-clear
           @search="reload" />
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          刷新
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -19,11 +19,11 @@
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
           <a-radio-group v-model="reviewFilter" type="button" size="small" @change="reload">
-            <a-radio :value="0">全部</a-radio>
-            <a-radio :value="2">待审核</a-radio>
-            <a-radio :value="1">已通过</a-radio>
+            <a-radio :value="0">{{ t('common.all') }}</a-radio>
+            <a-radio :value="2">{{ t('status.pending') }}</a-radio>
+            <a-radio :value="1">{{ t('comments.comments.filterApproved') }}</a-radio>
           </a-radio-group>
-          <span class="admin-toolbar-caption">共 {{ total }} 条评论</span>
+          <span class="admin-toolbar-caption">{{ t('comments.comments.total', { total }) }}</span>
         </div>
         <div class="admin-table-toolbar-actions">
           <a-button
@@ -32,16 +32,16 @@
             type="primary"
             :loading="approvingAll"
             @click="approveAllPending">
-            一键通过本页 {{ pendingCount }} 条待审核
+            {{ t('comments.comments.approvePagePending', { count: pendingCount }) }}
           </a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="评论加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('comments.comments.loadFailed')" @retry="load" />
 
-      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${records.length} 条`" @clear="clearSelection">
-        <a-button size="small" type="primary" :loading="batchApproving" @click="batchReview">批量审核</a-button>
-        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      <AdminBatchBar :count="selectedIds.length" :hint="t('comments.common.pageCount', { count: records.length })" @clear="clearSelection">
+        <a-button size="small" type="primary" :loading="batchApproving" @click="batchReview">{{ t('comments.comments.batchApprove') }}</a-button>
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('comments.common.batchDelete') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -60,7 +60,7 @@
             <span v-if="record.articleTitle" :title="String(record.articleTitle)" class="comment-article">
               {{ record.articleTitle }}
             </span>
-            <span v-else class="admin-muted-cell">未关联文章</span>
+            <span v-else class="admin-muted-cell">{{ t('comments.comments.noArticle') }}</span>
           </template>
           <template #content="{ record }">
             <span class="comment-content" :title="plainText(record.commentContent)">{{ plainText(record.commentContent) || '—' }}</span>
@@ -72,19 +72,19 @@
           <template #actions="{ record }">
             <a-space class="admin-action-space">
               <a-button type="text" size="small" :loading="isPending(record.id)" @click="toggleReview(record)">
-                {{ Number(record.isReview) === 1 ? '取消审核' : '通过审核' }}
+                {{ Number(record.isReview) === 1 ? t('comments.comments.revokeReview') : t('comments.comments.approve') }}
               </a-button>
-              <a-popconfirm content="确认删除这条评论吗？删除后无法恢复。" @ok="remove(record.id)">
-                <a-button type="text" status="danger" size="small">删除</a-button>
+              <a-popconfirm :content="t('comments.comments.deleteConfirm')" @ok="remove(record.id)">
+                <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconMessage"
-              :title="keywords.trim() ? '没有匹配的评论' : '暂无评论'"
-              :description="keywords.trim() ? '换个关键词再试一次。' : '当读者留下第一条评论时，它会出现在这里。'">
-              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
+              :title="keywords.trim() ? t('comments.comments.emptySearch') : t('comments.comments.empty')"
+              :description="keywords.trim() ? t('comments.common.noMatch') : t('comments.comments.emptyHint')">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">{{ t('comments.common.clearSearch') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -115,6 +115,7 @@ import { useAsyncList } from '@/composables/useAsyncList'
 import { usePendingIds } from '@/composables/usePendingIds'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatDateTime, plainText } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
@@ -127,15 +128,16 @@ interface CommentRow extends Record<string, unknown> {
 
 const VIEW_KEY = 'comments'
 
-const columns = [
+// 列定义必须在 computed 里生成：它只在 setup 时求值一次，语言切换后不会再更新。
+const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', width: 78, slotName: 'id' },
-  { title: '用户', dataIndex: 'nickname', width: 140, ellipsis: true, tooltip: true },
-  { title: '文章', dataIndex: 'articleTitle', width: 200, slotName: 'article' },
-  { title: '内容', dataIndex: 'commentContent', minWidth: 260, slotName: 'content' },
-  { title: '审核', dataIndex: 'isReview', width: 104, slotName: 'review' },
-  { title: '创建时间', dataIndex: 'createTime', width: 184, slotName: 'time' },
-  { title: '操作', dataIndex: 'actions', width: 168, slotName: 'actions' }
-]
+  { title: t('comments.comments.user'), dataIndex: 'nickname', width: 140, ellipsis: true, tooltip: true },
+  { title: t('comments.comments.article'), dataIndex: 'articleTitle', width: 200, slotName: 'article' },
+  { title: t('comments.common.content'), dataIndex: 'commentContent', minWidth: 260, slotName: 'content' },
+  { title: t('comments.comments.review'), dataIndex: 'isReview', width: 104, slotName: 'review' },
+  { title: t('comments.common.createdAt'), dataIndex: 'createTime', width: 184, slotName: 'time' },
+  { title: t('common.actions'), dataIndex: 'actions', width: 168, slotName: 'actions' }
+])
 
 const keywords = ref('')
 const reviewFilter = ref(0)
@@ -164,7 +166,9 @@ const {
     keywords: keywords.value.trim(),
     isReview: reviewFilter.value
   }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '评论加载失败' }
+  // fallbackMessage 只在 setup 时取一次值（useAsyncList 的参数是普通字符串），
+  // 因此这里保留当前语言的快照；错误块的标题会跟着语言切换重新渲染。
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('comments.comments.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -203,10 +207,10 @@ async function toggleReview(row: CommentRow): Promise<void> {
     try {
       await reviewComment(Number(row.id), next)
       row.isReview = next
-      Message.success(next === 1 ? '评论已通过审核' : '已取消审核')
+      Message.success(next === 1 ? t('comments.comments.approved') : t('comments.comments.reviewRevoked'))
       await load()
     } catch (error) {
-      Message.error(apiErrorMessage(error, '审核操作失败'))
+      Message.error(apiErrorMessage(error, t('comments.comments.reviewFailed')))
     }
   })
 }
@@ -217,11 +221,11 @@ async function batchReview(): Promise<void> {
   batchApproving.value = true
   try {
     await reviewComments(ids, 1)
-    Message.success(`已通过 ${ids.length} 条评论`)
+    Message.success(t('comments.comments.approvedCount', { count: ids.length }))
     clearSelection()
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '批量审核失败'))
+    Message.error(apiErrorMessage(error, t('comments.comments.batchApproveFailed')))
   } finally {
     batchApproving.value = false
   }
@@ -233,11 +237,11 @@ async function batchDelete(): Promise<void> {
   batchDeleting.value = true
   try {
     await deleteComments(ids)
-    Message.success(`已删除 ${ids.length} 条评论`)
+    Message.success(t('comments.comments.deletedCount', { count: ids.length }))
     clearSelection()
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '批量删除失败'))
+    Message.error(apiErrorMessage(error, t('comments.common.batchDeleteFailed')))
   } finally {
     batchDeleting.value = false
   }
@@ -249,10 +253,10 @@ async function approveAllPending(): Promise<void> {
   approvingAll.value = true
   try {
     await reviewComments(pending.map((row) => Number(row.id)), 1)
-    Message.success(`已通过本页 ${pending.length} 条评论`)
+    Message.success(t('comments.comments.approvedPageCount', { count: pending.length }))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '批量审核失败'))
+    Message.error(apiErrorMessage(error, t('comments.comments.batchApproveFailed')))
     await load()
   } finally {
     approvingAll.value = false
@@ -266,9 +270,9 @@ async function remove(id: unknown): Promise<void> {
     await deleteComment(commentId)
     if (records.value.length === 1 && current.value > 1) current.value -= 1
     await load()
-    Message.success('评论已删除')
+    Message.success(t('comments.comments.deleted'))
   } catch (error) {
-    Message.error(apiErrorMessage(error, '删除失败'))
+    Message.error(apiErrorMessage(error, t('common.deleteFailed')))
   }
 }
 </script>

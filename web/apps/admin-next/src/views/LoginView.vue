@@ -1,30 +1,25 @@
 <template>
   <main class="admin-login-page">
-    <section class="admin-login-layout" aria-label="星际信标管理台登录">
+    <div class="admin-login-controls">
+      <AdminShellControls labelled />
+    </div>
+
+    <section class="admin-login-layout" :aria-label="t('login.pageLabel')">
       <aside class="admin-login-art">
+        <!-- 这一栏只留品牌：标题、介绍、四条卖点都是界面上的噪音，
+             版面交给星空与北斗，文字只剩必要的签名。 -->
         <div class="admin-login-art-copy">
           <div class="admin-login-brand">
             <BrandMark />
-            <span>星际信标编辑台</span>
+            <span>{{ t('login.brand') }}</span>
           </div>
-          <div class="admin-home-eyebrow">A QUIET PLACE TO CREATE</div>
-          <h1>把博客，留在清爽的秩序里。</h1>
-          <p>文章、评论、图片与站点设置，都在一个安静而清晰的工作台里。</p>
-          <ul class="admin-login-highlights">
-            <li v-for="highlight in highlights" :key="highlight" class="admin-login-highlight">
-              <span class="admin-login-highlight-icon" aria-hidden="true"><IconCheckCircle /></span>
-              {{ highlight }}
-            </li>
-          </ul>
         </div>
       </aside>
 
       <section class="admin-login-panel">
         <div class="admin-login-card" aria-labelledby="login-title">
           <div class="admin-login-heading">
-            <div class="admin-page-eyebrow">WELCOME BACK</div>
-            <h2 id="login-title">管理员登录</h2>
-            <p>使用你注册的邮箱与密码登录编辑台。</p>
+            <h2 id="login-title">{{ t('login.title') }}</h2>
           </div>
 
           <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
@@ -32,38 +27,29 @@
           <a-alert v-if="redirectHint" type="info">{{ redirectHint }}</a-alert>
 
           <a-form ref="formRef" :model="form" layout="vertical" :disabled="auth.loading" @submit-success="submit">
-            <a-form-item
-              field="username"
-              hide-label
-              :rules="[
-                { required: true, message: '请输入邮箱' },
-                { type: 'email', message: '邮箱格式不正确' }
-              ]">
+            <a-form-item field="username" hide-label :rules="usernameRules">
               <div class="admin-login-control">
-                <label class="admin-login-label" for="admin-username">邮箱</label>
+                <label class="admin-login-label" for="admin-username">{{ t('login.email') }}</label>
                 <a-input
                   v-model="form.username"
-                  :input-attrs="{ id: 'admin-username', name: 'username', 'aria-label': '管理员邮箱' }"
+                  :input-attrs="{ id: 'admin-username', name: 'username', 'aria-label': t('login.emailAria') }"
                   data-testid="login-username"
                   autocomplete="username"
                   size="large"
-                  placeholder="请输入管理员邮箱" />
+                  :placeholder="t('login.emailPlaceholder')" />
               </div>
             </a-form-item>
 
-            <a-form-item
-              field="password"
-              hide-label
-              :rules="[{ required: true, message: '请输入密码' }]">
+            <a-form-item field="password" hide-label :rules="passwordRules">
               <div class="admin-login-control">
-                <label class="admin-login-label" for="admin-password">密码</label>
+                <label class="admin-login-label" for="admin-password">{{ t('login.password') }}</label>
                 <a-input-password
                   v-model="form.password"
-                  :input-attrs="{ id: 'admin-password', name: 'password', 'aria-label': '密码' }"
+                  :input-attrs="{ id: 'admin-password', name: 'password', 'aria-label': t('login.password') }"
                   data-testid="login-password"
                   autocomplete="current-password"
                   size="large"
-                  placeholder="请输入密码" />
+                  :placeholder="t('login.passwordPlaceholder')" />
               </div>
             </a-form-item>
 
@@ -74,15 +60,12 @@
               size="large"
               :loading="auth.loading"
               data-testid="login-submit">
-              登录编辑台
+              {{ t('login.submit') }}
               <template #icon><IconArrowRight /></template>
             </a-button>
           </a-form>
 
-          <p class="admin-login-hint">
-            忘记密码？请联系站点管理员在数据库或部署脚本中重置。
-          </p>
-          <div class="admin-login-footer">STELLAR BEACON / EDITORIAL ADMIN</div>
+          <p class="admin-login-hint">{{ t('login.forgot') }}</p>
         </div>
       </section>
     </section>
@@ -93,21 +76,16 @@
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconArrowRight, IconCheckCircle } from '@arco-design/web-vue/es/icon'
+import { IconArrowRight } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage } from '@/api/http'
+import AdminShellControls from '@/components/AdminShellControls.vue'
 import BrandMark from '@/components/BrandMark.vue'
+import { t } from '@/i18n'
 import { resetMenuRoutes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
 import { resetSessionExpiredNotice } from '@/utils/session-notice'
-
-const highlights = [
-  '文章、分类、标签统一管理',
-  '评论审核与友链维护',
-  '图片资源与相册集中托管',
-  '站点配置与访问数据一屏掌握'
-]
 
 const auth = useAuthStore()
 const menuStore = useMenuStore()
@@ -119,10 +97,17 @@ const errorMessage = ref('')
 const menuWarning = ref('')
 const formRef = ref<{ validate: () => Promise<Record<string, unknown> | undefined> } | null>(null)
 
+// 校验提示由 t() 生成，语言切换后重新提交即生效（已渲染的旧提示会保留上一次语言）。
+const usernameRules = computed(() => [
+  { required: true, message: t('login.emailRequired') },
+  { type: 'email' as const, message: t('login.emailInvalid') }
+])
+const passwordRules = computed(() => [{ required: true, message: t('login.passwordRequired') }])
+
 /** 因会话过期或未登录被挡回登录页时，告诉用户登录后会回到原来的页面。 */
 const redirectHint = computed(() => (safeRedirect(route.query.redirect) === '/'
   ? ''
-  : '登录成功后会返回你刚才访问的页面。'))
+  : t('login.redirectHint')))
 
 async function submit(): Promise<void> {
   const errors = await formRef.value?.validate()
@@ -137,7 +122,7 @@ async function submit(): Promise<void> {
     // 新会话开始，允许下一次过期重新提示。
     resetSessionExpiredNotice()
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '登录失败，请检查账号和密码')
+    errorMessage.value = apiErrorMessage(error, t('login.failed'))
     return
   }
 
@@ -149,10 +134,10 @@ async function submit(): Promise<void> {
   try {
     await menuStore.load()
   } catch (error) {
-    menuWarning.value = apiErrorMessage(error, '登录成功，但菜单加载失败，可在管理台内重试')
+    menuWarning.value = apiErrorMessage(error, t('login.menuFailed'))
   }
 
-  Message.success('登录成功')
+  Message.success(t('login.success'))
   await router.replace(safeRedirect(route.query.redirect))
 }
 
@@ -162,14 +147,6 @@ function safeRedirect(value: unknown): string {
 </script>
 
 <style scoped>
-.admin-login-highlights {
-  display: grid;
-  gap: 10px;
-  margin: 26px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
 .admin-login-hint {
   margin: 18px 0 0;
   color: var(--admin-subtle);

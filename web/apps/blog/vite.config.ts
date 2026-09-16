@@ -9,6 +9,12 @@ export default defineConfig(({ mode }) => {
   return {
     base: env.VITE_BASE_URL || '/',
     plugins: [vue()],
+    // Tocbot 4.x ships a legacy UMD wrapper that probes `global` during
+    // module evaluation. Map it to the browser global so direct navigation
+    // to Article/About remains a normal Vue route in Vite dev and production.
+    define: {
+      global: 'globalThis'
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url))

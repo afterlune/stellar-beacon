@@ -1,10 +1,10 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="个人中心" description="编辑账号资料和个人简介。">
+    <AdminPageHeader :title="t('account.title')" :description="t('account.description')">
       <template #actions>
         <a-button @click="router.push('/setting')">
           <template #icon><IconRefresh /></template>
-          重新载入
+          {{ t('account.reload') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -13,94 +13,94 @@
       <div class="profile-avatar-wrap">
         <a-avatar :size="88" :image-url="auth.user?.avatar">{{ avatarText }}</a-avatar>
         <input ref="avatarInput" type="file" accept="image/*" hidden @change="selectAvatar" />
-        <a-button size="small" :loading="avatarUploading" @click="avatarInput?.click()">更换头像</a-button>
+        <a-button size="small" :loading="avatarUploading" @click="avatarInput?.click()">{{ t('account.changeAvatar') }}</a-button>
       </div>
       <div class="profile-hero-copy">
-        <div class="admin-page-eyebrow">ACCOUNT / PROFILE</div>
-        <h3>{{ auth.user?.nickname || auth.user?.username || '管理员' }}</h3>
-        <p>{{ form.intro || '还没有填写个人简介。补充一点信息，让个人中心真正成为你的后台身份名片。' }}</p>
+        <div class="admin-page-eyebrow">{{ t('account.eyebrow') }}</div>
+        <h3>{{ auth.user?.nickname || auth.user?.username || t('shell.admin') }}</h3>
+        <p>{{ form.intro || t('account.avatarHint') }}</p>
         <a-space wrap>
-          <a-tag color="arcoblue">{{ auth.user?.username || '管理员账号' }}</a-tag>
-          <a-tag color="green">后台管理员</a-tag>
+          <a-tag color="arcoblue">{{ auth.user?.username || t('account.adminAccount') }}</a-tag>
+          <a-tag color="green">{{ t('account.roleAdmin') }}</a-tag>
           <a-tag v-if="auth.user?.website" color="orange">{{ auth.user.website }}</a-tag>
         </a-space>
       </div>
       <div class="profile-meta">
-        <span>注册时间</span><strong>{{ formatDate(auth.user?.createTime) }}</strong>
-        <span>最近登录</span><strong>{{ formatDate(auth.user?.lastLoginTime) }}</strong>
-        <span>登录邮箱</span><strong>{{ auth.user?.email || auth.user?.username || '未绑定' }}</strong>
-        <span>登录 IP</span><strong>{{ auth.user?.ipAddress || '未知' }}</strong>
+        <span>{{ t('account.createdAt') }}</span><strong>{{ formatDate(auth.user?.createTime) }}</strong>
+        <span>{{ t('account.lastLogin') }}</span><strong>{{ formatDate(auth.user?.lastLoginTime) }}</strong>
+        <span>{{ t('account.loginEmail') }}</span><strong>{{ auth.user?.email || auth.user?.username || t('account.unbound') }}</strong>
+        <span>{{ t('account.loginIp') }}</span><strong>{{ auth.user?.ipAddress || t('account.unknownIp') }}</strong>
       </div>
     </div>
 
     <div class="profile-grid">
-      <a-card class="admin-form-panel admin-form-card" :bordered="false" title="公开资料">
+      <a-card class="admin-form-panel admin-form-card" :bordered="false" :title="t('account.public.title')">
         <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
         <a-form :model="form" layout="vertical" @submit-success="save">
           <a-form-item
             field="nickname"
-            label="昵称"
-            :rules="[{ required: true, message: '请输入昵称' }]">
-            <a-input v-model="form.nickname" maxlength="30" show-word-limit placeholder="展示在后台与公开页面的名字" />
+            :label="t('account.public.nickname')"
+            :rules="[{ required: true, message: t('account.public.nicknameRequired') }]">
+            <a-input v-model="form.nickname" maxlength="30" show-word-limit :placeholder="t('account.public.nicknamePlaceholder')" />
           </a-form-item>
-          <a-form-item field="intro" label="个人简介">
+          <a-form-item field="intro" :label="t('account.public.intro')">
             <a-textarea
               v-model="form.intro"
               :max-length="200"
               show-word-limit
               :auto-size="{ minRows: 5, maxRows: 8 }"
-              placeholder="一两句话介绍自己" />
+              :placeholder="t('account.public.introPlaceholder')" />
           </a-form-item>
           <a-form-item
             field="website"
-            label="个人网站"
+            :label="t('account.public.website')"
             :rules="websiteRules">
             <a-input v-model="form.website" placeholder="https://" />
-            <template #help>留空表示不展示个人网站。</template>
+            <template #help>{{ t('account.public.websiteHelp') }}</template>
           </a-form-item>
           <div class="admin-form-actions">
-            <a-button type="primary" html-type="submit" :loading="saving">保存资料</a-button>
-            <a-button :disabled="saving" @click="resetForm">还原修改</a-button>
+            <a-button type="primary" html-type="submit" :loading="saving">{{ t('account.public.save') }}</a-button>
+            <a-button :disabled="saving" @click="resetForm">{{ t('account.public.revert') }}</a-button>
           </div>
         </a-form>
       </a-card>
 
-      <a-card class="admin-form-panel admin-form-card" :bordered="false" title="账号安全">
+      <a-card class="admin-form-panel admin-form-card" :bordered="false" :title="t('account.password.title')">
         <a-alert v-if="passwordMessage" :type="passwordError ? 'error' : 'success'" closable @close="passwordMessage = ''">
           {{ passwordMessage }}
         </a-alert>
         <a-form ref="passwordFormRef" :model="passwordForm" layout="vertical" @submit-success="changePassword">
           <a-form-item
             field="oldPassword"
-            label="当前密码"
-            :rules="[{ required: true, message: '请输入当前密码' }]">
-            <a-input-password v-model="passwordForm.oldPassword" autocomplete="current-password" placeholder="用于验证身份" />
+            :label="t('account.password.current')"
+            :rules="[{ required: true, message: t('account.password.currentRequired') }]">
+            <a-input-password v-model="passwordForm.oldPassword" autocomplete="current-password" :placeholder="t('account.password.currentPlaceholder')" />
           </a-form-item>
           <a-form-item
             field="newPassword"
-            label="新密码"
+            :label="t('account.password.next')"
             :rules="[
-              { required: true, message: '请输入新密码' },
-              { minLength: 6, message: '新密码至少需要 6 位' }
+              { required: true, message: t('account.password.nextRequired') },
+              { minLength: 6, message: t('account.password.tooShort') }
             ]">
-            <a-input-password v-model="passwordForm.newPassword" autocomplete="new-password" placeholder="至少 6 位" />
+            <a-input-password v-model="passwordForm.newPassword" autocomplete="new-password" :placeholder="t('account.password.nextPlaceholder')" />
           </a-form-item>
           <a-form-item
             field="confirmPassword"
-            label="确认新密码"
+            :label="t('account.password.confirm')"
             :rules="[
-              { required: true, message: '请再次输入新密码' },
-              { validator: validateConfirm, message: '两次输入的新密码不一致' }
+              { required: true, message: t('account.password.confirmRequired') },
+              { validator: validateConfirm, message: t('account.password.mismatch') }
             ]">
-            <a-input-password v-model="passwordForm.confirmPassword" autocomplete="new-password" placeholder="再次输入新密码" />
+            <a-input-password v-model="passwordForm.confirmPassword" autocomplete="new-password" :placeholder="t('account.password.confirmPlaceholder')" />
           </a-form-item>
           <div class="admin-form-actions">
-            <a-button html-type="submit" :loading="passwordSaving">更新密码</a-button>
+            <a-button html-type="submit" :loading="passwordSaving">{{ t('account.password.submit') }}</a-button>
           </div>
         </a-form>
         <div class="profile-security-note">
           <IconSafe aria-hidden="true" />
-          <span>修改密码后当前会话保持有效；如怀疑账号泄露，请同时更换其他站点的同款密码。</span>
+          <span>{{ t('account.password.note') }}</span>
         </div>
       </a-card>
     </div>
@@ -116,6 +116,7 @@ import { useRouter } from 'vue-router'
 import { apiErrorMessage, changeAdminPassword, updateUserProfile, uploadUserAvatar } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import { t } from '@/i18n'
 import { formatDate, initialOf } from '@/utils/format'
 
 const router = useRouter()
@@ -145,7 +146,7 @@ const websiteRules = computed(() => [
         callback()
         return
       }
-      if (!/^https?:\/\/.+/i.test(text)) callback('请输入以 http:// 或 https:// 开头的完整地址')
+      if (!/^https?:\/\/.+/i.test(text)) callback(t('account.public.websiteInvalid'))
       else callback()
     }
   }
@@ -160,7 +161,7 @@ watch(() => auth.user, (user) => {
 }, { deep: true })
 
 function validateConfirm(value: unknown, callback: (error?: string) => void): void {
-  if (String(value || '') !== passwordForm.newPassword) callback('两次输入的新密码不一致')
+  if (String(value || '') !== passwordForm.newPassword) callback(t('account.password.mismatch'))
   else callback()
 }
 
@@ -173,7 +174,7 @@ function resetForm(): void {
 async function save(): Promise<void> {
   const nickname = form.nickname.trim()
   if (!nickname) {
-    Message.error('昵称不能为空')
+    Message.error(t('account.public.nicknameEmpty'))
     return
   }
   saving.value = true
@@ -181,9 +182,9 @@ async function save(): Promise<void> {
   try {
     await updateUserProfile({ nickname, intro: form.intro.trim(), website: form.website.trim() })
     auth.updateUser({ nickname, intro: form.intro.trim(), website: form.website.trim() })
-    Message.success('个人信息已保存')
+    Message.success(t('account.public.saved'))
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '个人信息保存失败')
+    errorMessage.value = apiErrorMessage(error, t('account.public.saveFailed'))
     Message.error(errorMessage.value)
   } finally {
     saving.value = false
@@ -195,12 +196,12 @@ async function changePassword(): Promise<void> {
   passwordError.value = false
   if (passwordForm.newPassword.length < 6) {
     passwordError.value = true
-    passwordMessage.value = '新密码至少需要 6 位'
+    passwordMessage.value = t('account.password.tooShort')
     return
   }
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
     passwordError.value = true
-    passwordMessage.value = '两次输入的新密码不一致'
+    passwordMessage.value = t('account.password.mismatch')
     return
   }
   passwordSaving.value = true
@@ -209,14 +210,14 @@ async function changePassword(): Promise<void> {
       oldPassword: passwordForm.oldPassword,
       newPassword: passwordForm.newPassword
     })
-    passwordMessage.value = '密码已更新'
-    Message.success('密码已更新')
+    passwordMessage.value = t('account.password.updated')
+    Message.success(t('account.password.updated'))
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
     passwordForm.confirmPassword = ''
   } catch (error) {
     passwordError.value = true
-    passwordMessage.value = apiErrorMessage(error, '密码更新失败')
+    passwordMessage.value = apiErrorMessage(error, t('account.password.updateFailed'))
     Message.error(passwordMessage.value)
   } finally {
     passwordSaving.value = false
@@ -229,16 +230,16 @@ async function selectAvatar(event: Event): Promise<void> {
   input.value = ''
   if (!file) return
   if (!file.type.startsWith('image/')) {
-    Message.warning('请选择图片文件作为头像')
+    Message.warning(t('account.avatar.wrongType'))
     return
   }
   avatarUploading.value = true
   try {
     const avatar = await uploadUserAvatar(file)
     auth.updateUser({ avatar })
-    Message.success('头像已更新')
+    Message.success(t('account.avatar.updated'))
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '头像上传失败')
+    errorMessage.value = apiErrorMessage(error, t('account.avatar.failed'))
     Message.error(errorMessage.value)
   } finally {
     avatarUploading.value = false

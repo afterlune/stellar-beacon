@@ -5,7 +5,8 @@
   "scripts": {
     "serve": "vite --host 0.0.0.0 --port 8080",
     "build": "vite build",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:e2e": "playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@stellar-beacon/api-client": "0.1.0",
@@ -34,6 +35,7 @@
     "vue3-lazy": "^1.0.0-alpha.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/node": "^22.10.2",
     "@types/nprogress": "^0.2.0",
     "@types/prismjs": "^1.26.0",

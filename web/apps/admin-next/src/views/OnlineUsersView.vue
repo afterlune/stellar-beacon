@@ -1,16 +1,16 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="在线用户" description="查看当前登录会话及其状态。">
+    <AdminPageHeader :title="t('taxonomy.online.title')" :description="t('taxonomy.online.description')">
       <template #actions>
         <a-input-search
           v-model="keywords"
           class="admin-filter-input"
-          placeholder="搜索用户昵称"
+          :placeholder="t('taxonomy.online.searchPlaceholder')"
           allow-clear
           @search="reload" />
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          刷新
+          {{ t('taxonomy.common.refresh') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -18,17 +18,17 @@
     <a-card class="admin-panel" :bordered="false">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
-          <span class="admin-live-badge"><span class="admin-live-dot" aria-hidden="true" />当前在线 {{ total }} 人</span>
-          <a-tag v-if="keywords.trim()" color="arcoblue">关键词：{{ keywords.trim() }}</a-tag>
-          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+          <span class="admin-live-badge"><span class="admin-live-dot" aria-hidden="true" />{{ t('taxonomy.online.total', { total }) }}</span>
+          <a-tag v-if="keywords.trim()" color="arcoblue">{{ t('taxonomy.online.keywords', { keywords: keywords.trim() }) }}</a-tag>
+          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">{{ t('taxonomy.online.clearKeywords') }}</a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="在线用户加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('taxonomy.online.loadFailed')" @retry="load" />
 
-      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${records.length} 人`" @clear="clearSelection">
+      <AdminBatchBar :count="selectedIds.length" :hint="t('taxonomy.online.pageCount', { count: records.length })" @clear="clearSelection">
         <a-button :disabled="selectedIds.length === 0" size="small" status="danger" @click="removeSelected">
-          强制下线选中（{{ selectedIds.length }}）
+          {{ t('taxonomy.online.forceOfflineSelected', { count: selectedIds.length }) }}
         </a-button>
       </AdminBatchBar>
 
@@ -47,7 +47,7 @@
             <div class="online-user-cell">
               <a-avatar :size="30" :image-url="record.avatar">{{ initialOf(record.nickname || record.username) }}</a-avatar>
               <span class="online-user-copy">
-                <strong :title="String(record.nickname || '')">{{ record.nickname || record.username || '未命名用户' }}</strong>
+                <strong :title="String(record.nickname || '')">{{ record.nickname || record.username || t('taxonomy.online.unnamed') }}</strong>
                 <small>ID {{ record.userInfoId ?? '—' }}</small>
               </span>
             </div>
@@ -66,19 +66,19 @@
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.lastLoginTime) }}</span></template>
           <template #actions="{ record }">
             <a-popconfirm
-              :content="`强制「${record.nickname || record.username || '该用户'}」下线？对方需要重新登录。`"
+              :content="t('taxonomy.online.forceConfirm', { name: record.nickname || record.username || t('taxonomy.online.forceTarget') })"
               @ok="removeOne(record)">
               <a-button type="text" status="danger" size="small" :loading="pendingId === Number(record.userInfoId)">
-                强制下线
+                {{ t('taxonomy.online.forceOffline') }}
               </a-button>
             </a-popconfirm>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconUser"
-              :title="keywords.trim() ? '没有匹配的会话' : '当前没有活跃会话'"
-              :description="keywords.trim() ? '换个关键词再试一次。' : '当有用户登录并保持会话时，会出现在这里。'">
-              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
+              :title="keywords.trim() ? t('taxonomy.online.emptyFilteredTitle') : t('taxonomy.online.emptyTitle')"
+              :description="keywords.trim() ? t('taxonomy.online.emptyFilteredHint') : t('taxonomy.online.emptyHint')">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">{{ t('taxonomy.online.clearKeywords') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -100,19 +100,21 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatDateTime, initialOf } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminUser } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'online-users'
 
-const columns = [
-  { title: '用户', dataIndex: 'nickname', slotName: 'user', minWidth: 190 },
-  { title: '浏览器 / 系统', dataIndex: 'browser', slotName: 'client', minWidth: 170 },
-  { title: 'IP 地址', dataIndex: 'ipAddress', slotName: 'ip', width: 160 },
-  { title: '最后活跃', dataIndex: 'lastLoginTime', slotName: 'time', width: 168 },
-  { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 120 }
-]
+// 列定义里的标题要跟着语言切换更新，因此用 computed 而不是模块级常量。
+const columns = computed(() => [
+  { title: t('taxonomy.online.user'), dataIndex: 'nickname', slotName: 'user', minWidth: 190 },
+  { title: t('taxonomy.online.client'), dataIndex: 'browser', slotName: 'client', minWidth: 170 },
+  { title: t('taxonomy.online.ip'), dataIndex: 'ipAddress', slotName: 'ip', width: 160 },
+  { title: t('taxonomy.online.lastActive'), dataIndex: 'lastLoginTime', slotName: 'time', width: 168 },
+  { title: t('taxonomy.online.actions'), dataIndex: 'actions', slotName: 'actions', width: 120 }
+])
 
 const selectedKeys = ref<Array<string | number>>([])
 const keywords = ref('')
@@ -141,7 +143,8 @@ const {
     selectedKeys.value = selectedKeys.value.filter((key) => available.has(Number(key)))
     return result
   },
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '在线用户加载失败' }
+  // useAsyncList 只在初始化时读一次 options，兜底文案取当前语言即可。
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('taxonomy.online.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -178,10 +181,10 @@ async function removeOne(record: AdminUser): Promise<void> {
   pendingId.value = id
   try {
     await removeAdminOnlineUser(id)
-    Message.success('该会话已强制下线')
+    Message.success(t('taxonomy.online.forceSuccess'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '强制下线失败'))
+    Message.error(apiErrorMessage(error, t('taxonomy.online.forceFailed')))
   } finally {
     pendingId.value = 0
   }
@@ -193,10 +196,10 @@ async function removeSelected(): Promise<void> {
   try {
     for (const id of ids) await removeAdminOnlineUser(id)
     selectedKeys.value = []
-    Message.success(`已强制 ${ids.length} 个会话下线`)
+    Message.success(t('taxonomy.online.batchForceSuccess', { count: ids.length }))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '批量强制下线失败'))
+    Message.error(apiErrorMessage(error, t('taxonomy.online.batchForceFailed')))
     await load()
   }
 }
@@ -205,7 +208,7 @@ function clientLabel(record: AdminUser): string {
   const browser = String(record.browser || '').trim()
   const os = String(record.os || '').trim()
   if (browser && os) return `${browser} · ${os}`
-  return browser || os || '未知客户端'
+  return browser || os || t('taxonomy.online.unknownClient')
 }
 </script>
 

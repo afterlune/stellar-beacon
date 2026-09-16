@@ -1,16 +1,16 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="定时任务" description="管理定时任务并查看执行结果。">
+    <AdminPageHeader :title="t('logs.jobs.title')" :description="t('logs.jobs.description')">
       <template #actions>
         <a-input-search
           v-model="keywords"
           class="admin-filter-input"
-          placeholder="搜索任务名"
+          :placeholder="t('logs.common.searchJobName')"
           allow-clear
           @search="reload" />
         <a-button type="primary" @click="openEditor()">
           <template #icon><IconPlus /></template>
-          新增
+          {{ t('common.create') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -19,34 +19,34 @@
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
           <a-radio-group v-model="statusFilter" type="button" size="small" @change="reload">
-            <a-radio value="all">全部</a-radio>
-            <a-radio value="1">正常</a-radio>
-            <a-radio value="0">已暂停</a-radio>
+            <a-radio value="all">{{ t('common.all') }}</a-radio>
+            <a-radio value="1">{{ t('logs.jobs.statusNormal') }}</a-radio>
+            <a-radio value="0">{{ t('logs.jobs.statusPaused') }}</a-radio>
           </a-radio-group>
           <a-select
             v-model="groupFilter"
-            placeholder="全部分组"
+            :placeholder="t('logs.common.allGroups')"
             allow-clear
             style="width: 150px"
             @change="reload">
             <a-option v-for="group in groupOptions" :key="group" :value="group">{{ group }}</a-option>
           </a-select>
-          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">重置筛选</a-button>
+          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">{{ t('logs.jobs.resetFilters') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 个任务</span>
+          <span class="admin-toolbar-caption">{{ t('logs.jobs.total', { total }) }}</span>
           <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
-            刷新
+            {{ t('common.refresh') }}
           </a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="任务列表加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('logs.jobs.loadFailed')" @retry="load" />
       <a-alert v-if="runHint" type="info" closable @close="runHint = ''">{{ runHint }}</a-alert>
 
-      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${jobs.length} 个`" @clear="clearSelection">
-        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      <AdminBatchBar :count="selectedIds.length" :hint="t('logs.jobs.pageCount', { count: jobs.length })" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('logs.common.batchDelete') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -62,12 +62,12 @@
           @page-size-change="changePageSize">
           <template #jobName="{ record }">
             <div class="job-name-cell">
-              <span class="admin-title-cell">{{ record.jobName || '未命名任务' }}</span>
+              <span class="admin-title-cell">{{ record.jobName || t('logs.jobs.untitled') }}</span>
               <small v-if="record.remark" :title="String(record.remark)">{{ record.remark }}</small>
             </div>
           </template>
           <template #group="{ record }">
-            <a-tag :color="groupColor(record.jobGroup)">{{ record.jobGroup || '默认' }}</a-tag>
+            <a-tag :color="groupColor(record.jobGroup)">{{ record.jobGroup || t('logs.jobs.defaultGroup') }}</a-tag>
           </template>
           <template #target="{ record }">
             <span class="admin-mono-cell ellipsis" :title="String(record.invokeTarget || '')">{{ record.invokeTarget || '—' }}</span>
@@ -76,7 +76,7 @@
             <span class="admin-mono-cell" :title="String(record.cronExpression || '')">{{ record.cronExpression || '—' }}</span>
           </template>
           <template #status="{ record }">
-            <a-tooltip :content="Number(record.status) === 1 ? '点击暂停该任务' : '点击启用该任务'">
+            <a-tooltip :content="Number(record.status) === 1 ? t('logs.jobs.pauseHint') : t('logs.jobs.resumeHint')">
               <a-switch
                 :model-value="Number(record.status) === 1"
                 :checked-value="true"
@@ -84,35 +84,35 @@
                 :loading="isPending(record.id)"
                 :disabled="pending.some((item) => item !== Number(record.id))"
                 @change="changeStatus(record, $event)">
-                <template #checked>正常</template>
-                <template #unchecked>暂停</template>
+                <template #checked>{{ t('logs.jobs.statusNormal') }}</template>
+                <template #unchecked>{{ t('logs.jobs.pause') }}</template>
               </a-switch>
             </a-tooltip>
           </template>
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openEditor(record)">编辑</a-button>
-              <a-popconfirm v-if="record.canRunOnce" content="只处理一个已入队任务，确认立即执行吗？" @ok="runOnce(record)">
-                <a-button type="text" size="small" :loading="runningId === Number(record.id)">执行一次</a-button>
+              <a-button type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
+              <a-popconfirm v-if="record.canRunOnce" :content="t('logs.jobs.runOnceConfirm')" @ok="runOnce(record)">
+                <a-button type="text" size="small" :loading="runningId === Number(record.id)">{{ t('logs.jobs.runOnce') }}</a-button>
               </a-popconfirm>
-              <a-tooltip v-else :content="String(record.runOnceReason || '该任务目标暂不支持手动执行')">
-                <a-button type="text" size="small" disabled>执行一次</a-button>
+              <a-tooltip v-else :content="String(record.runOnceReason || t('logs.jobs.runOnceUnsupported'))">
+                <a-button type="text" size="small" disabled>{{ t('logs.jobs.runOnce') }}</a-button>
               </a-tooltip>
               <a-popconfirm
-                :content="`确定删除任务「${record.jobName}」吗？删除后调度配置不可恢复。`"
+                :content="t('logs.jobs.deleteConfirm', { name: record.jobName })"
                 @ok="deleteJob(record.id)">
-                <a-button type="text" status="danger" size="small">删除</a-button>
+                <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconCalendarClock"
-              :title="hasFilters ? '没有匹配的任务' : '还没有定时任务'"
-              :description="hasFilters ? '换个关键词或重置筛选条件再试一次。' : '创建任务后，后台会按 Cron 表达式自动执行它。'">
-              <a-button v-if="hasFilters" size="small" @click="resetFilters">重置筛选</a-button>
-              <a-button v-else type="primary" size="small" @click="openEditor()">新增任务</a-button>
+              :title="hasFilters ? t('logs.jobs.emptyFiltered') : t('logs.jobs.empty')"
+              :description="hasFilters ? t('logs.jobs.emptyFilteredHint') : t('logs.jobs.emptyHint')">
+              <a-button v-if="hasFilters" size="small" @click="resetFilters">{{ t('logs.jobs.resetFilters') }}</a-button>
+              <a-button v-else type="primary" size="small" @click="openEditor()">{{ t('logs.jobs.create') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
@@ -121,25 +121,25 @@
 
     <a-modal
       v-model:visible="editorVisible"
-      :title="editor.id ? '编辑任务' : '新增任务'"
+      :title="editor.id ? t('logs.jobs.edit') : t('logs.jobs.create')"
       :ok-loading="saving"
       :ok-button-props="{ disabled: editorLoading }"
       :mask-closable="false"
       width="720px"
       @ok="saveEditor">
-      <a-spin v-if="editorLoading" class="job-editor-loading" tip="正在读取任务详情…" />
+      <a-spin v-if="editorLoading" class="job-editor-loading" :tip="t('logs.jobs.loadingDetail')" />
       <a-form v-else :model="editor" layout="vertical">
         <div class="admin-form-grid">
-          <a-form-item field="jobName" label="任务名称" required>
-            <a-input v-model="editor.jobName" maxlength="64" show-word-limit placeholder="例如：清理过期文章" />
+          <a-form-item field="jobName" :label="t('logs.common.colJobName')" required>
+            <a-input v-model="editor.jobName" maxlength="64" show-word-limit :placeholder="t('logs.jobs.namePlaceholder')" />
           </a-form-item>
-          <a-form-item field="jobGroup" label="任务分组" required>
-            <a-input v-model="editor.jobGroup" maxlength="64" show-word-limit placeholder="例如：默认" />
+          <a-form-item field="jobGroup" :label="t('logs.common.colJobGroup')" required>
+            <a-input v-model="editor.jobGroup" maxlength="64" show-word-limit :placeholder="t('logs.jobs.groupPlaceholder')" />
             <!-- 建议分组只是把已有分组填进输入框，不新增输入控件（分组字段的
                  输入序号被 E2E 契约锁定，且 fill() 需要可写的 text input）。 -->
             <template v-if="editorGroupSuggestions.length" #help>
               <span class="job-group-hint">
-                已有分组：
+                {{ t('logs.jobs.existingGroups') }}
                 <a-button
                   v-for="group in editorGroupSuggestions"
                   :key="group"
@@ -150,42 +150,42 @@
             </template>
           </a-form-item>
         </div>
-        <a-form-item field="invokeTarget" label="调用目标" required>
-          <a-input v-model="editor.invokeTarget" maxlength="500" placeholder="例如：article.cleanup" />
+        <a-form-item field="invokeTarget" :label="t('logs.common.colInvokeTarget')" required>
+          <a-input v-model="editor.invokeTarget" maxlength="500" :placeholder="t('logs.jobs.targetPlaceholder')" />
           <template #help>
-            这里只保存目标标识；“执行一次”仅允许后端固定白名单中、且已启用 Worker 的目标。
+            {{ t('logs.jobs.targetHelp') }}
           </template>
         </a-form-item>
-        <a-form-item field="cronExpression" label="Cron 表达式" required>
-          <a-input v-model="editor.cronExpression" maxlength="255" placeholder="例如：0 0 3 * * ?" />
-          <template #help>使用 Quartz 六段式 Cron，例如每天凌晨 3 点执行：0 0 3 * * ?</template>
+        <a-form-item field="cronExpression" :label="t('logs.jobs.cronLabel')" required>
+          <a-input v-model="editor.cronExpression" maxlength="255" :placeholder="t('logs.jobs.cronPlaceholder')" />
+          <template #help>{{ t('logs.jobs.cronHelp') }}</template>
         </a-form-item>
         <div class="admin-form-grid">
-          <a-form-item label="错误策略">
+          <a-form-item :label="t('logs.jobs.misfireLabel')">
             <a-select v-model="editor.misfirePolicy">
-              <a-option :value="0">默认策略</a-option>
-              <a-option :value="1">立即执行</a-option>
-              <a-option :value="2">执行一次</a-option>
-              <a-option :value="3">放弃执行</a-option>
+              <a-option :value="0">{{ t('logs.jobs.misfireDefault') }}</a-option>
+              <a-option :value="1">{{ t('logs.jobs.misfireFireNow') }}</a-option>
+              <a-option :value="2">{{ t('logs.jobs.misfireOnce') }}</a-option>
+              <a-option :value="3">{{ t('logs.jobs.misfireAbandon') }}</a-option>
             </a-select>
-            <template #help>错过触发时间后如何处理本次调度。</template>
+            <template #help>{{ t('logs.jobs.misfireHelp') }}</template>
           </a-form-item>
-          <a-form-item label="并发执行">
+          <a-form-item :label="t('logs.jobs.concurrentLabel')">
             <a-radio-group v-model="editor.concurrent">
-              <a-radio :value="0">允许</a-radio>
-              <a-radio :value="1">禁止</a-radio>
+              <a-radio :value="0">{{ t('logs.jobs.concurrentAllow') }}</a-radio>
+              <a-radio :value="1">{{ t('logs.jobs.concurrentDeny') }}</a-radio>
             </a-radio-group>
-            <template #help>禁止并发可避免同一任务被重复执行。</template>
+            <template #help>{{ t('logs.jobs.concurrentHelp') }}</template>
           </a-form-item>
         </div>
-        <a-form-item label="状态">
+        <a-form-item :label="t('common.status')">
           <a-radio-group v-model="editor.status">
-            <a-radio :value="1">正常</a-radio>
-            <a-radio :value="0">暂停</a-radio>
+            <a-radio :value="1">{{ t('logs.jobs.statusNormal') }}</a-radio>
+            <a-radio :value="0">{{ t('logs.jobs.pause') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="备注">
-          <a-textarea v-model="editor.remark" maxlength="500" show-word-limit :auto-size="{ minRows: 2, maxRows: 4 }" placeholder="记录这个任务的用途，方便日后维护" />
+        <a-form-item :label="t('common.remark')">
+          <a-textarea v-model="editor.remark" maxlength="500" show-word-limit :auto-size="{ minRows: 2, maxRows: 4 }" :placeholder="t('logs.jobs.remarkPlaceholder')" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -215,21 +215,23 @@ import { useAsyncList } from '@/composables/useAsyncList'
 import { usePendingIds } from '@/composables/usePendingIds'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminJob } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'jobs'
 
-const columns = [
-  { title: '任务名称', dataIndex: 'jobName', slotName: 'jobName', minWidth: 200 },
-  { title: '分组', dataIndex: 'jobGroup', slotName: 'group', width: 118 },
-  { title: '调用目标', dataIndex: 'invokeTarget', slotName: 'target', ellipsis: true, tooltip: true, minWidth: 180 },
-  { title: 'Cron', dataIndex: 'cronExpression', slotName: 'cron', width: 156 },
-  { title: '状态', dataIndex: 'status', slotName: 'status', width: 118 },
-  { title: '创建时间', dataIndex: 'createTime', slotName: 'time', width: 168 },
-  { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 224 }
-]
+// 列标题要跟着语言切换，因此放在 computed 里求值。
+const columns = computed(() => [
+  { title: t('logs.common.colJobName'), dataIndex: 'jobName', slotName: 'jobName', minWidth: 200 },
+  { title: t('logs.jobs.colGroup'), dataIndex: 'jobGroup', slotName: 'group', width: 118 },
+  { title: t('logs.common.colInvokeTarget'), dataIndex: 'invokeTarget', slotName: 'target', ellipsis: true, tooltip: true, minWidth: 180 },
+  { title: t('logs.jobs.colCron'), dataIndex: 'cronExpression', slotName: 'cron', width: 156 },
+  { title: t('common.status'), dataIndex: 'status', slotName: 'status', width: 118 },
+  { title: t('logs.jobs.colCreateTime'), dataIndex: 'createTime', slotName: 'time', width: 168 },
+  { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 224 }
+])
 
 const keywords = ref('')
 const statusFilter = ref<'all' | '0' | '1'>('all')
@@ -274,7 +276,7 @@ const {
     jobName: keywords.value.trim(),
     jobGroup: groupFilter.value || ''
   }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '任务列表加载失败' }
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('logs.jobs.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -339,11 +341,11 @@ async function batchDelete(): Promise<void> {
   batchDeleting.value = true
   try {
     await deleteAdminJobs(ids)
-    Message.success(`已删除 ${ids.length} 个任务`)
+    Message.success(t('logs.jobs.batchDeleted', { count: ids.length }))
     clearSelection()
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '批量删除失败'))
+    Message.error(apiErrorMessage(error, t('logs.common.batchDeleteFailed')))
   } finally {
     batchDeleting.value = false
   }
@@ -359,7 +361,7 @@ async function openEditor(job?: AdminJob): Promise<void> {
     resetEditor(await getAdminJob(Number(job.id)))
   } catch (error) {
     editorVisible.value = false
-    Message.error(apiErrorMessage(error, '任务详情加载失败'))
+    Message.error(apiErrorMessage(error, t('logs.jobs.detailLoadFailed')))
   } finally {
     editorLoading.value = false
   }
@@ -380,7 +382,7 @@ function resetEditor(job?: AdminJob): void {
 async function saveEditor(): Promise<void> {
   if (editorLoading.value) return
   if (!editor.jobName.trim() || !editor.jobGroup.trim() || !editor.invokeTarget.trim() || !editor.cronExpression.trim()) {
-    Message.error('任务名称、分组、调用目标和 Cron 表达式不能为空')
+    Message.error(t('logs.jobs.requiredFields'))
     return
   }
   saving.value = true
@@ -398,12 +400,12 @@ async function saveEditor(): Promise<void> {
       remark: editor.remark?.trim() || ''
     })
     editorVisible.value = false
-    Message.success(editing ? '任务已更新' : '任务已创建')
+    Message.success(editing ? t('logs.jobs.updated') : t('logs.jobs.created'))
     // 新建的分组要立刻出现在筛选下拉里。
     void loadGroupOptions()
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '任务保存失败'))
+    Message.error(apiErrorMessage(error, t('logs.jobs.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -419,10 +421,10 @@ async function changeStatus(job: AdminJob, value: boolean | string | number): Pr
   await withPending(jobId, async () => {
     try {
       await updateAdminJobStatus(jobId, next)
-      Message.success(next === 1 ? '任务已启用' : '任务已暂停')
+      Message.success(next === 1 ? t('logs.jobs.enabled') : t('logs.jobs.paused'))
     } catch (error) {
       job.status = previous
-      Message.error(apiErrorMessage(error, '任务状态更新失败'))
+      Message.error(apiErrorMessage(error, t('logs.jobs.statusFailed')))
     }
   })
 }
@@ -433,10 +435,10 @@ async function runOnce(job: AdminJob): Promise<void> {
   runningId.value = jobId
   try {
     const outcome = await runAdminJob(jobId, String(job.jobGroup || ''))
-    if (outcome.processed) Message.success('任务已执行一次')
-    else runHint.value = '没有可执行的队列任务：该目标当前没有待处理的数据。'
+    if (outcome.processed) Message.success(t('logs.jobs.runOnceDone'))
+    else runHint.value = t('logs.jobs.runOnceEmpty')
   } catch (error) {
-    Message.error(apiErrorMessage(error, '任务执行失败'))
+    Message.error(apiErrorMessage(error, t('logs.jobs.runFailed')))
   } finally {
     runningId.value = 0
   }
@@ -448,10 +450,10 @@ async function deleteJob(id: unknown): Promise<void> {
   try {
     await deleteAdminJobs([jobId])
     if (rows.value.length === 1 && current.value > 1) current.value -= 1
-    Message.success('任务已删除')
+    Message.success(t('logs.jobs.deleted'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '任务删除失败'))
+    Message.error(apiErrorMessage(error, t('logs.jobs.deleteFailed')))
   }
 }
 

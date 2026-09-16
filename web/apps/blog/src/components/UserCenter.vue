@@ -1,11 +1,15 @@
 <template>
   <el-drawer v-model="visible" direction="rtl" :with-header="false" :before-close="handleClose">
-    <span class="text font-semibold text-2xl">用户中心</span>
+    <div class="user-center-header">
+      <span class="user-center-kicker">PROFILE / ACCOUNT</span>
+      <h2>用户中心</h2>
+      <p>集中管理你的公开资料、联系方式和订阅状态。</p>
+    </div>
     <template v-if="userInfo !== ''">
-      <span class="text font-medium">(该页面的信息,本网站将严格保密)</span>
+      <span class="user-center-note">资料仅用于博客账户功能，不会公开展示你的邮箱。</span>
       <div class="max-w-full mt-10">
         <button id="pick-avatar" @click="showCropper = true">
-          <el-avatar :size="110" :src="userInfo.avatar" class="ml-40" />
+          <el-avatar :size="110" :src="userInfo.avatar" class="user-center-avatar" />
         </button>
         <avatar-cropper
           v-model="showCropper"

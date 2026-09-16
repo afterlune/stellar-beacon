@@ -1,15 +1,15 @@
 <template>
   <section class="admin-page dashboard-page">
-    <AdminPageHeader title="数据仪表盘" description="查看访问趋势、内容分布和访客地域。">
+    <AdminPageHeader :title="t('dashboard.title')" :description="t('dashboard.description')">
       <template #actions>
         <a-radio-group v-model="range" type="button" :disabled="loading" @change="load">
-          <a-radio value="7d">近 7 天</a-radio>
-          <a-radio value="30d">近 30 天</a-radio>
-          <a-radio value="12m">近 12 月</a-radio>
+          <a-radio value="7d">{{ t('dashboard.range.days7') }}</a-radio>
+          <a-radio value="30d">{{ t('dashboard.range.days30') }}</a-radio>
+          <a-radio value="12m">{{ t('dashboard.range.months12') }}</a-radio>
         </a-radio-group>
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          刷新
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -17,7 +17,7 @@
     <AdminErrorState
       v-if="errorMessage"
       :error="errorMessage"
-      title="仪表盘数据加载失败"
+      :title="t('dashboard.loadFailed')"
       @retry="load" />
 
     <div class="admin-stat-grid">
@@ -32,50 +32,50 @@
     </div>
 
     <div class="dashboard-grid dashboard-grid-wide">
-      <a-card class="admin-panel" :bordered="false" title="访问趋势">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.trend')">
         <template #extra>
-          <span class="admin-muted-cell">{{ rangeLabel }} · {{ analytics.unit === 'month' ? '按月' : '按日' }}</span>
+          <span class="admin-muted-cell">{{ rangeLabel }} · {{ analytics.unit === 'month' ? t('dashboard.unit.month') : t('dashboard.unit.day') }}</span>
         </template>
         <div v-if="loading && !analytics.trend.length" class="admin-skeleton dashboard-chart-skeleton" />
         <AdminEChart v-else-if="analytics.trend.length" :option="trendOption" height="330px" />
         <AdminEmptyState
           v-else
           :icon="IconBarChart"
-          title="该区间暂无访问数据"
-          description="换一个时间区间，或等待博客产生新的访问。" />
+          :title="t('dashboard.empty.trend.title')"
+          :description="t('dashboard.empty.trend.description')" />
       </a-card>
 
-      <a-card class="admin-panel" :bordered="false" title="热门文章">
-        <template #extra><span class="admin-muted-cell">浏览量排行</span></template>
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.hotArticles')">
+        <template #extra><span class="admin-muted-cell">{{ t('dashboard.panels.viewRank') }}</span></template>
         <div v-if="analytics.articleRank.length" class="admin-rank-list dashboard-rank-scroll">
           <div v-for="(article, index) in analytics.articleRank.slice(0, 10)" :key="article.id" class="admin-rank-item">
             <span class="admin-rank-index">{{ String(index + 1).padStart(2, '0') }}</span>
-            <span class="admin-rank-title" :title="article.title">{{ article.title || '未命名文章' }}</span>
+            <span class="admin-rank-title" :title="article.title">{{ article.title || t('dashboard.untitledArticle') }}</span>
             <span class="admin-rank-metric">{{ formatNumber(article.views) }}</span>
           </div>
         </div>
         <AdminEmptyState
           v-else
           :icon="IconBook"
-          title="暂无浏览排行"
-          description="文章被阅读后，这里会显示浏览量最高的内容。" />
+          :title="t('dashboard.empty.rank.title')"
+          :description="t('dashboard.empty.rank.description')" />
       </a-card>
     </div>
 
     <div class="dashboard-grid dashboard-grid-three">
-      <a-card class="admin-panel" :bordered="false" title="访客地域">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.regions')">
         <template #extra>
           <a-radio-group v-model="areaType" type="button" size="mini" :disabled="loading" @change="load">
-            <a-radio value="users">用户</a-radio>
-            <a-radio value="visitors">访客</a-radio>
+            <a-radio value="users">{{ t('dashboard.area.users') }}</a-radio>
+            <a-radio value="visitors">{{ t('dashboard.area.visitors') }}</a-radio>
           </a-radio-group>
         </template>
         <AdminEChart v-if="regionMapData.length" :option="regionOption" height="300px" />
         <div v-else class="admin-chart-empty">
           <AdminEmptyState
             :icon="IconLocation"
-            title="暂无地域数据"
-            description="访客分布需要站点持续积累访问记录。" />
+            :title="t('dashboard.empty.regions.title')"
+            :description="t('dashboard.empty.regions.description')" />
         </div>
         <div v-if="analytics.regions.length" class="dashboard-region-list">
           <div v-for="region in analytics.regions.slice(0, 8)" :key="`${region.label}-${region.code}`" class="dashboard-region-item">
@@ -85,17 +85,23 @@
         </div>
       </a-card>
 
-      <a-card class="admin-panel" :bordered="false" title="分类分布">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.categories')">
         <AdminEChart v-if="analytics.categories.length" :option="categoryOption" height="300px" />
         <div v-else class="admin-chart-empty">
-          <AdminEmptyState :icon="IconFolder" title="暂无分类数据" description="为文章设置分类后即可看到分布。" />
+          <AdminEmptyState
+            :icon="IconFolder"
+            :title="t('dashboard.empty.categories.title')"
+            :description="t('dashboard.empty.categories.description')" />
         </div>
       </a-card>
 
-      <a-card class="admin-panel" :bordered="false" title="标签分布">
+      <a-card class="admin-panel" :bordered="false" :title="t('dashboard.panels.tags')">
         <AdminEChart v-if="analytics.tags.length" :option="tagOption" height="300px" />
         <div v-else class="admin-chart-empty">
-          <AdminEmptyState :icon="IconTags" title="暂无标签数据" description="为文章添加标签后即可看到分布。" />
+          <AdminEmptyState
+            :icon="IconTags"
+            :title="t('dashboard.empty.tags.title')"
+            :description="t('dashboard.empty.tags.description')" />
         </div>
       </a-card>
     </div>
@@ -124,6 +130,7 @@ import AdminEChart from '@/components/AdminEChart.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatCard from '@/components/AdminStatCard.vue'
 import { useLatestRequest } from '@/composables/useAsyncList'
+import { t } from '@/i18n'
 import { useThemeStore } from '@/stores/theme'
 import { chartSeriesColor, verticalFade, withAlpha } from '@/utils/chart-theme'
 import { formatNumber } from '@/utils/format'
@@ -142,15 +149,17 @@ const themeStore = useThemeStore()
 // 区间与地域维度可以连续切换，由共享的「最新请求胜出」保护丢弃过期响应。
 const latest = useLatestRequest()
 
-const rangeLabel = computed(() => (range.value === '30d' ? '近 30 天' : range.value === '12m' ? '近 12 月' : '近 7 天'))
+const rangeLabel = computed(() => (range.value === '30d'
+  ? t('dashboard.range.days30')
+  : range.value === '12m' ? t('dashboard.range.months12') : t('dashboard.range.days7')))
 
 const stats = computed(() => [
-  { label: '累计访问', value: formatNumber(analytics.overview.totalViews), caption: '站点历史访问量', icon: IconDashboard, tone: 'blue' as const },
-  { label: '今日访问', value: formatNumber(analytics.overview.todayViews), caption: '今日独立访客访问', icon: IconBarChart, tone: 'green' as const },
-  { label: '本月访问', value: formatNumber(analytics.overview.monthViews), caption: '本月累计访问量', icon: IconMessage, tone: 'warm' as const },
-  { label: '注册用户', value: formatNumber(analytics.overview.userCount), caption: '站点用户总数', icon: IconUserGroup, tone: 'violet' as const },
-  { label: '文章数量', value: formatNumber(analytics.overview.articleCount), caption: '文章与草稿内容', icon: IconBook, tone: 'info' as const },
-  { label: '评论数量', value: formatNumber(analytics.overview.messageCount), caption: '已审核评论与留言', icon: IconMessage, tone: 'danger' as const }
+  { label: t('dashboard.stats.totalViews'), value: formatNumber(analytics.overview.totalViews), caption: t('dashboard.stats.totalViewsCaption'), icon: IconDashboard, tone: 'blue' as const },
+  { label: t('dashboard.stats.todayViews'), value: formatNumber(analytics.overview.todayViews), caption: t('dashboard.stats.todayViewsCaption'), icon: IconBarChart, tone: 'green' as const },
+  { label: t('dashboard.stats.monthViews'), value: formatNumber(analytics.overview.monthViews), caption: t('dashboard.stats.monthViewsCaption'), icon: IconMessage, tone: 'warm' as const },
+  { label: t('dashboard.stats.users'), value: formatNumber(analytics.overview.userCount), caption: t('dashboard.stats.usersCaption'), icon: IconUserGroup, tone: 'violet' as const },
+  { label: t('dashboard.stats.articles'), value: formatNumber(analytics.overview.articleCount), caption: t('dashboard.stats.articlesCaption'), icon: IconBook, tone: 'info' as const },
+  { label: t('dashboard.stats.comments'), value: formatNumber(analytics.overview.messageCount), caption: t('dashboard.stats.commentsCaption'), icon: IconMessage, tone: 'danger' as const }
 ])
 
 // 坐标轴、网格线、提示框都交给 chart-theme 注册的主题，这里只描述数据本身。
@@ -167,7 +176,7 @@ const trendOption = computed(() => {
     },
     yAxis: { type: 'value', minInterval: 1 },
     series: [{
-      name: '访问量',
+      name: t('dashboard.chart.views'),
       type: 'line',
       // 折线只在悬浮时露出圆点：默认满屏圆点会把趋势线切成一串珠子。
       showSymbol: false,
@@ -192,7 +201,10 @@ const regionOption = computed(() => {
   return {
     tooltip: {
       trigger: 'item',
-      formatter: (params: { name?: string; value?: number }) => `${params.name || '未知地域'}：${formatNumber(params.value || 0)}`
+      formatter: (params: { name?: string; value?: number }) => t('dashboard.chart.regionTooltip', {
+        name: params.name || t('dashboard.chart.unknownRegion'),
+        value: formatNumber(params.value || 0)
+      })
     },
     visualMap: {
       min: 0,
@@ -205,7 +217,7 @@ const regionOption = computed(() => {
       inRange: { color: [withAlpha(brand, 0.14), brand] }
     },
     series: [{
-      name: '访问地域',
+      name: t('dashboard.chart.regionSeries'),
       type: 'map',
       map: 'world',
       roam: true,
@@ -238,7 +250,7 @@ async function load(): Promise<void> {
     if (!value) return
     Object.assign(analytics, value)
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '仪表盘数据加载失败')
+    errorMessage.value = apiErrorMessage(error, t('dashboard.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -251,11 +263,11 @@ function distributionOption(items: AdminDashboardAnalytics['categories']): Recor
     total > 0 ? Math.round((Number(item.value || 0) / total) * 100) : 0
   ]))
   return {
-    tooltip: { trigger: 'item', formatter: '{b}：{c}（{d}%）' },
+    tooltip: { trigger: 'item', formatter: t('dashboard.chart.shareTooltip') },
     // 环心留白里放总计：环形图最缺的就是“整体量级”这个参照。
     title: {
       text: formatNumber(total),
-      subtext: '总计',
+      subtext: t('dashboard.chart.total'),
       left: 'center',
       top: '35%',
       textAlign: 'center',

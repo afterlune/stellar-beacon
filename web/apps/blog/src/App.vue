@@ -1,23 +1,20 @@
 <template>
   <div id="App-Wrapper" :class="[appWrapperClass, theme]">
+    <AmbientGrid />
     <div
       id="App-Container"
       class="app-container px-3 lg:px-8"
       @keydown.meta.k.stop.prevent=""
       tabindex="-1">
       <HeaderMain />
-      <template v-if="!hideBanner">
-        <div class="app-banner app-banner-base" />
-        <div class="app-banner app-banner-image" :style="headerImage" />
-        <div class="app-banner app-banner-aurora" />
-        <div class="app-banner app-banner-grain" />
-        <div class="app-banner app-banner-veil" />
-        <div class="app-banner app-banner-stars" />
-        <div class="app-banner app-banner-dipper" />
-        <div class="app-banner-rule" />
-        <div class="app-banner-spill" />
+      <template v-if="showBanner">
+        <div class="app-banner future-banner" :style="headerImage" aria-hidden="true">
+          <span class="future-banner__scanline" />
+          <span class="future-banner__index">SB / 01</span>
+          <span class="future-banner__signal">SIGNAL ONLINE</span>
+        </div>
       </template>
-      <div class="relative z-10">
+      <div class="app-content">
         <router-view v-slot="{ Component }">
           <transition name="fade-slide-y" mode="out-in">
             <component :is="Component" />
@@ -53,6 +50,7 @@ import MobileMenu from '@/components/MobileMenu.vue'
 import Dia from '@/components/Dia.vue'
 import AuroraNavigator from '@/components/AuroraNavigator.vue'
 import UserCenter from '@/components/UserCenter.vue'
+import AmbientGrid from '@/components/AmbientGrid.vue'
 import api from './api/api'
 export default defineComponent({
   name: 'App',
@@ -62,7 +60,8 @@ export default defineComponent({
     Dia,
     AuroraNavigator,
     MobileMenu,
-    UserCenter
+    UserCenter,
+    AmbientGrid
   },
   setup() {
     const appStore = useAppStore()
@@ -134,11 +133,16 @@ export default defineComponent({
       title: metaStore.title,
       theme: computed(() => appStore.themeConfig.theme),
       hideBanner: computed(() => route.meta.hideBanner === true),
+      // The cover is a homepage treatment. Inner pages use a clear heading
+      // band so the sticky navigation never sits on top of their first row.
+      showBanner: computed(() => route.path === '/' && route.meta.hideBanner !== true),
       headerImage: computed(() => {
-        // Keep the cover image subdued beneath the aurora overlay.
+        // Keep the cover image as a quiet texture under the new editorial shell.
         return {
           backgroundImage: commonStore.headerImage !== '' ? `url(${commonStore.headerImage})` : 'none',
-          opacity: commonStore.headerImage !== '' ? 0.42 : 0
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: 1
         }
       }),
 
@@ -166,10 +170,6 @@ export default defineComponent({
 }
 body {
   background: var(--background-primary-alt);
-}
-
-*:focus {
-  outline: none;
 }
 
 #app {

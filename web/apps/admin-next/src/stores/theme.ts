@@ -29,8 +29,8 @@ function readTheme(): Theme {
       value = localStorage.getItem(LEGACY_STORAGE_KEY)
       if (value !== null) localStorage.setItem(STORAGE_KEY, value)
     }
-    return value === 'light' ? 'light' : 'dark'
+    return value === 'dark' ? 'dark' : 'light'
   } catch {
-    return 'dark'
+    return 'light'
   }
 }

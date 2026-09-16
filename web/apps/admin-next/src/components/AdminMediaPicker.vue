@@ -10,16 +10,16 @@
       <a-input-search
         v-model="prefix"
         class="media-picker-search"
-        placeholder="按目录筛选，例如 media/"
+        :placeholder="t('mediaPicker.filterHint')"
         allow-clear
         @search="reload" />
       <a-space>
         <input ref="fileInput" type="file" accept="image/*" multiple hidden @change="upload" />
-        <a-button size="small" :loading="uploading" @click="fileInput?.click()">上传图片</a-button>
-        <a-button size="small" :loading="loading" @click="load">刷新</a-button>
+        <a-button size="small" :loading="uploading" @click="fileInput?.click()">{{ t('common.upload') }}</a-button>
+        <a-button size="small" :loading="loading" @click="load">{{ t('common.refresh') }}</a-button>
       </a-space>
     </div>
-    <p class="media-picker-hint">选择一张图片作为封面或内容资源；上传后会自动出现在列表顶部。</p>
+    <p class="media-picker-hint">{{ t('mediaPicker.hint') }}</p>
 
     <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
 
@@ -44,9 +44,9 @@
     <AdminEmptyState
       v-else
       :icon="IconImage"
-      title="还没有可选择的图片"
-      description="上传一张图片后即可在这里选择。">
-      <a-button type="primary" size="small" @click="fileInput?.click()">上传图片</a-button>
+      :title="t('mediaPicker.empty')"
+      :description="t('mediaPicker.emptyHint')">
+      <a-button type="primary" size="small" @click="fileInput?.click()">{{ t('common.upload') }}</a-button>
     </AdminEmptyState>
 
     <a-pagination
@@ -61,18 +61,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconImage } from '@arco-design/web-vue/es/icon'
 
 import { apiErrorMessage, listAdminMedia, uploadAdminMedia } from '@/api/http'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminImagePreview from '@/components/AdminImagePreview.vue'
+import { t } from '@/i18n'
 import { formatFileSize } from '@/utils/format'
 import type { AdminMediaAsset } from '@stellar-beacon/api-contract'
 
-const props = withDefaults(defineProps<{ modelValue: boolean; title?: string }>(), { title: '选择图片资源' })
+const props = withDefaults(defineProps<{ modelValue: boolean; title?: string }>(), { title: '' })
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; select: [asset: AdminMediaAsset] }>()
+
+/** 标题默认走词条：语言切换后跟着变，父级显式传入时以父级为准。 */
+const title = computed(() => props.title || t('mediaPicker.title'))
 
 const pageSize = 24
 
@@ -110,7 +114,7 @@ async function load(): Promise<void> {
     assets.value = page.items
     total.value = page.total
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '图片资源加载失败')
+    errorMessage.value = apiErrorMessage(error, t('mediaPicker.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -143,13 +147,13 @@ async function upload(event: Event): Promise<void> {
     current.value = 1
     await load()
     if (uploaded) {
-      Message.success('图片已上传并选中')
+      Message.success(t('mediaPicker.uploaded'))
       select(uploaded)
     } else {
-      Message.success(`已上传 ${files.length} 张图片`)
+      Message.success(t('mediaPicker.uploadedCount', { count: files.length }))
     }
   } catch (error) {
-    Message.error(apiErrorMessage(error, '图片上传失败'))
+    Message.error(apiErrorMessage(error, t('upload.failed')))
   } finally {
     uploading.value = false
   }

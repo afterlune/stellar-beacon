@@ -1,5 +1,5 @@
 <template>
-  <div class="header-container" :class="{ 'is-stuck': stuck }">
+  <div class="header-container" :class="{ 'is-stuck': stuck, 'is-inner': !isHome }">
     <header class="site-header">
       <Logo />
       <Navigation />
@@ -27,6 +27,7 @@ export default defineComponent({
     // Use a solid surface after the banner scrolls away, or immediately on routes without a banner.
     const route = useRoute()
     const noBanner = computed(() => route.meta.hideBanner === true)
+    const isHome = computed(() => route.path === '/')
     const stuck = ref(false)
     const onScroll = () => {
       if (noBanner.value) {
@@ -45,7 +46,7 @@ export default defineComponent({
       window.removeEventListener('scroll', onScroll)
     })
     watch(noBanner, () => onScroll(), { immediate: true })
-    return { stuck }
+    return { stuck, isHome }
   }
 })
 </script>
@@ -63,6 +64,10 @@ export default defineComponent({
     --header-fg: var(--text-bright);
   }
 
+  &.is-inner {
+    --header-fg: var(--text-bright);
+  }
+
   .site-header {
     max-width: var(--max-width);
     @apply relative flex z-50 my-0 mx-auto py-4;
@@ -72,6 +77,11 @@ export default defineComponent({
 
   &.is-stuck .site-header {
     background-color: var(--surface-1);
+    border-bottom-color: var(--border-hairline);
+  }
+
+  &.is-inner .site-header {
+    background-color: var(--surface-solid);
     border-bottom-color: var(--border-hairline);
   }
 

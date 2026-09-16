@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { listUserMenus } from '@/api/http'
+import { t } from '@/i18n'
 import { normalizeMenus, type NormalizedMenu, visibleChildren } from '@/types'
 
 export const useMenuStore = defineStore('admin-menu', () => {
@@ -28,7 +29,7 @@ export const useMenuStore = defineStore('admin-menu', () => {
         return menus.value
       })
       .catch((cause: unknown) => {
-        error.value = cause instanceof Error ? cause.message : '菜单加载失败'
+        error.value = cause instanceof Error ? cause.message : t('shell.menuFailed')
         throw cause
       })
       .finally(() => {

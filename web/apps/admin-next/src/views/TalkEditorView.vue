@@ -1,35 +1,35 @@
 <template>
   <section class="admin-page">
     <AdminPageHeader
-      :title="isEditing ? '编辑说说' : '发布说说'"
-      :description="isEditing ? '设置说说内容、图片和可见范围。' : '发布短动态和图片。'"
-      eyebrow="STELLAR BEACON / 说说" />
+      :title="isEditing ? t('comments.talks.editTitle') : t('comments.talks.create')"
+      :description="isEditing ? t('comments.talks.editDescription') : t('comments.talks.createDescription')"
+      :eyebrow="t('comments.talks.eyebrow')" />
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
-      <a-spin v-if="!editorReady" class="talk-editor-loading" tip="正在加载说说…" />
+      <a-spin v-if="!editorReady" class="talk-editor-loading" :tip="t('comments.talks.loading')" />
       <a-form v-else ref="formRef" class="talk-form" :model="editor" layout="vertical">
-        <a-form-item field="content" label="内容" :rules="[{ required: true, message: '内容不能为空' }]">
+        <a-form-item field="content" :label="t('comments.common.content')" :rules="[{ required: true, message: t('comments.talks.contentRequired') }]">
           <a-textarea v-model="editor.content" class="talk-content-editor" :max-length="100000" show-word-limit :auto-size="{ minRows: 12, maxRows: 28 }" />
         </a-form-item>
-        <a-form-item label="图片">
+        <a-form-item :label="t('common.image')">
           <a-space direction="vertical" fill>
             <div v-if="editor.images.length" class="talk-image-grid">
               <AdminImagePreview
                 v-for="image in editor.images"
                 :key="image"
                 :src="image"
-                alt="说说图片"
+                :alt="t('comments.talks.imageAlt')"
                 :width="112"
                 :height="78" />
             </div>
             <template v-else>
-              <span class="field-hint">暂无图片，可以上传 1–9 张配图。</span>
+              <span class="field-hint">{{ t('comments.talks.noImages') }}</span>
             </template>
             <a-space wrap>
               <input ref="imageInput" type="file" accept="image/*" hidden @change="selectImage" />
-              <a-button :loading="uploading" @click="imageInput?.click()">上传图片</a-button>
-              <a-button v-if="editor.images.length" @click="editor.images = []">清空图片</a-button>
-              <span class="field-hint">上传地址由后端返回，不接受前端直接拼接对象存储 URL。</span>
+              <a-button :loading="uploading" @click="imageInput?.click()">{{ t('comments.talks.uploadImage') }}</a-button>
+              <a-button v-if="editor.images.length" @click="editor.images = []">{{ t('comments.talks.clearImages') }}</a-button>
+              <span class="field-hint">{{ t('comments.talks.uploadHint') }}</span>
             </a-space>
             <a-space v-if="editor.images.length" wrap :size="4">
               <a-tag
@@ -43,22 +43,22 @@
           </a-space>
         </a-form-item>
         <a-space>
-          <span>状态</span>
+          <span>{{ t('common.status') }}</span>
           <a-radio-group v-model="editor.status">
-            <a-radio :value="1">公开</a-radio>
-            <a-radio :value="2">私密</a-radio>
+            <a-radio :value="1">{{ t('status.published') }}</a-radio>
+            <a-radio :value="2">{{ t('status.private') }}</a-radio>
           </a-radio-group>
-          <AdminFlagCheckbox v-model="editor.isTop">置顶</AdminFlagCheckbox>
+          <AdminFlagCheckbox v-model="editor.isTop">{{ t('status.pinned') }}</AdminFlagCheckbox>
         </a-space>
         <div class="admin-form-actions">
-          <a-button type="primary" :loading="saving" @click="submit">保存</a-button>
-          <a-button :disabled="saving" @click="router.push('/talk-list')">取消</a-button>
+          <a-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</a-button>
+          <a-button :disabled="saving" @click="router.push('/talk-list')">{{ t('common.cancel') }}</a-button>
         </div>
       </a-form>
     </a-card>
 
     <AdminLeaveGuard :visible="leaveVisible" @ok="confirmLeave" @cancel="cancelLeave">
-      当前页面还有未保存的修改，离开后这些内容会丢失。
+      {{ t('comments.talks.unsavedHint') }}
     </AdminLeaveGuard>
   </section>
 </template>
@@ -74,6 +74,7 @@ import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminLeaveGuard from '@/components/AdminLeaveGuard.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
+import { t } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -115,7 +116,7 @@ async function load(): Promise<void> {
     editor.isTop = Number(talk.isTop || 0)
     editor.status = Number(talk.status || 1)
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '说说加载失败')
+    errorMessage.value = apiErrorMessage(error, t('comments.talks.editorLoadFailed'))
   } finally {
     editorReady.value = true
     markClean()
@@ -124,7 +125,7 @@ async function load(): Promise<void> {
 
 async function save(): Promise<void> {
   if (!editor.content.trim()) {
-    Message.error('说说内容不能为空')
+    Message.error(t('comments.talks.contentEmpty'))
     return
   }
   saving.value = true
@@ -137,10 +138,10 @@ async function save(): Promise<void> {
       isTop: editor.isTop,
       status: editor.status
     })
-    Message.success(isEditing.value ? '说说已更新' : '说说已发布')
+    Message.success(isEditing.value ? t('comments.talks.updated') : t('comments.talks.published'))
     await router.push('/talk-list')
   } catch (error) {
-    errorMessage.value = apiErrorMessage(error, '说说保存失败')
+    errorMessage.value = apiErrorMessage(error, t('comments.talks.saveFailed'))
     Message.error(errorMessage.value)
   } finally {
     saving.value = false
@@ -152,7 +153,7 @@ async function submit(): Promise<void> {
   if (saving.value) return
   const errors = await formRef.value?.validate()
   if (errors) {
-    Message.error('请先填写说说内容')
+    Message.error(t('comments.talks.fillContent'))
     return
   }
   await save()
@@ -177,9 +178,9 @@ async function selectImage(event: Event): Promise<void> {
   uploading.value = true
   try {
     editor.images.push(await uploadAdminTalkImage(file))
-    Message.success('图片上传成功')
+    Message.success(t('comments.talks.uploadSuccess'))
   } catch (error) {
-    Message.error(apiErrorMessage(error, '图片上传失败'))
+    Message.error(apiErrorMessage(error, t('upload.failed')))
   } finally {
     uploading.value = false
   }

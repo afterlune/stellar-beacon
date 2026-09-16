@@ -10,6 +10,8 @@ import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
 const routes: RouteRecordRaw[] = [
+  // meta.title 保留中文原文：显示层统一由 i18n/menu.ts 的 routeTitle() 按路由名/路径
+  // 解析成当前语言，所以这些字面量不会直接渲染出去。
   { path: '/login', name: 'login', component: LoginView, meta: { public: true, title: '管理员登录' } },
   {
     path: '/',

@@ -1,6 +1,7 @@
 import { onMounted, onScopeDispose, ref, type Ref } from 'vue'
 
 import { apiErrorMessage } from '@/api/http'
+import { t } from '@/i18n'
 
 /** 一页数据：与 `listAdminPage` 的返回结构兼容。 */
 export interface AsyncListPage<T> {
@@ -17,8 +18,13 @@ export interface AsyncListContext {
 export interface AsyncListOptions {
   /** 每页条数初值（会被持久化偏好覆盖，见 `useStoredPageSize`）。 */
   pageSize?: number
-  /** 加载失败时的兜底文案。 */
-  fallbackMessage?: string
+  /**
+   * 加载失败时的兜底文案。
+   *
+   * 传函数可以跟随语言切换：字符串在 composable 初始化时就固定了，
+   * 而 `() => t('…')` 在每次失败时才求值。
+   */
+  fallbackMessage?: string | (() => string)
   /** 是否在挂载时自动加载首页，默认 true。 */
   immediate?: boolean
 }
@@ -46,7 +52,11 @@ export function useAsyncList<T>(
   const error = ref('')
   const hasLoaded = ref(false)
 
-  const fallbackMessage = options.fallbackMessage ?? '数据加载失败'
+  const fallback = options.fallbackMessage
+  const fallbackMessage = (): string => {
+    const value = typeof fallback === 'function' ? fallback() : fallback
+    return value || t('common.loadFailed')
+  }
 
   let seq = 0
   let controller: AbortController | null = null
@@ -67,7 +77,7 @@ export function useAsyncList<T>(
       hasLoaded.value = true
     } catch (cause) {
       if (token !== seq || isAbort(cause)) return
-      error.value = apiErrorMessage(cause, fallbackMessage)
+      error.value = apiErrorMessage(cause, fallbackMessage())
     } finally {
       if (token === seq) loading.value = false
     }

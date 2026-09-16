@@ -2,6 +2,7 @@ import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
 import { normalizePage, unwrapResult, type AdminAlbum, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type JobRunOutcome, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
+import { t } from '@/i18n'
 
 export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
 
@@ -504,12 +505,14 @@ export async function deleteAdminMedia(keys: string[]): Promise<void> {
   responseData(response)
 }
 
-export function apiErrorMessage(error: unknown, fallback = '请求失败，请稍后再试'): string {
+export function apiErrorMessage(error: unknown, fallback?: string): string {
   const axiosError = error as AxiosError<unknown>
   const body = axiosError?.response?.data
   if (body && typeof body === 'object' && 'message' in body && typeof body.message === 'string') {
     return body.message
   }
   if (error instanceof Error && error.message) return error.message
-  return fallback
+  // 兜底文案延迟到调用时取词条：这个模块在 i18n 初始化时就参与构建图，
+  // 在模块作用域读 t() 会拿到未初始化的语言。
+  return fallback ?? t('common.requestFailed')
 }

@@ -1,6 +1,6 @@
 # 星际信标 · Stellar Beacon
 
-星际信标（Stellar Beacon）是一个 Vue 博客前台 + Vue 管理端 + Go API 的博客系统。当前仓库采用按职责分层、按业务域组织的结构；博客前台保留原有视觉、素材和页面交互，管理端使用保留的 `admin-next`。
+星际信标（Stellar Beacon）是一个 Vue 博客前台 + Vue 管理端 + Go API 的博客系统。当前仓库采用按职责分层、按业务域组织的结构；博客前台使用「星图仪器 / Astral Instrument」设计语言（规范见 [`docs/design/blog-frontend.md`](docs/design/blog-frontend.md)），管理端使用保留的 `admin-next`。
 
 ## 目录
 

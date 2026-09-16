@@ -1,15 +1,15 @@
 <template>
   <teleport to="body">
     <div v-if="visible" class="admin-command-overlay" @click.self="close">
-      <div class="admin-command" role="dialog" aria-modal="true" aria-label="快速跳转">
+      <div class="admin-command" role="dialog" aria-modal="true" :aria-label="t('shell.quickJump')">
         <div class="admin-command-input">
           <IconSearch aria-hidden="true" />
           <input
             ref="inputRef"
             v-model="keyword"
             type="text"
-            placeholder="搜索页面、菜单或操作…"
-            aria-label="搜索页面、菜单或操作"
+            :placeholder="t('palette.placeholder')"
+            :aria-label="t('palette.searchLabel')"
             @keydown.down.prevent="move(1)"
             @keydown.up.prevent="move(-1)"
             @keydown.enter.prevent="run()"
@@ -17,7 +17,7 @@
           <kbd>ESC</kbd>
         </div>
 
-        <div class="admin-command-list" role="listbox" aria-label="跳转结果">
+        <div class="admin-command-list" role="listbox" :aria-label="t('palette.results')">
           <template v-for="group in groupedResults" :key="group.label">
             <div class="admin-command-group">{{ group.label }}</div>
             <button
@@ -38,13 +38,13 @@
               <IconRight v-if="item.path === activePath" aria-hidden="true" />
             </button>
           </template>
-          <p v-if="results.length === 0" class="admin-command-empty">没有匹配的页面，换个关键词试试。</p>
+          <p v-if="results.length === 0" class="admin-command-empty">{{ t('palette.empty') }}</p>
         </div>
 
         <div class="admin-command-footer">
-          <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
-          <span><kbd>↵</kbd> 打开</span>
-          <span><kbd>ESC</kbd> 关闭</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> {{ t('palette.select') }}</span>
+          <span><kbd>↵</kbd> {{ t('palette.open') }}</span>
+          <span><kbd>ESC</kbd> {{ t('palette.close') }}</span>
         </div>
       </div>
     </div>
@@ -60,6 +60,8 @@ import { Message } from '@arco-design/web-vue'
 
 import { useThemeStore } from '@/stores/theme'
 import { menuItemPath, normalizeRoutePath, type NormalizedMenu } from '@/types'
+import { t } from '@/i18n'
+import { menuLabel } from '@/i18n/menu'
 import { menuIconFor } from '@/utils/menu-icon'
 
 interface CommandItem {
@@ -90,18 +92,19 @@ const pageItems = computed<CommandItem[]>(() => {
   const seen = new Set<string>()
   for (const menu of props.menus) {
     const children = menu.children.filter((child) => !child.hidden)
+    const menuName = menuLabel(menu.name, menu.path)
     if (children.length === 0) {
       if (menu.hidden) continue
       const path = normalizeRoutePath(menu.path)
       if (seen.has(path)) continue
       seen.add(path)
       items.push({
-        title: menu.name,
+        title: menuName,
         caption: path,
         path,
         icon: menuIconFor(menu),
-        group: '页面',
-        keywords: `${menu.name} ${path}`.toLowerCase()
+        group: t('palette.groupPages'),
+        keywords: `${menu.name} ${menuName} ${path}`.toLowerCase()
       })
       continue
     }
@@ -109,13 +112,14 @@ const pageItems = computed<CommandItem[]>(() => {
       const path = menuItemPath(menu, child)
       if (seen.has(path)) continue
       seen.add(path)
+      const childName = menuLabel(child.name, path)
       items.push({
-        title: child.name,
-        caption: `${menu.name} · ${path}`,
+        title: childName,
+        caption: `${menuName} · ${path}`,
         path,
         icon: menuIconFor(child),
-        group: '页面',
-        keywords: `${menu.name} ${child.name} ${path}`.toLowerCase()
+        group: t('palette.groupPages'),
+        keywords: `${menu.name} ${menuName} ${child.name} ${childName} ${path}`.toLowerCase()
       })
     }
   }
@@ -124,19 +128,19 @@ const pageItems = computed<CommandItem[]>(() => {
 
 const actionItems = computed<CommandItem[]>(() => [
   {
-    title: theme.theme === 'dark' ? '切换为浅色主题' : '切换为深色主题',
-    caption: '外观设置',
+    title: theme.theme === 'dark' ? t('shell.toLight') : t('shell.toDark'),
+    caption: t('palette.appearance'),
     path: '__action:theme',
     icon: menuIconFor({ name: '设置' }),
-    group: '操作',
+    group: t('palette.groupActions'),
     keywords: 'theme 主题 外观 深色 浅色 dark light'
   },
   {
-    title: '刷新当前页面数据',
-    caption: '重新加载路由',
+    title: t('palette.reloadData'),
+    caption: t('palette.reloadRoute'),
     path: '__action:reload',
     icon: menuIconFor({ name: '任务' }),
-    group: '操作',
+    group: t('palette.groupActions'),
     keywords: 'reload 刷新 重载 refresh'
   }
 ])
@@ -192,7 +196,7 @@ function go(path: string): void {
   close()
   if (path === '__action:theme') {
     theme.toggle()
-    Message.success(theme.theme === 'dark' ? '已切换为深色主题' : '已切换为浅色主题')
+    Message.success(theme.theme === 'dark' ? t('shell.switchedToDark') : t('shell.switchedToLight'))
     return
   }
   if (path === '__action:reload') {

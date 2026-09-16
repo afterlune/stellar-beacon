@@ -10,13 +10,13 @@
           @search="reload" />
         <a-popconfirm
           v-if="mode === 'job'"
-          content="确定清空全部任务日志吗？此操作不可撤销。"
+          :content="t('logs.jobLogs.cleanConfirm')"
           @ok="clean">
-          <a-button status="danger" :loading="cleaning">清空任务日志</a-button>
+          <a-button status="danger" :loading="cleaning">{{ t('logs.jobLogs.clean') }}</a-button>
         </a-popconfirm>
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          刷新
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -28,26 +28,26 @@
           <a-select
             v-if="mode === 'job'"
             v-model="groupFilter"
-            placeholder="全部分组"
+            :placeholder="t('logs.common.allGroups')"
             allow-clear
             style="width: 150px"
             @change="reload">
             <a-option v-for="group in groupOptions" :key="group" :value="group">{{ group }}</a-option>
           </a-select>
-          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">清空搜索</a-button>
+          <a-button v-if="keywords.trim()" type="text" size="small" @click="clearKeywords">{{ t('logs.common.clearSearch') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 条记录</span>
+          <span class="admin-toolbar-caption">{{ t('pagination.total', { total }) }}</span>
           <a-dropdown trigger="click" position="br">
             <a-button size="small">
               <template #icon><IconSettings /></template>
-              列设置
+              {{ t('logs.common.columnSettings') }}
             </a-button>
             <template #content>
               <div class="admin-column-settings">
                 <div class="admin-column-settings-head">
-                  <span>显示列</span>
-                  <a-button type="text" size="mini" @click="columnPrefs.reset">全部显示</a-button>
+                  <span>{{ t('logs.common.visibleColumns') }}</span>
+                  <a-button type="text" size="mini" @click="columnPrefs.reset">{{ t('logs.common.showAll') }}</a-button>
                 </div>
                 <a-checkbox
                   v-for="column in config.columns"
@@ -63,10 +63,10 @@
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="日志加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('logs.common.loadFailed')" @retry="load" />
 
-      <AdminBatchBar :count="selectedIds.length" :hint="`本页 ${records.length} 条`" @clear="clearSelection">
-        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">批量删除</a-button>
+      <AdminBatchBar :count="selectedIds.length" :hint="t('logs.common.pageCount', { count: records.length })" @clear="clearSelection">
+        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('logs.common.batchDelete') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -101,33 +101,33 @@
           <template #formatted="{ record, column }">{{ formatCell(record[column.dataIndex]) }}</template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="showDetail(record)">详情</a-button>
+              <a-button type="text" size="small" @click="showDetail(record)">{{ t('common.detail') }}</a-button>
               <a-popconfirm
-                content="确定删除这条日志吗？删除后无法恢复。"
+                :content="t('logs.common.deleteConfirm')"
                 @ok="deleteLog(record.id)">
-                <a-button type="text" status="danger" size="small">删除</a-button>
+                <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
           <template #empty>
             <AdminEmptyState
               :icon="IconHistory"
-              :title="keywords.trim() ? '没有匹配的日志' : '暂无日志'"
-              :description="keywords.trim() ? '换个关键词再试一次。' : config.emptyHint">
-              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">清空搜索</a-button>
+              :title="keywords.trim() ? t('logs.common.emptyFiltered') : t('logs.common.empty')"
+              :description="keywords.trim() ? t('logs.common.emptyFilteredHint') : config.emptyHint">
+              <a-button v-if="keywords.trim()" size="small" @click="clearKeywords">{{ t('logs.common.clearSearch') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
       </div>
     </a-card>
 
-    <a-modal v-model:visible="detailVisible" title="日志详情" width="760px" :footer="false">
+    <a-modal v-model:visible="detailVisible" :title="t('logs.common.detailTitle')" width="760px" :footer="false">
       <div v-if="detail" class="log-detail">
         <div class="log-detail-head">
           <span class="log-detail-id">#{{ detail.id }}</span>
           <a-button size="mini" @click="copyDetail">
             <template #icon><IconCopy /></template>
-            复制原始数据
+            {{ t('logs.common.copyRaw') }}
           </a-button>
         </div>
         <a-descriptions :column="2" size="small" bordered>
@@ -166,6 +166,7 @@ import AdminStatusTag from '@/components/AdminStatusTag.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useColumnPrefs, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { copyText } from '@/utils/clipboard'
 import { formatCell, formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
@@ -184,64 +185,84 @@ interface DetailField {
   span?: number
 }
 
+interface LogColumn {
+  title: string
+  dataIndex: string
+  slotName?: string
+  width?: number
+  minWidth?: number
+  ellipsis?: boolean
+  tooltip?: boolean
+}
+
+interface LogConfig {
+  title: string
+  description: string
+  placeholder: string
+  endpoint: string
+  emptyHint: string
+  columns: LogColumn[]
+}
+
 const props = defineProps<{ mode: LogMode }>()
 const route = useRoute()
 
 const mode = computed(() => props.mode)
 
-const configs = {
+// 列定义与页头文案都要跟着语言切换，因此放在 computed 里求值。
+const configs = computed<Record<LogMode, LogConfig>>(() => ({
   operation: {
-    title: '操作日志',
-    description: '查看后台操作记录。',
-    placeholder: '搜索模块或描述',
+    title: t('logs.operation.title'),
+    description: t('logs.operation.description'),
+    placeholder: t('logs.operation.searchPlaceholder'),
     endpoint: 'admin/logs/operations',
-    emptyHint: '后台的写操作会自动记录在这里。',
+    emptyHint: t('logs.operation.emptyHint'),
     columns: [
-      { title: '模块', dataIndex: 'optModule', width: 140 },
-      { title: '类型', dataIndex: 'optType', width: 130 },
+      { title: t('logs.operation.colModule'), dataIndex: 'optModule', width: 140 },
+      { title: t('common.type'), dataIndex: 'optType', width: 130 },
       { title: 'URI', dataIndex: 'optUri', minWidth: 200, ellipsis: true, tooltip: true },
-      { title: '方法', dataIndex: 'requestMethod', slotName: 'method', width: 100 },
-      { title: '用户', dataIndex: 'nickname', width: 168, ellipsis: true, tooltip: true },
-      { title: '时间', dataIndex: 'createTime', slotName: 'time', width: 184 },
-      { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
+      { title: t('logs.common.colMethod'), dataIndex: 'requestMethod', slotName: 'method', width: 100 },
+      { title: t('logs.operation.colUser'), dataIndex: 'nickname', width: 168, ellipsis: true, tooltip: true },
+      { title: t('common.time'), dataIndex: 'createTime', slotName: 'time', width: 184 },
+      { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]
   },
   exception: {
-    title: '异常日志',
-    description: '查看后台异常记录和请求信息。',
-    placeholder: '搜索请求 URI 或描述',
+    title: t('logs.exception.title'),
+    description: t('logs.exception.description'),
+    placeholder: t('logs.exception.searchPlaceholder'),
     endpoint: 'admin/logs/exceptions',
-    emptyHint: '接口抛出未捕获异常时会记录在这里。',
+    emptyHint: t('logs.exception.emptyHint'),
     columns: [
       { title: 'URI', dataIndex: 'optUri', minWidth: 200, ellipsis: true, tooltip: true },
-      { title: '方法', dataIndex: 'requestMethod', slotName: 'method', width: 100 },
-      { title: '描述', dataIndex: 'optDesc', minWidth: 160, ellipsis: true, tooltip: true },
-      { title: '异常', dataIndex: 'exceptionInfo', slotName: 'content', ellipsis: true, tooltip: true, minWidth: 200 },
-      { title: '时间', dataIndex: 'createTime', slotName: 'time', width: 184 },
-      { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
+      { title: t('logs.common.colMethod'), dataIndex: 'requestMethod', slotName: 'method', width: 100 },
+      { title: t('common.description'), dataIndex: 'optDesc', minWidth: 160, ellipsis: true, tooltip: true },
+      { title: t('logs.exception.colException'), dataIndex: 'exceptionInfo', slotName: 'content', ellipsis: true, tooltip: true, minWidth: 200 },
+      { title: t('common.time'), dataIndex: 'createTime', slotName: 'time', width: 184 },
+      { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]
   },
   job: {
-    title: '任务日志',
-    description: '回看后台任务的执行结果与耗时。',
-    placeholder: '搜索任务名',
+    title: t('logs.jobLogs.title'),
+    description: t('logs.jobLogs.description'),
+    placeholder: t('logs.common.searchJobName'),
     endpoint: 'admin/logs/jobs',
-    emptyHint: '定时任务每次执行都会生成一条日志。',
+    emptyHint: t('logs.jobLogs.emptyHint'),
     columns: [
-      { title: '任务', dataIndex: 'jobName', minWidth: 170 },
-      { title: '任务组', dataIndex: 'jobGroup', width: 120 },
-      { title: '调用目标', dataIndex: 'invokeTarget', ellipsis: true, tooltip: true, minWidth: 180 },
-      { title: '状态', dataIndex: 'status', slotName: 'status', width: 96 },
-      { title: '时间', dataIndex: 'startTime', slotName: 'time', width: 184 },
-      { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 140 }
+      { title: t('logs.jobLogs.colJob'), dataIndex: 'jobName', minWidth: 170 },
+      { title: t('logs.jobLogs.colJobGroup'), dataIndex: 'jobGroup', width: 120 },
+      { title: t('logs.common.colInvokeTarget'), dataIndex: 'invokeTarget', ellipsis: true, tooltip: true, minWidth: 180 },
+      { title: t('common.status'), dataIndex: 'status', slotName: 'status', width: 96 },
+      { title: t('common.time'), dataIndex: 'startTime', slotName: 'time', width: 184 },
+      { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 140 }
     ]
   }
-} as const
+}))
 
-const config = computed(() => configs[props.mode])
+const config = computed(() => configs.value[props.mode])
 
 const viewKey = `log-${props.mode}`
-const columnPrefs = useColumnPrefs(viewKey, configs[props.mode].columns.map((column) => column.dataIndex))
+const columnPrefs = useColumnPrefs(viewKey, config.value.columns.map((column) => column.dataIndex))
 
 // Give every column an explicit slot so no cell leaks a raw RFC3339 timestamp.
 const tableColumns = computed(() => config.value.columns
@@ -285,9 +306,9 @@ const {
       if (Number.isInteger(jobId) && jobId > 0) params.jobId = jobId
       if (groupFilter.value) params.jobGroup = groupFilter.value
     }
-    return listAdminPage<LogRecord>(configs[props.mode].endpoint, params, { signal })
+    return listAdminPage<LogRecord>(config.value.endpoint, params, { signal })
   },
-  { pageSize: readStoredPageSize(viewKey), fallbackMessage: '日志加载失败', immediate: false }
+  { pageSize: readStoredPageSize(viewKey), fallbackMessage: t('logs.common.loadFailed'), immediate: false }
 )
 
 useStoredPageSize(viewKey, pageSize)
@@ -307,7 +328,7 @@ const selectedIds = computed(() => selectedKeys.value.map(Number).filter((id) =>
 const jobScopeLabel = computed(() => {
   if (props.mode !== 'job') return ''
   const jobId = Number(route.params.quartzId)
-  return Number.isInteger(jobId) && jobId > 0 ? `任务 #${jobId}` : ''
+  return Number.isInteger(jobId) && jobId > 0 ? t('logs.jobLogs.scopeLabel', { id: jobId }) : ''
 })
 
 const detailFields = computed<DetailField[]>(() => {
@@ -328,10 +349,10 @@ const detailSections = computed(() => {
   const record = detail.value
   if (!record) return []
   return [
-    { label: '请求参数', raw: record.requestParam },
-    { label: '响应数据', raw: record.responseData },
-    { label: '异常信息', raw: record.exceptionInfo },
-    { label: '任务输出', raw: record.jobMessage }
+    { label: t('logs.common.sectionRequestParam'), raw: record.requestParam },
+    { label: t('logs.common.sectionResponse'), raw: record.responseData },
+    { label: t('logs.common.sectionException'), raw: record.exceptionInfo },
+    { label: t('logs.common.sectionJobOutput'), raw: record.jobMessage }
   ]
     .filter((section) => section.raw !== null && section.raw !== undefined && section.raw !== '')
     .map((section) => ({ label: section.label, value: pretty(section.raw) }))
@@ -375,11 +396,11 @@ async function batchDelete(): Promise<void> {
   batchDeleting.value = true
   try {
     await deleteAdminLogs(props.mode, ids)
-    Message.success(`已删除 ${ids.length} 条日志`)
+    Message.success(t('logs.common.batchDeleted', { count: ids.length }))
     clearSelection()
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '批量删除失败'))
+    Message.error(apiErrorMessage(error, t('logs.common.batchDeleteFailed')))
   } finally {
     batchDeleting.value = false
   }
@@ -393,8 +414,8 @@ function showDetail(record: LogRecord): void {
 function copyDetail(): void {
   if (!detail.value) return
   void copyText(JSON.stringify(detail.value, null, 2), {
-    success: '日志原始数据已复制',
-    failure: '浏览器不允许自动复制，请手动选择文本'
+    success: t('logs.common.copyRawSuccess'),
+    failure: t('common.copyFailed')
   })
 }
 
@@ -404,10 +425,10 @@ async function deleteLog(id: unknown): Promise<void> {
   try {
     await deleteAdminLogs(props.mode, [logId])
     if (records.value.length === 1 && current.value > 1) current.value -= 1
-    Message.success('日志已删除')
+    Message.success(t('logs.common.deleted'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '日志删除失败'))
+    Message.error(apiErrorMessage(error, t('logs.common.deleteFailed')))
   }
 }
 
@@ -415,37 +436,38 @@ async function clean(): Promise<void> {
   cleaning.value = true
   try {
     await cleanAdminJobLogs()
-    Message.success('任务日志已清空')
+    Message.success(t('logs.jobLogs.cleaned'))
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '任务日志清理失败'))
+    Message.error(apiErrorMessage(error, t('logs.jobLogs.cleanFailed')))
   } finally {
     cleaning.value = false
   }
 }
 
-const LABELS: Record<string, string> = {
-  optModule: '操作模块',
-  optType: '操作类型',
-  optUri: '请求地址',
-  optDesc: '操作描述',
-  requestMethod: '请求方法',
-  optMethod: '请求方法',
-  nickname: '操作用户',
-  ipAddress: 'IP 地址',
-  ipSource: 'IP 归属',
-  createTime: '发生时间',
-  startTime: '开始时间',
-  endTime: '结束时间',
-  status: '执行状态',
-  jobName: '任务名称',
-  jobGroup: '任务分组',
-  invokeTarget: '调用目标',
-  elapsed: '耗时'
-}
+// 详情字段名来自后端字段，这里只翻译已知字段；语言切换后重新计算。
+const LABELS = computed<Record<string, string>>(() => ({
+  optModule: t('logs.operation.fieldModule'),
+  optType: t('logs.operation.fieldType'),
+  optUri: t('logs.common.fieldRequestUri'),
+  optDesc: t('logs.operation.fieldDesc'),
+  requestMethod: t('logs.common.fieldRequestMethod'),
+  optMethod: t('logs.common.fieldRequestMethod'),
+  nickname: t('logs.operation.fieldUser'),
+  ipAddress: t('logs.common.fieldIp'),
+  ipSource: t('logs.common.fieldIpSource'),
+  createTime: t('logs.common.fieldOccurredAt'),
+  startTime: t('logs.common.fieldStartTime'),
+  endTime: t('logs.common.fieldEndTime'),
+  status: t('logs.common.fieldRunStatus'),
+  jobName: t('logs.common.colJobName'),
+  jobGroup: t('logs.common.colJobGroup'),
+  invokeTarget: t('logs.common.colInvokeTarget'),
+  elapsed: t('logs.common.fieldElapsed')
+}))
 
 function fieldLabel(key: string): string {
-  return LABELS[key] || key
+  return LABELS.value[key] || key
 }
 
 function pretty(value: unknown): string {

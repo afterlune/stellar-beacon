@@ -127,6 +127,8 @@ export function flattenMenuRoutes(menus: NormalizedMenu[]): ResolvedMenuRoute[] 
         name: routeName(path),
         component: resolveMenuComponent(child.component || menu.component),
         meta: {
+          // 后端菜单名原样存进 meta（中文），显示时经 i18n/menu.ts 的 menuLabel() 反查词条，
+          // 这样语言切换能实时生效。
           title: child.name || menu.name,
           icon: child.icon || menu.icon,
           hidden: Boolean(child.hidden || menu.hidden),

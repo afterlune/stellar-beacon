@@ -1,19 +1,19 @@
 <template>
   <section class="admin-page">
-    <AdminPageHeader title="文章列表" description="查看和管理文章及发布状态。">
+    <AdminPageHeader :title="t('articles.list.title')" :description="t('articles.list.description')">
       <template #actions>
         <input ref="importInput" type="file" accept=".md,.markdown,.txt" hidden @change="onImportFile" />
         <a-button :loading="importing" @click="pickImportFile">
           <template #icon><IconUpload /></template>
-          导入文章
+          {{ t('articles.list.import') }}
         </a-button>
         <a-button type="primary" @click="router.push('/articles')">
           <template #icon><IconPlus /></template>
-          发布文章
+          {{ t('articles.actions.publish') }}
         </a-button>
         <a-button :loading="loading" @click="load">
           <template #icon><IconRefresh /></template>
-          刷新
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -24,33 +24,33 @@
           <a-input-search
             v-model="keywords"
             class="admin-filter-input"
-            placeholder="搜索文章标题"
+            :placeholder="t('articles.list.searchPlaceholder')"
             allow-clear
             @search="reload" />
-          <a-select v-model="status" placeholder="全部状态" allow-clear style="width: 130px" @change="reload">
-            <a-option :value="1">公开</a-option>
-            <a-option :value="2">私密</a-option>
-            <a-option :value="3">草稿</a-option>
+          <a-select v-model="status" :placeholder="t('articles.list.allStatuses')" allow-clear style="width: 130px" @change="reload">
+            <a-option :value="1">{{ t('status.published') }}</a-option>
+            <a-option :value="2">{{ t('status.private') }}</a-option>
+            <a-option :value="3">{{ t('status.draft') }}</a-option>
           </a-select>
-          <a-select v-model="type" placeholder="全部类型" allow-clear style="width: 130px" @change="reload">
-            <a-option :value="1">原创</a-option>
-            <a-option :value="2">转载</a-option>
-            <a-option :value="3">翻译</a-option>
+          <a-select v-model="type" :placeholder="t('articles.list.allTypes')" allow-clear style="width: 130px" @change="reload">
+            <a-option :value="1">{{ t('status.original') }}</a-option>
+            <a-option :value="2">{{ t('status.reprint') }}</a-option>
+            <a-option :value="3">{{ t('status.translate') }}</a-option>
           </a-select>
-          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">重置筛选</a-button>
+          <a-button v-if="hasFilters" type="text" size="small" @click="resetFilters">{{ t('articles.list.resetFilters') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 篇文章</span>
+          <span class="admin-toolbar-caption">{{ t('articles.list.total', { total }) }}</span>
           <a-dropdown trigger="click" position="br">
             <a-button size="small">
               <template #icon><IconSettings /></template>
-              列设置
+              {{ t('articles.list.columnSettings') }}
             </a-button>
             <template #content>
               <div class="admin-column-settings">
                 <div class="admin-column-settings-head">
-                  <span>显示列</span>
-                  <a-button type="text" size="mini" @click="columnPrefs.reset">全部显示</a-button>
+                  <span>{{ t('articles.list.visibleColumns') }}</span>
+                  <a-button type="text" size="mini" @click="columnPrefs.reset">{{ t('articles.list.showAllColumns') }}</a-button>
                 </div>
                 <a-checkbox
                   v-for="column in columns"
@@ -66,18 +66,18 @@
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="文章列表加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('articles.list.loadFailed')" @retry="load" />
 
       <AdminBatchBar
         :count="selectedKeys.length"
-        :hint="`本页 ${records.length} 篇`"
+        :hint="t('articles.list.pageHint', { count: records.length })"
         @clear="clearSelection">
         <a-button size="small" @click="exportSelected">
           <template #icon><IconDownload /></template>
-          导出 Markdown
+          {{ t('articles.actions.exportMarkdown') }}
         </a-button>
-        <a-button size="small" @click="batchTrash">移入回收站</a-button>
-        <a-button size="small" status="danger" @click="batchDelete">永久删除</a-button>
+        <a-button size="small" @click="batchTrash">{{ t('articles.actions.trash') }}</a-button>
+        <a-button size="small" status="danger" @click="batchDelete">{{ t('articles.actions.deleteForever') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -95,17 +95,17 @@
             <AdminImagePreview
               v-if="isHttpUrl(record.articleCover)"
               :src="String(record.articleCover)"
-              :alt="`${String(record.articleTitle || '文章')} 封面`"
+              :alt="t('articles.list.coverAlt', { title: String(record.articleTitle || t('articles.list.articleFallback')) })"
               :width="88"
               :height="60" />
             <span v-else class="admin-cover-cell" aria-hidden="true"><IconBook /></span>
           </template>
           <template #title="{ record }">
-            <span class="admin-title-cell" :title="String(record.articleTitle || '')">{{ record.articleTitle || '未命名文章' }}</span>
+            <span class="admin-title-cell" :title="String(record.articleTitle || '')">{{ record.articleTitle || t('articles.list.untitled') }}</span>
           </template>
           <template #category="{ record }">
             <a-tag v-if="record.categoryName" color="arcoblue">{{ record.categoryName }}</a-tag>
-            <span v-else class="admin-muted-cell">未分类</span>
+            <span v-else class="admin-muted-cell">{{ t('articles.list.uncategorized') }}</span>
           </template>
           <template #status="{ record }">
             <AdminStatusTag :kind="statusKind(record.status)" />
@@ -116,8 +116,8 @@
           <template #flags="{ record }">
             <!-- 间距收到 4px：默认 8px 会让「置顶 + 精选」在 120px 列里折行，把整行撑高 -->
             <a-space v-if="Number(record.isTop) === 1 || Number(record.isFeatured) === 1" wrap :size="4">
-              <a-tag v-if="Number(record.isTop) === 1" color="arcoblue">置顶</a-tag>
-              <a-tag v-if="Number(record.isFeatured) === 1" color="green">精选</a-tag>
+              <a-tag v-if="Number(record.isTop) === 1" color="arcoblue">{{ t('status.pinned') }}</a-tag>
+              <a-tag v-if="Number(record.isFeatured) === 1" color="green">{{ t('articles.featured') }}</a-tag>
             </a-space>
             <span v-else class="admin-muted-cell">—</span>
           </template>
@@ -127,21 +127,21 @@
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="editArticle(record.id)">编辑</a-button>
+              <a-button type="text" size="small" @click="editArticle(record.id)">{{ t('common.edit') }}</a-button>
               <a-dropdown trigger="click" position="br">
                 <a-button type="text" size="small" :loading="isPending(record.id)">
-                  更多
+                  {{ t('common.more') }}
                   <template #icon><IconDown /></template>
                 </a-button>
                 <template #content>
                   <a-doption @click="toggleFlag(record, 'isTop')">
-                    {{ Number(record.isTop) === 1 ? '取消置顶' : '设为置顶' }}
+                    {{ Number(record.isTop) === 1 ? t('articles.list.unsetTop') : t('articles.list.setTop') }}
                   </a-doption>
                   <a-doption @click="toggleFlag(record, 'isFeatured')">
-                    {{ Number(record.isFeatured) === 1 ? '取消精选' : '设为精选' }}
+                    {{ Number(record.isFeatured) === 1 ? t('articles.list.unsetFeatured') : t('articles.list.setFeatured') }}
                   </a-doption>
-                  <a-doption @click="moveToTrash(record)">移入回收站</a-doption>
-                  <a-doption class="admin-danger-option" @click="removeArticle(record)">永久删除</a-doption>
+                  <a-doption @click="moveToTrash(record)">{{ t('articles.actions.trash') }}</a-doption>
+                  <a-doption class="admin-danger-option" @click="removeArticle(record)">{{ t('articles.actions.deleteForever') }}</a-doption>
                 </template>
               </a-dropdown>
             </a-space>
@@ -149,23 +149,23 @@
           <template #empty>
             <AdminEmptyState
               :icon="IconBook"
-              :title="hasFilters ? '没有匹配的文章' : '还没有文章'"
-              :description="hasFilters ? '换个关键词或清空筛选条件再试一次。' : '创建文章后，可在此查看和管理。'">
-              <a-button v-if="hasFilters" size="small" @click="resetFilters">清空筛选</a-button>
-              <a-button v-else type="primary" size="small" @click="router.push('/articles')">发布文章</a-button>
+              :title="hasFilters ? t('articles.list.emptyFiltered') : t('articles.list.empty')"
+              :description="hasFilters ? t('articles.list.emptyFilteredHint') : t('articles.list.emptyHint')">
+              <a-button v-if="hasFilters" size="small" @click="resetFilters">{{ t('articles.list.clearFilters') }}</a-button>
+              <a-button v-else type="primary" size="small" @click="router.push('/articles')">{{ t('articles.actions.publish') }}</a-button>
             </AdminEmptyState>
           </template>
         </a-table>
       </div>
     </a-card>
 
-    <a-modal v-model:visible="exportVisible" title="导出结果" :footer="false" width="560px">
-      <p class="admin-export-hint">后端已把选中的文章导出为 Markdown 文件，可以打开或复制链接。</p>
+    <a-modal v-model:visible="exportVisible" :title="t('articles.list.exportTitle')" :footer="false" width="560px">
+      <p class="admin-export-hint">{{ t('articles.list.exportHint') }}</p>
       <div class="admin-export-list">
         <div v-for="(url, index) in exportUrls" :key="url" class="admin-export-item">
           <span class="admin-export-index">{{ index + 1 }}</span>
           <a-link :href="url" target="_blank" rel="noopener" class="admin-export-link">{{ url }}</a-link>
-          <a-button size="mini" @click="copyText(url, { success: '导出链接已复制' })">复制链接</a-button>
+          <a-button size="mini" @click="copyText(url, { success: t('articles.list.exportLinkCopied') })">{{ t('articles.actions.copyLink') }}</a-button>
         </div>
       </div>
     </a-modal>
@@ -205,6 +205,7 @@ import { useAsyncList } from '@/composables/useAsyncList'
 import { usePendingIds } from '@/composables/usePendingIds'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useColumnPrefs, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { copyText } from '@/utils/clipboard'
 import { formatDateTime, formatNumber, isHttpUrl } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
@@ -238,19 +239,20 @@ const { isPending, withPending } = usePendingIds()
 // - 标记 128 = 置顶 + 精选 两个标签并排（96px 内容 + 间距），否则会折行把整行撑高
 // - 标题给死 220：这一列原来不给宽度，1280 宽的窗口里被固定列宽挤成 0px，
 //   表格里最重要的信息直接消失，是这次改版修掉的真实缺陷。
-const columns: TableColumn[] = [
-  { title: '封面', dataIndex: 'articleCover', slotName: 'cover', width: 116 },
-  { title: '标题', dataIndex: 'articleTitle', slotName: 'title', width: 220, ellipsis: true, tooltip: true },
-  { title: '分类', dataIndex: 'categoryName', slotName: 'category', width: 96 },
-  { title: '状态', dataIndex: 'status', slotName: 'status', width: 84 },
-  { title: '类型', dataIndex: 'type', slotName: 'type', width: 62 },
-  { title: '标记', dataIndex: 'flags', slotName: 'flags', width: 128 },
-  { title: '浏览量', dataIndex: 'viewsCount', slotName: 'views', width: 74 },
-  { title: '创建时间', dataIndex: 'createTime', slotName: 'time', width: 164 },
-  { title: '操作', dataIndex: 'actions', slotName: 'actions', width: 148 }
-]
+// 标题文案走 t()，所以做成 computed：语言切换后表头与「列设置」里的复选框一起更新。
+const columns = computed<TableColumn[]>(() => [
+  { title: t('articles.list.columnCover'), dataIndex: 'articleCover', slotName: 'cover', width: 116 },
+  { title: t('common.title'), dataIndex: 'articleTitle', slotName: 'title', width: 220, ellipsis: true, tooltip: true },
+  { title: t('articles.category'), dataIndex: 'categoryName', slotName: 'category', width: 96 },
+  { title: t('common.status'), dataIndex: 'status', slotName: 'status', width: 84 },
+  { title: t('common.type'), dataIndex: 'type', slotName: 'type', width: 62 },
+  { title: t('articles.list.columnFlags'), dataIndex: 'flags', slotName: 'flags', width: 128 },
+  { title: t('articles.list.columnViews'), dataIndex: 'viewsCount', slotName: 'views', width: 74 },
+  { title: t('articles.list.columnCreatedAt'), dataIndex: 'createTime', slotName: 'time', width: 164 },
+  { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 148 }
+])
 
-const columnPrefs = useColumnPrefs(VIEW_KEY, columns.map((column) => column.dataIndex))
+const columnPrefs = useColumnPrefs(VIEW_KEY, columns.value.map((column) => column.dataIndex))
 
 const {
   items: records,
@@ -271,7 +273,7 @@ const {
     status: status.value ?? 0,
     type: type.value ?? 0
   }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: '文章列表加载失败' }
+  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('articles.list.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -283,7 +285,7 @@ useQueryFilters([
 ], { onRestore: () => void load(), onSearch: () => void reload() })
 
 // 每一列都显式给一个 slot：默认的 `formatted` 槽位会绕过共享的时间/数字格式化。
-const tableColumns = computed(() => columns
+const tableColumns = computed(() => columns.value
   .filter((column) => columnPrefs.isVisible(column.dataIndex))
   .map((column) => ({ ...column, slotName: column.slotName || 'formatted' })))
 
@@ -330,14 +332,14 @@ function batchTrash(): void {
   const ids = selectedIds()
   if (ids.length === 0) return
   Modal.confirm({
-    title: '移入回收站',
-    content: `确定把选中的 ${ids.length} 篇文章移入回收站吗？之后可以在回收站中恢复。`,
-    okText: '移入回收站',
-    cancelText: '取消',
+    title: t('articles.actions.trash'),
+    content: t('articles.list.confirmBatchTrash', { count: ids.length }),
+    okText: t('articles.actions.trash'),
+    cancelText: t('common.cancel'),
     onOk: () => runBatch(async () => {
       await updateAdminArticleTrash(ids, 1)
-      Message.success(`已移入回收站 ${ids.length} 篇`)
-    }, '移入回收站失败')
+      Message.success(t('articles.list.trashedCount', { count: ids.length }))
+    }, t('articles.list.trashFailed'))
   })
 }
 
@@ -345,15 +347,15 @@ function batchDelete(): void {
   const ids = selectedIds()
   if (ids.length === 0) return
   Modal.confirm({
-    title: '永久删除',
-    content: `永久删除选中的 ${ids.length} 篇文章后无法恢复，确定继续吗？`,
-    okText: '永久删除',
-    cancelText: '取消',
+    title: t('articles.actions.deleteForever'),
+    content: t('articles.list.confirmBatchDelete', { count: ids.length }),
+    okText: t('articles.actions.deleteForever'),
+    cancelText: t('common.cancel'),
     okButtonProps: { status: 'danger' },
     onOk: () => runBatch(async () => {
       await deleteAdminArticles(ids)
-      Message.success(`已删除 ${ids.length} 篇文章`)
-    }, '删除失败')
+      Message.success(t('articles.list.deletedCount', { count: ids.length }))
+    }, t('common.deleteFailed'))
   })
 }
 
@@ -363,13 +365,13 @@ async function exportSelected(): Promise<void> {
   try {
     const urls = await exportAdminArticles(ids)
     if (urls.length === 0) {
-      Message.warning('没有可导出的文章')
+      Message.warning(t('articles.list.exportEmpty'))
       return
     }
     exportUrls.value = urls
     exportVisible.value = true
   } catch (error) {
-    Message.error(apiErrorMessage(error, '导出失败'))
+    Message.error(apiErrorMessage(error, t('articles.list.exportFailed')))
   }
 }
 
@@ -386,10 +388,10 @@ async function onImportFile(event: Event): Promise<void> {
   importing.value = true
   try {
     await importAdminArticles(file)
-    Message.success(`已导入《${file.name}》，默认保存为草稿`)
+    Message.success(t('articles.list.importSuccess', { name: file.name }))
     await reload()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '导入失败，请确认文件为 Markdown 或文本'))
+    Message.error(apiErrorMessage(error, t('articles.list.importFailed')))
   } finally {
     importing.value = false
   }
@@ -413,9 +415,11 @@ async function toggleFlag(record: Record<string, unknown>, field: 'isTop' | 'isF
         isFeatured: field === 'isFeatured' ? next : Number(record.isFeatured) === 1 ? 1 : 0
       })
       record[field] = next
-      Message.success(next === 1 ? (field === 'isTop' ? '已设为置顶' : '已设为精选') : '已取消标记')
+      Message.success(next === 1
+        ? (field === 'isTop' ? t('articles.list.markedTop') : t('articles.list.markedFeatured'))
+        : t('articles.list.markCleared'))
     } catch (error) {
-      Message.error(apiErrorMessage(error, '标记更新失败'))
+      Message.error(apiErrorMessage(error, t('articles.list.markFailed')))
     }
   })
 }
@@ -424,18 +428,18 @@ function moveToTrash(record: Record<string, unknown>): void {
   const id = Number(record.id)
   if (!Number.isInteger(id) || id <= 0) return
   Modal.confirm({
-    title: '移入回收站',
-    content: `确定把《${String(record.articleTitle || '未命名文章')}》移入回收站吗？之后可以在回收站中恢复。`,
-    okText: '移入回收站',
-    cancelText: '取消',
+    title: t('articles.actions.trash'),
+    content: t('articles.list.confirmTrash', { title: String(record.articleTitle || t('articles.list.untitled')) }),
+    okText: t('articles.actions.trash'),
+    cancelText: t('common.cancel'),
     onOk: () => withPending(id, async () => {
       try {
         await updateAdminArticleTrash([id], 1)
-        Message.success('已移入回收站')
+        Message.success(t('articles.list.trashed'))
         if (records.value.length === 1 && current.value > 1) current.value -= 1
         await load()
       } catch (error) {
-        Message.error(apiErrorMessage(error, '移入回收站失败'))
+        Message.error(apiErrorMessage(error, t('articles.list.trashFailed')))
       }
     })
   })
@@ -445,19 +449,19 @@ function removeArticle(record: Record<string, unknown>): void {
   const id = Number(record.id)
   if (!Number.isInteger(id) || id <= 0) return
   Modal.confirm({
-    title: '永久删除',
-    content: `永久删除《${String(record.articleTitle || '未命名文章')}》后无法恢复，确定继续吗？`,
-    okText: '永久删除',
-    cancelText: '取消',
+    title: t('articles.actions.deleteForever'),
+    content: t('articles.list.confirmDelete', { title: String(record.articleTitle || t('articles.list.untitled')) }),
+    okText: t('articles.actions.deleteForever'),
+    cancelText: t('common.cancel'),
     okButtonProps: { status: 'danger' },
     onOk: () => withPending(id, async () => {
       try {
         await deleteAdminArticles([id])
-        Message.success('文章已删除')
+        Message.success(t('articles.list.deleted'))
         if (records.value.length === 1 && current.value > 1) current.value -= 1
         await load()
       } catch (error) {
-        Message.error(apiErrorMessage(error, '删除失败'))
+        Message.error(apiErrorMessage(error, t('common.deleteFailed')))
       }
     })
   })
@@ -473,9 +477,9 @@ function statusKind(value: unknown): StatusKind {
 
 function typeLabel(value: unknown): string {
   const raw = Number(value)
-  if (raw === 1) return '原创'
-  if (raw === 2) return '转载'
-  if (raw === 3) return '翻译'
+  if (raw === 1) return t('status.original')
+  if (raw === 2) return t('status.reprint')
+  if (raw === 3) return t('status.translate')
   return '—'
 }
 </script>

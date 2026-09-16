@@ -28,8 +28,7 @@
                     <el-image
                       class="images-talks"
                       :src="safeTalkImageUrl(img)"
-                      aspect-ratio="1"
-                      max-height="200"
+                      fit="contain"
                       @click.prevent="handlePreview(img)" />
                   </el-col>
                 </el-row>
@@ -215,5 +214,17 @@ export default defineComponent({
   cursor: pointer;
   border-radius: 3px;
   margin-right: 5px;
+}
+.images-talks {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.images-talks :deep(.el-image__inner) {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
 }
 </style>

@@ -1,11 +1,11 @@
 <template>
   <section class="admin-page media-page">
-    <AdminPageHeader title="图片资源" description="管理文章、说说和相册图片，支持预览、复制和删除。">
+    <AdminPageHeader :title="t('media.library.title')" :description="t('media.library.description')">
       <template #actions>
         <input ref="fileInput" type="file" accept="image/*" multiple hidden @change="uploadFiles" />
         <a-button type="primary" :loading="uploading" @click="fileInput?.click()">
           <template #icon><IconUpload /></template>
-          {{ uploading ? uploadLabel : '上传图片' }}
+          {{ uploading ? uploadLabel : t('media.library.upload') }}
         </a-button>
       </template>
     </AdminPageHeader>
@@ -16,33 +16,33 @@
           <a-input-search
             v-model="prefix"
             class="admin-filter-input"
-            placeholder="按目录筛选，例如 media/"
+            :placeholder="t('mediaPicker.filterHint')"
             allow-clear
             @search="reload" />
-          <a-button v-if="prefix.trim()" type="text" size="small" @click="clearPrefix">清空筛选</a-button>
+          <a-button v-if="prefix.trim()" type="text" size="small" @click="clearPrefix">{{ t('media.library.clearFilter') }}</a-button>
         </div>
         <div class="admin-table-toolbar-actions">
-          <span class="admin-toolbar-caption">共 {{ total }} 张图片</span>
+          <span class="admin-toolbar-caption">{{ t('media.library.total', { total }) }}</span>
           <a-button v-if="assets.length" size="small" @click="toggleSelectAll">
-            {{ selectedKeys.length === assets.length ? '取消全选' : '全选本页' }}
+            {{ selectedKeys.length === assets.length ? t('media.library.deselectAll') : t('media.library.selectAllPage') }}
           </a-button>
           <a-button :loading="loading" size="small" @click="load">
             <template #icon><IconRefresh /></template>
-            刷新
+            {{ t('common.refresh') }}
           </a-button>
         </div>
       </div>
 
-      <AdminErrorState v-if="errorMessage" :error="errorMessage" title="图片资源加载失败" @retry="load" />
+      <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('mediaPicker.loadFailed')" @retry="load" />
 
       <AdminBatchBar :count="selectedKeys.length" @clear="selectedKeys = []">
         <a-popconfirm
-          :content="`确定永久删除选中的 ${selectedKeys.length} 张图片吗？引用这些图片的内容会显示为损坏图片。`"
+          :content="t('media.library.deleteSelectedConfirm', { count: selectedKeys.length })"
           :disabled="selectedKeys.length === 0"
           @ok="removeSelected">
           <a-button status="danger" :disabled="selectedKeys.length === 0">
             <template #icon><IconDelete /></template>
-            删除选中
+            {{ t('media.library.deleteSelected') }}
           </a-button>
         </a-popconfirm>
       </AdminBatchBar>
@@ -58,7 +58,7 @@
           class="media-card"
           :class="{ 'media-card-selected': selectedKeys.includes(asset.key) }">
           <label class="media-card-check">
-            <input v-model="selectedKeys" type="checkbox" :value="asset.key" :aria-label="`选择 ${asset.name}`" />
+            <input v-model="selectedKeys" type="checkbox" :value="asset.key" :aria-label="t('media.library.selectAsset', { name: asset.name })" />
           </label>
           <AdminImagePreview :src="asset.url" :alt="asset.name" :width="220" :height="148" />
           <div class="media-card-copy">
@@ -66,15 +66,15 @@
             <small>{{ formatFileSize(asset.size) }} · {{ formatDate(asset.lastModified) }}</small>
           </div>
           <div class="media-card-actions">
-            <a-button size="small" @click="copyUrl(asset.url)">复制地址</a-button>
+            <a-button size="small" @click="copyUrl(asset.url)">{{ t('image.copyUrl') }}</a-button>
             <a-popconfirm
               v-if="asset.deletable"
-              content="确定永久删除这张图片吗？"
+              :content="t('media.library.deleteConfirm')"
               @ok="remove(asset.key)">
-              <a-button size="small" status="danger">删除</a-button>
+              <a-button size="small" status="danger">{{ t('common.delete') }}</a-button>
             </a-popconfirm>
-            <a-tooltip v-else content="该图片不可删除（可能被系统引用）">
-              <a-button size="small" disabled>删除</a-button>
+            <a-tooltip v-else :content="t('media.library.undeletable')">
+              <a-button size="small" disabled>{{ t('common.delete') }}</a-button>
             </a-tooltip>
           </div>
         </article>
@@ -83,10 +83,10 @@
       <AdminEmptyState
         v-else
         :icon="IconImage"
-        title="还没有图片资源"
-        :description="prefix.trim() ? '当前目录下没有图片，试试清空筛选条件。' : '上传第一张图片后，它可以被文章封面和说说引用。'">
-        <a-button v-if="prefix.trim()" size="small" @click="clearPrefix">清空筛选</a-button>
-        <a-button v-else type="primary" size="small" @click="fileInput?.click()">上传图片</a-button>
+        :title="t('media.library.empty')"
+        :description="prefix.trim() ? t('media.library.emptyFiltered') : t('media.library.emptyHint')">
+        <a-button v-if="prefix.trim()" size="small" @click="clearPrefix">{{ t('media.library.clearFilter') }}</a-button>
+        <a-button v-else type="primary" size="small" @click="fileInput?.click()">{{ t('media.library.upload') }}</a-button>
       </AdminEmptyState>
 
       <a-pagination
@@ -116,6 +116,7 @@ import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import { t } from '@/i18n'
 import { formatDate, formatFileSize } from '@/utils/format'
 import type { AdminMediaAsset } from '@stellar-beacon/api-contract'
 
@@ -146,7 +147,7 @@ const {
       size,
       prefix: prefix.value.trim()
     }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY, 24), fallbackMessage: '图片资源加载失败' }
+  { pageSize: readStoredPageSize(VIEW_KEY, 24), fallbackMessage: t('mediaPicker.loadFailed') }
 )
 
 useStoredPageSize(VIEW_KEY, pageSize)
@@ -157,7 +158,9 @@ useQueryFilters([
 
 const uploadLabel = computed(() => {
   const { done, total: count } = uploadProgress.value
-  return count > 0 ? `上传中 ${done}/${count}` : '上传中…'
+  return count > 0
+    ? t('media.library.uploadingProgress', { done, total: count })
+    : t('media.library.uploading')
 })
 
 // 分页或筛选后丢弃已不在列表中的选中项，避免删除到看不见的图片。
@@ -190,7 +193,7 @@ async function uploadFiles(event: Event): Promise<void> {
   const rejected = files.filter((file) => !file.type.startsWith('image/') || file.size > MAX_UPLOAD_BYTES)
   const accepted = files.filter((file) => !rejected.includes(file))
   if (rejected.length) {
-    Message.warning(`已跳过 ${rejected.length} 个文件：仅支持 10MB 以内的图片`)
+    Message.warning(t('media.library.skipped', { count: rejected.length }))
   }
   if (!accepted.length) return
 
@@ -202,13 +205,13 @@ async function uploadFiles(event: Event): Promise<void> {
       try {
         await uploadAdminMedia(file)
       } catch (error) {
-        failures.push(`${file.name}：${apiErrorMessage(error, '上传失败')}`)
+        failures.push(`${file.name}：${apiErrorMessage(error, t('upload.failed'))}`)
       }
       uploadProgress.value = { done: uploadProgress.value.done + 1, total: accepted.length }
     }
     const succeeded = accepted.length - failures.length
-    if (succeeded > 0) Message.success(`已上传 ${succeeded} 张图片`)
-    if (failures.length) Message.error(`${failures.length} 张图片上传失败：${failures[0]}`)
+    if (succeeded > 0) Message.success(t('media.library.uploaded', { count: succeeded }))
+    if (failures.length) Message.error(t('media.library.uploadFailedCount', { count: failures.length, detail: failures[0] }))
     if (succeeded > 0) await reload()
   } finally {
     uploading.value = false
@@ -228,21 +231,23 @@ async function removeKeys(keys: string[]): Promise<void> {
   if (!keys.length) return
   try {
     await deleteAdminMedia(keys)
-    Message.success(keys.length > 1 ? `已删除 ${keys.length} 张图片` : '图片已删除')
+    Message.success(keys.length > 1
+      ? t('media.library.deleted', { count: keys.length })
+      : t('media.library.deletedOne'))
     selectedKeys.value = []
     await load()
   } catch (error) {
-    Message.error(apiErrorMessage(error, '图片删除失败'))
+    Message.error(apiErrorMessage(error, t('media.library.deleteFailed')))
   }
 }
 
 async function copyUrl(url: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(url)
-    Message.success('图片地址已复制')
+    Message.success(t('image.copied'))
   } catch {
     // Clipboard access is blocked outside secure contexts; fall back to a manual hint.
-    Message.warning('浏览器不允许自动复制，请手动复制图片地址')
+    Message.warning(t('media.library.copyManual'))
   }
 }
 </script>

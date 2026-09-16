@@ -29,7 +29,7 @@
                   v-for="(img, index) of item.imgs"
                   :key="index"
                   :src="safeTalkImageUrl(img)"
-                  fit="cover"
+                  fit="contain"
                   @click.stop="handlePreview(img)" />
               </div>
             </div>
@@ -190,9 +190,17 @@ export default defineComponent({
 }
 .talk-image {
   width: 100%;
-  aspect-ratio: 1;
+  height: auto;
+  min-height: 0;
   border-radius: var(--radius-md);
   overflow: hidden;
   border: none;
+}
+.talk-image :deep(.el-image__inner) {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
 }
 </style>
