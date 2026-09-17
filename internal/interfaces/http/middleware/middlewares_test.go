@@ -2,11 +2,39 @@ package middlewares
 
 import (
 	"bytes"
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"unicode/utf8"
 )
+
+// An aborted request must not be filed as an exception: the caller is gone, so
+// the failure is a consequence of the disconnect rather than a service fault.
+func TestShouldRecordExceptionSkipsCanceledRequests(t *testing.T) {
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tests := []struct {
+		name string
+		ctx  context.Context
+		code string
+		want bool
+	}{
+		{name: "application failure", ctx: context.Background(), code: "OPERATION_FAILED", want: true},
+		{name: "invalid argument", ctx: context.Background(), code: "INVALID_ARGUMENT", want: true},
+		{name: "success", ctx: context.Background(), code: "OK", want: false},
+		{name: "canceled request", ctx: canceled, code: "OPERATION_FAILED", want: false},
+		{name: "nil context", ctx: nil, code: "OPERATION_FAILED", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldRecordException(tt.ctx, tt.code); got != tt.want {
+				t.Fatalf("shouldRecordException(%v, %q) = %v, want %v", tt.ctx, tt.code, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestIsAdminPathUsesSegmentBoundary(t *testing.T) {
 	tests := []struct {

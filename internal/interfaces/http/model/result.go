@@ -245,13 +245,21 @@ func ResultFromError(err error) ResultVO {
 	if err == nil {
 		return ResultOk()
 	}
+	kind := apperrors.KindOf(err)
+	if kind == apperrors.KindCanceled {
+		// Nobody is waiting for this response any more, so a canceled request is
+		// not an application failure. Keep the wire envelope identical to the
+		// default failure below and leave only a trace at debug level.
+		slog.Debug("request canceled", "op", apperrors.Op(err))
+		return ResultFailWithMessage("系统繁忙，请稍后再试")
+	}
 	// Keep the public boundary diagnostic free of database, credential, and
 	// request details. Lower layers retain the original error for debugging.
 	slog.Error("application operation failed",
-		"kind", string(apperrors.KindOf(err)),
+		"kind", string(kind),
 		"op", apperrors.Op(err),
 	)
-	switch apperrors.KindOf(err) {
+	switch kind {
 	case apperrors.KindValidation:
 		return ResultFailWithMessage("参数格式不正确")
 	case apperrors.KindNotFound:

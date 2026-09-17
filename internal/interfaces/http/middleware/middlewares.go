@@ -211,6 +211,18 @@ func splitSwaggerPath(value string) []string {
 	return strings.Split(value, "/")
 }
 
+// shouldRecordException reports whether a failed response deserves an
+// exception-log row. A canceled request context means the caller is gone: the
+// handler failed because the connection went away, not because the service did,
+// so recording it would only create false positives. Operation logs are still
+// written, because an aborted write remains worth auditing.
+func shouldRecordException(ctx context.Context, code string) bool {
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	return code == "OPERATION_FAILED" || code == "INVALID_ARGUMENT"
+}
+
 func Log() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		blw := &bodyLog{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
@@ -283,7 +295,8 @@ func Log() gin.HandlerFunc {
 		}
 		resData := make(map[string]interface{})
 		json.Unmarshal(blw.body.Bytes(), &resData)
-		if resData["code"] == "OPERATION_FAILED" || resData["code"] == "INVALID_ARGUMENT" || resData["code"] == 51000 {
+		code, _ := resData["code"].(string)
+		if shouldRecordException(c.Request.Context(), code) {
 			reqURI := strings.Split(c.Request.RequestURI, "?")[0]
 			reqMethod := c.Request.Method
 			ip := visitor.ClientIP(c.Request.Context(), c.Request)

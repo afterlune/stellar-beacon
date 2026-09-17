@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 )
@@ -16,6 +17,7 @@ const (
 	KindUnauthorized Kind = "unauthorized"
 	KindForbidden    Kind = "forbidden"
 	KindUnavailable  Kind = "unavailable"
+	KindCanceled     Kind = "canceled"
 	KindInternal     Kind = "internal"
 )
 
@@ -56,14 +58,26 @@ func New(kind Kind, op string, err error) error {
 	if err == nil {
 		err = errors.New(string(kind))
 	}
-	return &Error{Kind: kind, Op: op, Err: err}
+	return &Error{Kind: classify(kind, err), Op: op, Err: err}
 }
 
 func Wrap(kind Kind, op string, err error) error {
 	if err == nil {
 		return nil
 	}
-	return &Error{Kind: kind, Op: op, Err: err}
+	return &Error{Kind: classify(kind, err), Op: op, Err: err}
+}
+
+// classify keeps a canceled request distinguishable from a genuine failure:
+// a client that disconnects cancels the request context, and every lower layer
+// then reports a transport error that says nothing about service health.
+// DeadlineExceeded is deliberately not reclassified: without a request-level
+// timeout it can only come from a real infrastructure timeout.
+func classify(kind Kind, err error) Kind {
+	if errors.Is(err, context.Canceled) {
+		return KindCanceled
+	}
+	return kind
 }
 
 func KindOf(err error) Kind {
@@ -103,4 +117,14 @@ func Unavailable(op string, err error) error {
 		return New(KindUnavailable, op, errors.New("service unavailable"))
 	}
 	return Wrap(KindUnavailable, op, err)
+}
+
+// Canceled marks work that stopped because the caller went away. Callers may
+// pass any transport error together with a canceled context; the kind is what
+// matters, not the underlying message.
+func Canceled(op string, err error) error {
+	if err == nil {
+		err = context.Canceled
+	}
+	return New(KindCanceled, op, err)
 }
