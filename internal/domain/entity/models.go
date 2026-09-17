@@ -233,16 +233,17 @@ type TUserAuth struct {
 }
 
 type TUserInfo struct {
-	Id          int       `xorm:"autoincr not null pk comment('用户ID') unique INTEGER" json:"id"`
-	Email       string    `xorm:"comment('邮箱号') VARCHAR(50)" json:"email"`
-	Nickname    string    `xorm:"not null comment('用户昵称') VARCHAR(50)" json:"nickname"`
-	Avatar      string    `xorm:"not null comment('用户头像') VARCHAR(1024)" json:"avatar"`
-	Intro       string    `xorm:"comment('用户简介') VARCHAR(255)" json:"intro"`
-	Website     string    `xorm:"comment('个人网站') VARCHAR(255)" json:"website"`
-	IsSubscribe int       `xorm:"comment('是否订阅') SMALLINT" json:"isSubscribe"`
-	IsDisable   int       `xorm:"not null comment('是否禁用') SMALLINT" json:"isDisable"`
-	CreateTime  time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
-	UpdateTime  time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
+	Id            int       `xorm:"autoincr not null pk comment('用户ID') unique INTEGER" json:"id"`
+	Email         string    `xorm:"comment('邮箱号') VARCHAR(50)" json:"email"`
+	Nickname      string    `xorm:"not null comment('用户昵称') VARCHAR(50)" json:"nickname"`
+	Avatar        string    `xorm:"not null comment('用户头像') VARCHAR(1024)" json:"avatar"`
+	Intro         string    `xorm:"comment('用户简介') VARCHAR(255)" json:"intro"`
+	Website       string    `xorm:"comment('个人网站') VARCHAR(255)" json:"website"`
+	IsSubscribe   int       `xorm:"comment('是否订阅') SMALLINT" json:"isSubscribe"`
+	NotifyComment int       `xorm:"notify_comment not null default 1 comment('是否接收评论邮件通知') SMALLINT" json:"notifyComment"`
+	IsDisable     int       `xorm:"not null comment('是否禁用') SMALLINT" json:"isDisable"`
+	CreateTime    time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
+	UpdateTime    time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
 type TUserRole struct {

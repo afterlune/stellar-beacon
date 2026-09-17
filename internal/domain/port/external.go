@@ -128,6 +128,27 @@ type NewsletterEnqueuer interface {
 	EnqueueArticle(context.Context, int) error
 }
 
+// CommentNotification is one queued comment-notification email. It carries the
+// rendered inputs rather than entities so the delivery layer stays independent
+// of the persistence model.
+type CommentNotification struct {
+	CommentID    int
+	ArticleID    int
+	RecipientID  int
+	Recipient    string
+	Nickname     string
+	ReplyAuthor  string
+	ArticleTitle string
+	ArticleURL   string
+	CommentBody  string
+}
+
+// CommentNotifier queues comment notifications. Comment writes must not wait
+// for, or fail because of, the mail transport.
+type CommentNotifier interface {
+	EnqueueComment(CommentNotification) error
+}
+
 // VisitorIdentity contains request-derived information used by rate limiting
 // and unique-visitor accounting.
 type VisitorIdentity struct {

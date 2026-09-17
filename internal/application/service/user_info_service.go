@@ -3,6 +3,7 @@ package service
 import (
 	"container/list"
 	"errors"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
@@ -18,6 +19,7 @@ type UserInfoService interface {
 	UpdateUserAvatar(c *gin.Context) model.ResultVO
 	SaveUserEmail(c *gin.Context) model.ResultVO
 	UpdateUserSubscribe(c *gin.Context) model.ResultVO
+	UpdateUserCommentNotice(c *gin.Context) model.ResultVO
 	UpdateUserRole(c *gin.Context) model.ResultVO
 	UpdateUserDisable(c *gin.Context) model.ResultVO
 	ListOnlineUsers(c *gin.Context) model.ResultVO
@@ -135,6 +137,32 @@ func (u *MyUserInfoService) UpdateUserSubscribe(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("邮箱未绑定！")
 	}
 	if err := u.userInfoRepository().UpdateSubscribe(c.Request.Context(), vo.UserId, vo.IsSubscribe); err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOk()
+}
+
+// UpdateUserCommentNotice toggles the account-level comment notification
+// preference. The account always comes from the authenticated session, never
+// from the request body.
+func (u *MyUserInfoService) UpdateUserCommentNotice(c *gin.Context) model.ResultVO {
+	var vo model.CommentNoticeVO
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "user_info.notify_comment", nil))
+	}
+	dto, ok := value.(model.UserDetailsDTO)
+	if !ok || dto.UserInfoId <= 0 {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "user_info.notify_comment", nil))
+	}
+	notify := 0
+	if vo.NotifyComment == 1 {
+		notify = 1
+	}
+	if err := u.userInfoRepository().UpdateNotifyComment(c.Request.Context(), dto.UserInfoId, notify); err != nil {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOk()

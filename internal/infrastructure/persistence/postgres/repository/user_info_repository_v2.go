@@ -61,6 +61,13 @@ func (r *MyUserInfoRepo) UpdateSubscribe(ctx context.Context, id, subscribe int)
 	})
 }
 
+func (r *MyUserInfoRepo) UpdateNotifyComment(ctx context.Context, id, notify int) error {
+	return repoTx(r.engine, ctx, "user_info.notify_comment", func(session *xorm.Session) error {
+		_, err := session.ID(id).MustCols("notify_comment").Update(&entity.TUserInfo{Id: id, NotifyComment: notify})
+		return err
+	})
+}
+
 func (r *MyUserInfoRepo) UpdateRole(ctx context.Context, userInfoID int, nickname string, roleIDs []int) error {
 	return repoTx(r.engine, ctx, "user_info.role", func(session *xorm.Session) error {
 		if _, err := session.ID(userInfoID).MustCols("nickname").Update(&entity.TUserInfo{Id: userInfoID, Nickname: nickname}); err != nil {

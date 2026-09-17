@@ -3,13 +3,24 @@ package service
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+)
+
+// Comment notification policy: one mail per recipient and comment, capped per
+// recipient per day so a busy thread cannot flood an inbox.
+const (
+	commentNotifyDedupeWindow = 24 * time.Hour
+	commentNotifyDailyLimit   = 20
 )
 
 type CommentService interface {
@@ -23,15 +34,26 @@ type CommentService interface {
 }
 
 type MyCommentService struct {
-	repo    port.CommentRepository
-	website StellarBeaconInfoService
+	repo          port.CommentRepository
+	website       StellarBeaconInfoService
+	users         port.UserInfoRepository
+	articles      port.ArticleRepository
+	notifications port.CommentNotifier
+	limiter       port.RateLimiter
 }
 
 func NewCommentService(deps CommentServiceDeps) (*MyCommentService, error) {
 	if err := deps.validate(); err != nil {
 		return nil, err
 	}
-	return &MyCommentService{repo: deps.Repo, website: deps.Website}, nil
+	return &MyCommentService{
+		repo:          deps.Repo,
+		website:       deps.Website,
+		users:         deps.Users,
+		articles:      deps.Articles,
+		notifications: deps.Notifications,
+		limiter:       deps.Limiter,
+	}, nil
 }
 
 func (c *MyCommentService) commentRepository() port.CommentRepository {
@@ -141,10 +163,117 @@ func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 		Type:           commentVO.Type,
 		IsReview:       isReview,
 	}
-	if err := c.commentRepository().Create(ctx.Request.Context(), comment); err != nil {
+	commentID, err := c.commentRepository().Create(ctx.Request.Context(), comment)
+	if err != nil {
 		return model.ResultFromError(err)
 	}
+	comment.Id = commentID
+	c.notifyComment(ctx.Request.Context(), comment, dto)
 	return model.ResultOk()
+}
+
+// notifyComment queues the reply/article notification after a comment is
+// stored. Delivery is best effort: a mail problem must never fail the write,
+// and the queue owns retries.
+func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TComment, author model.UserDetailsDTO) {
+	if c.notifications == nil || c.users == nil || c.articles == nil || created.Id == 0 {
+		return
+	}
+	// Comments waiting for moderation must not leak their content by email
+	// before a moderator approves them.
+	if created.IsReview != 1 {
+		return
+	}
+	if !c.commentNoticeEnabled(ctx) {
+		return
+	}
+
+	recipientID := 0
+	replyTo := ""
+	switch {
+	case created.ParentId != 0:
+		parent, err := c.commentRepository().GetByID(ctx, created.ParentId)
+		if err != nil {
+			slog.WarnContext(ctx, "load parent comment for notification failed", "error", err)
+			return
+		}
+		recipientID = parent.UserId
+		replyTo = author.Nickname
+	case created.Type == 1 && created.TopicId != 0:
+		article, err := c.articles.GetArticleRecord(ctx, created.TopicId)
+		if err != nil {
+			slog.WarnContext(ctx, "load article for notification failed", "error", err)
+			return
+		}
+		recipientID = article.UserId
+	default:
+		// Message-board, about, friend-link and talk comments have no owner to
+		// notify in this iteration.
+		return
+	}
+	if recipientID <= 0 || recipientID == created.UserId {
+		return
+	}
+
+	recipient, err := c.users.GetByID(ctx, recipientID)
+	if err != nil {
+		slog.WarnContext(ctx, "load notification recipient failed", "error", err)
+		return
+	}
+	if recipient.Email == "" || recipient.IsDisable != 0 || recipient.NotifyComment == 0 {
+		return
+	}
+	if !c.notificationAllowed(ctx, recipientID, created.Id) {
+		return
+	}
+
+	notification := port.CommentNotification{
+		CommentID:   created.Id,
+		RecipientID: recipientID,
+		Recipient:   recipient.Email,
+		Nickname:    recipient.Nickname,
+		ReplyAuthor: replyTo,
+		CommentBody: created.CommentContent,
+	}
+	if created.Type == 1 && created.TopicId != 0 {
+		article, err := c.articles.GetArticleRecord(ctx, created.TopicId)
+		if err == nil && article.Id != 0 {
+			notification.ArticleID = article.Id
+			notification.ArticleTitle = article.ArticleTitle
+			notification.ArticleURL = config.PublicSiteURL + "/articles/" + strconv.Itoa(article.Id)
+		}
+	}
+	if err := c.notifications.EnqueueComment(notification); err != nil {
+		slog.WarnContext(ctx, "enqueue comment notification failed", "error", err)
+	}
+}
+
+func (c *MyCommentService) commentNoticeEnabled(ctx context.Context) bool {
+	result := c.websiteService().GetWebsiteConfig(ctx)
+	config, ok := result.Data.(model.WebsiteConfigDTO)
+	if !ok {
+		return false
+	}
+	return config.IsEmailNotice == 1
+}
+
+// notificationAllowed applies the per-comment dedupe and the per-recipient
+// daily cap. Rate-limit failures are treated as "do not send".
+func (c *MyCommentService) notificationAllowed(ctx context.Context, recipientID, commentID int) bool {
+	allowed, err := allowRateLimit(ctx, c.limiter, "comment-notify:", fmt.Sprintf("%d:%d", recipientID, commentID), 1, commentNotifyDedupeWindow)
+	if err != nil {
+		slog.WarnContext(ctx, "comment notification dedupe failed", "error", err)
+		return false
+	}
+	if !allowed {
+		return false
+	}
+	allowed, err = allowRateLimit(ctx, c.limiter, "comment-notify-daily:", strconv.Itoa(recipientID), commentNotifyDailyLimit, commentNotifyDedupeWindow)
+	if err != nil {
+		slog.WarnContext(ctx, "comment notification daily cap failed", "error", err)
+		return false
+	}
+	return allowed
 }
 
 func (c *MyCommentService) ListRepliesByCommentId(ctx *gin.Context) model.ResultVO {

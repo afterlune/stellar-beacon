@@ -15,7 +15,8 @@ type CommentRepository interface {
 	ListCommentCountByTypeAndTopicID(ctx context.Context, commentType, topicID int) (CommentCount, error)
 	ValidateTarget(ctx context.Context, commentType, topicID int) error
 	ValidateReply(ctx context.Context, commentType, parentID, replyUserID int) error
-	Create(ctx context.Context, comment entity.TComment) error
+	GetByID(ctx context.Context, commentID int) (entity.TComment, error)
+	Create(ctx context.Context, comment entity.TComment) (int, error)
 	Review(ctx context.Context, ids []int, review int) error
 	Delete(ctx context.Context, ids []int) error
 }

@@ -3,14 +3,34 @@ package middlewares
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/gin-gonic/gin"
 )
 
 // An aborted request must not be filed as an exception: the caller is gone, so
 // the failure is a consequence of the disconnect rather than a service fault.
+// Public routes must attach the logged-in reader, otherwise comment writes and
+// private-article access can never see an account.
+func TestAttachOptionalLoginUserIgnoresUnusableTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, header := range []string{"", "Bearer", "Bearer null", "Basic abc", "Bearer not-a-jwt"} {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/public/comments", nil)
+		if header != "" {
+			c.Request.Header.Set("Authorization", header)
+		}
+		attachOptionalLoginUser(c)
+		if _, ok := c.Get("userInfo"); ok {
+			t.Fatalf("header %q must not attach an account", header)
+		}
+	}
+}
+
 func TestShouldRecordExceptionSkipsCanceledRequests(t *testing.T) {
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()

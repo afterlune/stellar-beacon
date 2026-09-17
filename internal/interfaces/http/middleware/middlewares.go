@@ -521,8 +521,10 @@ func clearLoginFailures(ctx context.Context, username, ip string) error {
 
 func AuthorizationFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 后台接口、当前用户接口和登出接口需要认证；其余前台接口保持公开。
+		// 后台接口、当前用户接口和登出接口需要认证；其余前台接口保持公开，
+		// 但公开接口仍需要识别已登录读者（评论、私密文章访问等）。
 		if !requiresAuthentication(c.Request.URL.Path) {
+			attachOptionalLoginUser(c)
 			c.Next()
 			return
 		}
@@ -567,6 +569,37 @@ func AuthorizationFilter() gin.HandlerFunc {
 		c.Set("userInfo", userDetailsDTO)
 		c.Next()
 	}
+}
+
+// attachOptionalLoginUser sets userInfo for a public route when the request
+// carries a usable bearer token. Public routes must stay reachable with a
+// missing, stale or malformed token: those requests simply stay anonymous.
+func attachOptionalLoginUser(c *gin.Context) {
+	authorization := strings.TrimSpace(c.Request.Header.Get(shared.TOKEN_HEADER))
+	parts := strings.Fields(authorization)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "null" {
+		return
+	}
+	hm, err := shared.TokenParseCtx(c.Request.Context(), parts[1])
+	if err != nil || hm == nil {
+		return
+	}
+	userAuthID, ok := hm["sub"].(string)
+	if !ok || userAuthID == "" {
+		return
+	}
+	dto, err := shared.HGetCtx(c.Request.Context(), shared.LOGIN_USER, userAuthID)
+	if err != nil || dto == "" {
+		return
+	}
+	var userDetailsDTO model.UserDetailsDTO
+	if err := json.Unmarshal([]byte(dto), &userDetailsDTO); err != nil {
+		return
+	}
+	if userDetailsDTO.UserInfoId <= 0 {
+		return
+	}
+	c.Set("userInfo", userDetailsDTO)
 }
 
 func isAdminPath(path string) bool {

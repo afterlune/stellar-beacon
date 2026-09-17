@@ -35,6 +35,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
     const suffix = String(Date.now()).slice(-8)
     await traceStep('article', () => runArticleDraftCRUD(page, token, suffix))
     await traceStep('reactions', () => runArticleReactionRoundTrip(page, token, suffix))
+    await traceStep('comment-notify', () => runCommentNotificationRoundTrip(page, token, suffix))
     await traceStep('album', () => runAlbumCRUD(page, suffix))
     await traceStep('job', () => runJobCRUD(page, suffix))
     await traceStep('role', () => runRoleCRUD(page, suffix))
@@ -637,6 +638,127 @@ async function runArticleReactionRoundTrip(page: Page, token: string, suffix: st
   } finally {
     if (articleID > 0) await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', [articleID])
   }
+}
+
+/**
+ * Comment notifications need two accounts plus the integration mail sink, so
+ * the step is gated on the reader credentials and skips when they are absent.
+ */
+async function runCommentNotificationRoundTrip(page: Page, token: string, suffix: string): Promise<void> {
+  const readerEmail = process.env.E2E_USER_EMAIL || ''
+  const readerPassword = process.env.E2E_USER_PASSWORD || ''
+  const mailpitURL = process.env.E2E_MAILPIT_URL || 'http://127.0.0.1:18025'
+  if (!readerEmail || !readerPassword) {
+    console.log('[full-crud] skipped comment-notify: reader credentials are not configured')
+    return
+  }
+
+  const login = await page.request.post('/api/v1/auth/login', {
+    form: { username: readerEmail, password: readerPassword }
+  })
+  expect(login.status(), 'reader login').toBe(200)
+  const readerToken = String((await login.json() as { data?: { token?: string } }).data?.token || '')
+  expect(readerToken, 'reader token').not.toBe('')
+
+  const siteResponse = await page.request.get('/api/v1/admin/site', { headers: { Authorization: `Bearer ${token}` } })
+  const site = (await siteResponse.json() as { data?: Record<string, unknown> }).data || {}
+  const originalNotice = Number(site.isEmailNotice || 0)
+  const originalReview = Number(site.isCommentReview || 0)
+
+  const title = `e2e-notify-${suffix}`
+  let articleID = 0
+  let commentID = 0
+  try {
+    // Notifications require an immediately visible comment.
+    await page.request.put('/api/v1/admin/site', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { ...site, isEmailNotice: 1, isCommentReview: 0 }
+    })
+    const created = await page.request.post('/api/v1/admin/articles', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        articleTitle: title, articleContent: 'notification fixture', articleCover: '',
+        categoryName: '', tagNames: [], status: 1, type: 0, isTop: 0, isFeatured: 0,
+        password: '', originalUrl: ''
+      }
+    })
+    expect(created.status(), 'create notification fixture').toBe(200)
+    const searchResponse = await page.request.get(`/api/v1/admin/articles?current=1&size=5&keywords=${encodeURIComponent(title)}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    articleID = firstRecordID(await searchResponse.json())
+    expect(articleID, 'notification fixture id').toBeGreaterThan(0)
+
+    const mailBefore = await mailpitTotal(mailpitURL)
+    const commented = await page.request.post('/api/v1/public/comments', {
+      headers: { Authorization: `Bearer ${readerToken}` },
+      data: { topicId: String(articleID), commentContent: `notify ${suffix}`, type: 1 }
+    })
+    expect(commented.status(), 'reader comment').toBe(200)
+    const commentPayload = await commented.json() as { code?: string | number }
+    expect(commentPayload.code === 'OK', 'reader comment success').toBe(true)
+
+    const adminEmail = process.env.E2E_ADMIN_EMAIL || ''
+    const delivered = await waitForMailpitMessage(mailpitURL, adminEmail, '你的文章收到了新评论', mailBefore)
+    expect(delivered, `notification email for ${adminEmail}`).toBe(true)
+
+    const comments = await page.request.get(`/api/v1/admin/comments?current=1&size=10&type=1&keywords=${encodeURIComponent(`notify ${suffix}`)}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const commentItems = (await comments.json() as { data?: { items?: Array<{ id: number }>; records?: Array<{ id: number }> } }).data
+    commentID = Number((commentItems?.items || commentItems?.records || [])[0]?.id || 0)
+  } finally {
+    if (commentID > 0) {
+      await page.request.delete('/api/v1/admin/comments', {
+        headers: { Authorization: `Bearer ${token}` },
+        data: [commentID]
+      })
+    }
+    if (articleID > 0) await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', [articleID])
+    await page.request.put('/api/v1/admin/site', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { ...site, isEmailNotice: originalNotice, isCommentReview: originalReview }
+    })
+  }
+}
+
+// mailpitTotal reads the current message count of the integration mail sink.
+async function mailpitTotal(mailpitURL: string): Promise<number> {
+  try {
+    const response = await fetch(`${mailpitURL}/api/v1/messages?limit=1`)
+    if (!response.ok) return 0
+    const payload = await response.json() as { total?: number }
+    return Number(payload.total || 0)
+  } catch {
+    return 0
+  }
+}
+
+// waitForMailpitMessage polls the integration mail sink until a message for the
+// recipient arrives; the queue delivers asynchronously. The baseline count
+// keeps an older message with the same subject from satisfying the check.
+async function waitForMailpitMessage(mailpitURL: string, recipient: string, subject: string, baseline: number): Promise<boolean> {
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${mailpitURL}/api/v1/messages?limit=20`)
+      if (response.ok) {
+        const payload = await response.json() as {
+          total?: number
+          messages?: Array<{ To?: Array<{ Address: string }>; Subject?: string }>
+        }
+        const grew = Number(payload.total || 0) > baseline
+        const hit = (payload.messages || []).some((message) =>
+          (message.To || []).some((to) => to.Address === recipient) && String(message.Subject || '').includes(subject)
+        )
+        if (grew && hit) return true
+      }
+    } catch {
+      // the sink may not be reachable yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return false
 }
 
 async function deleteAdminIDs(request: APIRequestContext, token: string, path: string, ids: number[]): Promise<void> {

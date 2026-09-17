@@ -54,6 +54,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyArticleReactionSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyCommentNotificationSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -430,6 +433,37 @@ func applyArticleReactionSchema(ctx context.Context, engine *xorm.Engine) error 
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit article reaction migration: %w", err)
+	}
+	return nil
+}
+
+// applyCommentNotificationSchema adds the per-account opt-out used by comment
+// notification emails. The site-wide switch already lives in the website
+// configuration, so only the account preference needs a column.
+func applyCommentNotificationSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 7)").Get(&applied); err != nil {
+		return fmt.Errorf("check comment notification migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin comment notification migration: %w", err)
+	}
+	defer session.Rollback()
+	if _, err := session.Exec(`ALTER TABLE t_user_info ADD COLUMN IF NOT EXISTS notify_comment SMALLINT NOT NULL DEFAULT 1`); err != nil {
+		return fmt.Errorf("apply comment notification schema: %w", err)
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 7, "comment-notification"); err != nil {
+		return fmt.Errorf("record comment notification migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit comment notification migration: %w", err)
 	}
 	return nil
 }

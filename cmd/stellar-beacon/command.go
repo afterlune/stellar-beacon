@@ -7,6 +7,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/bootstrap"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/logging"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/notification"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/security/tls"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/shared"
@@ -87,6 +88,9 @@ func runServer() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := repository.StopLogQueue(shutdownCtx); err != nil {
 			slog.Error("stop log queue failed", "error", err)
+		}
+		if err := notification.StopCommentQueue(shutdownCtx); err != nil {
+			slog.Error("stop comment notification queue failed", "error", err)
 		}
 		cancel()
 	}()

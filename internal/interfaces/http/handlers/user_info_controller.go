@@ -41,6 +41,15 @@ func UpdateUserSubscribe(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.UpdateUserSubscribe(c))
 }
 
+// UpdateUserCommentNotice 修改当前账号的评论邮件通知开关
+// @Summary		 用户信息模块
+// @Description  开启或关闭评论邮件通知
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/auth/me/notifications [PUT]
+func UpdateUserCommentNotice(c *gin.Context) {
+	c.JSON(http.StatusOK, userInfoService.UpdateUserCommentNotice(c))
+}
+
 // UpdateUserRole
 // @Summary		 用户信息模块
 // @Description  修改用户角色

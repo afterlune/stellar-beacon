@@ -77,6 +77,8 @@ paths:
     put: { tags: [auth], summary: Bind current user email, operationId: bindCurrentEmail, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/subscription:
     put: { tags: [auth], summary: Update subscription, operationId: updateSubscription, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notifications:
+    put: { tags: [auth], summary: Set the comment email notification preference, operationId: updateCommentNotice, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/reactions:
     put: { tags: [auth], summary: Set the like or favourite state of an article, operationId: toggleArticleReaction, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     get: { tags: [auth], summary: List the current account reactions, operationId: listMyArticleReactions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }

@@ -7,6 +7,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/cache"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/mail/smtp"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/notification"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/search/meilisearch"
@@ -33,6 +34,7 @@ func Initialize() error {
 	searcher := search.NewMeiliSearcher(new(config.MeiliSearch).MeiliSearch())
 	smtpMailer := mailer.NewSMTPMailer(new(config.Email).Email())
 	visitorResolver := visitor.NewResolver()
+	notification.StartCommentQueue(context.Background(), notification.NewMailerSender(smtpMailer))
 
 	site := repository.NewSiteInfoRepo(engine)
 	article := repository.NewArticleRepo(engine)
@@ -96,8 +98,12 @@ func Initialize() error {
 		return errors.Unavailable("bootstrap.service.article", err)
 	}
 	commentService, err := service.NewCommentService(service.CommentServiceDeps{
-		Repo:    comment,
-		Website: stellarBeacon,
+		Repo:          comment,
+		Website:       stellarBeacon,
+		Users:         userInfo,
+		Articles:      article,
+		Notifications: notification.Notifier(),
+		Limiter:       redisCache,
 	})
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.comment", err)

@@ -367,19 +367,20 @@ func (u *MyUserAuthService) Authenticate(ctx context.Context, vo model.UserVO) (
 		return nil, nil
 	}
 	return &model.UserDetailsDTO{
-		Id:          user.Auth.Id,
-		UserInfoId:  user.Info.Id,
-		Email:       user.Info.Email,
-		LoginType:   user.Auth.LoginType,
-		Username:    user.Auth.Username,
-		Password:    user.Auth.Password,
-		Roles:       user.Roles,
-		Nickname:    user.Info.Nickname,
-		Avatar:      user.Info.Avatar,
-		Intro:       user.Info.Intro,
-		Website:     user.Info.Website,
-		IsSubscribe: user.Info.IsSubscribe,
-		IsDisable:   user.Info.IsDisable,
+		Id:            user.Auth.Id,
+		UserInfoId:    user.Info.Id,
+		Email:         user.Info.Email,
+		LoginType:     user.Auth.LoginType,
+		Username:      user.Auth.Username,
+		Password:      user.Auth.Password,
+		Roles:         user.Roles,
+		Nickname:      user.Info.Nickname,
+		Avatar:        user.Info.Avatar,
+		Intro:         user.Info.Intro,
+		Website:       user.Info.Website,
+		IsSubscribe:   user.Info.IsSubscribe,
+		NotifyComment: user.Info.NotifyComment,
+		IsDisable:     user.Info.IsDisable,
 	}, nil
 }
 

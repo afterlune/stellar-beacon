@@ -36,11 +36,15 @@ type UserInfoServiceDeps struct {
 	Storage port.ObjectStorage
 }
 
-// CommentServiceDeps contains the comment repository and site-information
-// collaborator.
+// CommentServiceDeps contains the comment repository, site-information
+// collaborator and the notification collaborators used after a comment lands.
 type CommentServiceDeps struct {
-	Repo    port.CommentRepository
-	Website StellarBeaconInfoService
+	Repo          port.CommentRepository
+	Website       StellarBeaconInfoService
+	Users         port.UserInfoRepository
+	Articles      port.ArticleRepository
+	Notifications port.CommentNotifier
+	Limiter       port.RateLimiter
 }
 
 // ArticleReactionServiceDeps contains the reader-interaction ports plus the
@@ -149,6 +153,15 @@ func (d CommentServiceDeps) validate() error {
 	}
 	if d.Website == nil {
 		return missingServiceDependency("comment", "website")
+	}
+	if d.Users == nil {
+		return missingServiceDependency("comment", "user info repository")
+	}
+	if d.Articles == nil {
+		return missingServiceDependency("comment", "article repository")
+	}
+	if d.Notifications == nil {
+		return missingServiceDependency("comment", "comment notifier")
 	}
 	return nil
 }

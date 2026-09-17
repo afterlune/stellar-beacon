@@ -439,6 +439,7 @@ type UserDetailsDTO struct {
 	IpAddress     string    `json:"ipAddress"`
 	IpSource      string    `json:"ipSource"`
 	IsSubscribe   int       `json:"isSubscribe"`
+	NotifyComment int       `json:"notifyComment"`
 	Browser       string    `json:"browser"`
 	Os            string    `json:"os"`
 	ExpireTime    time.Time `json:"expireTime"`
@@ -538,4 +539,10 @@ type ReactionStateDTO struct {
 	ArticleId int  `json:"articleId"`
 	Like      bool `json:"like"`
 	Favorite  bool `json:"favorite"`
+}
+
+// CommentNoticeVO toggles the comment notification preference of the
+// authenticated account.
+type CommentNoticeVO struct {
+	NotifyComment int `json:"notifyComment" form:"notifyComment"`
 }

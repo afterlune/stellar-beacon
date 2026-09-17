@@ -132,5 +132,8 @@ export default {
   },
   getArticleReactionStates: (articleIds: number[]) => {
     return http.get('/auth/me/reactions/state', { params: { articleIds: articleIds.join(',') } })
+  },
+  updateCommentNotice: (params: { notifyComment: number }) => {
+    return http.put('/auth/me/notifications', params)
   }
 }

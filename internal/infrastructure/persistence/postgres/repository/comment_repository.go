@@ -229,13 +229,35 @@ func (c *MyCommentRepo) ValidateReply(ctx context.Context, commentType, parentID
 	return nil
 }
 
-func (c *MyCommentRepo) Create(ctx context.Context, comment entity.TComment) error {
-	return ormInit.WithEngineTx(c.engine, ctx, func(session *xorm.Session) error {
+func (c *MyCommentRepo) GetByID(ctx context.Context, commentID int) (entity.TComment, error) {
+	session, err := c.commentSession(ctx)
+	if err != nil {
+		return entity.TComment{}, err
+	}
+	var comment entity.TComment
+	found, err := session.ID(commentID).Get(&comment)
+	if err != nil {
+		return entity.TComment{}, apperrors.Wrap(apperrors.KindUnavailable, "comment.get", err)
+	}
+	if !found {
+		return entity.TComment{}, apperrors.NotFound("comment.get")
+	}
+	return comment, nil
+}
+
+// Create inserts the comment and returns its generated id so callers can use it
+// without a follow-up query.
+func (c *MyCommentRepo) Create(ctx context.Context, comment entity.TComment) (int, error) {
+	err := ormInit.WithEngineTx(c.engine, ctx, func(session *xorm.Session) error {
 		if _, err := session.Insert(&comment); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "comment.create", err)
 		}
 		return nil
 	})
+	if err != nil {
+		return 0, err
+	}
+	return comment.Id, nil
 }
 
 func (c *MyCommentRepo) Review(ctx context.Context, ids []int, review int) error {

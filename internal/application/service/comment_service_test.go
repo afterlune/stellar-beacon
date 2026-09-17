@@ -38,9 +38,12 @@ func (f *fakeCommentRepository) ValidateTarget(context.Context, int, int) error 
 func (f *fakeCommentRepository) ValidateReply(context.Context, int, int, int) error {
 	return nil
 }
-func (f *fakeCommentRepository) Create(context.Context, entity.TComment) error { return nil }
-func (f *fakeCommentRepository) Review(context.Context, []int, int) error      { return nil }
-func (f *fakeCommentRepository) Delete(context.Context, []int) error           { return nil }
+func (f *fakeCommentRepository) Create(context.Context, entity.TComment) (int, error) { return 0, nil }
+func (f *fakeCommentRepository) GetByID(context.Context, int) (entity.TComment, error) {
+	return entity.TComment{}, nil
+}
+func (f *fakeCommentRepository) Review(context.Context, []int, int) error { return nil }
+func (f *fakeCommentRepository) Delete(context.Context, []int) error      { return nil }
 
 func TestCommentServiceAttachesRepliesUsingPortData(t *testing.T) {
 	gin.SetMode(gin.TestMode)

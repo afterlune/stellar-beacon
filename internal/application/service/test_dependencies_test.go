@@ -166,8 +166,11 @@ func mustArticleService(t *testing.T, repo port.ArticleRepository, searcher port
 func mustCommentService(t *testing.T, repo port.CommentRepository) *MyCommentService {
 	t.Helper()
 	service, err := NewCommentService(CommentServiceDeps{
-		Repo:    repo,
-		Website: fakeStellarBeaconInfoService{},
+		Repo:          repo,
+		Website:       fakeStellarBeaconInfoService{},
+		Users:         notificationUsers{},
+		Articles:      &fakeArticleRepository{},
+		Notifications: &fakeCommentNotifier{},
 	})
 	if err != nil {
 		t.Fatal(err)

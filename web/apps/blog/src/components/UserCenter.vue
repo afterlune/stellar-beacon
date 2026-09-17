@@ -47,6 +47,15 @@
               :active-value="1"
               :inactive-value="0" />
           </el-form-item>
+          <el-form-item label="评论邮件通知:">
+            <el-switch
+              v-model="userInfo.notifyComment"
+              :loading="loading"
+              @change="changeCommentNotice"
+              active-color="#0fb6d6"
+              :active-value="1"
+              :inactive-value="0" />
+          </el-form-item>
           <button
             @click="commit"
             type="button"
@@ -172,6 +181,19 @@ export default defineComponent({
         })
       }
     }
+    // The account-level comment notification preference is stored on its own
+    // endpoint; it does not require the email binding the subscription does.
+    const changeCommentNotice = () => {
+      api
+        .updateCommentNotice({ notifyComment: Number(userStore.userInfo.notifyComment) === 1 ? 1 : 0 })
+        .then(({ data }) => {
+          proxy.$notify({
+            title: data.flag ? '成功' : '错误',
+            message: data.flag ? '修改成功' : data.message,
+            type: data.flag ? 'success' : 'error'
+          })
+        })
+    }
     const commit = () => {
       let params = {
         nickname: userStore.userInfo.nickname,
@@ -238,6 +260,7 @@ export default defineComponent({
       bingingEmail,
       changeEmailDialogVisible,
       changeSubscribe,
+      changeCommentNotice,
       handleSuccess,
       sendCode,
       commit,
