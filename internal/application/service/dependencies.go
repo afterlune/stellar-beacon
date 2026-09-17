@@ -10,6 +10,7 @@ import (
 // the composition root.
 type ArticleServiceDeps struct {
 	Repo       port.ArticleRepository
+	Reactions  port.ArticleReactionRepository
 	Cache      port.Cache
 	Storage    port.ObjectStorage
 	Search     port.ArticleSearcher
@@ -40,6 +41,14 @@ type UserInfoServiceDeps struct {
 type CommentServiceDeps struct {
 	Repo    port.CommentRepository
 	Website StellarBeaconInfoService
+}
+
+// ArticleReactionServiceDeps contains the reader-interaction ports plus the
+// article repository used to validate targets and render favourites.
+type ArticleReactionServiceDeps struct {
+	Repo     port.ArticleReactionRepository
+	Articles port.ArticleRepository
+	Limiter  port.RateLimiter
 }
 
 // PhotoAlbumServiceDeps contains the album repository, photo repository and
@@ -93,6 +102,9 @@ func (d ArticleServiceDeps) validate() error {
 	if d.Search == nil {
 		return missingServiceDependency("article", "search")
 	}
+	if d.Reactions == nil {
+		return missingServiceDependency("article", "reaction repository")
+	}
 	return nil
 }
 
@@ -137,6 +149,16 @@ func (d CommentServiceDeps) validate() error {
 	}
 	if d.Website == nil {
 		return missingServiceDependency("comment", "website")
+	}
+	return nil
+}
+
+func (d ArticleReactionServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("article_reaction", "repository")
+	}
+	if d.Articles == nil {
+		return missingServiceDependency("article_reaction", "article repository")
 	}
 	return nil
 }

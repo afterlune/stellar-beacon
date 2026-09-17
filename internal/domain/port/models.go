@@ -21,6 +21,8 @@ type ArticleCard struct {
 	UpdateTime         time.Time        `json:"updateTime"`
 	Author             entity.TUserInfo `json:"author"`
 	Tags               any              `json:"tags"`
+	LikeCount          int              `json:"likeCount"`
+	FavoriteCount      int              `json:"favoriteCount"`
 }
 
 type Article struct {
@@ -44,21 +46,25 @@ type Article struct {
 	NextArticleCard    ArticleCard      `json:"nextArticleCard"`
 	RelatedArticles    []ArticleCard    `json:"relatedArticles"`
 	Tags               any              `json:"tags"`
+	LikeCount          int              `json:"likeCount"`
+	FavoriteCount      int              `json:"favoriteCount"`
 }
 
 type ArticleAdmin struct {
-	Id           int       `json:"id"`
-	ArticleCover string    `json:"articleCover"`
-	ArticleTitle string    `json:"articleTitle"`
-	IsTop        int       `json:"isTop"`
-	IsFeatured   int       `json:"isFeatured"`
-	IsDelete     int       `json:"isDelete"`
-	Status       int       `json:"status"`
-	Type         int       `json:"type"`
-	CreateTime   time.Time `json:"createTime"`
-	CategoryName string    `json:"categoryName"`
-	ViewsCount   int       `json:"viewsCount"`
-	TagDTOs      []Tag     `json:"tagDTOs"`
+	Id            int       `json:"id"`
+	ArticleCover  string    `json:"articleCover"`
+	ArticleTitle  string    `json:"articleTitle"`
+	IsTop         int       `json:"isTop"`
+	IsFeatured    int       `json:"isFeatured"`
+	IsDelete      int       `json:"isDelete"`
+	Status        int       `json:"status"`
+	Type          int       `json:"type"`
+	CreateTime    time.Time `json:"createTime"`
+	CategoryName  string    `json:"categoryName"`
+	ViewsCount    int       `json:"viewsCount"`
+	TagDTOs       []Tag     `json:"tagDTOs"`
+	LikeCount     int       `json:"likeCount"`
+	FavoriteCount int       `json:"favoriteCount"`
 }
 
 type ArticleAdminView struct {

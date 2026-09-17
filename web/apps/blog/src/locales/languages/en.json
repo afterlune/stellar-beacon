@@ -92,4 +92,21 @@
     "done": "Done",
     "failed": "This link is invalid or expired"
   }
+  ,
+  "reactions": {
+    "like": "Like",
+    "favorite": "Save",
+    "liked": "Liked",
+    "favorited": "Saved",
+    "saved": "Saved",
+    "removed": "Removed",
+    "failed": "Something went wrong. Please try again.",
+    "loginRequired": "Sign in to like and save articles",
+    "favorites": "My saves",
+    "favoritesEmpty": "You have not saved any article yet",
+    "favoritesTitle": "My saves",
+    "loading": "Loading…",
+    "previous": "Previous",
+    "next": "Next"
+  }
 }

@@ -474,3 +474,12 @@ export function normalizePage<T>(value: unknown): Page<T> {
     nextSince: typeof value.nextSince === 'string' ? value.nextSince : undefined
   }
 }
+
+/** Reader reactions: `like` and `favorite` are the only accepted kinds. */
+export type ReactionKind = 'like' | 'favorite'
+
+export interface ReactionToggleResult {
+  active: boolean
+  likeCount: number
+  favoriteCount: number
+}

@@ -35,6 +35,7 @@
         </span>
         <DropdownMenu>
           <template v-if="!isMobile">
+            <DropdownItem @click="openFavorites">{{ t('reactions.favorites') }}</DropdownItem>
             <DropdownItem @click="openUserCenter">{{ t('settings.personal-center') }}</DropdownItem>
           </template>
           <DropdownItem @click="logout">{{ t('settings.logout') }}</DropdownItem>
@@ -232,6 +233,9 @@ export default defineComponent({
     const openUserCenter = () => {
       userStore.userVisible = true
     }
+    const openFavorites = () => {
+      router.push({ path: '/favorites' })
+    }
     const openLoginDialog = () => {
       reactiveDate.loginDialogVisible = true
     }
@@ -359,6 +363,7 @@ export default defineComponent({
       logout,
       handleClick,
       openUserCenter,
+      openFavorites,
       openLoginDialog,
       openRegisterDialog,
       returnLoginDialog,

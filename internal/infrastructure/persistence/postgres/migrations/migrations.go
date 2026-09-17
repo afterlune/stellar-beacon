@@ -51,6 +51,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyArticleContentSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyArticleReactionSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -85,7 +88,8 @@ func applySchema(engine *xorm.Engine) error {
 	}
 	models := []any{
 		new(entity.TAbout), new(entity.TArticle), new(entity.TArticleTag),
-		new(entity.TCategory), new(entity.TComment), new(entity.TExceptionLog),
+		new(entity.TArticleReaction), new(entity.TCategory), new(entity.TComment),
+		new(entity.TExceptionLog),
 		new(entity.TFriendLink), new(entity.TJob), new(entity.TJobLog),
 		new(entity.TMenu), new(entity.TOperationLog), new(entity.TPhoto),
 		new(entity.TPhotoAlbum), new(entity.TResource), new(entity.TRole),
@@ -382,6 +386,50 @@ func applyArticleContentSchema(ctx context.Context, engine *xorm.Engine) error {
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit article content migration: %w", err)
+	}
+	return nil
+}
+
+// applyArticleReactionSchema adds the reader-interaction ledger. Reactions are
+// stored per account and article; the aggregate counts are derived on read so
+// the table stays the single source of truth.
+func applyArticleReactionSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 6)").Get(&applied); err != nil {
+		return fmt.Errorf("check article reaction migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin article reaction migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS t_article_reaction (
+			id SERIAL PRIMARY KEY,
+			article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			user_info_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			reaction VARCHAR(16) NOT NULL,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (article_id, user_info_id, reaction)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_article_reaction_article ON t_article_reaction(article_id, reaction)`,
+		`CREATE INDEX IF NOT EXISTS idx_article_reaction_user ON t_article_reaction(user_info_id, reaction, id DESC)`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply article reaction schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 6, "article-reactions"); err != nil {
+		return fmt.Errorf("record article reaction migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit article reaction migration: %w", err)
 	}
 	return nil
 }

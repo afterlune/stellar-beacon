@@ -57,6 +57,11 @@ const routes = [
     component: () => import('../views/Photos.vue')
   },
   {
+    path: '/favorites',
+    name: 'Favorites',
+    component: () => import('../views/Favorites.vue')
+  },
+  {
     path: '/subscribe/confirm',
     name: 'SubscriptionConfirm',
     component: () => import('../views/SubscriptionConfirm.vue'),

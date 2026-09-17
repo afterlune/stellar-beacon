@@ -12,12 +12,12 @@ type TAbout struct {
 }
 
 type TArticle struct {
-	Id                 int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
-	UserId             int       `xorm:"not null comment('作者') INTEGER" json:"userId"`
-	CategoryId         int       `xorm:"comment('文章分类') INTEGER" json:"categoryId"`
-	ArticleCover       string    `xorm:"comment('文章缩略图') VARCHAR(1024)" json:"articleCover"`
-	ArticleTitle       string    `xorm:"not null comment('标题') VARCHAR(50)" json:"articleTitle"`
-	ArticleContent     string    `xorm:"not null comment('内容') TEXT" json:"articleContent"`
+	Id             int    `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	UserId         int    `xorm:"not null comment('作者') INTEGER" json:"userId"`
+	CategoryId     int    `xorm:"comment('文章分类') INTEGER" json:"categoryId"`
+	ArticleCover   string `xorm:"comment('文章缩略图') VARCHAR(1024)" json:"articleCover"`
+	ArticleTitle   string `xorm:"not null comment('标题') VARCHAR(50)" json:"articleTitle"`
+	ArticleContent string `xorm:"not null comment('内容') TEXT" json:"articleContent"`
 	// The column must be spelled out: xorm's snake mapper turns the `HTML`
 	// suffix into `article_content_h_t_m_l`, which does not exist.
 	ArticleContentHTML string    `xorm:"article_content_html comment('富文本 HTML 内容') TEXT" json:"articleContentHtml,omitempty"`
@@ -296,4 +296,14 @@ type TGrowthEvent struct {
 	ArticleId int       `xorm:"index INTEGER" json:"articleId"`
 	Path      string    `xorm:"VARCHAR(255)" json:"path"`
 	CreatedAt time.Time `xorm:"created not null index DATETIME" json:"createdAt"`
+}
+
+// TArticleReaction records one reader reaction per article and account. The
+// unique constraint is what makes the toggle idempotent.
+type TArticleReaction struct {
+	Id         int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	ArticleId  int       `xorm:"article_id not null index INTEGER" json:"articleId"`
+	UserInfoId int       `xorm:"user_info_id not null index INTEGER" json:"userInfoId"`
+	Reaction   string    `xorm:"reaction not null VARCHAR(16)" json:"reaction"`
+	CreateTime time.Time `xorm:"create_time created not null DATETIME" json:"createTime"`
 }

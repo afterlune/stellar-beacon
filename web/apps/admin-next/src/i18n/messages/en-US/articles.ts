@@ -27,6 +27,8 @@ export default {
   'articles.list.columnCover': 'Cover',
   'articles.list.columnFlags': 'Flags',
   'articles.list.columnViews': 'Views',
+  'articles.list.columnLikes': 'Likes',
+  'articles.list.columnFavorites': 'Saves',
   'articles.list.columnCreatedAt': 'Created',
   'articles.list.untitled': 'Untitled article',
   'articles.list.articleFallback': 'Article',

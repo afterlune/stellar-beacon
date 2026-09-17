@@ -8,6 +8,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
+	"strings"
 
 	"xorm.io/xorm"
 )
@@ -103,6 +104,30 @@ func (a *MyArticleRepo) GetArticlesByCategoryID(ctx context.Context, current, si
 		}
 	}
 	return articles, count, nil
+}
+
+// ListArticleCardsByIDs loads public article cards for an explicit id set. The
+// reader-interaction feature uses it to render an account's favourites.
+func (a *MyArticleRepo) ListArticleCardsByIDs(ctx context.Context, articleIDs []int) ([]*port.ArticleCard, error) {
+	if len(articleIDs) == 0 {
+		return []*port.ArticleCard{}, nil
+	}
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	statement := strings.Replace(pgsql.ListArticlesByIds, "%s", placeholders(len(articleIDs)), 1)
+	var articles []*port.ArticleCard
+	if err := session.SQL(statement, intArgs(articleIDs)...).Find(&articles); err != nil {
+		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_ids", err)
+	}
+	for _, article := range articles {
+		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return articles, nil
 }
 
 func (a *MyArticleRepo) GetArticleByID(ctx context.Context, articleID int) (port.Article, error) {

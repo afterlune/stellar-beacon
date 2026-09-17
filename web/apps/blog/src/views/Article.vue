@@ -110,6 +110,32 @@
           <button type="button" @click="copyArticleLink">{{ t('newsletter.copy') }}</button>
           <span v-if="shareMessage" class="article-actions__message">{{ shareMessage }}</span>
         </div>
+        <div class="article-reactions" v-if="article.articleTitle">
+          <button
+            type="button"
+            class="article-reaction"
+            :class="{ 'article-reaction--active': reactions.like }"
+            :aria-pressed="reactions.like"
+            :disabled="reactionPending"
+            data-testid="article-like"
+            @click="toggleReaction('like')">
+            <span>{{ reactions.like ? t('reactions.liked') : t('reactions.like') }}</span>
+            <span class="article-reaction__count">{{ reactions.likeCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="article-reaction"
+            :class="{ 'article-reaction--active': reactions.favorite }"
+            :aria-pressed="reactions.favorite"
+            :disabled="reactionPending"
+            data-testid="article-favorite"
+            @click="toggleReaction('favorite')">
+            <span>{{ reactions.favorite ? t('reactions.favorited') : t('reactions.favorite') }}</span>
+            <span class="article-reaction__count">{{ reactions.favoriteCount }}</span>
+          </button>
+          <router-link v-if="userToken" class="article-reaction__link" to="/favorites">{{ t('reactions.favorites') }}</router-link>
+          <span v-if="reactionMessage" class="article-actions__message">{{ reactionMessage }}</span>
+        </div>
         <section v-if="article.relatedArticles && article.relatedArticles.length" class="related-articles" :aria-labelledby="'related-title-' + articleId">
           <h2 :id="'related-title-' + articleId">{{ t('newsletter.related') }}</h2>
           <div class="related-articles__grid">
@@ -174,6 +200,7 @@ import { ArticleCard } from '@/components/ArticleCard'
 import '@/styles/prism-aurora-future.css'
 import { useCommonStore } from '@/stores/common'
 import { useCommentStore } from '@/stores/comment'
+import { useUserStore } from '@/stores/user'
 import Sticky from '@/components/Sticky.vue'
 import Prism from '@/utils/prism'
 import MarkdownIt from 'markdown-it'
@@ -214,6 +241,16 @@ export default defineComponent({
       isReload: false as any
     })
     const shareMessage = ref('')
+    const userStore = useUserStore()
+    const reactionPending = ref(false)
+    const reactionMessage = ref('')
+    const reactions = reactive({
+      like: false,
+      favorite: false,
+      likeCount: 0,
+      favoriteCount: 0
+    })
+    const userToken = computed(() => Boolean(userStore.token))
     const navigatorShareAvailable = computed(() => typeof navigator !== 'undefined' && typeof navigator.share === 'function')
     const pageInfo = reactive({
       current: 1,
@@ -240,6 +277,9 @@ export default defineComponent({
       reactiveData.preArticleCard = ''
       reactiveData.nextArticleCard = ''
       shareMessage.value = ''
+      reactionMessage.value = ''
+      reactions.like = false
+      reactions.favorite = false
       reactiveData.articleId = to.params.articleId
       pageInfo.current = 1
       reactiveData.isReload = true
@@ -319,6 +359,8 @@ export default defineComponent({
           resolve(data.data)
         }).then((article: any) => {
           reactiveData.article = article
+          syncReactionTotals(article)
+          fetchReactionStates()
           setSeo({
             title: `${article.articleTitle} · Stellar Beacon`,
             description: deleteHTMLTag(article.articleContent).slice(0, 180),
@@ -435,6 +477,61 @@ export default defineComponent({
         .replace(/[|]*\n/, '')
         .replace(/&npsp;/gi, '')
     }
+    // The article payload carries shared totals; the per-account state comes
+    // from the authenticated endpoint so the shared article cache stays valid.
+    const syncReactionTotals = (article: any) => {
+      reactions.likeCount = Number(article?.likeCount || 0)
+      reactions.favoriteCount = Number(article?.favoriteCount || 0)
+    }
+    const fetchReactionStates = () => {
+      reactions.like = false
+      reactions.favorite = false
+      if (!userStore.token || !reactiveData.articleId) return
+      const articleId = Number(reactiveData.articleId)
+      if (!Number.isFinite(articleId) || articleId <= 0) return
+      api
+        .getArticleReactionStates([articleId])
+        .then(({ data }: any) => {
+          const entry = (data?.data || [])[0]
+          if (!entry) return
+          reactions.like = Boolean(entry.like)
+          reactions.favorite = Boolean(entry.favorite)
+        })
+        .catch(() => {
+          reactions.like = false
+          reactions.favorite = false
+        })
+    }
+    const toggleReaction = (kind: 'like' | 'favorite') => {
+      if (!userStore.token) {
+        userStore.userVisible = true
+        reactionMessage.value = t('reactions.loginRequired')
+        return
+      }
+      const articleId = Number(reactiveData.articleId)
+      if (!Number.isFinite(articleId) || articleId <= 0 || reactionPending.value) return
+      reactionPending.value = true
+      reactionMessage.value = ''
+      api
+        .toggleArticleReaction({ articleId, reaction: kind, active: !reactions[kind] })
+        .then(({ data }: any) => {
+          if (data?.code && data.code !== 'OK') {
+            reactionMessage.value = t('reactions.failed')
+            return
+          }
+          const payload = data?.data || {}
+          reactions[kind] = Boolean(payload.active)
+          reactions.likeCount = Number(payload.likeCount || 0)
+          reactions.favoriteCount = Number(payload.favoriteCount || 0)
+          reactionMessage.value = payload.active ? t('reactions.saved') : t('reactions.removed')
+        })
+        .catch(() => {
+          reactionMessage.value = t('reactions.failed')
+        })
+        .finally(() => {
+          reactionPending.value = false
+        })
+    }
     return {
       articleRef,
       ...toRefs(reactiveData),
@@ -447,7 +544,12 @@ export default defineComponent({
       shareMessage,
       navigatorShareAvailable,
       copyArticleLink,
-      shareArticle
+      shareArticle,
+      reactions,
+      reactionPending,
+      reactionMessage,
+      userToken,
+      toggleReaction
     }
   }
 })
@@ -560,6 +662,30 @@ export default defineComponent({
 .article-actions button { padding: .5rem .85rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 28%, transparent); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
 .article-actions button:hover { border-color: var(--color-ob); color: var(--color-ob); }
 .article-actions__message { color: var(--color-ob); font-size: .82rem; }
+.article-reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin: -1rem 0 2rem;
+}
+.article-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .45rem .9rem;
+  border: 1px solid color-mix(in srgb, var(--text-ob-dim) 28%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color .2s ease, color .2s ease;
+}
+.article-reaction:hover:not(:disabled) { border-color: var(--color-ob); color: var(--color-ob); }
+.article-reaction:disabled { opacity: .6; cursor: progress; }
+.article-reaction--active { border-color: var(--color-ob); color: var(--color-ob); }
+.article-reaction__count { font-variant-numeric: tabular-nums; opacity: .7; }
+.article-reaction__link { font-size: .82rem; opacity: .7; text-decoration: underline; }
 .related-articles { margin: 2.5rem 0; }
 .related-articles h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.45rem; }
 .related-articles__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }

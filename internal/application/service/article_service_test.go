@@ -40,6 +40,9 @@ func (f *fakeArticleRepository) ListArticles(context.Context, int, int) ([]*port
 func (f *fakeArticleRepository) GetArticlesByCategoryID(context.Context, int, int, int) ([]*port.ArticleCard, int, error) {
 	return nil, 0, nil
 }
+func (f *fakeArticleRepository) ListArticleCardsByIDs(context.Context, []int) ([]*port.ArticleCard, error) {
+	return nil, nil
+}
 func (f *fakeArticleRepository) GetArticleByID(context.Context, int) (port.Article, error) {
 	return port.Article{}, nil
 }

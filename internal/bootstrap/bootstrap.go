@@ -36,6 +36,7 @@ func Initialize() error {
 
 	site := repository.NewSiteInfoRepo(engine)
 	article := repository.NewArticleRepo(engine)
+	articleReaction := repository.NewArticleReactionRepo(engine)
 	category := repository.NewCategoryRepo(engine)
 	comment := repository.NewCommentRepo(engine)
 	job := repository.NewJobRepository(engine)
@@ -85,6 +86,7 @@ func Initialize() error {
 	}
 	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
 		Repo:       article,
+		Reactions:  articleReaction,
 		Cache:      redisCache,
 		Storage:    ossStorage,
 		Search:     searcher,
@@ -99,6 +101,14 @@ func Initialize() error {
 	})
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.comment", err)
+	}
+	articleReactionService, err := service.NewArticleReactionService(service.ArticleReactionServiceDeps{
+		Repo:     articleReaction,
+		Articles: article,
+		Limiter:  redisCache,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.article_reaction", err)
 	}
 	photoAlbumService, err := service.NewPhotoAlbumService(service.PhotoAlbumServiceDeps{
 		Repo:    photoAlbum,
@@ -145,28 +155,29 @@ func Initialize() error {
 	mediaService := service.NewMediaService(ossStorage)
 
 	api.ConfigureServices(api.Services{
-		Article:       articleService,
-		StellarBeacon: stellarBeacon,
-		Category:      service.NewCategoryService(category),
-		Comment:       commentService,
-		ErrorLog:      service.NewErrorLogService(errorLog),
-		FriendLink:    service.NewFriendLinkService(friendLink),
-		JobLog:        service.NewJobLogService(jobLog),
-		Job:           service.NewJobService(job),
-		Menu:          service.NewMenuService(menu),
-		Media:         mediaService,
-		OperationLog:  service.NewOperationLogService(operationLog),
-		PhotoAlbum:    photoAlbumService,
-		Photo:         photoService,
-		Resource:      service.NewResourceService(resource),
-		Role:          service.NewRoleService(role),
-		Tag:           service.NewTagService(tag),
-		Talk:          talkService,
-		UserAuth:      userAuthService,
-		UserInfo:      userInfoService,
-		Seo:           seoService,
-		Newsletter:    newsletterService,
-		Growth:        growthService,
+		Article:         articleService,
+		ArticleReaction: articleReactionService,
+		StellarBeacon:   stellarBeacon,
+		Category:        service.NewCategoryService(category),
+		Comment:         commentService,
+		ErrorLog:        service.NewErrorLogService(errorLog),
+		FriendLink:      service.NewFriendLinkService(friendLink),
+		JobLog:          service.NewJobLogService(jobLog),
+		Job:             service.NewJobService(job),
+		Menu:            service.NewMenuService(menu),
+		Media:           mediaService,
+		OperationLog:    service.NewOperationLogService(operationLog),
+		PhotoAlbum:      photoAlbumService,
+		Photo:           photoService,
+		Resource:        service.NewResourceService(resource),
+		Role:            service.NewRoleService(role),
+		Tag:             service.NewTagService(tag),
+		Talk:            talkService,
+		UserAuth:        userAuthService,
+		UserInfo:        userInfoService,
+		Seo:             seoService,
+		Newsletter:      newsletterService,
+		Growth:          growthService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

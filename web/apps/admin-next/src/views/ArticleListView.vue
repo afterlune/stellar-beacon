@@ -124,6 +124,12 @@
           <template #views="{ record }">
             <span class="admin-num-cell">{{ formatNumber(record.viewsCount) }}</span>
           </template>
+          <template #likes="{ record }">
+            <span class="admin-num-cell" data-testid="article-like-count">{{ formatNumber(record.likeCount) }}</span>
+          </template>
+          <template #favorites="{ record }">
+            <span class="admin-num-cell" data-testid="article-favorite-count">{{ formatNumber(record.favoriteCount) }}</span>
+          </template>
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
@@ -248,6 +254,8 @@ const columns = computed<TableColumn[]>(() => [
   { title: t('common.type'), dataIndex: 'type', slotName: 'type', width: 62 },
   { title: t('articles.list.columnFlags'), dataIndex: 'flags', slotName: 'flags', width: 128 },
   { title: t('articles.list.columnViews'), dataIndex: 'viewsCount', slotName: 'views', width: 74 },
+  { title: t('articles.list.columnLikes'), dataIndex: 'likeCount', slotName: 'likes', width: 74 },
+  { title: t('articles.list.columnFavorites'), dataIndex: 'favoriteCount', slotName: 'favorites', width: 78 },
   { title: t('articles.list.columnCreatedAt'), dataIndex: 'createTime', slotName: 'time', width: 164 },
   { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 148 }
 ])

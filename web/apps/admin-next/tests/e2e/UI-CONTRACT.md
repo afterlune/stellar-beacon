@@ -1036,6 +1036,19 @@ future change to them must respect.
   `imports and exports articles, moves photos, and keeps filters in the URL`), so a run reports
   `6 passed / 5 skipped`. It is still 5 skipped: the `@integration` suites remain env-gated and are not run by CI.
 
+### Reader-interaction counters (article list)
+
+The article list gained two numeric columns backed by the reaction ledger
+(`integration-full-crud.spec.ts`, step `reactions`):
+
+- `[data-testid="article-like-count"]` — text of the like total for that row.
+- `[data-testid="article-favorite-count"]` — text of the favourite total for that row.
+
+Both live inside the row's own cells, so `row.getByTestId(...)` stays scoped to
+one article. The counters are plain text (formatted through `formatNumber`), not
+inputs, and the columns are registered in `ArticleListView.vue`'s column list —
+removing them or moving the testids to a shared wrapper breaks the gated suite.
+
 ### Local verification commands
 
 ```bash

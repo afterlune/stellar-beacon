@@ -123,5 +123,14 @@ export default {
   },
   trackGrowthEvent: (params: { eventName: string; articleId?: number; path?: string }) => {
     return http.post('/public/growth/events', params)
+  },
+  toggleArticleReaction: (params: { articleId: number; reaction: string; active: boolean }) => {
+    return http.put('/auth/me/reactions', params)
+  },
+  getMyArticleReactions: (params: { reaction: string; current: number; size: number }) => {
+    return http.get('/auth/me/reactions', { params })
+  },
+  getArticleReactionStates: (articleIds: number[]) => {
+    return http.get('/auth/me/reactions/state', { params: { articleIds: articleIds.join(',') } })
   }
 }

@@ -34,6 +34,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
 
     const suffix = String(Date.now()).slice(-8)
     await traceStep('article', () => runArticleDraftCRUD(page, token, suffix))
+    await traceStep('reactions', () => runArticleReactionRoundTrip(page, token, suffix))
     await traceStep('album', () => runAlbumCRUD(page, suffix))
     await traceStep('job', () => runJobCRUD(page, suffix))
     await traceStep('role', () => runRoleCRUD(page, suffix))
@@ -536,6 +537,106 @@ function firstRecordID(payload: unknown): number {
     : (data as { records?: unknown }).records
   if (!Array.isArray(records) || !records[0] || typeof records[0] !== 'object') return 0
   return Number((records[0] as { id?: unknown }).id || 0)
+}
+
+/**
+ * Reader reactions are account-scoped, so this step drives the API directly and
+ * only touches the admin UI to prove the new counters render in the list.
+ */
+async function reactionFor(page: Page, token: string, articleID: number, kind: string, active: boolean): Promise<{ active?: boolean; likeCount?: number; favoriteCount?: number }> {
+  const response = await page.request.put('/api/v1/auth/me/reactions', {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { articleId: articleID, reaction: kind, active }
+  })
+  expect(response.status(), `${kind} reaction`).toBe(200)
+  const payload = await response.json() as { code?: string | number; data?: { active?: boolean; likeCount?: number; favoriteCount?: number } }
+  expect(payload.code === 'OK', `${kind} reaction success`).toBe(true)
+  return payload.data || {}
+}
+
+async function favouriteIDs(page: Page, token: string): Promise<number[]> {
+  const response = await page.request.get('/api/v1/auth/me/reactions?reaction=favorite&current=1&size=50', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  expect(response.status(), 'favourites list').toBe(200)
+  const payload = await response.json() as { code?: string | number; data?: { items?: Array<{ id: number }>; records?: Array<{ id: number }> } }
+  expect(payload.code === 'OK', 'favourites list success').toBe(true)
+  const items = payload.data?.items || payload.data?.records || []
+  return items.map((item) => Number(item.id))
+}
+
+async function runArticleReactionRoundTrip(page: Page, token: string, suffix: string): Promise<void> {
+  const title = `e2e-reaction-${suffix}`
+  let articleID = 0
+  try {
+    const created = await page.request.post('/api/v1/admin/articles', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        articleTitle: title, articleContent: 'reaction fixture', articleCover: '',
+        categoryName: '', tagNames: [], status: 0, type: 0, isTop: 0, isFeatured: 0,
+        password: '', originalUrl: ''
+      }
+    })
+    expect(created.status(), 'create reaction fixture').toBe(200)
+
+    const searchResponse = await page.request.get(`/api/v1/admin/articles?current=1&size=10&keywords=${encodeURIComponent(title)}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    articleID = firstRecordID(await searchResponse.json())
+    expect(articleID, 'reaction fixture id').toBeGreaterThan(0)
+
+    const reaction = (kind: string, active: boolean) => reactionFor(page, token, articleID, kind, active)
+
+    const liked = await reaction('like', true)
+    expect(liked.active, 'like is active').toBe(true)
+    expect(liked.likeCount, 'like count after first write').toBe(1)
+
+    // The endpoint is state-based, so repeating the same request must not add a
+    // second ledger row.
+    const likedAgain = await reaction('like', true)
+    expect(likedAgain.likeCount, 'like count stays stable').toBe(1)
+
+    const favorited = await reaction('favorite', true)
+    expect(favorited.favoriteCount, 'favorite count after first write').toBe(1)
+
+    const states = await page.request.get(`/api/v1/auth/me/reactions/state?articleIds=${articleID}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const statePayload = await states.json() as { data?: Array<{ articleId: number; like: boolean; favorite: boolean }> }
+    const entry = (statePayload.data || [])[0]
+    expect(entry?.like, 'state reports like').toBe(true)
+    expect(entry?.favorite, 'state reports favorite').toBe(true)
+
+    // The favourites page renders public cards, so a draft stays out of the
+    // list while its reaction is still recorded for the account.
+    const draftFavourites = await favouriteIDs(page, token)
+    expect(draftFavourites.includes(articleID), 'draft articles stay out of favourites').toBe(false)
+
+    // A published article must show up, and the admin list counter must match.
+    const publishedResponse = await page.request.get('/api/v1/public/articles?current=1&size=1')
+    const publishedPayload = await publishedResponse.json() as { data?: { items?: Array<{ id: number; articleTitle: string }>; records?: Array<{ id: number; articleTitle: string }> } }
+    const published = (publishedPayload.data?.items || publishedPayload.data?.records || [])[0]
+    expect(published?.id, 'published fixture available').toBeGreaterThan(0)
+    const publishedID = Number(published?.id)
+    await reactionFor(page, token, publishedID, 'favorite', true)
+    const publishedFavourites = await favouriteIDs(page, token)
+    expect(publishedFavourites.includes(publishedID), 'published favourites contain the article').toBe(true)
+
+    await page.goto('/article-list', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('.arco-table')).toBeVisible()
+    const row = rowWithText(page, title)
+    await expect(row).toBeVisible()
+    await expect(row.getByTestId('article-like-count')).toHaveText('1')
+    await expect(row.getByTestId('article-favorite-count')).toHaveText('1')
+
+    const unliked = await reaction('like', false)
+    expect(unliked.likeCount, 'like count after removal').toBe(0)
+    const unfavorited = await reaction('favorite', false)
+    expect(unfavorited.favoriteCount, 'favorite count after removal').toBe(0)
+    await reactionFor(page, token, publishedID, 'favorite', false)
+  } finally {
+    if (articleID > 0) await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', [articleID])
+  }
 }
 
 async function deleteAdminIDs(request: APIRequestContext, token: string, path: string, ids: number[]): Promise<void> {

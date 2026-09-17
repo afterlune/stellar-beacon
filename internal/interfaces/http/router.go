@@ -65,6 +65,9 @@ func RouterSetup(router *gin.Engine) {
 	auth.POST("/me/avatar", api.UpdateUserAvatar)
 	auth.PUT("/me/email", api.SaveUserEmail)
 	auth.PUT("/me/subscription", api.UpdateUserSubscribe)
+	auth.PUT("/me/reactions", api.ToggleArticleReaction)
+	auth.GET("/me/reactions", api.ListMyArticleReactions)
+	auth.GET("/me/reactions/state", api.ListArticleReactionStates)
 
 	admin.GET("/dashboard", api.GetBlogBackInfo)
 	admin.GET("/dashboard/analytics", api.GetDashboardAnalytics)

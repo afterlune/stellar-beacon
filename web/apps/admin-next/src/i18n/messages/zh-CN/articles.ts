@@ -27,6 +27,8 @@ export default {
   'articles.list.columnCover': '封面',
   'articles.list.columnFlags': '标记',
   'articles.list.columnViews': '浏览量',
+  'articles.list.columnLikes': '点赞',
+  'articles.list.columnFavorites': '收藏',
   'articles.list.columnCreatedAt': '创建时间',
   'articles.list.untitled': '未命名文章',
   'articles.list.articleFallback': '文章',

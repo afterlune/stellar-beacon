@@ -43,6 +43,7 @@ type ArticleService interface {
 
 type MyArticleService struct {
 	repo       port.ArticleRepository
+	reactions  port.ArticleReactionRepository
 	cache      port.Cache
 	storage    port.ObjectStorage
 	search     port.ArticleSearcher
@@ -55,6 +56,7 @@ func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
 	}
 	return &MyArticleService{
 		repo:       deps.Repo,
+		reactions:  deps.Reactions,
 		cache:      deps.Cache,
 		storage:    deps.Storage,
 		search:     deps.Search,
@@ -66,6 +68,73 @@ func (a *MyArticleService) articleRepository() port.ArticleRepository {
 	return a.repo
 }
 
+// attachCardReactionCounts decorates article cards with like/favourite totals.
+// Counts are presentational: a ledger failure is logged and leaves the zero
+// value instead of failing the whole read.
+func (a *MyArticleService) attachCardReactionCounts(ctx context.Context, cards []*port.ArticleCard) {
+	if a.reactions == nil || len(cards) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(cards))
+	for _, card := range cards {
+		if card != nil && card.Id > 0 {
+			ids = append(ids, card.Id)
+		}
+	}
+	counts, err := a.reactions.Counts(ctx, ids)
+	if err != nil {
+		slog.WarnContext(ctx, "load article reaction counts failed", "error", err)
+		return
+	}
+	for _, card := range cards {
+		if card == nil {
+			continue
+		}
+		totals := counts[card.Id]
+		card.LikeCount = totals.LikeCount
+		card.FavoriteCount = totals.FavoriteCount
+	}
+}
+
+func (a *MyArticleService) attachArticleReactionCounts(ctx context.Context, article *port.Article) {
+	if a.reactions == nil || article == nil || article.Id <= 0 {
+		return
+	}
+	counts, err := a.reactions.Counts(ctx, []int{article.Id})
+	if err != nil {
+		slog.WarnContext(ctx, "load article reaction counts failed", "error", err)
+		return
+	}
+	totals := counts[article.Id]
+	article.LikeCount = totals.LikeCount
+	article.FavoriteCount = totals.FavoriteCount
+}
+
+func (a *MyArticleService) attachAdminReactionCounts(ctx context.Context, rows []*port.ArticleAdmin) {
+	if a.reactions == nil || len(rows) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(rows))
+	for _, row := range rows {
+		if row != nil && row.Id > 0 {
+			ids = append(ids, row.Id)
+		}
+	}
+	counts, err := a.reactions.Counts(ctx, ids)
+	if err != nil {
+		slog.WarnContext(ctx, "load article reaction counts failed", "error", err)
+		return
+	}
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		totals := counts[row.Id]
+		row.LikeCount = totals.LikeCount
+		row.FavoriteCount = totals.FavoriteCount
+	}
+}
+
 func (a *MyArticleService) ListTopAndFeaturedArticles(c *gin.Context) model.ResultVO {
 	ctx := context.Background()
 	if c != nil && c.Request != nil {
@@ -75,6 +144,7 @@ func (a *MyArticleService) ListTopAndFeaturedArticles(c *gin.Context) model.Resu
 	if err != nil {
 		return model.ResultFromError(err)
 	}
+	a.attachCardReactionCounts(ctx, data)
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.TopAndFeaturedArticlesDTO{})
 	} else if len(data) > 3 {
@@ -98,6 +168,7 @@ func (a *MyArticleService) ListArticles(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
+	a.attachCardReactionCounts(c.Request.Context(), data)
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -123,6 +194,7 @@ func (a *MyArticleService) ListArticlesByCategoryId(c *gin.Context) model.Result
 	if err != nil {
 		return model.ResultFromError(err)
 	}
+	a.attachCardReactionCounts(c.Request.Context(), data)
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -143,6 +215,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 		var dto model.ArticleDTO
 		if err := Unmarsh(get, &dto); err == nil {
 			sanitizePublicArticle(&dto)
+			a.attachArticleReactionCounts(c.Request.Context(), &dto)
 			if a.cache != nil {
 				if _, err := a.cache.Expire(c.Request.Context(), articleId, time.Hour*1); err != nil {
 					slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
@@ -244,6 +317,11 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	}
 	data.PreArticleCard = preData
 	data.NextArticleCard = nextData
+	relatedPointers := make([]*port.ArticleCard, 0, len(data.RelatedArticles))
+	for index := range data.RelatedArticles {
+		relatedPointers = append(relatedPointers, &data.RelatedArticles[index])
+	}
+	a.attachCardReactionCounts(c.Request.Context(), relatedPointers)
 	sanitizePublicArticle(&data)
 	marshal, err := json.Marshal(data)
 	if err != nil {
@@ -255,6 +333,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 			slog.WarnContext(c.Request.Context(), "write article cache failed", "error", err)
 		}
 	}
+	a.attachArticleReactionCounts(c.Request.Context(), &data)
 	return model.ResultOkWithData(data)
 }
 
@@ -286,6 +365,7 @@ func (a *MyArticleService) ListArticlesByTagId(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
+	a.attachCardReactionCounts(c.Request.Context(), data)
 	if len(data) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}
@@ -346,6 +426,11 @@ func (a *MyArticleService) ListArchives(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
+	archivePointers := make([]*port.ArticleCard, 0, len(articles))
+	for index := range articles {
+		archivePointers = append(archivePointers, &articles[index])
+	}
+	a.attachCardReactionCounts(c.Request.Context(), archivePointers)
 	type archiveGroup struct {
 		date time.Time
 		dto  model.ArchiveDTO
@@ -419,6 +504,7 @@ func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 			v.ViewsCount = int(viewsCount)
 		}
 	}
+	a.attachAdminReactionCounts(c.Request.Context(), articleAdminDTOs)
 	if len(articleAdminDTOs) == 0 {
 		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
 	}

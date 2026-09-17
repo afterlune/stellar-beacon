@@ -79,6 +79,41 @@ func (fakeServiceVisitor) Resolve(context.Context, *http.Request) (port.VisitorI
 	return port.VisitorIdentity{}, nil
 }
 
+// fakeArticleReactionRepository keeps the article service constructible in
+// tests; reaction behaviour itself is covered by the reaction service tests.
+type fakeArticleReactionRepository struct {
+	counts map[int]port.ReactionCounts
+	states map[int]map[string]bool
+}
+
+func (f *fakeArticleReactionRepository) Toggle(context.Context, int, int, string) (bool, error) {
+	return false, nil
+}
+
+func (f *fakeArticleReactionRepository) Counts(_ context.Context, articleIDs []int) (map[int]port.ReactionCounts, error) {
+	result := make(map[int]port.ReactionCounts, len(articleIDs))
+	for _, id := range articleIDs {
+		if f != nil && f.counts != nil {
+			result[id] = f.counts[id]
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeArticleReactionRepository) States(_ context.Context, _ int, articleIDs []int) (map[int]map[string]bool, error) {
+	result := make(map[int]map[string]bool, len(articleIDs))
+	for _, id := range articleIDs {
+		if f != nil && f.states != nil && f.states[id] != nil {
+			result[id] = f.states[id]
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeArticleReactionRepository) ListArticleIDsByUser(context.Context, int, string, int, int) ([]int, int64, error) {
+	return nil, 0, nil
+}
+
 type fakeStellarBeaconInfoService struct{}
 
 func (fakeStellarBeaconInfoService) Report(*http.Request) model.ResultVO { return model.ResultOk() }
@@ -116,10 +151,11 @@ func mustArticleService(t *testing.T, repo port.ArticleRepository, searcher port
 		searcher = &fakeArticleSearcher{}
 	}
 	service, err := NewArticleService(ArticleServiceDeps{
-		Repo:    repo,
-		Cache:   fakeServiceCache{},
-		Storage: fakeServiceStorage{},
-		Search:  searcher,
+		Repo:      repo,
+		Reactions: &fakeArticleReactionRepository{},
+		Cache:     fakeServiceCache{},
+		Storage:   fakeServiceStorage{},
+		Search:    searcher,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -517,3 +517,25 @@ type WebsiteConfigDTO struct {
 	WeiXinQRCode      string `json:"weiXinQRCode"`
 	AlipayQRCode      string `json:"alipayQRCode"`
 }
+
+// ReactionToggleVO is the reader-interaction write payload. Active carries the
+// desired state rather than a blind toggle so retries stay idempotent.
+type ReactionToggleVO struct {
+	ArticleId int    `json:"articleId" form:"articleId"`
+	Reaction  string `json:"reaction" form:"reaction"`
+	Active    bool   `json:"active" form:"active"`
+}
+
+// ReactionToggleDTO reports the resulting state and the refreshed totals.
+type ReactionToggleDTO struct {
+	Active        bool `json:"active"`
+	LikeCount     int  `json:"likeCount"`
+	FavoriteCount int  `json:"favoriteCount"`
+}
+
+// ReactionStateDTO is one row of the per-account state lookup.
+type ReactionStateDTO struct {
+	ArticleId int  `json:"articleId"`
+	Like      bool `json:"like"`
+	Favorite  bool `json:"favorite"`
+}
