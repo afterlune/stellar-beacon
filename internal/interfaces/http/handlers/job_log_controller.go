@@ -38,5 +38,5 @@ func CleanJobLogs(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/logs/jobs/groups [GET]
 func ListJobLogGroups(c *gin.Context) {
-	c.JSON(http.StatusOK, jobLogService.CleanJobLogs())
+	c.JSON(http.StatusOK, jobLogService.ListJobLogGroups())
 }

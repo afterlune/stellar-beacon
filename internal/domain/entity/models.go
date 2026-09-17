@@ -18,7 +18,9 @@ type TArticle struct {
 	ArticleCover       string    `xorm:"comment('文章缩略图') VARCHAR(1024)" json:"articleCover"`
 	ArticleTitle       string    `xorm:"not null comment('标题') VARCHAR(50)" json:"articleTitle"`
 	ArticleContent     string    `xorm:"not null comment('内容') TEXT" json:"articleContent"`
-	ArticleContentHTML string    `xorm:"comment('富文本 HTML 内容') TEXT" json:"articleContentHtml,omitempty"`
+	// The column must be spelled out: xorm's snake mapper turns the `HTML`
+	// suffix into `article_content_h_t_m_l`, which does not exist.
+	ArticleContentHTML string    `xorm:"article_content_html comment('富文本 HTML 内容') TEXT" json:"articleContentHtml,omitempty"`
 	IsTop              int       `xorm:"not null comment('是否置顶 0否 1是') SMALLINT" json:"isTop"`
 	IsFeatured         int       `xorm:"not null comment('是否推荐 0否 1是') SMALLINT" json:"isFeatured"`
 	IsDelete           int       `xorm:"not null comment('是否删除  0否 1是') SMALLINT" json:"isDelete"`

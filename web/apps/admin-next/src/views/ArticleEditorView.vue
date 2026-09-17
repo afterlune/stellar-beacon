@@ -289,9 +289,18 @@ function handleEditorCreated(editor: IDomEditor): void {
   editorInstance.value = editor
 }
 
+/**
+ * wangEditor 把空文档规范成 `<p><br></p>`；原样写回表单会让「刚打开就离开」
+ * 也被未保存守卫拦截，所以空文档仍然按空内容保存。
+ */
+function normalizeEditorHtml(html: string): string {
+  return /^(?:<p><br\s*\/?><\/p>|\s)*$/i.test(html) ? '' : html
+}
+
 function handleEditorChange(editor: IDomEditor): void {
-  form.articleContentHtml = editor.getHtml()
-  form.articleContent = form.articleContentHtml
+  const html = normalizeEditorHtml(editor.getHtml())
+  form.articleContentHtml = html
+  form.articleContent = html
 }
 
 async function uploadEditorImage(file: File, insertFn: (url: string, poster?: string, alt?: string) => void): Promise<void> {

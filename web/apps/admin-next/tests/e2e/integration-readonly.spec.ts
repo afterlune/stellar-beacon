@@ -198,11 +198,11 @@ test.describe('admin-next real read-only integration', () => {
     const menuItems = flattenMenuItems(menuPayload.data)
 
     const routes = [
-      { path: '/articles/42', menuPaths: ['/articles/*'], marker: '修改文章', contentSelector: '.article-form' },
+      { path: `/articles/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/articles')}`, menuPaths: ['/articles/*'], marker: '修改文章', contentSelector: '.article-form' },
       { path: '/quartz/log/85', menuPaths: ['/quartz/log/:quartzId'], marker: '任务日志' },
-      { path: '/albums/5', menuPaths: ['/albums/*', '/albums/:albumId'], marker: '照片管理', contentSelector: '.arco-table' },
+      { path: `/albums/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/albums')}`, menuPaths: ['/albums/*', '/albums/:albumId'], marker: '上传照片', contentSelector: '.photo-masonry' },
       { path: '/photos/delete', menuPaths: ['/photos/delete'], marker: '照片回收站' },
-      { path: '/talks/7', menuPaths: ['/talks/*', '/talks/:talkId'], marker: '编辑说说', contentSelector: '.talk-form' }
+      { path: `/talks/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/talks')}`, menuPaths: ['/talks/*', '/talks/:talkId'], marker: '编辑说说', contentSelector: '.talk-form' }
     ]
 
     for (const route of routes) {
@@ -229,6 +229,23 @@ test.describe('admin-next real read-only integration', () => {
     expect(pageErrors.filter((error) => !error.includes('status of 502 (Bad Gateway)'))).toEqual([])
   })
 })
+
+/**
+ * Detail routes must point at a record that exists in the target environment;
+ * a hard-coded id is only valid for one seeded dataset.  Read the first id
+ * through the admin API so this read-only suite never writes anything.
+ */
+async function firstAdminRecordID(page: Page, token: string, endpoint: string): Promise<number> {
+  const response = await page.request.get(`${endpoint}?current=1&size=1`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  expect(response.status(), `GET ${endpoint}`).toBe(200)
+  const payload = await response.json() as { code?: string | number; data?: { items?: Array<{ id?: number }> } }
+  expect(payload.code === 'OK' || payload.code === 20000, `GET ${endpoint} application success`).toBe(true)
+  const id = Number(payload.data?.items?.[0]?.id || 0)
+  expect(id, `GET ${endpoint} returned no record to open`).toBeGreaterThan(0)
+  return id
+}
 
 async function assertRenderedRoute(page: Page, label: string, marker: string, status: number | undefined, expectedPath = label): Promise<void> {
   if (status !== undefined) expect(status, label).toBe(200)

@@ -151,6 +151,9 @@ async function save(): Promise<void> {
       status: editor.status
     })
     Message.success(isEditing.value ? t('comments.talks.updated') : t('comments.talks.published'))
+    // Rebase the unsaved-changes guard, otherwise the route push below is
+    // intercepted by the leave dialog right after a successful save.
+    markClean()
     await router.push('/talk-list')
   } catch (error) {
     errorMessage.value = apiErrorMessage(error, t('comments.talks.saveFailed'))

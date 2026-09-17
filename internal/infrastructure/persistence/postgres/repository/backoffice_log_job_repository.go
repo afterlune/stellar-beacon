@@ -106,7 +106,9 @@ func (r *MyJobLogRepo) Delete(ctx context.Context, ids []int) error {
 
 func (r *MyJobLogRepo) Clean(ctx context.Context) error {
 	return repoTx(r.engine, ctx, "job_log.clean", func(session *xorm.Session) error {
-		_, err := session.Delete(&entity.TJobLog{})
+		// xorm refuses an unconditional delete; the explicit tautology keeps the
+		// intended "purge every job log" semantics while satisfying that check.
+		_, err := session.Where("1 = 1").Delete(&entity.TJobLog{})
 		return err
 	})
 }

@@ -38,8 +38,10 @@ function Get-IntegrationComposeArgs {
         'compose',
         '-p', $script:IntegrationProject,
         '--env-file', $script:IntegrationEnvFile,
-        '-f', $script:IntegrationComposeFile,
-        '--project-directory', $script:IntegrationRepoRoot
+        '-f', $script:IntegrationComposeFile
+        # Do not pass --project-directory: the manifest's build context and Caddy
+        # mounts are relative to deploy/compose, so overriding the project
+        # directory resolves them outside the repository and breaks --build.
     )
     if (-not [string]::IsNullOrWhiteSpace($env:INTEGRATION_COMPOSE_OVERRIDE)) {
         $override = Join-Path $script:IntegrationRepoRoot $env:INTEGRATION_COMPOSE_OVERRIDE
