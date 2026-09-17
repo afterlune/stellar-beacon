@@ -44,6 +44,15 @@
               <a-option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</a-option>
             </a-select>
           </a-form-item>
+          <a-form-item field="seriesId" :label="t('series.name')">
+            <a-select v-model="form.seriesId" allow-clear :placeholder="t('articles.editor.seriesPlaceholder')">
+              <a-option :value="0">{{ t('articles.editor.seriesNone') }}</a-option>
+              <a-option v-for="option in seriesOptions" :key="option.id" :value="option.id">{{ option.seriesName }}</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item field="seriesOrder" :label="t('articles.editor.seriesOrder')">
+            <a-input-number v-model="form.seriesOrder" :min="0" :max="9999" :disabled="!form.seriesId" />
+          </a-form-item>
           <a-form-item field="status" :label="t('common.status')">
             <a-select v-model="form.status">
               <a-option :value="1">{{ t('status.published') }}</a-option>
@@ -189,6 +198,7 @@ import AdminLeaveGuard from '@/components/AdminLeaveGuard.vue'
 import AdminMediaPicker from '@/components/AdminMediaPicker.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
+import { listAdminSeriesOptions } from '@/api/http'
 import { t } from '@/i18n'
 import { plainText } from '@/utils/format'
 import { markdownToHtml, sanitizePreviewHtml } from '@/utils/markdown'
@@ -221,11 +231,14 @@ const form = reactive({
   isTop: 0,
   isFeatured: 0,
   password: '',
-  originalUrl: ''
+  originalUrl: '',
+  seriesId: 0,
+  seriesOrder: 0
 })
 
 const categories = ref<string[]>([])
 const tags = ref<string[]>([])
+const seriesOptions = ref<Array<{ id: number; seriesName: string }>>([])
 const articleId = computed(() => (typeof route.params.articleId === 'string' ? route.params.articleId : ''))
 const isEditing = computed(() => /^\d+$/.test(articleId.value))
 
@@ -245,7 +258,9 @@ const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsav
   form.isTop,
   form.isFeatured,
   form.password,
-  form.originalUrl
+  form.originalUrl,
+  form.seriesId,
+  form.seriesOrder
 ]))
 
 const wordCount = computed(() => plainText(form.articleContent).replace(/\s/g, '').length)
@@ -259,6 +274,7 @@ const summary = computed(() => {
 
 onMounted(() => {
   void loadTaxonomy()
+  void loadSeriesOptions()
   if (isEditing.value) void load()
   else {
     editorReady.value = true
@@ -362,6 +378,8 @@ async function load(): Promise<void> {
     form.isFeatured = Number(article.isFeatured || 0)
     form.password = String(article.password || '')
     form.originalUrl = String(article.originalUrl || '')
+    form.seriesId = Number(article.seriesId || 0)
+    form.seriesOrder = Number(article.seriesOrder || 0)
     // Ensure the loaded taxonomy value is always selectable in its dropdown.
     if (form.categoryName && !categories.value.includes(form.categoryName)) {
       categories.value = [form.categoryName, ...categories.value]
@@ -406,7 +424,9 @@ async function save(): Promise<void> {
       isTop: form.isTop,
       isFeatured: form.isFeatured,
       password: form.status === 2 ? form.password : '',
-      originalUrl: form.type === 1 ? '' : form.originalUrl.trim()
+      originalUrl: form.type === 1 ? '' : form.originalUrl.trim(),
+      seriesId: form.seriesId || 0,
+      seriesOrder: form.seriesId ? form.seriesOrder : 0
     })
     Message.success(isEditing.value ? t('articles.editor.saved') : t('articles.editor.published'))
     markClean()
@@ -416,6 +436,14 @@ async function save(): Promise<void> {
     Message.error(errorMessage.value)
   } finally {
     saving.value = false
+  }
+}
+
+async function loadSeriesOptions(): Promise<void> {
+  try {
+    seriesOptions.value = await listAdminSeriesOptions()
+  } catch {
+    seriesOptions.value = []
   }
 }
 

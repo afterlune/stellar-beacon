@@ -57,6 +57,18 @@ const routes = [
     component: () => import('../views/Photos.vue')
   },
   {
+    path: '/series',
+    name: 'Series',
+    component: () => import('../views/SeriesList.vue')
+  },
+
+  {
+    path: '/series/:seriesId',
+    name: 'SeriesDetail',
+    component: () => import('../views/SeriesDetail.vue')
+  },
+
+  {
     path: '/favorites',
     name: 'Favorites',
     component: () => import('../views/Favorites.vue')

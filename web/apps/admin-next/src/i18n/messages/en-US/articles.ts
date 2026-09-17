@@ -100,6 +100,10 @@ export default {
   'articles.editor.imageTypeInvalid': 'Only image files can be uploaded',
   'articles.editor.imageTooLarge': 'Images must be smaller than 10 MB',
   'articles.editor.imageUploadFailed': 'Failed to upload the body image',
+  'articles.editor.seriesPlaceholder': 'Add to a collection (optional)',
+  'articles.editor.seriesNone': 'No collection',
+  'articles.editor.seriesOrder': 'Order in collection',
+
   'articles.editor.contentRequired': 'Please enter the article body',
   'articles.editor.displayOptions': 'Display options',
   'articles.editor.wordCount': 'About {count} characters',

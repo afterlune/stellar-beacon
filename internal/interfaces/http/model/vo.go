@@ -26,6 +26,8 @@ type ArticleVO struct {
 	ArticleTitle       string   `json:"articleTitle" form:"articleTitle"`
 	ArticleContent     string   `json:"articleContent" from:"articleContent"`
 	ArticleContentHTML string   `json:"articleContentHtml" form:"articleContentHtml"`
+	SeriesId           int      `json:"seriesId" form:"seriesId"`
+	SeriesOrder        int      `json:"seriesOrder" form:"seriesOrder"`
 	TagNames           []string `json:"tagNames" form:"tagNames"`
 	IsTop              int      `json:"isTop" from:"isTop"`
 	IsFeatured         int      `json:"isFeatured" form:"isFeatured"`
@@ -38,6 +40,14 @@ type ArticleVO struct {
 type CategoryVO struct {
 	Id           int    `json:"id"`
 	CategoryName string `json:"categoryName"`
+}
+
+// SeriesVO is the admin write payload for an article collection.
+type SeriesVO struct {
+	Id         int    `json:"id" form:"id"`
+	SeriesName string `json:"seriesName" form:"seriesName"`
+	SeriesDesc string `json:"seriesDesc" form:"seriesDesc"`
+	Cover      string `json:"cover" form:"cover"`
 }
 
 type CommentVO struct {

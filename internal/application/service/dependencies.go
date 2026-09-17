@@ -47,6 +47,23 @@ type CommentServiceDeps struct {
 	Limiter       port.RateLimiter
 }
 
+// SeriesServiceDeps contains the collection repository plus the article
+// repository used to render one collection's ordered articles.
+type SeriesServiceDeps struct {
+	Repo     port.SeriesRepository
+	Articles port.ArticleRepository
+}
+
+func (d SeriesServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("series", "repository")
+	}
+	if d.Articles == nil {
+		return missingServiceDependency("series", "article repository")
+	}
+	return nil
+}
+
 // ArticleReactionServiceDeps contains the reader-interaction ports plus the
 // article repository used to validate targets and render favourites.
 type ArticleReactionServiceDeps struct {

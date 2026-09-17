@@ -5,6 +5,7 @@ import "github.com/eternallyzzz/stellar-beacon/internal/application/service"
 var (
 	articleService         service.ArticleService           = new(service.MyArticleService)
 	articleReactionService service.ArticleReactionService   = new(service.MyArticleReactionService)
+	seriesService          service.SeriesService            = new(service.MySeriesService)
 	stellarBeaconService   service.StellarBeaconInfoService = new(service.MyStellarBeaconInfoService)
 	categoryService        service.CategoryService          = new(service.MyCategoryService)
 	commentService         service.CommentService           = new(service.MyCommentService)
@@ -31,6 +32,7 @@ var (
 type Services struct {
 	Article         service.ArticleService
 	ArticleReaction service.ArticleReactionService
+	Series          service.SeriesService
 	StellarBeacon   service.StellarBeaconInfoService
 	Category        service.CategoryService
 	Comment         service.CommentService
@@ -57,6 +59,7 @@ type Services struct {
 func ConfigureServices(s Services) {
 	articleService = s.Article
 	articleReactionService = s.ArticleReaction
+	seriesService = s.Series
 	stellarBeaconService = s.StellarBeacon
 	categoryService = s.Category
 	commentService = s.Comment

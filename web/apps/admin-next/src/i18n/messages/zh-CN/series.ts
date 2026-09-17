@@ -1,0 +1,22 @@
+export default {
+  'series.title': '系列管理',
+  'series.description': '把同一主题的文章按顺序编成系列，读者可以顺着读完。',
+  'series.create': '新增系列',
+  'series.edit': '编辑系列',
+  'series.name': '系列名称',
+  'series.namePlaceholder': '例如：从零实现渲染管线',
+  'series.nameRequired': '请填写系列名称',
+  'series.desc': '系列描述',
+  'series.cover': '系列封面',
+  'series.coverPlaceholder': '封面图片地址（可留空）',
+  'series.articleCount': '文章数',
+  'series.updatedAt': '更新时间',
+  'series.total': '共 {total} 个系列',
+  'series.searchPlaceholder': '搜索系列名称',
+  'series.saved': '系列已保存',
+  'series.deleted': '系列已删除',
+  'series.deleteConfirm': '删除系列「{name}」？文章会保留并解除关联。',
+  'series.loadFailed': '系列加载失败',
+  'series.saveFailed': '系列保存失败',
+  'series.deleteFailed': '系列删除失败'
+}

@@ -483,3 +483,12 @@ export interface ReactionToggleResult {
   likeCount: number
   favoriteCount: number
 }
+
+/** Article collections: an ordered group of published articles. */
+export interface SeriesSummary {
+  id: number
+  seriesName: string
+  seriesDesc: string
+  cover: string
+  articleCount: number
+}

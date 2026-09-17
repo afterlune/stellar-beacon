@@ -17,6 +17,7 @@ import logsZh from './zh-CN/logs'
 import siteZh from './zh-CN/site'
 import accountZh from './zh-CN/account'
 import growthZh from './zh-CN/growth'
+import seriesZh from './zh-CN/series'
 
 import commonEn from './en-US/common'
 import shellEn from './en-US/shell'
@@ -31,6 +32,7 @@ import logsEn from './en-US/logs'
 import siteEn from './en-US/site'
 import accountEn from './en-US/account'
 import growthEn from './en-US/growth'
+import seriesEn from './en-US/series'
 
 export const messages = {
   'zh-CN': {
@@ -46,7 +48,8 @@ export const messages = {
     ...logsZh,
     ...siteZh,
     ...accountZh,
-    ...growthZh
+    ...growthZh,
+    ...seriesZh
   },
   'en-US': {
     ...commonEn,
@@ -61,7 +64,8 @@ export const messages = {
     ...logsEn,
     ...siteEn,
     ...accountEn,
-    ...growthEn
+    ...growthEn,
+    ...seriesEn
   }
 } as const
 

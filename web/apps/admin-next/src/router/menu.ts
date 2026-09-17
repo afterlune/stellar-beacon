@@ -45,6 +45,7 @@ const VIEWS = {
   menu: () => import('@/views/MenuView.vue'),
   resource: () => import('@/views/ResourceView.vue'),
   friendLink: () => import('@/views/FriendLinksView.vue'),
+  series: () => import('@/views/SeriesView.vue'),
   website: () => import('@/views/WebsiteView.vue'),
   about: () => import('@/views/AboutView.vue'),
   setting: () => import('@/views/SettingView.vue')

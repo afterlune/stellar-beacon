@@ -100,6 +100,10 @@ export default {
   'articles.editor.imageTypeInvalid': '只能上传图片文件',
   'articles.editor.imageTooLarge': '图片不能超过 10 MB',
   'articles.editor.imageUploadFailed': '正文图片上传失败',
+  'articles.editor.seriesPlaceholder': '归入某个系列（可留空）',
+  'articles.editor.seriesNone': '不归入系列',
+  'articles.editor.seriesOrder': '系列内序号',
+
   'articles.editor.contentRequired': '正文不能为空',
   'articles.editor.displayOptions': '展示选项',
   'articles.editor.wordCount': '约 {count} 字',

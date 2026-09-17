@@ -135,5 +135,11 @@ export default {
   },
   updateCommentNotice: (params: { notifyComment: number }) => {
     return http.put('/auth/me/notifications', params)
+  },
+  getSeriesList: () => {
+    return http.get('/public/series')
+  },
+  getSeriesDetail: (seriesId: any) => {
+    return http.get('/public/series/' + encodeURIComponent(seriesId))
   }
 }

@@ -45,6 +45,10 @@ paths:
     get: { tags: [public], summary: List comment replies, operationId: listCommentReplies, parameters: [{ $ref: '#/components/parameters/CommentId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/links:
     get: { tags: [public], summary: List friend links, operationId: listFriendLinks, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/series:
+    get: { tags: [public], summary: List article collections, operationId: listPublicSeries, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/series/{seriesId}:
+    get: { tags: [public], summary: Get one collection with its ordered articles, operationId: getPublicSeries, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/albums:
     get: { tags: [public], summary: List photo albums, operationId: listAlbums, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/albums/{albumId}/photos:
@@ -118,6 +122,12 @@ paths:
     get: { tags: [admin], summary: Search admin categories, operationId: searchAdminCategories, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/tags:
     get: { tags: [admin], summary: List admin tags, operationId: listAdminTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/series:
+    get: { tags: [admin], summary: List article collections, operationId: listAdminSeries, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Create or update an article collection, operationId: saveSeries, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete article collections, operationId: deleteSeries, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/series/options:
+    get: { tags: [admin], summary: List article collection options, operationId: listSeriesOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     post: { tags: [admin], summary: Save tag, operationId: saveTag, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     delete: { tags: [admin], summary: Delete tags, operationId: deleteTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/tags/search:

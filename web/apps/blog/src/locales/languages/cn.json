@@ -109,4 +109,13 @@
     "previous": "上一页",
     "next": "下一页"
   }
+  ,
+  "series": {
+    "pageTitle": "系列",
+    "articleCount": "{count} 篇",
+    "empty": "还没有系列",
+    "emptyArticles": "这个系列还没有公开文章",
+    "inSeries": "本文属于系列《{name}》",
+    "backToSeries": "查看系列"
+  }
 }

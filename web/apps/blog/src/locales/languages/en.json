@@ -109,4 +109,13 @@
     "previous": "Previous",
     "next": "Next"
   }
+  ,
+  "series": {
+    "pageTitle": "Collections",
+    "articleCount": "{count} articles",
+    "empty": "No collections yet",
+    "emptyArticles": "This collection has no published article yet",
+    "inSeries": "Part of the collection \"{name}\"",
+    "backToSeries": "Open the collection"
+  }
 }

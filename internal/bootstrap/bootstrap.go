@@ -39,6 +39,7 @@ func Initialize() error {
 	site := repository.NewSiteInfoRepo(engine)
 	article := repository.NewArticleRepo(engine)
 	articleReaction := repository.NewArticleReactionRepo(engine)
+	series := repository.NewSeriesRepo(engine)
 	category := repository.NewCategoryRepo(engine)
 	comment := repository.NewCommentRepo(engine)
 	job := repository.NewJobRepository(engine)
@@ -158,11 +159,19 @@ func Initialize() error {
 	if err != nil {
 		return errors.Unavailable("bootstrap.service.user_info", err)
 	}
+	seriesService, err := service.NewSeriesService(service.SeriesServiceDeps{
+		Repo:     series,
+		Articles: article,
+	})
+	if err != nil {
+		return errors.Unavailable("bootstrap.service.series", err)
+	}
 	mediaService := service.NewMediaService(ossStorage)
 
 	api.ConfigureServices(api.Services{
 		Article:         articleService,
 		ArticleReaction: articleReactionService,
+		Series:          seriesService,
 		StellarBeacon:   stellarBeacon,
 		Category:        service.NewCategoryService(category),
 		Comment:         commentService,

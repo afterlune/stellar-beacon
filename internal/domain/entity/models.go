@@ -21,6 +21,8 @@ type TArticle struct {
 	// The column must be spelled out: xorm's snake mapper turns the `HTML`
 	// suffix into `article_content_h_t_m_l`, which does not exist.
 	ArticleContentHTML string    `xorm:"article_content_html comment('富文本 HTML 内容') TEXT" json:"articleContentHtml,omitempty"`
+	SeriesId           int       `xorm:"series_id comment('所属系列') INTEGER" json:"seriesId"`
+	SeriesOrder        int       `xorm:"series_order not null default 0 comment('系列内序号') INTEGER" json:"seriesOrder"`
 	IsTop              int       `xorm:"not null comment('是否置顶 0否 1是') SMALLINT" json:"isTop"`
 	IsFeatured         int       `xorm:"not null comment('是否推荐 0否 1是') SMALLINT" json:"isFeatured"`
 	IsDelete           int       `xorm:"not null comment('是否删除  0否 1是') SMALLINT" json:"isDelete"`
@@ -30,6 +32,18 @@ type TArticle struct {
 	OriginalUrl        string    `xorm:"comment('原文链接') VARCHAR(255)" json:"originalUrl"`
 	CreateTime         time.Time `xorm:"created not null comment('发表时间') DATETIME" json:"createTime"`
 	UpdateTime         time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
+}
+
+// TSeries groups articles into an ordered collection. The relation lives on
+// t_article.series_id so an article belongs to at most one series.
+type TSeries struct {
+	Id         int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	SeriesName string    `xorm:"series_name not null unique comment('系列名') VARCHAR(50)" json:"seriesName"`
+	SeriesDesc string    `xorm:"series_desc comment('系列描述') VARCHAR(255)" json:"seriesDesc"`
+	Cover      string    `xorm:"comment('系列封面') VARCHAR(1024)" json:"cover"`
+	IsDelete   int       `xorm:"not null default 0 comment('是否删除 0否 1是') SMALLINT" json:"isDelete"`
+	CreateTime time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
+	UpdateTime time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
 type TArticleTag struct {

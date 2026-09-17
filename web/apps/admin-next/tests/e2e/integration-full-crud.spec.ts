@@ -36,6 +36,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
     await traceStep('article', () => runArticleDraftCRUD(page, token, suffix))
     await traceStep('reactions', () => runArticleReactionRoundTrip(page, token, suffix))
     await traceStep('comment-notify', () => runCommentNotificationRoundTrip(page, token, suffix))
+    await traceStep('series', () => runSeriesRoundTrip(page, token, suffix))
     await traceStep('album', () => runAlbumCRUD(page, suffix))
     await traceStep('job', () => runJobCRUD(page, suffix))
     await traceStep('role', () => runRoleCRUD(page, suffix))
@@ -759,6 +760,77 @@ async function waitForMailpitMessage(mailpitURL: string, recipient: string, subj
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return false
+}
+
+/**
+ * A collection must publish its articles in the authored order, which is what
+ * the series field on the article editor controls.
+ */
+async function runSeriesRoundTrip(page: Page, token: string, suffix: string): Promise<void> {
+  const name = `e2e-series-${suffix}`
+  const articleIDs: number[] = []
+  let seriesID = 0
+  try {
+    const created = await page.request.post('/api/v1/admin/series', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { seriesName: name, seriesDesc: 'integration fixture' }
+    })
+    expect(created.status(), 'create series').toBe(200)
+    const options = await page.request.get('/api/v1/admin/series/options', { headers: { Authorization: `Bearer ${token}` } })
+    const optionList = (await options.json() as { data?: Array<{ id: number; seriesName: string }> }).data || []
+    seriesID = Number((optionList.find((item) => item.seriesName === name) || {}).id || 0)
+    expect(seriesID, 'series id').toBeGreaterThan(0)
+
+    // The second article is authored first so the ordering assertion is real.
+    for (const order of [2, 1]) {
+      const title = `${name}-${order}`
+      const article = await page.request.post('/api/v1/admin/articles', {
+        headers: { Authorization: `Bearer ${token}` },
+        data: {
+          articleTitle: title, articleContent: 'series fixture', articleCover: '',
+          categoryName: '', tagNames: [], status: 1, type: 0, isTop: 0, isFeatured: 0,
+          password: '', originalUrl: '', seriesId: seriesID, seriesOrder: order
+        }
+      })
+      expect(article.status(), `create series article ${order}`).toBe(200)
+      const search = await page.request.get(`/api/v1/admin/articles?current=1&size=5&keywords=${encodeURIComponent(title)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const id = firstRecordID(await search.json())
+      expect(id, `series article ${order} id`).toBeGreaterThan(0)
+      articleIDs.push(id)
+    }
+
+    const detail = await page.request.get(`/api/v1/public/series/${seriesID}`)
+    const detailPayload = await detail.json() as { code?: string | number; data?: { series?: { seriesName: string; articleCount: number }; articles?: Array<{ articleTitle: string }> } }
+    expect(detailPayload.code === 'OK', 'public series detail').toBe(true)
+    expect(detailPayload.data?.series?.seriesName, 'public series name').toBe(name)
+    expect(detailPayload.data?.series?.articleCount, 'public series article count').toBe(2)
+    const titles = (detailPayload.data?.articles || []).map((item) => item.articleTitle)
+    expect(titles, 'series articles follow seriesOrder').toEqual([`${name}-1`, `${name}-2`])
+
+    const adminList = await page.request.get(`/api/v1/admin/series?current=1&size=5&keywords=${encodeURIComponent(name)}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const adminItems = (await adminList.json() as { data?: { items?: Array<{ id: number; articleCount: number }> } }).data?.items || []
+    expect(Number(adminItems[0]?.articleCount || 0), 'admin series article count').toBe(2)
+
+    await page.request.delete('/api/v1/admin/series', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: [seriesID]
+    })
+    const afterDelete = await page.request.get(`/api/v1/public/series/${seriesID}`)
+    const afterPayload = await afterDelete.json() as { code?: string | number }
+    expect(afterPayload.code !== 'OK', 'a deleted series is no longer public').toBe(true)
+    seriesID = 0
+  } finally {
+    if (seriesID > 0) {
+      await page.request.delete('/api/v1/admin/series', { headers: { Authorization: `Bearer ${token}` }, data: [seriesID] })
+    }
+    if (articleIDs.length > 0) {
+      await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', articleIDs)
+    }
+  }
 }
 
 async function deleteAdminIDs(request: APIRequestContext, token: string, path: string, ids: number[]): Promise<void> {

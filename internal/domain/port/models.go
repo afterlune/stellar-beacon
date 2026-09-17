@@ -48,6 +48,8 @@ type Article struct {
 	Tags               any              `json:"tags"`
 	LikeCount          int              `json:"likeCount"`
 	FavoriteCount      int              `json:"favoriteCount"`
+	SeriesId           int              `json:"seriesId"`
+	SeriesOrder        int              `json:"seriesOrder"`
 }
 
 type ArticleAdmin struct {
@@ -81,6 +83,8 @@ type ArticleAdminView struct {
 	Type               int    `json:"type"`
 	Password           string `json:"password"`
 	OriginalUrl        string `json:"originalUrl"`
+	SeriesId           int    `json:"seriesId"`
+	SeriesOrder        int    `json:"seriesOrder"`
 }
 
 type ArticleSearch struct {

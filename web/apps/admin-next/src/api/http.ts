@@ -194,6 +194,35 @@ export async function deleteAdminFriendLinks(ids: number[]): Promise<void> {
   responseData(response)
 }
 
+/** 文章系列（合集）：列表、下拉选项与写操作。 */
+export interface AdminSeries {
+  id: number
+  seriesName: string
+  seriesDesc: string
+  cover: string
+  articleCount: number
+  updateTime?: string
+}
+
+export async function getAdminSeries(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminSeries>> {
+  return listAdminPage<AdminSeries>('admin/series', params, config)
+}
+
+export async function listAdminSeriesOptions(): Promise<AdminSeries[]> {
+  const response = await http.get<ResultVO<AdminSeries[]>>('admin/series/options')
+  return responseData(response)
+}
+
+export async function saveAdminSeries(payload: { id?: number; seriesName: string; seriesDesc: string; cover: string }): Promise<void> {
+  const response = await http.post<ResultVO<unknown>>('admin/series', payload)
+  responseData(response)
+}
+
+export async function deleteAdminSeries(ids: number[]): Promise<void> {
+  const response = await http.delete<ResultVO<unknown>>('admin/series', { data: ids })
+  responseData(response)
+}
+
 export async function uploadAdminAlbumCover(file: File): Promise<string> {
   const form = new FormData()
   form.append('file', file)

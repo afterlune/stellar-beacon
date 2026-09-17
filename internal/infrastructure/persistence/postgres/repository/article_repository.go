@@ -130,6 +130,25 @@ func (a *MyArticleRepo) ListArticleCardsByIDs(ctx context.Context, articleIDs []
 	return articles, nil
 }
 
+// ListArticleCardsBySeries loads one collection in its authored order.
+func (a *MyArticleRepo) ListArticleCardsBySeries(ctx context.Context, seriesID int) ([]*port.ArticleCard, error) {
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var articles []*port.ArticleCard
+	if err := session.SQL(pgsql.ListArticlesBySeries, seriesID).Find(&articles); err != nil {
+		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_series", err)
+	}
+	for _, article := range articles {
+		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return articles, nil
+}
+
 func (a *MyArticleRepo) GetArticleByID(ctx context.Context, articleID int) (port.Article, error) {
 	session, err := a.articleSession(ctx)
 	if err != nil {

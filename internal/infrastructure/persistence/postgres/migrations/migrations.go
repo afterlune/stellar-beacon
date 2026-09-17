@@ -57,6 +57,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyCommentNotificationSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applySeriesSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -96,7 +99,7 @@ func applySchema(engine *xorm.Engine) error {
 		new(entity.TFriendLink), new(entity.TJob), new(entity.TJobLog),
 		new(entity.TMenu), new(entity.TOperationLog), new(entity.TPhoto),
 		new(entity.TPhotoAlbum), new(entity.TResource), new(entity.TRole),
-		new(entity.TRoleMenu), new(entity.TRoleResource), new(entity.TTag),
+		new(entity.TRoleMenu), new(entity.TRoleResource), new(entity.TSeries), new(entity.TTag),
 		new(entity.TTalk), new(entity.TUniqueView), new(entity.TUserAuth),
 		new(entity.TUserInfo), new(entity.TUserRole), new(entity.TWebsiteConfig),
 	}
@@ -233,6 +236,7 @@ var defaultMenus = []menuSeed{
 	{name: "文章列表", path: "/article-list", component: "/article/ArticleList.vue", icon: "list", order: 3, parentPath: "/article-submenu"},
 	{name: "分类管理", path: "/categories", component: "/category/Category.vue", icon: "category", order: 4, parentPath: "/article-submenu"},
 	{name: "标签管理", path: "/tags", component: "/tag/Tag.vue", icon: "tags", order: 5, parentPath: "/article-submenu"},
+	{name: "系列管理", path: "/series", component: "/series/Series.vue", icon: "list", order: 6, parentPath: "/article-submenu"},
 	{name: "评论管理", path: "/comments", component: "/comment/Comment.vue", icon: "comments", order: 1, parentPath: "/message-submenu"},
 	{name: "说说列表", path: "/talk-list", component: "/talk/TalkList.vue", icon: "list", order: 1, parentPath: "/talk-submenu"},
 	{name: "发布说说", path: "/talks", component: "/talk/Talk.vue", icon: "pen", order: 2, parentPath: "/talk-submenu"},
@@ -464,6 +468,54 @@ func applyCommentNotificationSchema(ctx context.Context, engine *xorm.Engine) er
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit comment notification migration: %w", err)
+	}
+	return nil
+}
+
+// applySeriesSchema adds ordered article collections plus the admin menu entry
+// that manages them.
+func applySeriesSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 8)").Get(&applied); err != nil {
+		return fmt.Errorf("check series migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin series migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS t_series (
+			id SERIAL PRIMARY KEY,
+			series_name VARCHAR(50) NOT NULL UNIQUE,
+			series_desc VARCHAR(255) NOT NULL DEFAULT '',
+			cover VARCHAR(1024) NOT NULL DEFAULT '',
+			is_delete SMALLINT NOT NULL DEFAULT 0,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`ALTER TABLE t_article ADD COLUMN IF NOT EXISTS series_id INTEGER NULL`,
+		`ALTER TABLE t_article ADD COLUMN IF NOT EXISTS series_order INTEGER NOT NULL DEFAULT 0`,
+		`CREATE INDEX IF NOT EXISTS idx_article_series ON t_article(series_id, series_order, id)`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply series schema: %w", err)
+		}
+	}
+	if err := seedMenus(session); err != nil {
+		return err
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 8, "article-series"); err != nil {
+		return fmt.Errorf("record series migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit series migration: %w", err)
 	}
 	return nil
 }

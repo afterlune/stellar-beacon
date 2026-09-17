@@ -43,6 +43,9 @@ func (f *fakeArticleRepository) GetArticlesByCategoryID(context.Context, int, in
 func (f *fakeArticleRepository) ListArticleCardsByIDs(context.Context, []int) ([]*port.ArticleCard, error) {
 	return nil, nil
 }
+func (f *fakeArticleRepository) ListArticleCardsBySeries(context.Context, int) ([]*port.ArticleCard, error) {
+	return nil, nil
+}
 func (f *fakeArticleRepository) GetArticleByID(context.Context, int) (port.Article, error) {
 	return port.Article{}, nil
 }

@@ -134,6 +134,9 @@
             <span class="article-reaction__count">{{ reactions.favoriteCount }}</span>
           </button>
           <router-link v-if="userToken" class="article-reaction__link" to="/favorites">{{ t('reactions.favorites') }}</router-link>
+          <router-link v-if="seriesInfo" class="article-reaction__link" :to="'/series/' + seriesInfo.id">
+            {{ t('series.inSeries', { name: seriesInfo.seriesName }) }}
+          </router-link>
           <span v-if="reactionMessage" class="article-actions__message">{{ reactionMessage }}</span>
         </div>
         <section v-if="article.relatedArticles && article.relatedArticles.length" class="related-articles" :aria-labelledby="'related-title-' + articleId">
@@ -251,6 +254,7 @@ export default defineComponent({
       favoriteCount: 0
     })
     const userToken = computed(() => Boolean(userStore.token))
+    const seriesInfo = ref<any>(null)
     const navigatorShareAvailable = computed(() => typeof navigator !== 'undefined' && typeof navigator.share === 'function')
     const pageInfo = reactive({
       current: 1,
@@ -360,6 +364,7 @@ export default defineComponent({
         }).then((article: any) => {
           reactiveData.article = article
           syncReactionTotals(article)
+          fetchSeriesInfo(article)
           fetchReactionStates()
           setSeo({
             title: `${article.articleTitle} · Stellar Beacon`,
@@ -483,6 +488,20 @@ export default defineComponent({
       reactions.likeCount = Number(article?.likeCount || 0)
       reactions.favoriteCount = Number(article?.favoriteCount || 0)
     }
+    // The article payload only carries the series id; the badge needs its name.
+    const fetchSeriesInfo = (article: any) => {
+      seriesInfo.value = null
+      const seriesId = Number(article?.seriesId || 0)
+      if (!seriesId) return
+      api
+        .getSeriesDetail(seriesId)
+        .then(({ data }: any) => {
+          seriesInfo.value = data?.data?.series || null
+        })
+        .catch(() => {
+          seriesInfo.value = null
+        })
+    }
     const fetchReactionStates = () => {
       reactions.like = false
       reactions.favorite = false
@@ -549,6 +568,7 @@ export default defineComponent({
       reactionPending,
       reactionMessage,
       userToken,
+      seriesInfo,
       toggleReaction
     }
   }
