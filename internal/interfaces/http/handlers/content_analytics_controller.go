@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -37,6 +39,31 @@ func ListContentAnalyticsArticles(c *gin.Context) {
 		c.Request.Context(),
 		c.DefaultQuery("range", "7d"),
 		c.DefaultQuery("sort", "views"),
+		current,
+		size,
+	))
+}
+
+// ListContentContinuationTargets returns the attributed continuation click
+// ranking, optionally scoped to one source article.
+// @Router /v1/admin/content/analytics/continuation-targets [GET]
+func ListContentContinuationTargets(c *gin.Context) {
+	current, _ := strconv.Atoi(c.DefaultQuery("current", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+	sourceArticleID := 0
+	if value := c.Query("sourceArticleId"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+			return
+		}
+		sourceArticleID = parsed
+	}
+	c.JSON(http.StatusOK, contentAnalyticsService.ListContinuationTargets(
+		c.Request.Context(),
+		c.DefaultQuery("range", "7d"),
+		c.DefaultQuery("sort", "clicks"),
+		sourceArticleID,
 		current,
 		size,
 	))

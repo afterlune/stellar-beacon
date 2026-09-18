@@ -80,13 +80,12 @@ func (r *MyContentAnalyticsRepo) RecordReadSession(ctx context.Context, articleI
 	return nil
 }
 
-func (r *MyContentAnalyticsRepo) RecordContinuationEvent(ctx context.Context, articleID int, day time.Time, eventType port.ContinuationEventType) error {
+func (r *MyContentAnalyticsRepo) RecordContinuationEvent(ctx context.Context, articleID int, day time.Time, eventType port.ContinuationEventType, target *port.ContinuationTarget) error {
 	if articleID <= 0 || !eventType.Valid() {
 		return nil
 	}
-	session, err := r.session(ctx, "content_analytics.record_continuation_event")
-	if err != nil {
-		return err
+	if eventType.IsClick() && target == nil {
+		return apperrors.Invalid("content_analytics.record_continuation_event", "continuation click target is required")
 	}
 	var seriesImpressions, seriesClicks, relatedImpressions, relatedClicks int
 	switch eventType {
@@ -99,25 +98,94 @@ func (r *MyContentAnalyticsRepo) RecordContinuationEvent(ctx context.Context, ar
 	case port.ContinuationEventRelatedClick:
 		relatedClicks = 1
 	}
-	_, err = session.Exec(`
-		INSERT INTO t_article_daily_metric (
-			article_id, metric_date, series_impressions, series_clicks,
-			related_impressions, related_clicks
-		)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT (article_id, metric_date) DO UPDATE
-		SET series_impressions = t_article_daily_metric.series_impressions + EXCLUDED.series_impressions,
-		    series_clicks = t_article_daily_metric.series_clicks + EXCLUDED.series_clicks,
-		    related_impressions = t_article_daily_metric.related_impressions + EXCLUDED.related_impressions,
-		    related_clicks = t_article_daily_metric.related_clicks + EXCLUDED.related_clicks,
-		    update_time = CURRENT_TIMESTAMP
-	`, articleID, day.Format("2006-01-02"), seriesImpressions, seriesClicks, relatedImpressions, relatedClicks)
-	if err != nil {
-		return apperrors.Unavailable("content_analytics.record_continuation_event", err)
-	}
-	return nil
+	return repoTx(r.engine, ctx, "content_analytics.record_continuation_event", func(session *xorm.Session) error {
+		if _, err := session.Exec(`
+			INSERT INTO t_article_daily_metric (
+				article_id, metric_date, series_impressions, series_clicks,
+				related_impressions, related_clicks
+			)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT (article_id, metric_date) DO UPDATE
+			SET series_impressions = t_article_daily_metric.series_impressions + EXCLUDED.series_impressions,
+			    series_clicks = t_article_daily_metric.series_clicks + EXCLUDED.series_clicks,
+			    related_impressions = t_article_daily_metric.related_impressions + EXCLUDED.related_impressions,
+			    related_clicks = t_article_daily_metric.related_clicks + EXCLUDED.related_clicks,
+			    update_time = CURRENT_TIMESTAMP
+		`, articleID, day.Format("2006-01-02"), seriesImpressions, seriesClicks, relatedImpressions, relatedClicks); err != nil {
+			return apperrors.Unavailable("content_analytics.record_continuation_event", err)
+		}
+		if target == nil {
+			return nil
+		}
+		if _, err := session.Exec(`
+			INSERT INTO t_article_continuation_target (
+				source_article_id, target_type, target_id, placement, position, metric_date, clicks
+			)
+			VALUES (?, ?, ?, ?, ?, ?, 1)
+			ON CONFLICT (source_article_id, target_type, target_id, placement, position, metric_date) DO UPDATE
+			SET clicks = t_article_continuation_target.clicks + EXCLUDED.clicks,
+			    update_time = CURRENT_TIMESTAMP
+		`, articleID, target.Type, target.Id, target.Placement, target.Position, day.Format("2006-01-02")); err != nil {
+			return apperrors.Unavailable("content_analytics.record_continuation_target", err)
+		}
+		return nil
+	})
 }
 
+func (r *MyContentAnalyticsRepo) ListContinuationTargetMetrics(ctx context.Context, startDate, endDate string, sourceArticleID int) ([]port.ContinuationTargetMetric, error) {
+	session, err := r.session(ctx, "content_analytics.continuation_targets")
+	if err != nil {
+		return nil, err
+	}
+	query := `
+		WITH click_rows AS (
+			SELECT source_article_id, target_type, target_id, placement, position, SUM(clicks) AS clicks
+			FROM t_article_continuation_target
+			WHERE metric_date >= ? AND metric_date <= ?`
+	args := []interface{}{startDate, endDate}
+	if sourceArticleID > 0 {
+		query += " AND source_article_id = ?"
+		args = append(args, sourceArticleID)
+	}
+	query += `
+			GROUP BY source_article_id, target_type, target_id, placement, position
+		),
+		impression_rows AS (
+			SELECT article_id,
+			       COALESCE(SUM(series_impressions), 0) AS series_impressions,
+			       COALESCE(SUM(related_impressions), 0) AS related_impressions
+			FROM t_article_daily_metric
+			WHERE metric_date >= ? AND metric_date <= ?
+			GROUP BY article_id
+		)
+		SELECT c.source_article_id AS source_article_id,
+		       COALESCE(source.article_title, '') AS source_article_title,
+		       c.target_type AS target_type,
+		       c.target_id AS target_id,
+		       CASE
+		           WHEN c.target_type = 'article' THEN COALESCE(target_article.article_title, '')
+		           ELSE COALESCE(target_series.series_name, '')
+		       END AS target_title,
+		       c.placement AS placement,
+		       c.position AS position,
+		       c.clicks AS clicks,
+		       CASE
+		           WHEN c.target_type = 'series' THEN COALESCE(i.series_impressions, 0)
+		           ELSE COALESCE(i.related_impressions, 0)
+		       END AS module_impressions
+		FROM click_rows c
+		LEFT JOIN t_article source ON source.id = c.source_article_id
+		LEFT JOIN t_article target_article ON c.target_type = 'article' AND target_article.id = c.target_id
+		LEFT JOIN t_series target_series ON c.target_type = 'series' AND target_series.id = c.target_id
+		LEFT JOIN impression_rows i ON i.article_id = c.source_article_id
+		ORDER BY c.clicks DESC, c.source_article_id DESC, c.target_id DESC`
+	args = append(args, startDate, endDate)
+	var rows []port.ContinuationTargetMetric
+	if err := session.SQL(query, args...).Find(&rows); err != nil {
+		return nil, apperrors.Unavailable("content_analytics.continuation_targets", err)
+	}
+	return rows, nil
+}
 func (r *MyContentAnalyticsRepo) ListDailyMetrics(ctx context.Context, startDate, endDate string) ([]port.ContentDailyMetric, error) {
 	session, err := r.session(ctx, "content_analytics.daily_metrics")
 	if err != nil {

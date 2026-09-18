@@ -45,7 +45,7 @@ paths:
     post:
       tags: [public]
       summary: Record an anonymous article continuation event
-      description: Accepts one allow-listed series or related-reading impression/click event. It does not accept target, account, session, IP, User-Agent or referrer data.
+      description: Accepts one allow-listed series or related-reading impression/click event. Clicks include the public target and placement; the endpoint does not accept account, session, IP, User-Agent or referrer data.
       operationId: trackArticleContinuationEvent
       parameters: [{ $ref: '#/components/parameters/ArticleId' }]
       requestBody:
@@ -137,6 +137,17 @@ paths:
         - { name: sort, in: query, schema: { type: string, enum: [views, uniqueReaders, effectiveSessions, avgActiveMs, completionRate], default: views } }
         - { name: current, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/content/analytics/continuation-targets:
+    get:
+      tags: [admin]
+      summary: List attributed continuation targets
+      operationId: listContentContinuationTargets
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: range, in: query, schema: { type: string, enum: [7d, 30d, 90d, 12m] } }
+        - { name: sort, in: query, schema: { type: string, enum: [clicks, clickRate] } }
+        - { name: sourceArticleId, in: query, schema: { type: integer, minimum: 1 } }
       responses: { '200': { $ref: '#/components/responses/Result' } }
   /admin/content/analytics/articles/{articleId}:
     get:
@@ -339,6 +350,10 @@ components:
         eventType:
           type: string
           enum: [series_impression, series_click, related_impression, related_click]
+        targetType: { type: string, enum: [article, series] }
+        targetId: { type: integer, minimum: 1 }
+        placement: { type: string, enum: [related, series_previous, series_next, series_index] }
+        position: { type: integer, minimum: 0, maximum: 3 }
   securitySchemes:
     bearerAuth:
       type: http

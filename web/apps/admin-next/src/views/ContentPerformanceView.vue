@@ -62,6 +62,47 @@
         :description="t('contentPerformance.continuation.emptyDescription')" />
     </a-card>
 
+    <a-card class="admin-panel content-performance-targets" :bordered="false" :title="t('contentPerformance.targets.title')" data-testid="content-performance-targets">
+      <div class="admin-table-toolbar">
+        <div class="admin-table-toolbar-main">
+          <a-select v-model="targetSort" style="width: 180px" @change="reloadTargets">
+            <a-option value="clicks">{{ t('contentPerformance.targets.clicks') }}</a-option>
+            <a-option value="clickRate">{{ t('contentPerformance.targets.clickRate') }}</a-option>
+          </a-select>
+        </div>
+        <span class="admin-toolbar-caption">{{ t('contentPerformance.targets.total', { total: targetTotal }) }}</span>
+      </div>
+      <div class="admin-table-shell">
+        <a-table
+          :data="targets"
+          :columns="targetColumns"
+          :loading="loading"
+          :pagination="targetPagination"
+          row-key="rowKey"
+          @page-change="changeTargetPage"
+          @page-size-change="changeTargetPageSize">
+          <template #targetSource="{ record }">
+            <span class="admin-title-cell" :title="record.sourceArticleTitle">{{ record.sourceArticleTitle || `#${record.sourceArticleId}` }}</span>
+          </template>
+          <template #targetTarget="{ record }">
+            <div class="content-performance-target">
+              <a-tag size="small">{{ record.targetType === 'series' ? t('contentPerformance.targets.series') : t('contentPerformance.targets.article') }}</a-tag>
+              <span :title="targetLabel(record)">{{ targetLabel(record) }}</span>
+            </div>
+          </template>
+          <template #targetPlacement="{ record }">
+            <span class="admin-muted-cell">{{ placementLabel(record.placement) }}<template v-if="record.position"> · {{ record.position }}</template></span>
+          </template>
+          <template #targetClicks="{ record }">{{ formatNumber(record.clicks) }}</template>
+          <template #targetClickRate="{ record }">
+            <span :title="t('contentPerformance.targets.rateDetail', { clicks: formatNumber(record.clicks), impressions: formatNumber(record.moduleImpressions) })">
+              {{ formatPercent(record.clickRate) }}
+            </span>
+          </template>
+          <template #empty>{{ t('contentPerformance.targets.empty') }}</template>
+        </a-table>
+      </div>
+    </a-card>
     <a-card class="admin-panel content-performance-ranking" :bordered="false" :title="t('contentPerformance.ranking.title')" data-testid="content-performance-ranking">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
@@ -138,8 +179,25 @@
           </div>
           <AdminEChart v-if="detail.trend.length" :option="detailTrendOption" height="300px" />
           <AdminEChart v-if="detail.trend.length" :option="detailContinuationTrendOption" height="260px" />
+              <div class="content-performance-detail-targets" data-testid="content-performance-detail-targets">
+            <h4>{{ t('contentPerformance.targets.detailTitle') }}</h4>
+            <a-table :data="detailTargets" :columns="detailTargetColumns" :pagination="false" row-key="rowKey">
+              <template #targetTarget="{ record }">
+                <div class="content-performance-target">
+                  <a-tag size="small">{{ record.targetType === 'series' ? t('contentPerformance.targets.series') : t('contentPerformance.targets.article') }}</a-tag>
+                  <span :title="targetLabel(record)">{{ targetLabel(record) }}</span>
+                </div>
+              </template>
+              <template #targetPlacement="{ record }">
+                <span class="admin-muted-cell">{{ placementLabel(record.placement) }}<template v-if="record.position"> · {{ record.position }}</template></span>
+              </template>
+              <template #targetClicks="{ record }">{{ formatNumber(record.clicks) }}</template>
+              <template #targetClickRate="{ record }">{{ formatPercent(record.clickRate) }}</template>
+              <template #empty>{{ t('contentPerformance.targets.empty') }}</template>
+            </a-table>
+          </div>
           <AdminEmptyState
-            v-else
+            v-if="!detail.trend.length"
             :title="t('contentPerformance.trend.emptyTitle')"
             :description="t('contentPerformance.trend.emptyDescription')" />
         </div>
@@ -152,13 +210,13 @@
 <script lang="ts">
 import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
 import { IconBook, IconCheckCircle, IconClockCircle, IconEye, IconRefresh, IconUserGroup } from '@arco-design/web-vue/es/icon'
-import type { AdminContentAnalytics, ContentAnalyticsOverview, ContentAnalyticsRange, ContentAnalyticsTrend, ContentArticleAnalyticsDetail, ContentArticlePerformance, ContentContinuationMetrics } from '@stellar-beacon/api-contract'
+import type { AdminContentAnalytics, ContentAnalyticsOverview, ContentAnalyticsRange, ContentAnalyticsTrend, ContentArticleAnalyticsDetail, ContentArticlePerformance, ContentContinuationTarget, ContentContinuationMetrics } from '@stellar-beacon/api-contract'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminEChart from '@/components/AdminEChart.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import AdminStatCard from '@/components/AdminStatCard.vue'
-import { apiErrorMessage, getAdminContentAnalytics, getAdminContentArticleAnalytics, listAdminContentArticles } from '@/api/http'
+import { apiErrorMessage, getAdminContentAnalytics, getAdminContentArticleAnalytics, listAdminContentArticles, listAdminContinuationTargets } from '@/api/http'
 import { t } from '@/i18n'
 import { useThemeStore } from '@/stores/theme'
 import { chartSeriesColor, verticalFade } from '@/utils/chart-theme'
@@ -191,6 +249,7 @@ export default defineComponent({
     const themeStore = useThemeStore()
     const range = ref<ContentAnalyticsRange>('7d')
     const sort = ref('views')
+    const targetSort = ref('clicks')
     const analytics = reactive<AdminContentAnalytics>(emptyAnalytics())
     const articles = ref<ContentArticlePerformance[]>([])
     const total = ref(0)
@@ -203,6 +262,11 @@ export default defineComponent({
     const detailError = ref('')
     const detail = ref<ContentArticleAnalyticsDetail | null>(null)
     const detailArticleID = ref(0)
+    const targets = ref<ContentContinuationTarget[]>([])
+    const targetTotal = ref(0)
+    const targetCurrent = ref(1)
+    const targetPageSize = ref(10)
+    const detailTargets = ref<ContentContinuationTarget[]>([])
 
     const stats = computed(() => [
       { testId: 'content-performance-views', label: t('contentPerformance.stats.views'), value: formatNumber(analytics.overview.views), caption: t('contentPerformance.stats.viewsCaption'), icon: IconEye, tone: 'blue' as const },
@@ -229,7 +293,22 @@ export default defineComponent({
       showTotal: true,
       showPageSize: true
     }))
+    const targetPagination = computed(() => ({
+      current: targetCurrent.value,
+      pageSize: targetPageSize.value,
+      total: targetTotal.value,
+      showTotal: true,
+      showPageSize: true
+    }))
 
+    const targetColumns = computed(() => [
+      { title: t('contentPerformance.targets.source'), dataIndex: 'sourceArticleTitle', slotName: 'targetSource', width: 220 },
+      { title: t('contentPerformance.targets.target'), dataIndex: 'targetTitle', slotName: 'targetTarget', width: 260 },
+      { title: t('contentPerformance.targets.placement'), dataIndex: 'placement', slotName: 'targetPlacement', width: 150 },
+      { title: t('contentPerformance.targets.clicks'), dataIndex: 'clicks', slotName: 'targetClicks', width: 90 },
+      { title: t('contentPerformance.targets.clickRate'), dataIndex: 'clickRate', slotName: 'targetClickRate', width: 120 }
+    ])
+    const detailTargetColumns = computed(() => targetColumns.value.slice(1))
     const rangeLabel = computed(() => t(`contentPerformance.range.${range.value === '7d' ? 'days7' : range.value === '30d' ? 'days30' : range.value === '90d' ? 'days90' : 'months12'}`))
     const trendOption = computed(() => trendChart(analytics.trend, analytics.unit))
     const continuationTrendOption = computed(() => continuationTrendChart(analytics.trend, analytics.unit))
@@ -240,13 +319,16 @@ export default defineComponent({
       loading.value = true
       errorMessage.value = ''
       try {
-        const [summary, page] = await Promise.all([
+        const [summary, page, targetPage] = await Promise.all([
           getAdminContentAnalytics(range.value),
-          listAdminContentArticles(range.value, sort.value, current.value, pageSize.value)
+          listAdminContentArticles(range.value, sort.value, current.value, pageSize.value),
+          listAdminContinuationTargets(range.value, targetSort.value, targetCurrent.value, targetPageSize.value)
         ])
         Object.assign(analytics, summary)
         articles.value = page.items
         total.value = page.total
+        targets.value = targetPage.items
+        targetTotal.value = targetPage.total
       } catch (error) {
         errorMessage.value = apiErrorMessage(error, t('contentPerformance.loadFailed'))
       } finally {
@@ -256,6 +338,12 @@ export default defineComponent({
 
     const reload = () => {
       current.value = 1
+      targetCurrent.value = 1
+      void load()
+    }
+
+    const reloadTargets = () => {
+      targetCurrent.value = 1
       void load()
     }
 
@@ -270,6 +358,16 @@ export default defineComponent({
       void load()
     }
 
+    const changeTargetPage = (page: number) => {
+      targetCurrent.value = page
+      void load()
+    }
+
+    const changeTargetPageSize = (size: number) => {
+      targetPageSize.value = size
+      targetCurrent.value = 1
+      void load()
+    }
     const openDetail = async (articleID: number) => {
       detailArticleID.value = articleID
       detailVisible.value = true
@@ -285,7 +383,12 @@ export default defineComponent({
     const loadDetail = async (articleID: number) => {
       detailLoading.value = true
       try {
-        detail.value = await getAdminContentArticleAnalytics(articleID, range.value)
+        const [articleDetail, targetPage] = await Promise.all([
+          getAdminContentArticleAnalytics(articleID, range.value),
+          listAdminContinuationTargets(range.value, 'clicks', 1, 20, articleID)
+        ])
+        detail.value = articleDetail
+        detailTargets.value = targetPage.items
       } catch (error) {
         detailError.value = apiErrorMessage(error, t('contentPerformance.detail.loadFailed'))
       } finally {
@@ -330,6 +433,9 @@ export default defineComponent({
       }
     }
 
+    const placementLabel = (placement: string) => t(`contentPerformance.targets.placements.${placement}`)
+
+    const targetLabel = (target: ContentContinuationTarget) => target.targetTitle || `#${target.targetId}`
     onMounted(() => void load())
 
     return {
@@ -339,6 +445,15 @@ export default defineComponent({
       analytics,
       articles,
       total,
+      targets,
+      targetTotal,
+      targetSort,
+      targetPagination,
+      targetColumns,
+      detailTargets,
+      detailTargetColumns,
+      placementLabel,
+      targetLabel,
       loading,
       errorMessage,
       detailVisible,
@@ -357,6 +472,9 @@ export default defineComponent({
       reload,
       changePage,
       changePageSize,
+      changeTargetPage,
+      changeTargetPageSize,
+      reloadTargets,
       openDetail,
       reloadDetail,
       formatNumber,
@@ -425,6 +543,35 @@ function formatDuration(value: unknown): string {
   line-height: 1.2;
 }
 
+.content-performance-targets {
+  margin-top: 16px;
+}
+
+.content-performance-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.content-performance-target span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content-performance-targets .admin-title-cell {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.content-performance-detail-targets {
+  margin-top: 22px;
+}
+
+.content-performance-detail-targets h4 {
+  margin: 0 0 12px;
+}
 .content-performance-ranking {
   margin-top: 16px;
 }

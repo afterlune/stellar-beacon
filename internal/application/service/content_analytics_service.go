@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"math"
 	"sort"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 
@@ -32,6 +35,7 @@ type ContentAnalyticsService interface {
 	TrackContinuationEvent(c *gin.Context) model.ResultVO
 	GetContentAnalytics(ctx context.Context, rangeValue string) model.ResultVO
 	ListContentAnalyticsArticles(ctx context.Context, rangeValue, sortBy string, current, size int) model.ResultVO
+	ListContinuationTargets(ctx context.Context, rangeValue, sortBy string, sourceArticleID, current, size int) model.ResultVO
 	GetContentAnalyticsArticle(ctx context.Context, articleID int, rangeValue string) model.ResultVO
 }
 
@@ -165,6 +169,10 @@ func (s *MyContentAnalyticsService) TrackContinuationEvent(c *gin.Context) model
 	if article.Id == 0 || article.IsDelete != 0 || article.Status != 1 {
 		return model.ResultFailWithMessage("文章不存在")
 	}
+	target, err := s.validateContinuationTarget(c.Request.Context(), article, eventType, vo)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
 	identity, err := s.visitor.Resolve(c.Request.Context(), c.Request)
 	if err != nil {
 		return model.ResultFailWithMessage("无法识别续读事件")
@@ -185,10 +193,124 @@ func (s *MyContentAnalyticsService) TrackContinuationEvent(c *gin.Context) model
 			return model.ResultFailWithCodeAndMessage(42900, "请求过于频繁，请稍后再试")
 		}
 	}
-	if err := s.repo.RecordContinuationEvent(c.Request.Context(), articleID, timeNow(), eventType); err != nil {
+	if err := s.repo.RecordContinuationEvent(c.Request.Context(), articleID, timeNow(), eventType, target); err != nil {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
+}
+
+func (s *MyContentAnalyticsService) validateContinuationTarget(ctx context.Context, article entity.TArticle, eventType port.ContinuationEventType, vo model.ArticleContinuationEventVO) (*port.ContinuationTarget, error) {
+	if eventType.IsImpression() {
+		if strings.TrimSpace(vo.TargetType) != "" || vo.TargetId != 0 || strings.TrimSpace(vo.Placement) != "" || vo.Position != 0 {
+			return nil, apperrors.Invalid("content_analytics.continuation_target", "impression events must not carry a target")
+		}
+		return nil, nil
+	}
+	if !eventType.IsClick() {
+		return nil, apperrors.Invalid("content_analytics.continuation_target", "unsupported continuation event")
+	}
+	target := &port.ContinuationTarget{
+		Type:      port.ContinuationTargetType(strings.TrimSpace(vo.TargetType)),
+		Id:        vo.TargetId,
+		Placement: port.ContinuationPlacement(strings.TrimSpace(vo.Placement)),
+		Position:  vo.Position,
+	}
+	if !target.Type.Valid() || target.Id <= 0 || target.Position < 0 {
+		return nil, apperrors.Invalid("content_analytics.continuation_target", "invalid continuation target")
+	}
+	switch eventType {
+	case port.ContinuationEventRelatedClick:
+		if target.Type != port.ContinuationTargetArticle || target.Placement != port.ContinuationPlacementRelated || target.Position < 1 || target.Position > 3 {
+			return nil, apperrors.Invalid("content_analytics.continuation_target", "invalid related continuation target")
+		}
+		related, err := s.articles.ListRelatedArticles(ctx, article.Id, article.CategoryId, article.SeriesId, 3)
+		if err != nil {
+			return nil, err
+		}
+		if len(related) < target.Position || related[target.Position-1] == nil || related[target.Position-1].Id != target.Id {
+			return nil, apperrors.Invalid("content_analytics.continuation_target", "related target is no longer recommended")
+		}
+	case port.ContinuationEventSeriesClick:
+		if article.SeriesId <= 0 {
+			return nil, apperrors.Invalid("content_analytics.continuation_target", "source article has no series")
+		}
+		switch target.Placement {
+		case port.ContinuationPlacementSeriesPrevious, port.ContinuationPlacementSeriesNext:
+			if target.Type != port.ContinuationTargetArticle || target.Position != 0 {
+				return nil, apperrors.Invalid("content_analytics.continuation_target", "invalid series article target")
+			}
+			articles, err := s.articles.ListArticleCardsBySeries(ctx, article.SeriesId)
+			if err != nil {
+				return nil, err
+			}
+			index := -1
+			for i, candidate := range articles {
+				if candidate != nil && candidate.Id == article.Id {
+					index = i
+					break
+				}
+			}
+			if index < 0 {
+				return nil, apperrors.Invalid("content_analytics.continuation_target", "source article is not in its series")
+			}
+			neighborIndex := index - 1
+			if target.Placement == port.ContinuationPlacementSeriesNext {
+				neighborIndex = index + 1
+			}
+			if neighborIndex < 0 || neighborIndex >= len(articles) || articles[neighborIndex] == nil || articles[neighborIndex].Id != target.Id || articles[neighborIndex].Status != 1 {
+				return nil, apperrors.Invalid("content_analytics.continuation_target", "target is not the adjacent public article")
+			}
+		case port.ContinuationPlacementSeriesIndex:
+			if target.Type != port.ContinuationTargetSeries || target.Id != article.SeriesId || target.Position != 0 {
+				return nil, apperrors.Invalid("content_analytics.continuation_target", "invalid series index target")
+			}
+		default:
+			return nil, apperrors.Invalid("content_analytics.continuation_target", "invalid series placement")
+		}
+	default:
+		return nil, apperrors.Invalid("content_analytics.continuation_target", "unsupported continuation target")
+	}
+	return target, nil
+}
+
+func (s *MyContentAnalyticsService) ListContinuationTargets(ctx context.Context, rangeValue, sortBy string, sourceArticleID, current, size int) model.ResultVO {
+	if current < 1 {
+		current = 1
+	}
+	if size < 1 || size > 100 {
+		size = 20
+	}
+	window := resolveContentAnalyticsRange(rangeValue, timeNow())
+	rows, err := s.repo.ListContinuationTargetMetrics(ctx, window.Start.Format("2006-01-02"), window.End.Format("2006-01-02"), sourceArticleID)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	items := make([]model.ContentContinuationTargetDTO, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, model.ContentContinuationTargetDTO{
+			RowKey:             fmt.Sprintf("%d-%s-%d-%s-%d", row.SourceArticleId, row.TargetType, row.TargetId, row.Placement, row.Position),
+			SourceArticleID:    row.SourceArticleId,
+			SourceArticleTitle: row.SourceArticleTitle,
+			TargetType:         string(row.TargetType),
+			TargetID:           row.TargetId,
+			TargetTitle:        row.TargetTitle,
+			Placement:          string(row.Placement),
+			Position:           row.Position,
+			Clicks:             row.Clicks,
+			ModuleImpressions:  row.ModuleImpressions,
+			ClickRate:          contentPercentage(row.Clicks, row.ModuleImpressions),
+		})
+	}
+	sortContinuationTargets(items, sortBy)
+	start := (current - 1) * size
+	if start > len(items) {
+		start = len(items)
+	}
+	end := start + size
+	if end > len(items) {
+		end = len(items)
+	}
+	return model.ResultOkWithData(model.PageResultDTO{Records: items[start:end], Count: len(items)})
 }
 
 func (s *MyContentAnalyticsService) GetContentAnalytics(ctx context.Context, rangeValue string) model.ResultVO {
@@ -541,6 +663,41 @@ func sortContentArticles(items []model.ContentArticlePerformanceDTO, sortBy stri
 			return false
 		}
 		return items[i].ArticleID > items[j].ArticleID
+	})
+}
+
+func sortContinuationTargets(items []model.ContentContinuationTargetDTO, sortBy string) {
+	less := func(i, j int) bool {
+		if items[i].Clicks != items[j].Clicks {
+			return items[i].Clicks > items[j].Clicks
+		}
+		if items[i].ClickRate != items[j].ClickRate {
+			return items[i].ClickRate > items[j].ClickRate
+		}
+		return items[i].TargetID > items[j].TargetID
+	}
+	if strings.TrimSpace(sortBy) == "clickRate" {
+		less = func(i, j int) bool {
+			if items[i].ClickRate != items[j].ClickRate {
+				return items[i].ClickRate > items[j].ClickRate
+			}
+			if items[i].Clicks != items[j].Clicks {
+				return items[i].Clicks > items[j].Clicks
+			}
+			return items[i].TargetID > items[j].TargetID
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if less(i, j) {
+			return true
+		}
+		if less(j, i) {
+			return false
+		}
+		if items[i].SourceArticleID != items[j].SourceArticleID {
+			return items[i].SourceArticleID > items[j].SourceArticleID
+		}
+		return items[i].TargetID > items[j].TargetID
 	})
 }
 

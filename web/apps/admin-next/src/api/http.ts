@@ -1,7 +1,8 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
+  type ContentContinuationTarget, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
 export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
@@ -184,6 +185,21 @@ export async function getAdminContentArticleAnalytics(articleId: number, range: 
   return responseData(response)
 }
 
+export async function listAdminContinuationTargets(
+  range: ContentAnalyticsRange,
+  sort: string,
+  current: number,
+  size: number,
+  sourceArticleId?: number
+): Promise<Page<ContentContinuationTarget>> {
+  return listAdminPage<ContentContinuationTarget>('admin/content/analytics/continuation-targets', {
+    range,
+    sort,
+    current,
+    size,
+    ...(sourceArticleId ? { sourceArticleId } : {})
+  })
+}
 export async function listAdminJobTargets(): Promise<AdminJobTarget[]> {
   const response = await http.get<ResultVO<AdminJobTarget[]>>('admin/jobs/targets')
   return responseData(response)

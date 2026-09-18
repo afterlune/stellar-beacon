@@ -145,7 +145,13 @@ export default {
   getSeriesDetail: (seriesId: any) => {
     return http.get('/public/series/' + encodeURIComponent(seriesId))
   },
-  trackContinuationEvent: (params: { articleId: number; eventType: string }) => {
-    return http.post(`/public/articles/${encodeURIComponent(params.articleId)}/continuation-events`, { eventType: params.eventType })
+  trackContinuationEvent: (params: { articleId: number; eventType: string; targetType?: string; targetId?: number; placement?: string; position?: number }) => {
+    return http.post(`/public/articles/${encodeURIComponent(params.articleId)}/continuation-events`, {
+      eventType: params.eventType,
+      targetType: params.targetType,
+      targetId: params.targetId,
+      placement: params.placement,
+      position: params.position
+    })
   }
 }

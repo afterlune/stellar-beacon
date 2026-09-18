@@ -1070,10 +1070,12 @@ surface under the article submenu. Its stable contract is intentionally small:
   `[data-testid="content-performance-continuation"]`,
   `[data-testid="content-performance-continuation-series"]`,
   `[data-testid="content-performance-continuation-related"]`,
+  `[data-testid="content-performance-targets"]`,
   `[data-testid="content-performance-ranking"]` and
-  `[data-testid="content-performance-detail"]`.
-- The continuation card and article detail render series/related impressions,
-  clicks and click-through rates from the aggregate daily counters.
+  `[data-testid="content-performance-detail"]` and
+  `[data-testid="content-performance-detail-targets"]`.
+- The continuation card, target ranking and article detail render module
+  impressions/clicks plus target-level attribution from the aggregate daily counters.
 - The page never renders raw account, IP, User-Agent or referrer values; the
   reading-session endpoint accepts only `sessionId`, `activeMs` and
   `maxScrollPercent`, while the continuation endpoint accepts only an

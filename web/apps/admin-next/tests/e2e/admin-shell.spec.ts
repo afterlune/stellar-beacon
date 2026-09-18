@@ -323,6 +323,34 @@ test.beforeEach(async ({ page }) => {
       return
     }
 
+    if (requestURL.pathname === '/api/v1/admin/content/analytics/continuation-targets') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          flag: true,
+          code: 20000,
+          message: '操作成功',
+          data: {
+            records: [{
+              rowKey: '7-article-20-related-1',
+              sourceArticleId: 7,
+              sourceArticleTitle: '内容表现测试文章',
+              targetType: 'article',
+              targetId: 20,
+              targetTitle: '有效推荐目标',
+              placement: 'related',
+              position: 1,
+              clicks: 8,
+              moduleImpressions: 20,
+              clickRate: 40
+            }],
+            count: 1
+          }
+        })
+      })
+      return
+    }
     if (requestURL.pathname === '/api/v1/admin/content/analytics/articles') {
       contentAnalyticsRange = requestURL.searchParams.get('range') || ''
       contentAnalyticsSort = requestURL.searchParams.get('sort') || ''
@@ -1231,6 +1259,9 @@ test('renders content performance and opens the article detail drawer', async ({
   await expect(page.getByTestId('content-performance-continuation')).toBeVisible()
   await expect(page.getByTestId('content-performance-continuation-series')).toContainText('20.00%')
   await expect(page.getByTestId('content-performance-continuation-related')).toContainText('20.00%')
+  await expect(page.getByTestId('content-performance-targets')).toBeVisible()
+  await expect(page.getByTestId('content-performance-targets')).toContainText('有效推荐目标')
+  await expect(page.getByTestId('content-performance-targets')).toContainText('40.00%')
   await expect(page.getByTestId('content-performance-ranking').getByText('内容表现测试文章')).toBeVisible()
   expect(contentAnalyticsRange).toBe('7d')
   expect(contentAnalyticsSort).toBe('views')
@@ -1244,6 +1275,7 @@ test('renders content performance and opens the article detail drawer', async ({
   await expect(page.getByTestId('content-performance-detail')).toContainText('12,345')
   await expect(page.getByTestId('content-performance-detail')).toContainText('系列续读')
   await expect(page.getByTestId('content-performance-detail')).toContainText('相关阅读')
+  await expect(page.getByTestId('content-performance-detail-targets')).toContainText('有效推荐目标')
   expect(pageErrors()).toEqual([])
 })
 

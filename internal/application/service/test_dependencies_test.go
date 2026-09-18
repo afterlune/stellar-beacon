@@ -130,10 +130,13 @@ func (fakeContentAnalyticsRepository) RecordReadSession(context.Context, int, ti
 	return nil
 }
 
-func (fakeContentAnalyticsRepository) RecordContinuationEvent(context.Context, int, time.Time, port.ContinuationEventType) error {
+func (fakeContentAnalyticsRepository) RecordContinuationEvent(context.Context, int, time.Time, port.ContinuationEventType, *port.ContinuationTarget) error {
 	return nil
 }
 
+func (fakeContentAnalyticsRepository) ListContinuationTargetMetrics(context.Context, string, string, int) ([]port.ContinuationTargetMetric, error) {
+	return nil, nil
+}
 func (fakeContentAnalyticsRepository) ListDailyMetrics(context.Context, string, string) ([]port.ContentDailyMetric, error) {
 	return nil, nil
 }

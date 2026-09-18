@@ -331,6 +331,19 @@ export interface AdminContentAnalytics {
   generatedAt: string
 }
 
+export interface ContentContinuationTarget {
+  rowKey: string
+  sourceArticleId: number
+  sourceArticleTitle: string
+  targetType: 'article' | 'series' | string
+  targetId: number
+  targetTitle: string
+  placement: 'related' | 'series_previous' | 'series_next' | 'series_index' | string
+  position: number
+  clicks: number
+  moduleImpressions: number
+  clickRate: number
+}
 export interface ContentArticlePerformance {
   articleId: number
   articleTitle: string

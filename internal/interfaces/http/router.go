@@ -89,6 +89,7 @@ func RouterSetup(router *gin.Engine) {
 	admin.GET("/content/analytics", api.GetContentAnalytics)
 	admin.GET("/content/analytics/articles", api.ListContentAnalyticsArticles)
 	admin.GET("/content/analytics/articles/:articleId", api.GetContentAnalyticsArticle)
+	admin.GET("/content/analytics/continuation-targets", api.ListContentContinuationTargets)
 	admin.GET("/growth/summary", api.GetGrowthSummary)
 	admin.GET("/newsletter/health", api.GetNewsletterHealth)
 	admin.GET("/newsletter/subscribers", api.ListNewsletterSubscribers)

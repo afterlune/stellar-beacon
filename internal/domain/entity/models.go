@@ -256,6 +256,21 @@ type TArticleDailyMetric struct {
 	UpdateTime         time.Time `xorm:"updated not null DATETIME"`
 }
 
+// TArticleContinuationTarget aggregates clicks on one attributed continuation
+// target. The target id is intentionally not a foreign key because it can
+// reference either t_article or t_series.
+type TArticleContinuationTarget struct {
+	Id              int       `xorm:"autoincr not null pk unique INTEGER"`
+	SourceArticleId int       `xorm:"source_article_id not null unique(source_target_day) index INTEGER"`
+	TargetType      string    `xorm:"target_type not null unique(source_target_day) VARCHAR(16)"`
+	TargetId        int       `xorm:"target_id not null unique(source_target_day) index INTEGER"`
+	Placement       string    `xorm:"placement not null unique(source_target_day) VARCHAR(24)"`
+	Position        int       `xorm:"position not null default 0 unique(source_target_day) SMALLINT"`
+	MetricDate      time.Time `xorm:"metric_date not null unique(source_target_day) index DATE"`
+	Clicks          int64     `xorm:"not null default 0 BIGINT"`
+	CreateTime      time.Time `xorm:"created not null DATETIME"`
+	UpdateTime      time.Time `xorm:"updated not null DATETIME"`
+}
 type TUserAuth struct {
 	Id            int       `xorm:"autoincr not null pk unique INTEGER"`
 	UserInfoId    int       `xorm:"not null comment('用户信息id') INTEGER"`

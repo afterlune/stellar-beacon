@@ -17,7 +17,7 @@
     "/v1/public/articles/{articleId}": { "get": { "summary": "文章模块", "description": "获取文章详情" } },
     "/v1/public/articles/{articleId}/access": { "post": { "summary": "文章模块", "description": "校验文章密码" } },
     "/v1/public/articles/{articleId}/read-sessions": { "post": { "summary": "内容表现", "description": "上报匿名阅读会话（仅 sessionId、activeMs、maxScrollPercent）" } },
-    "/v1/public/articles/{articleId}/continuation-events": { "post": { "summary": "内容表现", "description": "上报匿名续读曝光或点击（仅系列、相关阅读与事件类型）" } },
+    "/v1/public/articles/{articleId}/continuation-events": { "post": { "summary": "内容表现", "description": "上报匿名续读曝光或点击（含公开目标与推荐位）" } },
     "/v1/public/archives": { "get": { "summary": "文章模块", "description": "获取文章归档" } },
     "/v1/public/categories": { "get": { "summary": "分类模块", "description": "获取分类" } },
     "/v1/public/tags": { "get": { "summary": "标签模块", "description": "获取标签" } },
@@ -46,6 +46,7 @@
     "/v1/admin/content/analytics": { "get": { "summary": "内容表现", "description": "获取站点级内容表现概览" } },
     "/v1/admin/content/analytics/articles": { "get": { "summary": "内容表现", "description": "获取文章表现排行" } },
     "/v1/admin/content/analytics/articles/{articleId}": { "get": { "summary": "内容表现", "description": "获取单篇文章表现详情" } },
+    "/v1/admin/content/analytics/continuation-targets": { "get": { "summary": "内容表现", "description": "获取推荐目标点击归因排行" } },
     "/v1/admin/articles": { "get": { "summary": "文章模块", "description": "获取后台文章" }, "post": { "summary": "文章模块", "description": "保存文章" } },
     "/v1/admin/articles/featured": { "put": { "summary": "文章模块", "description": "修改文章置顶和推荐状态" } },
     "/v1/admin/articles/trash": { "put": { "summary": "文章模块", "description": "删除或恢复文章" } },
@@ -128,7 +129,11 @@
         "type": "object",
         "required": ["eventType"],
         "properties": {
-          "eventType": { "type": "string", "enum": ["series_impression", "series_click", "related_impression", "related_click"] }
+          "eventType": { "type": "string", "enum": ["series_impression", "series_click", "related_impression", "related_click"] },
+          "targetType": { "type": "string", "enum": ["article", "series"] },
+          "targetId": { "type": "integer", "minimum": 1 },
+          "placement": { "type": "string", "enum": ["related", "series_previous", "series_next", "series_index"] },
+          "position": { "type": "integer", "minimum": 0, "maximum": 3 }
         }
       }
     }

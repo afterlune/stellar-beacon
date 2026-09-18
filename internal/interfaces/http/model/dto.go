@@ -108,6 +108,19 @@ type ContentContinuationMetricsDTO struct {
 	ContinuationRate   float64 `json:"continuationRate"`
 }
 
+type ContentContinuationTargetDTO struct {
+	RowKey             string  `json:"rowKey"`
+	SourceArticleID    int     `json:"sourceArticleId"`
+	SourceArticleTitle string  `json:"sourceArticleTitle"`
+	TargetType         string  `json:"targetType"`
+	TargetID           int     `json:"targetId"`
+	TargetTitle        string  `json:"targetTitle"`
+	Placement          string  `json:"placement"`
+	Position           int     `json:"position"`
+	Clicks             int64   `json:"clicks"`
+	ModuleImpressions  int64   `json:"moduleImpressions"`
+	ClickRate          float64 `json:"clickRate"`
+}
 type ContentAnalyticsOverviewDTO struct {
 	Views             int64                         `json:"views"`
 	UniqueReaders     int64                         `json:"uniqueReaders"`

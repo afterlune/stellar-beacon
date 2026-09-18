@@ -28,13 +28,13 @@ function articleFixture(id: number, title: string) {
   }
 }
 
-async function mockArticleReading(page: Page, onContinuationEvent?: (event: { articleId: number; eventType: string }) => void): Promise<void> {
+async function mockArticleReading(page: Page, onContinuationEvent?: (event: { articleId: number; eventType: string; targetType?: string; targetId?: number; placement?: string; position?: number }) => void): Promise<void> {
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     const continuationMatch = path.match(/^\/api\/v1\/public\/articles\/(\d+)\/continuation-events$/)
     if (continuationMatch) {
-      const body = route.request().postDataJSON() as { eventType?: string }
-      onContinuationEvent?.({ articleId: Number(continuationMatch[1]), eventType: String(body?.eventType || '') })
+      const body = route.request().postDataJSON() as { eventType?: string; targetType?: string; targetId?: number; placement?: string; position?: number }
+      onContinuationEvent?.({ articleId: Number(continuationMatch[1]), eventType: String(body?.eventType || ''), targetType: body?.targetType, targetId: body?.targetId, placement: body?.placement, position: body?.position })
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'OK', message: '操作成功', data: null }) })
       return
     }
@@ -126,7 +126,7 @@ test.describe('mobile front shell', () => {
 
 test.describe('article reading experience', () => {
   test('tracks visible continuation impressions and clicks', async ({ page }) => {
-    const events: Array<{ articleId: number; eventType: string }> = []
+    const events: Array<{ articleId: number; eventType: string; targetType?: string; targetId?: number; placement?: string; position?: number }> = []
     await mockArticleReading(page, (event) => events.push(event))
 
     await page.goto('/articles/8')
@@ -135,12 +135,14 @@ test.describe('article reading experience', () => {
     await page.getByTestId('series-next').evaluate((element) => (element as HTMLElement).click())
     await expect(page).toHaveURL(/\/articles\/9$/)
     await expect.poll(() => events.filter((event) => event.articleId === 8 && event.eventType === 'series_click').length).toBe(1)
+    expect(events.find((event) => event.eventType === 'series_click')).toMatchObject({ targetType: 'article', targetId: 9, placement: 'series_next', position: 0 })
 
     await page.goto('/articles/8')
     await page.getByTestId('related-articles').scrollIntoViewIfNeeded()
     await expect.poll(() => events.filter((event) => event.articleId === 8 && event.eventType === 'related_impression').length).toBe(1)
     await page.getByTestId('related-articles').locator('a').first().evaluate((element) => (element as HTMLElement).click())
     await expect.poll(() => events.filter((event) => event.articleId === 8 && event.eventType === 'related_click').length).toBe(1)
+    expect(events.find((event) => event.eventType === 'related_click')).toMatchObject({ targetType: 'article', targetId: 20, placement: 'related', position: 1 })
   })
   test('keeps series navigation separate from related reading', async ({ page }) => {
     await mockArticleReading(page)

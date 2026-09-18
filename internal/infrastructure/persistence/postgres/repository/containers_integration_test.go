@@ -103,7 +103,10 @@ CREATE TABLE t_role_menu (id INTEGER PRIMARY KEY, role_id INTEGER, menu_id INTEG
 CREATE TABLE t_role_resource (id INTEGER PRIMARY KEY, role_id INTEGER, resource_id INTEGER);
 CREATE TABLE t_photo_album (id INTEGER PRIMARY KEY, album_name VARCHAR(50) NOT NULL, album_desc VARCHAR(100) NOT NULL, album_cover VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_photo (id INTEGER PRIMARY KEY, album_id INTEGER NOT NULL, photo_name VARCHAR(50) NOT NULL, photo_desc VARCHAR(100), photo_src VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
-CREATE TABLE t_article (
+CREATE TABLE t_series (
+    id INTEGER PRIMARY KEY, series_name VARCHAR(50) NOT NULL, series_desc VARCHAR(255), cover VARCHAR(1024),
+    is_delete SMALLINT NOT NULL DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
+);CREATE TABLE t_article (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, category_id INTEGER, article_cover VARCHAR(1024),
     article_title VARCHAR(50) NOT NULL, article_content TEXT NOT NULL, article_content_html TEXT,
     series_id INTEGER, series_order INTEGER,
@@ -113,6 +116,13 @@ CREATE TABLE t_article (
     create_time TIMESTAMP, update_time TIMESTAMP
 );
 CREATE TABLE t_article_tag (id INTEGER PRIMARY KEY, article_id INTEGER NOT NULL, tag_id INTEGER NOT NULL);
+CREATE TABLE t_article_continuation_target (
+    id SERIAL PRIMARY KEY, source_article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+    target_type VARCHAR(16) NOT NULL, target_id INTEGER NOT NULL, placement VARCHAR(24) NOT NULL,
+    position SMALLINT NOT NULL DEFAULT 0, metric_date DATE NOT NULL, clicks BIGINT NOT NULL DEFAULT 0,
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (source_article_id, target_type, target_id, placement, position, metric_date)
+);
 CREATE TABLE t_article_daily_metric (
     id SERIAL PRIMARY KEY, article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
     metric_date DATE NOT NULL, views BIGINT NOT NULL DEFAULT 0, unique_readers BIGINT NOT NULL DEFAULT 0,
@@ -138,7 +148,7 @@ INSERT INTO t_role_menu (id, role_id, menu_id) VALUES (1, 1, 1);
 INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1);
 INSERT INTO t_photo_album (id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 'integration album', 'integration', '', 0, 1);
 INSERT INTO t_photo (id, album_id, photo_name, photo_src, is_delete) VALUES (1, 1, 'integration photo', 'https://example.com/photo.jpg', 0);
-INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 1, 'integration article', 'content', 10, 1, 0, 0, 0, 1, 1);
+INSERT INTO t_series (id, series_name, is_delete) VALUES (10, 'integration series', 0);INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 1, 'integration article', 'content', 10, 1, 0, 0, 0, 1, 1);
 INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES
     (2, 1, 1, 'same series article', 'content', 10, 2, 0, 0, 0, 1, 1),
     (3, 1, 2, 'shared tag article', 'content', NULL, 0, 0, 0, 0, 1, 1),
@@ -226,19 +236,17 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	}
 	for _, eventType := range []port.ContinuationEventType{
 		port.ContinuationEventSeriesImpression,
-		port.ContinuationEventSeriesClick,
 		port.ContinuationEventRelatedImpression,
 		port.ContinuationEventRelatedImpression,
-		port.ContinuationEventRelatedClick,
 	} {
-		if err := contentAnalytics.RecordContinuationEvent(ctx, 1, time.Now(), eventType); err != nil {
+		if err := contentAnalytics.RecordContinuationEvent(ctx, 1, time.Now(), eventType, nil); err != nil {
 			t.Fatalf("record continuation event %s: %v", eventType, err)
 		}
 	}
 	dailyMetrics, err := contentAnalytics.GetArticleDailyMetrics(ctx, 1, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
 	if err != nil || len(dailyMetrics) != 1 || dailyMetrics[0].Views != 3 || dailyMetrics[0].CompletedSessions != 2 ||
-		dailyMetrics[0].SeriesImpressions != 1 || dailyMetrics[0].SeriesClicks != 1 ||
-		dailyMetrics[0].RelatedImpressions != 2 || dailyMetrics[0].RelatedClicks != 1 {
+		dailyMetrics[0].SeriesImpressions != 1 || dailyMetrics[0].SeriesClicks != 0 ||
+		dailyMetrics[0].RelatedImpressions != 2 || dailyMetrics[0].RelatedClicks != 0 {
 		t.Fatalf("unexpected content analytics daily metrics: metrics=%v err=%v", dailyMetrics, err)
 	}
 	siteDailyMetrics, err := contentAnalytics.ListDailyMetrics(ctx, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
@@ -248,15 +256,32 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	}
 	articleMetrics, err := contentAnalytics.ListArticleMetrics(ctx, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
 	if err != nil || len(articleMetrics) != 1 || articleMetrics[0].ArticleId != 1 || articleMetrics[0].CompletedSessions != 2 ||
-		articleMetrics[0].SeriesClicks != 1 || articleMetrics[0].RelatedClicks != 1 {
+		articleMetrics[0].SeriesClicks != 0 || articleMetrics[0].RelatedClicks != 0 {
 		t.Fatalf("unexpected article content analytics metrics: metrics=%v err=%v", articleMetrics, err)
 	}
-	if err := contentAnalytics.RecordContinuationEvent(ctx, 2, time.Now(), port.ContinuationEventSeriesClick); err != nil {
+	if err := contentAnalytics.RecordContinuationEvent(ctx, 2, time.Now(), port.ContinuationEventSeriesClick, &port.ContinuationTarget{
+		Type: port.ContinuationTargetArticle, Id: 3, Placement: port.ContinuationPlacementSeriesNext,
+	}); err != nil {
 		t.Fatalf("create continuation-only metric row: %v", err)
 	}
 	continuationOnly, err := contentAnalytics.GetArticleDailyMetrics(ctx, 2, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
 	if err != nil || len(continuationOnly) != 1 || continuationOnly[0].Views != 0 || continuationOnly[0].SeriesClicks != 1 {
 		t.Fatalf("unexpected continuation-only metrics: metrics=%v err=%v", continuationOnly, err)
+	}
+	if err := contentAnalytics.RecordContinuationEvent(ctx, 1, time.Now(), port.ContinuationEventRelatedClick, &port.ContinuationTarget{
+		Type: port.ContinuationTargetArticle, Id: 3, Placement: port.ContinuationPlacementRelated, Position: 1,
+	}); err != nil {
+		t.Fatalf("record attributed continuation click: %v", err)
+	}
+	if err := contentAnalytics.RecordContinuationEvent(ctx, 1, time.Now(), port.ContinuationEventRelatedClick, &port.ContinuationTarget{
+		Type: port.ContinuationTargetArticle, Id: 3, Placement: port.ContinuationPlacementRelated, Position: 1,
+	}); err != nil {
+		t.Fatalf("record attributed continuation retry: %v", err)
+	}
+	targetMetrics, err := contentAnalytics.ListContinuationTargetMetrics(ctx, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"), 1)
+	if err != nil || len(targetMetrics) != 1 || targetMetrics[0].TargetId != 3 || targetMetrics[0].Clicks != 2 ||
+		targetMetrics[0].ModuleImpressions != 2 || targetMetrics[0].TargetTitle != "shared tag article" {
+		t.Fatalf("unexpected continuation target metrics: metrics=%v err=%v", targetMetrics, err)
 	}
 	roles, err := NewRoleRepository(xormEngine).ListRolesByUserInfoID(ctx, 1)
 	if err != nil || len(roles) != 1 || roles[0] != "user" {

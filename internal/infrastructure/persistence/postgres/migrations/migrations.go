@@ -77,6 +77,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyContinuationAnalyticsSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyContinuationTargetSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -119,7 +122,7 @@ func applySchema(engine *xorm.Engine) error {
 		new(entity.TRoleMenu), new(entity.TRoleResource), new(entity.TSeries), new(entity.TTag),
 		new(entity.TTalk), new(entity.TUniqueView), new(entity.TUserAuth),
 		new(entity.TUserInfo), new(entity.TUserRole), new(entity.TWebsiteConfig),
-		new(entity.TArticleDailyMetric),
+		new(entity.TArticleDailyMetric), new(entity.TArticleContinuationTarget),
 	}
 	if err := engine.Sync2(models...); err != nil {
 		return fmt.Errorf("create application tables: %w", err)
@@ -795,6 +798,53 @@ func applyContinuationAnalyticsSchema(ctx context.Context, engine *xorm.Engine) 
 	return nil
 }
 
+// applyContinuationTargetSchema stores click attribution for the concrete
+// recommendation target while keeping the source article aggregate counters.
+func applyContinuationTargetSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 14)").Get(&applied); err != nil {
+		return fmt.Errorf("check continuation target migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin continuation target migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS t_article_continuation_target (
+			id SERIAL PRIMARY KEY,
+			source_article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			target_type VARCHAR(16) NOT NULL,
+			target_id INTEGER NOT NULL,
+			placement VARCHAR(24) NOT NULL,
+			position SMALLINT NOT NULL DEFAULT 0,
+			metric_date DATE NOT NULL,
+			clicks BIGINT NOT NULL DEFAULT 0,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (source_article_id, target_type, target_id, placement, position, metric_date)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_continuation_target_source_date ON t_article_continuation_target(source_article_id, metric_date)`,
+		`CREATE INDEX IF NOT EXISTS idx_continuation_target_target_date ON t_article_continuation_target(target_type, target_id, metric_date)`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply continuation target schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 14, "continuation-targets"); err != nil {
+		return fmt.Errorf("record continuation target migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit continuation target migration: %w", err)
+	}
+	return nil
+}
 func normalizeLegacyCron(expression string) string {
 	fields := strings.Fields(strings.TrimSpace(expression))
 	if len(fields) == 6 {

@@ -58,7 +58,7 @@ if ($null -eq $publicArticle) {
 }
 $contentArticleId = [int]$publicArticle.id
 $articleResponse = Invoke-IntegrationRequest -Uri "$blogBase/api/v1/public/articles/$contentArticleId"
-[void](Assert-IntegrationApiSuccess -Response $articleResponse -Name 'public article detail for content analytics')
+$articleDetail = Assert-IntegrationApiSuccess -Response $articleResponse -Name 'public article detail for content analytics'
 
 $readSessionId = [guid]::NewGuid().ToString()
 $readSessionBody = @{
@@ -71,10 +71,22 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
     [void](Assert-IntegrationApiSuccess -Response $readSession -Name "content analytics read session attempt $attempt")
 }
 
-foreach ($eventType in @('series_impression', 'series_click', 'related_impression', 'related_click')) {
-    $continuationBody = @{ eventType = $eventType } | ConvertTo-Json -Compress
+$continuationEvents = @(
+    @{ eventType = 'series_impression' },
+    @{ eventType = 'related_impression' }
+)
+$seriesId = [int]$articleDetail.data.seriesId
+if ($seriesId -gt 0) {
+    $continuationEvents += @{ eventType = 'series_click'; targetType = 'series'; targetId = $seriesId; placement = 'series_index'; position = 0 }
+}
+$relatedTarget = @($articleDetail.data.relatedArticles) | Where-Object { $null -ne $_ -and [int]$_.id -gt 0 } | Select-Object -First 1
+if ($null -ne $relatedTarget) {
+    $continuationEvents += @{ eventType = 'related_click'; targetType = 'article'; targetId = [int]$relatedTarget.id; placement = 'related'; position = 1 }
+}
+foreach ($event in $continuationEvents) {
+    $continuationBody = $event | ConvertTo-Json -Compress
     $continuation = Invoke-IntegrationRequest -Uri "$blogBase/api/v1/public/articles/$contentArticleId/continuation-events" -Method POST -ContentType 'application/json' -Body $continuationBody
-    [void](Assert-IntegrationApiSuccess -Response $continuation -Name "content analytics continuation event $eventType")
+    [void](Assert-IntegrationApiSuccess -Response $continuation -Name "content analytics continuation event $($event.eventType)")
 }
 $loginBody = 'username=' + [uri]::EscapeDataString($env:E2E_ADMIN_EMAIL) + '&password=' + [uri]::EscapeDataString($env:E2E_ADMIN_PASSWORD)
 $login = Invoke-IntegrationRequest -Uri "$adminBase/api/v1/auth/login" -Method POST -ContentType 'application/x-www-form-urlencoded' -Body $loginBody
@@ -89,7 +101,8 @@ $adminApi = @(
     @{ Name = 'website config API'; Uri = "$adminBase/api/v1/admin/site" },
     @{ Name = 'job targets API'; Uri = "$adminBase/api/v1/admin/jobs/targets" },
     @{ Name = 'content analytics overview API'; Uri = "$adminBase/api/v1/admin/content/analytics?range=7d" },
-    @{ Name = 'content analytics article list API'; Uri = "$adminBase/api/v1/admin/content/analytics/articles?range=7d&sort=views&current=1&size=10" }
+    @{ Name = 'content analytics article list API'; Uri = "$adminBase/api/v1/admin/content/analytics/articles?range=7d&sort=views&current=1&size=10" },
+    @{ Name = 'content analytics continuation targets API'; Uri = "$adminBase/api/v1/admin/content/analytics/continuation-targets?range=7d&sort=clicks&current=1&size=10" }
 )
 foreach ($item in $adminApi) {
     $response = Invoke-IntegrationRequest -Uri $item.Uri -Headers $authHeaders
@@ -116,8 +129,20 @@ if ([int]$contentAnalyticsDetail.data.overview.views -lt 1 -or [int]$contentAnal
     throw "content analytics did not persist the smoke reading session: $($contentAnalyticsDetailResponse.Content)"
 }
 $continuationOverview = $contentAnalyticsDetail.data.overview.continuation
-if ([int]$continuationOverview.seriesImpressions -lt 1 -or [int]$continuationOverview.seriesClicks -lt 1 -or [int]$continuationOverview.relatedImpressions -lt 1 -or [int]$continuationOverview.relatedClicks -lt 1) {
-    throw "content analytics did not persist the smoke continuation events: $($contentAnalyticsDetailResponse.Content)"
+if ([int]$continuationOverview.seriesImpressions -lt 1 -or [int]$continuationOverview.relatedImpressions -lt 1) {
+    throw "content analytics did not persist the smoke continuation impressions: $($contentAnalyticsDetailResponse.Content)"
+}
+if ($seriesId -gt 0 -and [int]$continuationOverview.seriesClicks -lt 1) {
+    throw "content analytics did not persist the smoke series continuation click: $($contentAnalyticsDetailResponse.Content)"
+}
+if ($null -ne $relatedTarget -and [int]$continuationOverview.relatedClicks -lt 1) {
+    throw "content analytics did not persist the smoke related continuation click: $($contentAnalyticsDetailResponse.Content)"
+}if ($seriesId -gt 0 -or $null -ne $relatedTarget) {
+    $continuationTargetResponse = Invoke-IntegrationRequest -Uri "$adminBase/api/v1/admin/content/analytics/continuation-targets?range=7d&sort=clicks&current=1&size=10&sourceArticleId=$contentArticleId" -Headers $authHeaders
+    $continuationTargetPayload = Assert-IntegrationApiSuccess -Response $continuationTargetResponse -Name 'content analytics continuation target detail API'
+    if ([int]$continuationTargetPayload.data.total -lt 1) {
+        throw "content analytics did not persist attributed continuation targets: $($continuationTargetResponse.Content)"
+    }
 }
 
 $adminListApi = @(

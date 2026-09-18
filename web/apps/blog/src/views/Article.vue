@@ -151,14 +151,14 @@
               <span class="series-context__eyebrow">{{ t('series.progress', { current: seriesIndex + 1, total: seriesArticles.length }) }}</span>
               <strong>{{ seriesInfo.seriesName }}</strong>
             </div>
-            <router-link :to="'/series/' + seriesInfo.id" @click="trackContinuationClick('series_click')">{{ t('series.backToSeries') }}</router-link>
+            <router-link :to="'/series/' + seriesInfo.id" @click="trackContinuationClick('series_click', 'series', seriesInfo.id, 'series_index', 0)">{{ t('series.backToSeries') }}</router-link>
           </div>
           <div class="series-context__nav">
-            <router-link v-if="seriesPrevious" class="series-context__link" :to="'/articles/' + seriesPrevious.id" data-testid="series-previous" @click="trackContinuationClick('series_click')">
+            <router-link v-if="seriesPrevious" class="series-context__link" :to="'/articles/' + seriesPrevious.id" data-testid="series-previous" @click="trackContinuationClick('series_click', 'article', seriesPrevious.id, 'series_previous', 0)">
               <small>{{ t('series.previous') }}</small>
               <span>{{ seriesPrevious.articleTitle }}</span>
             </router-link>
-            <router-link v-if="seriesNext" class="series-context__link series-context__link--next" :to="'/articles/' + seriesNext.id" data-testid="series-next" @click="trackContinuationClick('series_click')">
+            <router-link v-if="seriesNext" class="series-context__link series-context__link--next" :to="'/articles/' + seriesNext.id" data-testid="series-next" @click="trackContinuationClick('series_click', 'article', seriesNext.id, 'series_next', 0)">
               <small>{{ t('series.next') }}</small>
               <span>{{ seriesNext.articleTitle }}</span>
             </router-link>
@@ -167,7 +167,7 @@
         <section v-if="article.relatedArticles && article.relatedArticles.length" ref="relatedArticlesRef" class="related-articles" data-testid="related-articles" data-continuation-event="related_impression" :aria-labelledby="'related-title-' + articleId">
           <h2 :id="'related-title-' + articleId">{{ t('newsletter.related') }}</h2>
           <div class="related-articles__grid">
-            <router-link v-for="related in article.relatedArticles" :key="related.id" :to="'/articles/' + related.id" class="related-article" @click="trackContinuationClick('related_click')">
+            <router-link v-for="(related, index) in article.relatedArticles" :key="related.id" :to="'/articles/' + related.id" class="related-article" @click="trackContinuationClick('related_click', 'article', related.id, 'related', Number(index) + 1)">
               <span>{{ related.categoryName || t('settings.default-category') }}</span>
               <strong>{{ related.articleTitle }}</strong>
             </router-link>
@@ -366,10 +366,16 @@ export default defineComponent({
     }
     const continuationEventUrl = (articleId: number) => `${API_BASE_URL}/public/articles/${encodeURIComponent(String(articleId))}/continuation-events`
 
-    const sendContinuationEvent = (eventType: string) => {
+    const sendContinuationEvent = (
+      eventType: string,
+      targetType?: string,
+      targetId?: number,
+      placement?: string,
+      position?: number
+    ) => {
       const articleId = Number(reactiveData.articleId)
       if (!Number.isFinite(articleId) || articleId <= 0 || typeof navigator === 'undefined') return
-      const payload = JSON.stringify({ eventType })
+      const payload = JSON.stringify({ eventType, targetType, targetId, placement, position })
       const url = continuationEventUrl(articleId)
       if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) return
       void fetch(url, {
@@ -380,8 +386,8 @@ export default defineComponent({
       }).catch(() => undefined)
     }
 
-    const trackContinuationClick = (eventType: string) => {
-      sendContinuationEvent(eventType)
+    const trackContinuationClick = (eventType: string, targetType: string, targetId: number, placement: string, position: number) => {
+      sendContinuationEvent(eventType, targetType, targetId, placement, position)
     }
 
     const clearContinuationTimers = () => {

@@ -25,7 +25,11 @@ type ArticleReadSessionVO struct {
 // article page's continuation surfaces. It deliberately carries no target,
 // account or browser identifier.
 type ArticleContinuationEventVO struct {
-	EventType string `json:"eventType"`
+	EventType  string `json:"eventType"`
+	TargetType string `json:"targetType,omitempty"`
+	TargetId   int    `json:"targetId,omitempty"`
+	Placement  string `json:"placement,omitempty"`
+	Position   int    `json:"position,omitempty"`
 }
 
 type ArticleTopFeaturedVO struct {
