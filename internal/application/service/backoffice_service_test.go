@@ -43,6 +43,15 @@ func (f *fakeFriendLinkRepository) SaveOrUpdate(context.Context, entity.TFriendL
 }
 func (f *fakeFriendLinkRepository) Delete(context.Context, []int) error { return nil }
 
+func (f *fakeFriendLinkRepository) CreateApplication(_ context.Context, link entity.TFriendLink) (int, error) {
+	f.links = append(f.links, link)
+	return len(f.links), nil
+}
+func (f *fakeFriendLinkRepository) Review(context.Context, []int, int) error { return nil }
+func (f *fakeFriendLinkRepository) AddressExists(context.Context, string) (bool, error) {
+	return false, nil
+}
+
 func TestFriendLinkServiceMapsDomainRecordsToPublicDTO(t *testing.T) {
 	service := NewFriendLinkService(&fakeFriendLinkRepository{links: []entity.TFriendLink{{Id: 7, LinkName: "example"}}})
 	result := service.ListFriendLinks()

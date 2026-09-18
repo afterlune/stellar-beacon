@@ -136,6 +136,9 @@ export default {
   updateCommentNotice: (params: { notifyComment: number }) => {
     return http.put('/auth/me/notifications', params)
   },
+  applyFriendLink: (params: any) => {
+    return http.post('/public/links/applications', params)
+  },
   getSeriesList: () => {
     return http.get('/public/series')
   },

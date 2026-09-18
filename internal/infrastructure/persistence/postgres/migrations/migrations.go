@@ -60,6 +60,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applySeriesSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyFriendLinkReviewSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -516,6 +519,45 @@ func applySeriesSchema(ctx context.Context, engine *xorm.Engine) error {
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit series migration: %w", err)
+	}
+	return nil
+}
+
+// applyFriendLinkReviewSchema turns friend links into a reviewed resource:
+// reader submissions land as pending and only approved links stay public.
+// Historical rows are approved by definition, which the default preserves.
+func applyFriendLinkReviewSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 9)").Get(&applied); err != nil {
+		return fmt.Errorf("check friend link review migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin friend link review migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`ALTER TABLE t_friend_link ADD COLUMN IF NOT EXISTS status SMALLINT NOT NULL DEFAULT 1`,
+		`ALTER TABLE t_friend_link ADD COLUMN IF NOT EXISTS applicant_email VARCHAR(254) NOT NULL DEFAULT ''`,
+		`ALTER TABLE t_friend_link ADD COLUMN IF NOT EXISTS audit_time TIMESTAMPTZ NULL`,
+		`ALTER TABLE t_friend_link ALTER COLUMN link_address TYPE VARCHAR(255)`,
+		`CREATE INDEX IF NOT EXISTS idx_friend_link_status ON t_friend_link(status, id)`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply friend link review schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 9, "friend-link-review"); err != nil {
+		return fmt.Errorf("record friend link review migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit friend link review migration: %w", err)
 	}
 	return nil
 }

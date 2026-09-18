@@ -196,12 +196,15 @@ type ExceptionLogDTO struct {
 }
 
 type FriendLinkAdminDTO struct {
-	Id          int       `json:"id"`
-	LinkName    string    `json:"linkName"`
-	LinkAvatar  string    `json:"linkAvatar"`
-	LinkAddress string    `json:"linkAddress"`
-	LinkIntro   string    `json:"linkIntro"`
-	CreateTime  time.Time `json:"createTime"`
+	Id             int       `json:"id"`
+	LinkName       string    `json:"linkName"`
+	LinkAvatar     string    `json:"linkAvatar"`
+	LinkAddress    string    `json:"linkAddress"`
+	LinkIntro      string    `json:"linkIntro"`
+	Status         int       `json:"status"`
+	ApplicantEmail string    `json:"applicantEmail"`
+	AuditTime      time.Time `json:"auditTime"`
+	CreateTime     time.Time `json:"createTime"`
 }
 
 type FriendLinkDTO struct {

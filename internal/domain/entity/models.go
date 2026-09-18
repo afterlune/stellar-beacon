@@ -87,13 +87,16 @@ type TExceptionLog struct {
 }
 
 type TFriendLink struct {
-	Id          int       `xorm:"autoincr not null pk unique INTEGER"`
-	LinkName    string    `xorm:"not null comment('链接名') index VARCHAR(20)"`
-	LinkAvatar  string    `xorm:"not null comment('链接头像') VARCHAR(255)"`
-	LinkAddress string    `xorm:"not null comment('链接地址') VARCHAR(50)"`
-	LinkIntro   string    `xorm:"not null comment('链接介绍') VARCHAR(100)"`
-	CreateTime  time.Time `xorm:"created not null comment('创建时间') DATETIME"`
-	UpdateTime  time.Time `xorm:"updated comment('更新时间') DATETIME"`
+	Id             int       `xorm:"autoincr not null pk unique INTEGER"`
+	LinkName       string    `xorm:"not null comment('链接名') index VARCHAR(20)"`
+	LinkAvatar     string    `xorm:"not null comment('链接头像') VARCHAR(255)"`
+	LinkAddress    string    `xorm:"not null comment('链接地址') VARCHAR(255)"`
+	LinkIntro      string    `xorm:"not null comment('链接介绍') VARCHAR(100)"`
+	Status         int       `xorm:"status not null default 1 comment('状态 0待审 1通过 2拒绝') SMALLINT" json:"status"`
+	ApplicantEmail string    `xorm:"applicant_email comment('申请人邮箱') VARCHAR(254)" json:"applicantEmail"`
+	AuditTime      time.Time `xorm:"audit_time comment('审核时间') DATETIME" json:"auditTime"`
+	CreateTime     time.Time `xorm:"created not null comment('创建时间') DATETIME"`
+	UpdateTime     time.Time `xorm:"updated comment('更新时间') DATETIME"`
 }
 
 type TJob struct {

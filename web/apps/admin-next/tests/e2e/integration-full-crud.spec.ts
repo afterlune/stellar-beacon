@@ -37,6 +37,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
     await traceStep('reactions', () => runArticleReactionRoundTrip(page, token, suffix))
     await traceStep('comment-notify', () => runCommentNotificationRoundTrip(page, token, suffix))
     await traceStep('series', () => runSeriesRoundTrip(page, token, suffix))
+    await traceStep('link-application', () => runFriendLinkApplicationRoundTrip(page, token, suffix))
     await traceStep('album', () => runAlbumCRUD(page, suffix))
     await traceStep('job', () => runJobCRUD(page, suffix))
     await traceStep('role', () => runRoleCRUD(page, suffix))
@@ -829,6 +830,69 @@ async function runSeriesRoundTrip(page: Page, token: string, suffix: string): Pr
     }
     if (articleIDs.length > 0) {
       await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', articleIDs)
+    }
+  }
+}
+
+/**
+ * A reader submission must stay invisible until an administrator approves it,
+ * and a rejected submission must never surface.
+ */
+async function runFriendLinkApplicationRoundTrip(page: Page, token: string, suffix: string): Promise<void> {
+  const address = `https://e2e-link-${suffix}.example.test`
+  let linkID = 0
+  try {
+    const applied = await page.request.post('/api/v1/public/links/applications', {
+      data: {
+        linkName: `e2e-${suffix}`.slice(0, 20),
+        linkAvatar: '',
+        linkAddress: address,
+        linkIntro: 'integration application',
+        email: `e2e-link-${suffix}@example.test`
+      }
+    })
+    expect(applied.status(), 'submit application').toBe(200)
+    const appliedPayload = await applied.json() as { code?: string | number }
+    expect(appliedPayload.code === 'OK', 'application accepted').toBe(true)
+
+    const publicLinks = await page.request.get('/api/v1/public/links')
+    const publicPayload = await publicLinks.json() as { data?: Array<{ linkAddress: string }> }
+    expect((publicPayload.data || []).some((item) => item.linkAddress === address), 'pending links stay private').toBe(false)
+
+    const adminList = await page.request.get(`/api/v1/admin/friend-links?current=1&size=10&keywords=${encodeURIComponent(`e2e-${suffix}`.slice(0, 20))}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const adminItems = (await adminList.json() as { data?: { items?: Array<{ id: number; status: number; linkAddress: string; applicantEmail: string }> } }).data?.items || []
+    const pending = adminItems.find((item) => item.linkAddress === address)
+    expect(pending, 'pending application is visible to admins').toBeTruthy()
+    expect(Number(pending?.status), 'application starts pending').toBe(0)
+    expect(pending?.applicantEmail, 'applicant email is stored').toContain('example.test')
+    linkID = Number(pending?.id || 0)
+
+    const approved = await page.request.put('/api/v1/admin/friend-links/review', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { ids: [linkID], status: 1 }
+    })
+    expect(approved.status(), 'approve application').toBe(200)
+
+    const afterApprove = await page.request.get('/api/v1/public/links')
+    const approvedPayload = await afterApprove.json() as { data?: Array<{ linkAddress: string }> }
+    expect((approvedPayload.data || []).some((item) => item.linkAddress === address), 'approved links become public').toBe(true)
+
+    const rejected = await page.request.put('/api/v1/admin/friend-links/review', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { ids: [linkID], status: 2 }
+    })
+    expect(rejected.status(), 'reject application').toBe(200)
+    const afterReject = await page.request.get('/api/v1/public/links')
+    const rejectedPayload = await afterReject.json() as { data?: Array<{ linkAddress: string }> }
+    expect((rejectedPayload.data || []).some((item) => item.linkAddress === address), 'rejected links stay private').toBe(false)
+  } finally {
+    if (linkID > 0) {
+      await page.request.delete('/api/v1/admin/friend-links', {
+        headers: { Authorization: `Bearer ${token}` },
+        data: [linkID]
+      })
     }
   }
 }

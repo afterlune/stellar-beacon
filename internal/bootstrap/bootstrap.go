@@ -60,6 +60,8 @@ func Initialize() error {
 	growthRepo := repository.NewGrowthRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
+	service.ConfigureFriendLinkLimiter(redisCache)
+	service.ConfigureFriendLinkVisitor(visitorResolver)
 	stellarBeacon, err := service.NewStellarBeaconInfoService(service.StellarBeaconInfoServiceDeps{
 		Site:       site,
 		Articles:   article,

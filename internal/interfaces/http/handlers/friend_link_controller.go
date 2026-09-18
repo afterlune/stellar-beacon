@@ -32,6 +32,24 @@ func SaveOrUpdateFriendLink(c *gin.Context) {
 	c.JSON(http.StatusOK, friendLinkService.SaveOrUpdateFriendLink(c))
 }
 
+// ApplyFriendLink
+// @Summary		 友链模块
+// @Description  读者提交友链申请（进入待审）
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/public/links/applications [POST]
+func ApplyFriendLink(c *gin.Context) {
+	c.JSON(http.StatusOK, friendLinkService.ApplyFriendLink(c))
+}
+
+// ReviewFriendLinks
+// @Summary		 友链模块
+// @Description  审核友链申请
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/admin/friend-links/review [PUT]
+func ReviewFriendLinks(c *gin.Context) {
+	c.JSON(http.StatusOK, friendLinkService.ReviewFriendLinks(c))
+}
+
 // DeleteFriendLink
 // @Summary		 友链模块
 // @Description  删除友链

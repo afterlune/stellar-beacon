@@ -79,8 +79,25 @@
             <span class="link-intro" :title="String(record.linkIntro || '')">{{ record.linkIntro || '—' }}</span>
           </template>
           <template #createTime="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
+          <template #status="{ record }">
+            <a-tag v-if="Number(record.status) === 0" color="orange" data-testid="link-status-pending">{{ t('comments.links.statusPending') }}</a-tag>
+            <a-tag v-else-if="Number(record.status) === 2" color="red">{{ t('comments.links.statusRejected') }}</a-tag>
+            <a-tag v-else color="green">{{ t('comments.links.statusApproved') }}</a-tag>
+          </template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
+              <a-button
+                v-if="Number(record.status) === 0"
+                type="text"
+                size="small"
+                data-testid="link-approve"
+                @click="reviewLinks([Number(record.id)], 1)">{{ t('comments.links.approve') }}</a-button>
+              <a-button
+                v-if="Number(record.status) === 0"
+                type="text"
+                size="small"
+                status="danger"
+                @click="reviewLinks([Number(record.id)], 2)">{{ t('comments.links.reject') }}</a-button>
               <a-button type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
               <a-popconfirm :content="t('comments.links.deleteConfirm')" @ok="deleteLinks([Number(record.id)])">
                 <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
@@ -139,7 +156,7 @@ import { computed, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDelete, IconLink, IconPlus, IconRefresh } from '@arco-design/web-vue/es/icon'
 
-import { apiErrorMessage, deleteAdminFriendLinks, listAdminFriendLinks, saveAdminFriendLink } from '@/api/http'
+import { apiErrorMessage, deleteAdminFriendLinks, listAdminFriendLinks, reviewAdminFriendLinks, saveAdminFriendLink } from '@/api/http'
 import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminErrorState from '@/components/AdminErrorState.vue'
@@ -162,6 +179,7 @@ const columns = computed(() => [
   { title: t('comments.links.columnAddress'), dataIndex: 'linkAddress', slotName: 'address', ellipsis: true, tooltip: true, minWidth: 200 },
   { title: t('comments.links.columnIntro'), dataIndex: 'linkIntro', slotName: 'intro', ellipsis: true, tooltip: true, minWidth: 180 },
   { title: t('comments.common.createdAt'), dataIndex: 'createTime', slotName: 'createTime', width: 168 },
+  { title: t('comments.links.reviewPending'), dataIndex: 'status', slotName: 'status', width: 110 },
   { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 150 }
 ])
 
@@ -260,6 +278,16 @@ async function saveEditor(done: (closed: boolean) => void): Promise<void> {
     done(false)
   } finally {
     saving.value = false
+  }
+}
+
+const reviewLinks = async (ids: number[], status: number): Promise<void> => {
+  try {
+    await reviewAdminFriendLinks(ids, status)
+    Message.success(status === 1 ? t('comments.links.approved') : t('comments.links.rejected'))
+    await load()
+  } catch (error) {
+    Message.error(apiErrorMessage(error, t('comments.links.reviewFailed')))
   }
 }
 

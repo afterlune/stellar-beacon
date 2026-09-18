@@ -35,11 +35,26 @@ type ArticleRank struct {
 	ViewsCount   int    `json:"viewsCount"`
 }
 
+// Friend link review states: submissions are pending until an administrator
+// approves or rejects them, and only approved links are public.
+const (
+	FriendLinkStatusPending  = 0
+	FriendLinkStatusApproved = 1
+	FriendLinkStatusRejected = 2
+)
+
 type FriendLinkRepository interface {
+	// ListPublic returns approved links only.
 	ListPublic(ctx context.Context) ([]entity.TFriendLink, error)
 	ListAdmin(ctx context.Context, current, size int, keywords string) ([]entity.TFriendLink, int64, error)
 	SaveOrUpdate(ctx context.Context, link entity.TFriendLink) error
 	Delete(ctx context.Context, ids []int) error
+	// CreateApplication stores a reader submission as pending.
+	CreateApplication(ctx context.Context, link entity.TFriendLink) (int, error)
+	// Review approves or rejects submissions.
+	Review(ctx context.Context, ids []int, status int) error
+	// AddressExists reports whether a link with the same address is stored.
+	AddressExists(ctx context.Context, address string) (bool, error)
 }
 
 type JobFilter struct {

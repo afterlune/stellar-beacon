@@ -50,6 +50,23 @@ type SeriesVO struct {
 	Cover      string `json:"cover" form:"cover"`
 }
 
+// FriendLinkApplyVO is the public application payload. Honeypot is a hidden
+// field: bots fill it, readers never see it.
+type FriendLinkApplyVO struct {
+	LinkName    string `json:"linkName" form:"linkName"`
+	LinkAvatar  string `json:"linkAvatar" form:"linkAvatar"`
+	LinkAddress string `json:"linkAddress" form:"linkAddress"`
+	LinkIntro   string `json:"linkIntro" form:"linkIntro"`
+	Email       string `json:"email" form:"email"`
+	Honeypot    string `json:"website" form:"website"`
+}
+
+// FriendLinkReviewVO approves or rejects pending applications.
+type FriendLinkReviewVO struct {
+	Ids    []int `json:"ids" form:"ids"`
+	Status int   `json:"status" form:"status"`
+}
+
 type CommentVO struct {
 	TopicId        string `json:"topicId" form:"topicId"`
 	CommentContent string `json:"commentContent" form:"commentContent"`

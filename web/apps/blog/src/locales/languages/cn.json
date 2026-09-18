@@ -91,8 +91,19 @@
     "processing": "正在处理…",
     "done": "操作完成",
     "failed": "链接无效或已过期"
-  }
-  ,
+  },
+  "friends": {
+    "applyTitle": "申请友链",
+    "applyHint": "提交后会进入人工审核，通过后才会出现在这里。",
+    "applyName": "站点名称",
+    "applyAddress": "站点地址",
+    "applyAvatar": "头像地址（可选）",
+    "applyIntro": "一句话介绍（可选）",
+    "applyEmail": "联系邮箱（可选）",
+    "applySubmit": "提交申请",
+    "applyAccepted": "已收到申请，审核通过后会展示。",
+    "applyFailed": "提交失败，请稍后再试。"
+  },
   "reactions": {
     "like": "点赞",
     "favorite": "收藏",

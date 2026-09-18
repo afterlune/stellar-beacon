@@ -91,8 +91,19 @@
     "processing": "Processing…",
     "done": "Done",
     "failed": "This link is invalid or expired"
-  }
-  ,
+  },
+  "friends": {
+    "applyTitle": "Submit your site",
+    "applyHint": "Applications are reviewed by hand before they appear here.",
+    "applyName": "Site name",
+    "applyAddress": "Site URL",
+    "applyAvatar": "Avatar URL (optional)",
+    "applyIntro": "One-line description (optional)",
+    "applyEmail": "Contact email (optional)",
+    "applySubmit": "Submit",
+    "applyAccepted": "Application received. It appears here once approved.",
+    "applyFailed": "Submission failed. Please try again."
+  },
   "reactions": {
     "like": "Like",
     "favorite": "Save",

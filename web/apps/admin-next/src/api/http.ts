@@ -189,6 +189,11 @@ export async function saveAdminFriendLink(payload: { id?: number; linkName: stri
   responseData(response)
 }
 
+export async function reviewAdminFriendLinks(ids: number[], status: number): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>('admin/friend-links/review', { ids, status })
+  responseData(response)
+}
+
 export async function deleteAdminFriendLinks(ids: number[]): Promise<void> {
   const response = await http.delete<ResultVO<unknown>>('admin/friend-links', { data: ids })
   responseData(response)

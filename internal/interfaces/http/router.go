@@ -41,6 +41,7 @@ func RouterSetup(router *gin.Engine) {
 	public.POST("/growth/events", api.TrackGrowthEvent)
 	public.GET("/categories", api.ListCategories)
 	public.GET("/links", api.ListFriendLinks)
+	public.POST("/links/applications", api.ApplyFriendLink)
 	public.GET("/series", api.ListPublicSeries)
 	public.GET("/series/:seriesId", api.GetPublicSeries)
 	public.GET("/albums", api.ListPhotoAlbums)
@@ -118,6 +119,7 @@ func RouterSetup(router *gin.Engine) {
 	admin.DELETE("/comments", api.DeleteComments)
 	admin.GET("/friend-links", api.ListFriendLinkDTO)
 	admin.POST("/friend-links", api.SaveOrUpdateFriendLink)
+	admin.PUT("/friend-links/review", api.ReviewFriendLinks)
 	admin.DELETE("/friend-links", api.DeleteFriendLink)
 
 	admin.POST("/albums/cover", api.SavePhotoAlbumCover)
