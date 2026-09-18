@@ -28,6 +28,7 @@ type ArticleVO struct {
 	ArticleContentHTML string   `json:"articleContentHtml" form:"articleContentHtml"`
 	SeriesId           int      `json:"seriesId" form:"seriesId"`
 	SeriesOrder        int      `json:"seriesOrder" form:"seriesOrder"`
+	ScheduledAt        string   `json:"scheduledAt,omitempty" form:"scheduledAt"`
 	TagNames           []string `json:"tagNames" form:"tagNames"`
 	IsTop              int      `json:"isTop" from:"isTop"`
 	IsFeatured         int      `json:"isFeatured" form:"isFeatured"`

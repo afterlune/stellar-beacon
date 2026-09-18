@@ -63,6 +63,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyFriendLinkReviewSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyScheduledPublishSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -558,6 +561,42 @@ func applyFriendLinkReviewSchema(ctx context.Context, engine *xorm.Engine) error
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit friend link review migration: %w", err)
+	}
+	return nil
+}
+
+// applyScheduledPublishSchema adds the release timestamp used by status 4
+// (scheduled). Scheduled articles stay invisible because every public query
+// only reads status 1 and 2.
+func applyScheduledPublishSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 10)").Get(&applied); err != nil {
+		return fmt.Errorf("check scheduled publish migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin scheduled publish migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`ALTER TABLE t_article ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_article_scheduled ON t_article(status, scheduled_at)`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply scheduled publish schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 10, "scheduled-publish"); err != nil {
+		return fmt.Errorf("record scheduled publish migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit scheduled publish migration: %w", err)
 	}
 	return nil
 }

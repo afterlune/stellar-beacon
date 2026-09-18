@@ -20,6 +20,10 @@ import (
 	"github.com/goccy/go-json"
 )
 
+// ArticleStatusScheduled marks an article that the publisher task releases once
+// its scheduled_at passes.
+const ArticleStatusScheduled = 4
+
 type ArticleService interface {
 	ListTopAndFeaturedArticles(c *gin.Context) model.ResultVO
 	ListArticles(c *gin.Context) model.ResultVO
@@ -62,6 +66,44 @@ func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
 		search:     deps.Search,
 		newsletter: deps.Newsletter,
 	}, nil
+}
+
+// isPubliclyCacheable reports whether an article body may live in the shared
+// public cache. Only published, non-recycled articles qualify: drafts,
+// scheduled releases and password-protected posts must always be resolved
+// through the authenticated path.
+func isPubliclyCacheable(article port.Article) bool {
+	return article.IsDelete == 0 && article.Status == 1
+}
+
+// cacheArticle stores a published body and evicts every other state so a stale
+// public copy can never survive an unpublish, a recycle or a reschedule.
+func (a *MyArticleService) cacheArticle(ctx context.Context, id, status, isDelete int, value any) {
+	if a.cache == nil {
+		return
+	}
+	key := strconv.Itoa(id)
+	if isDelete != 0 || status != 1 {
+		a.evictArticleCache(ctx, key)
+		return
+	}
+	marshal, err := json.Marshal(value)
+	if err != nil {
+		slog.ErrorContext(ctx, "marshal article cache failed", "error", err)
+		return
+	}
+	if err := a.cache.Set(ctx, key, marshal, time.Hour*1); err != nil {
+		slog.WarnContext(ctx, "cache article failed", "error", err)
+	}
+}
+
+func (a *MyArticleService) evictArticleCache(ctx context.Context, articleID string) {
+	if a.cache == nil {
+		return
+	}
+	if err := a.cache.Delete(ctx, articleID); err != nil {
+		slog.WarnContext(ctx, "evict article cache failed", "error", err)
+	}
 }
 
 func (a *MyArticleService) articleRepository() port.ArticleRepository {
@@ -214,14 +256,21 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	if get != "" {
 		var dto model.ArticleDTO
 		if err := Unmarsh(get, &dto); err == nil {
-			sanitizePublicArticle(&dto)
-			a.attachArticleReactionCounts(c.Request.Context(), &dto)
-			if a.cache != nil {
-				if _, err := a.cache.Expire(c.Request.Context(), articleId, time.Hour*1); err != nil {
-					slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
+			// A cached body must never outlive the article's visibility: drafts,
+			// scheduled and recycled articles are only readable through the
+			// authenticated admin endpoints.
+			if !isPubliclyCacheable(dto) {
+				a.evictArticleCache(c.Request.Context(), articleId)
+			} else {
+				sanitizePublicArticle(&dto)
+				a.attachArticleReactionCounts(c.Request.Context(), &dto)
+				if a.cache != nil {
+					if _, err := a.cache.Expire(c.Request.Context(), articleId, time.Hour*1); err != nil {
+						slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
+					}
 				}
+				return model.ResultOkWithData(dto)
 			}
-			return model.ResultOkWithData(dto)
 		} else {
 			slog.WarnContext(c.Request.Context(), "decode article cache failed", "error", err)
 		}
@@ -540,6 +589,9 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("文章内容不能为空")
 	}
 	var article entity.TArticle
+	if err := normalizeScheduledAt(&articleVO); err != nil {
+		return model.ResultFromError(err)
+	}
 	marshal, err := json.Marshal(articleVO)
 	if err != nil {
 		return model.ResultFromError(err)
@@ -568,16 +620,7 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 				slog.ErrorContext(c.Request.Context(), "enqueue newsletter article failed", "articleId", articlebase.Id, "error", err)
 			}
 		}
-		marsha, err := json.Marshal(articlebase)
-		if err != nil {
-			slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
-			return model.ResultFail()
-		}
-		if a.cache != nil {
-			if err := a.cache.Set(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha, 0); err != nil {
-				slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
-			}
-		}
+		a.cacheArticle(c.Request.Context(), articlebase.Id, articlebase.Status, articlebase.IsDelete, articlebase)
 	}
 	return model.ResultOk()
 }
@@ -595,16 +638,7 @@ func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.Res
 		return model.ResultFromError(err)
 	}
 	if articlebase.Id != 0 {
-		marsha, err := json.Marshal(articlebase)
-		if err != nil {
-			slog.ErrorContext(c.Request.Context(), "marshal article cache failed", "error", err)
-			return model.ResultFail()
-		}
-		if a.cache != nil {
-			if err := a.cache.Set(c.Request.Context(), strconv.Itoa(articlebase.Id), marsha, 0); err != nil {
-				slog.WarnContext(c.Request.Context(), "cache article failed", "error", err)
-			}
-		}
+		a.cacheArticle(c.Request.Context(), articlebase.Id, articlebase.Status, articlebase.IsDelete, articlebase)
 	}
 	return model.ResultOk()
 }
@@ -616,6 +650,10 @@ func (a *MyArticleService) UpdateArticleDelete(c *gin.Context) model.ResultVO {
 	}
 	if err := a.articleRepository().UpdateDelete(c.Request.Context(), deleteVO.Ids, deleteVO.IsDelete); err != nil {
 		return model.ResultFromError(err)
+	}
+	// Recycled or restored articles must not keep a stale public body.
+	for _, id := range deleteVO.Ids {
+		a.evictArticleCache(c.Request.Context(), strconv.Itoa(id))
 	}
 	return model.ResultOk()
 }
@@ -642,6 +680,33 @@ func (a *MyArticleService) SaveArticleImages(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOkWithData(ref.URL)
+}
+
+// normalizeScheduledAt keeps the scheduled release consistent with status 4:
+// a scheduled article needs a future timestamp, and every other status must not
+// carry a stale one. The value is rewritten as RFC3339 because the VO reaches
+// the entity through a JSON round-trip.
+func normalizeScheduledAt(vo *model.ArticleVO) error {
+	raw := strings.TrimSpace(vo.ScheduledAt)
+	if vo.Status != ArticleStatusScheduled {
+		vo.ScheduledAt = ""
+		return nil
+	}
+	if raw == "" {
+		return apperrors.Invalid("article.schedule", "scheduled articles need a release time")
+	}
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		parsed, err = time.Parse("2006-01-02 15:04:05", raw)
+	}
+	if err != nil {
+		return apperrors.Invalid("article.schedule", "release time must be an RFC3339 timestamp")
+	}
+	if !parsed.After(time.Now()) {
+		return apperrors.Invalid("article.schedule", "release time must be in the future")
+	}
+	vo.ScheduledAt = parsed.Format(time.RFC3339)
+	return nil
 }
 
 func (a *MyArticleService) GetArticleBackById(c *gin.Context) model.ResultVO {

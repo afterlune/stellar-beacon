@@ -38,6 +38,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
     await traceStep('comment-notify', () => runCommentNotificationRoundTrip(page, token, suffix))
     await traceStep('series', () => runSeriesRoundTrip(page, token, suffix))
     await traceStep('link-application', () => runFriendLinkApplicationRoundTrip(page, token, suffix))
+    await traceStep('scheduled-publish', () => runScheduledPublishRoundTrip(page, token, suffix))
     await traceStep('album', () => runAlbumCRUD(page, suffix))
     await traceStep('job', () => runJobCRUD(page, suffix))
     await traceStep('role', () => runRoleCRUD(page, suffix))
@@ -894,6 +895,58 @@ async function runFriendLinkApplicationRoundTrip(page: Page, token: string, suff
         data: [linkID]
       })
     }
+  }
+}
+
+/**
+ * The publisher ticker releases scheduled articles once their time passes. The
+ * step therefore waits for the tick instead of asserting an immediate flip.
+ */
+async function runScheduledPublishRoundTrip(page: Page, token: string, suffix: string): Promise<void> {
+  const title = `e2e-scheduled-${suffix}`
+  let articleID = 0
+  try {
+    const past = await page.request.post('/api/v1/admin/articles', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        articleTitle: `${title}-past`, articleContent: 'scheduled fixture', articleCover: '',
+        categoryName: '', tagNames: [], status: 4, type: 0, isTop: 0, isFeatured: 0,
+        password: '', originalUrl: '', scheduledAt: new Date(Date.now() - 60_000).toISOString()
+      }
+    })
+    const pastPayload = await past.json() as { code?: string | number }
+    expect(pastPayload.code !== 'OK', 'a past release time is rejected').toBe(true)
+
+    const created = await page.request.post('/api/v1/admin/articles', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        articleTitle: title, articleContent: 'scheduled fixture', articleCover: '',
+        categoryName: '', tagNames: [], status: 4, type: 0, isTop: 0, isFeatured: 0,
+        password: '', originalUrl: '', scheduledAt: new Date(Date.now() + 45_000).toISOString()
+      }
+    })
+    expect(created.status(), 'create scheduled article').toBe(200)
+    const searchResponse = await page.request.get(`/api/v1/admin/articles?current=1&size=5&keywords=${encodeURIComponent(title)}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    articleID = firstRecordID(await searchResponse.json())
+    expect(articleID, 'scheduled article id').toBeGreaterThan(0)
+
+    const hidden = await page.request.get(`/api/v1/public/articles/${articleID}`)
+    const hiddenPayload = await hidden.json() as { data?: unknown }
+    expect(hiddenPayload.data, 'scheduled articles stay private').toBeFalsy()
+
+    const deadline = Date.now() + 150_000
+    let published = false
+    while (Date.now() < deadline && !published) {
+      await new Promise((resolve) => setTimeout(resolve, 5_000))
+      const detail = await page.request.get(`/api/v1/public/articles/${articleID}`)
+      const payload = await detail.json() as { data?: { id?: number } | null }
+      published = Number(payload.data?.id || 0) === articleID
+    }
+    expect(published, 'the publisher releases the article once due').toBe(true)
+  } finally {
+    if (articleID > 0) await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', [articleID])
   }
 }
 

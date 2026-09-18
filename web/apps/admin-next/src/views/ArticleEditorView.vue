@@ -44,6 +44,13 @@
               <a-option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</a-option>
             </a-select>
           </a-form-item>
+          <a-form-item v-if="Number(form.status) === 4" field="scheduledAt" :label="t('articles.editor.scheduledAt')">
+            <a-date-picker
+              v-model="form.scheduledAt"
+              show-time
+              format="YYYY-MM-DD HH:mm"
+              :placeholder="t('articles.editor.scheduledAtPlaceholder')" />
+          </a-form-item>
           <a-form-item field="seriesId" :label="t('series.name')">
             <a-select v-model="form.seriesId" allow-clear :placeholder="t('articles.editor.seriesPlaceholder')">
               <a-option :value="0">{{ t('articles.editor.seriesNone') }}</a-option>
@@ -58,6 +65,7 @@
               <a-option :value="1">{{ t('status.published') }}</a-option>
               <a-option :value="2">{{ t('status.private') }}</a-option>
               <a-option :value="3">{{ t('status.draft') }}</a-option>
+              <a-option :value="4">{{ t('articles.editor.scheduled') }}</a-option>
             </a-select>
           </a-form-item>
           <a-form-item field="type" :label="t('common.type')">
@@ -233,7 +241,8 @@ const form = reactive({
   password: '',
   originalUrl: '',
   seriesId: 0,
-  seriesOrder: 0
+  seriesOrder: 0,
+  scheduledAt: undefined as unknown as string
 })
 
 const categories = ref<string[]>([])
@@ -260,7 +269,8 @@ const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsav
   form.password,
   form.originalUrl,
   form.seriesId,
-  form.seriesOrder
+  form.seriesOrder,
+  form.scheduledAt
 ]))
 
 const wordCount = computed(() => plainText(form.articleContent).replace(/\s/g, '').length)
@@ -380,6 +390,7 @@ async function load(): Promise<void> {
     form.originalUrl = String(article.originalUrl || '')
     form.seriesId = Number(article.seriesId || 0)
     form.seriesOrder = Number(article.seriesOrder || 0)
+    form.scheduledAt = String(article.scheduledAt || '')
     // Ensure the loaded taxonomy value is always selectable in its dropdown.
     if (form.categoryName && !categories.value.includes(form.categoryName)) {
       categories.value = [form.categoryName, ...categories.value]
@@ -426,7 +437,8 @@ async function save(): Promise<void> {
       password: form.status === 2 ? form.password : '',
       originalUrl: form.type === 1 ? '' : form.originalUrl.trim(),
       seriesId: form.seriesId || 0,
-      seriesOrder: form.seriesId ? form.seriesOrder : 0
+      seriesOrder: form.seriesId ? form.seriesOrder : 0,
+      scheduledAt: Number(form.status) === 4 ? form.scheduledAt : undefined
     })
     Message.success(isEditing.value ? t('articles.editor.saved') : t('articles.editor.published'))
     markClean()

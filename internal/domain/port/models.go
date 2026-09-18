@@ -85,6 +85,7 @@ type ArticleAdminView struct {
 	OriginalUrl        string `json:"originalUrl"`
 	SeriesId           int    `json:"seriesId"`
 	SeriesOrder        int    `json:"seriesOrder"`
+	ScheduledAt        string `json:"scheduledAt"`
 }
 
 type ArticleSearch struct {

@@ -28,6 +28,9 @@ type ArticleRepository interface {
 	SaveOrUpdate(ctx context.Context, article entity.TArticle, categoryName string, tagNames []string) (entity.TArticle, error)
 	UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (entity.TArticle, error)
 	UpdateDelete(ctx context.Context, ids []int, isDelete int) error
+	// PublishDueArticles releases every scheduled article whose time has come
+	// and returns the affected ids so the caller can notify subscribers.
+	PublishDueArticles(ctx context.Context) ([]int, error)
 	Delete(ctx context.Context, ids []int) error
 	GetAdminArticle(ctx context.Context, articleID int) (entity.TArticle, string, []string, error)
 	Export(ctx context.Context, ids []int) ([]entity.TArticle, error)

@@ -149,6 +149,33 @@ func (a *MyArticleRepo) ListArticleCardsBySeries(ctx context.Context, seriesID i
 	return articles, nil
 }
 
+// PublishDueArticles flips every due scheduled article (status 4) to public and
+// returns their ids. The conditional update is atomic, so two instances cannot
+// publish the same article twice.
+func (a *MyArticleRepo) PublishDueArticles(ctx context.Context) ([]int, error) {
+	ids := make([]int, 0)
+	err := repoTx(a.engine, ctx, "article.publish_scheduled", func(session *xorm.Session) error {
+		var rows []struct {
+			Id int `xorm:"id"`
+		}
+		if err := session.SQL(
+			`UPDATE t_article SET status = 1, update_time = CURRENT_TIMESTAMP
+			 WHERE status = 4 AND is_delete = 0 AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
+			 RETURNING id`,
+		).Find(&rows); err != nil {
+			return apperrors.Wrap(apperrors.KindUnavailable, "article.publish_scheduled", err)
+		}
+		for _, row := range rows {
+			ids = append(ids, row.Id)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 func (a *MyArticleRepo) GetArticleByID(ctx context.Context, articleID int) (port.Article, error) {
 	session, err := a.articleSession(ctx)
 	if err != nil {

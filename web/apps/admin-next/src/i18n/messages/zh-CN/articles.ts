@@ -100,6 +100,10 @@ export default {
   'articles.editor.imageTypeInvalid': '只能上传图片文件',
   'articles.editor.imageTooLarge': '图片不能超过 10 MB',
   'articles.editor.imageUploadFailed': '正文图片上传失败',
+  'articles.editor.scheduled': '定时发布',
+  'articles.editor.scheduledAt': '发布时间',
+  'articles.editor.scheduledAtPlaceholder': '选择发布日期与时间',
+
   'articles.editor.seriesPlaceholder': '归入某个系列（可留空）',
   'articles.editor.seriesNone': '不归入系列',
   'articles.editor.seriesOrder': '系列内序号',

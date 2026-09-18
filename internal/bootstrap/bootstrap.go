@@ -12,6 +12,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/search/meilisearch"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/storage/object"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/task"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/visitor"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/handlers"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/middleware"
@@ -199,5 +200,6 @@ func Initialize() error {
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)
 	go newsletterService.Run(context.Background())
+	go task.PublishScheduledArticles(context.Background(), article, newsletterService)
 	return nil
 }

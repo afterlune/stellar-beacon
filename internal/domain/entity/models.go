@@ -23,6 +23,7 @@ type TArticle struct {
 	ArticleContentHTML string    `xorm:"article_content_html comment('富文本 HTML 内容') TEXT" json:"articleContentHtml,omitempty"`
 	SeriesId           int       `xorm:"series_id comment('所属系列') INTEGER" json:"seriesId"`
 	SeriesOrder        int       `xorm:"series_order not null default 0 comment('系列内序号') INTEGER" json:"seriesOrder"`
+	ScheduledAt        time.Time `xorm:"scheduled_at comment('定时发布时间') DATETIME" json:"scheduledAt,omitempty"`
 	IsTop              int       `xorm:"not null comment('是否置顶 0否 1是') SMALLINT" json:"isTop"`
 	IsFeatured         int       `xorm:"not null comment('是否推荐 0否 1是') SMALLINT" json:"isFeatured"`
 	IsDelete           int       `xorm:"not null comment('是否删除  0否 1是') SMALLINT" json:"isDelete"`

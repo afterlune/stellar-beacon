@@ -100,6 +100,10 @@ export default {
   'articles.editor.imageTypeInvalid': 'Only image files can be uploaded',
   'articles.editor.imageTooLarge': 'Images must be smaller than 10 MB',
   'articles.editor.imageUploadFailed': 'Failed to upload the body image',
+  'articles.editor.scheduled': 'Scheduled',
+  'articles.editor.scheduledAt': 'Release time',
+  'articles.editor.scheduledAtPlaceholder': 'Pick a release date and time',
+
   'articles.editor.seriesPlaceholder': 'Add to a collection (optional)',
   'articles.editor.seriesNone': 'No collection',
   'articles.editor.seriesOrder': 'Order in collection',
