@@ -4,10 +4,18 @@
       :title="isEditing ? t('articles.editor.editTitle') : t('articles.actions.publish')"
       :description="isEditing ? t('articles.editor.editDescription') : t('articles.editor.createDescription')">
       <template #actions>
+        <a-button v-if="isEditing" @click="openPerformance">{{ t('articles.performance.open') }}</a-button>
         <a-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</a-button>
         <a-button @click="router.push('/article-list')">{{ t('articles.editor.backToList') }}</a-button>
       </template>
     </AdminPageHeader>
+
+    <ArticlePerformancePanel
+      v-if="isEditing && editorReady"
+      ref="performancePanel"
+      :article-id="Number(form.id || articleId)"
+      :article-status="form.status"
+      :auto-expand="performancePanelAutoExpand" />
 
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
@@ -205,6 +213,7 @@ import AdminImagePreview from '@/components/AdminImagePreview.vue'
 import AdminLeaveGuard from '@/components/AdminLeaveGuard.vue'
 import AdminMediaPicker from '@/components/AdminMediaPicker.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
+import ArticlePerformancePanel from '@/components/ArticlePerformancePanel.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { listAdminSeriesOptions } from '@/api/http'
 import { t } from '@/i18n'
@@ -225,6 +234,7 @@ const coverInput = ref<HTMLInputElement | null>(null)
 const formRef = ref<{ validate: () => Promise<Record<string, unknown> | undefined> } | null>(null)
 const editorInstance = shallowRef<IDomEditor>()
 const contentMode = ref<'visual' | 'source'>('visual')
+const performancePanel = ref<{ expandAndScroll: () => void } | null>(null)
 
 const form = reactive({
   id: 0,
@@ -250,6 +260,7 @@ const tags = ref<string[]>([])
 const seriesOptions = ref<Array<{ id: number; seriesName: string }>>([])
 const articleId = computed(() => (typeof route.params.articleId === 'string' ? route.params.articleId : ''))
 const isEditing = computed(() => /^\d+$/.test(articleId.value))
+const performancePanelAutoExpand = computed(() => route.query.panel === 'performance')
 
 /**
  * 只比较真正会被保存的字段：加载与保存都会重置基线，因此「打开就离开」不会被拦截。
@@ -364,6 +375,10 @@ function convertSourceToVisual(): void {
   form.articleContent = form.articleContentHtml
   contentMode.value = 'visual'
   Message.success(t('articles.editor.convertedToRich'))
+}
+
+function openPerformance(): void {
+  performancePanel.value?.expandAndScroll()
 }
 
 async function load(): Promise<void> {

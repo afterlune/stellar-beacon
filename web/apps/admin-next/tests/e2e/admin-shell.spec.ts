@@ -19,6 +19,7 @@ let jobGroupsRequested = false
 let jobLogGroupsRequested = false
 let contentAnalyticsRange = ''
 let contentAnalyticsSort = ''
+let articlePerformanceRange = ''
 
 function continuationMetrics(seriesImpressions = 100, seriesClicks = 20, relatedImpressions = 150, relatedClicks = 30) {
   const totalClicks = seriesClicks + relatedClicks
@@ -67,6 +68,7 @@ test.beforeEach(async ({ page }) => {
   jobLogGroupsRequested = false
   contentAnalyticsRange = ''
   contentAnalyticsSort = ''
+  articlePerformanceRange = ''
   websiteConfig = { ...defaultWebsiteConfig }
   aboutContent = defaultAboutContent
   profile = { nickname: '测试管理员', intro: '保持公开资料边界', website: 'https://example.com/admin' }
@@ -383,6 +385,7 @@ test.beforeEach(async ({ page }) => {
     }
 
     if (requestURL.pathname === '/api/v1/admin/content/analytics/articles/7') {
+      articlePerformanceRange = requestURL.searchParams.get('range') || ''
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -468,11 +471,11 @@ test.beforeEach(async ({ page }) => {
       return
     }
 
-    if (requestURL.pathname === '/api/v1/admin/articles/42') {
+    if (requestURL.pathname === '/api/v1/admin/articles/42' || requestURL.pathname === '/api/v1/admin/articles/7') {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 42, articleTitle: '已存在文章', articleContent: '正文', categoryName: '工程化', tagNames: ['工程化'], status: 1, type: 1, isTop: 1, isFeatured: 0 } })
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: Number(requestURL.pathname.split('/').pop()), articleTitle: requestURL.pathname.endsWith('/7') ? '传统后台路线' : '已存在文章', articleContent: '正文', categoryName: '工程化', tagNames: ['工程化'], status: 1, type: 1, isTop: 1, isFeatured: 0, seriesId: requestURL.pathname.endsWith('/7') ? 3 : 0 } })
       })
       return
     }
@@ -853,7 +856,7 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await page.goto('/articles/42')
   await expect(page).toHaveURL(/\/articles\/42$/)
   await expect(page.getByRole('main').getByText('修改文章')).toBeVisible()
-  await expect(page.locator('input').first()).toHaveValue('已存在文章')
+  await expect(page.getByPlaceholder('一句话说清这篇文章讲什么')).toHaveValue('已存在文章')
   await page.getByText('分类管理').click()
   await expect(page).toHaveURL(/\/categories$/)
   await expect(page.getByRole('main').getByText('工程化')).toBeVisible()
@@ -1240,6 +1243,31 @@ test('all migrated routes keep their menu permission and survive a refresh', asy
   expect(pageErrors()).toEqual([])
 })
 
+test('opens article performance from the article list', async ({ page }) => {
+  const pageErrors = capturePageErrors(page)
+  await page.goto('/login')
+  await page.getByTestId('login-username').locator('input').fill('admin@example.com')
+  await page.getByTestId('login-password').locator('input').fill('password')
+  await page.getByTestId('login-submit').click()
+  await expect(page).toHaveURL(/\/$/)
+
+  await page.locator('.admin-sider').getByText('文章列表', { exact: true }).click()
+  const row = page.getByRole('row', { name: /传统后台路线/ })
+  await row.getByTestId('article-performance-link').click()
+  await expect(page).toHaveURL(/\/articles\/7\?panel=performance$/)
+
+  const panel = page.getByTestId('article-performance')
+  await expect(panel).toBeVisible()
+  await expect(panel).toContainText('12,345')
+  await expect(panel).toContainText('66.67%')
+  await expect(panel).toContainText('推荐目标表现')
+  await expect(panel).toContainText('有效推荐目标')
+  await expect.poll(() => articlePerformanceRange).toBe('30d')
+
+  await panel.getByText('近 7 天', { exact: true }).click()
+  await expect.poll(() => articlePerformanceRange).toBe('7d')
+  expect(pageErrors()).toEqual([])
+})
 test('renders content performance and opens the article detail drawer', async ({ page }) => {
   const pageErrors = capturePageErrors(page)
   await page.goto('/login')

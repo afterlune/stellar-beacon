@@ -133,6 +133,7 @@
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
+              <a-button type="text" size="small" data-testid="article-performance-link" @click="openPerformance(record.id)">{{ t('articles.performance.open') }}</a-button>
               <a-button type="text" size="small" @click="editArticle(record.id)">{{ t('common.edit') }}</a-button>
               <a-dropdown trigger="click" position="br">
                 <a-button type="text" size="small" :loading="isPending(record.id)">
@@ -241,7 +242,7 @@ const { isPending, withPending } = usePendingIds()
 
 // 列宽预算：这里是按"列内容实际需要多宽"倒推出来的，不是随手填的数。
 // - 封面 116 = 88px 缩略图 + 左右内边距（原来 108 会把缩略图裁掉一截）
-// - 操作 148 = 「编辑」+「更多⌄」两个按钮 + 间距（原来收得太窄时「更多」被裁没）
+// - 操作 196 = 「表现」+「编辑」+「更多⌄」三个按钮 + 间距（原来收得太窄时「更多」被裁没）
 // - 标记 128 = 置顶 + 精选 两个标签并排（96px 内容 + 间距），否则会折行把整行撑高
 // - 标题给死 220：这一列原来不给宽度，1280 宽的窗口里被固定列宽挤成 0px，
 //   表格里最重要的信息直接消失，是这次改版修掉的真实缺陷。
@@ -257,7 +258,7 @@ const columns = computed<TableColumn[]>(() => [
   { title: t('articles.list.columnLikes'), dataIndex: 'likeCount', slotName: 'likes', width: 74 },
   { title: t('articles.list.columnFavorites'), dataIndex: 'favoriteCount', slotName: 'favorites', width: 78 },
   { title: t('articles.list.columnCreatedAt'), dataIndex: 'createTime', slotName: 'time', width: 164 },
-  { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 148 }
+  { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 196 }
 ])
 
 const columnPrefs = useColumnPrefs(VIEW_KEY, columns.value.map((column) => column.dataIndex))
@@ -408,6 +409,14 @@ async function onImportFile(event: Event): Promise<void> {
 function editArticle(id: unknown): void {
   const articleId = Number(id)
   if (Number.isInteger(articleId) && articleId > 0) void router.push(`/articles/${articleId}`)
+}
+
+/** 打开编辑页并展开该文章的内容表现面板。 */
+function openPerformance(id: unknown): void {
+  const articleId = Number(id)
+  if (Number.isInteger(articleId) && articleId > 0) {
+    void router.push({ path: `/articles/${articleId}`, query: { panel: 'performance' } })
+  }
 }
 
 /** 行内“更多”菜单：置顶 / 精选 / 回收站 / 删除，全部复用已有后端接口。 */
