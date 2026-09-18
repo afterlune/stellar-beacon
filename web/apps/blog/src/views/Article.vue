@@ -141,31 +141,33 @@
         </div>
         <section
           v-if="seriesInfo && seriesIndex >= 0"
+          ref="seriesContextRef"
           class="series-context"
           data-testid="series-context"
+          data-continuation-event="series_impression"
           :aria-label="t('series.inSeries', { name: seriesInfo.seriesName })">
           <div class="series-context__head">
             <div>
               <span class="series-context__eyebrow">{{ t('series.progress', { current: seriesIndex + 1, total: seriesArticles.length }) }}</span>
               <strong>{{ seriesInfo.seriesName }}</strong>
             </div>
-            <router-link :to="'/series/' + seriesInfo.id">{{ t('series.backToSeries') }}</router-link>
+            <router-link :to="'/series/' + seriesInfo.id" @click="trackContinuationClick('series_click')">{{ t('series.backToSeries') }}</router-link>
           </div>
           <div class="series-context__nav">
-            <router-link v-if="seriesPrevious" class="series-context__link" :to="'/articles/' + seriesPrevious.id" data-testid="series-previous">
+            <router-link v-if="seriesPrevious" class="series-context__link" :to="'/articles/' + seriesPrevious.id" data-testid="series-previous" @click="trackContinuationClick('series_click')">
               <small>{{ t('series.previous') }}</small>
               <span>{{ seriesPrevious.articleTitle }}</span>
             </router-link>
-            <router-link v-if="seriesNext" class="series-context__link series-context__link--next" :to="'/articles/' + seriesNext.id" data-testid="series-next">
+            <router-link v-if="seriesNext" class="series-context__link series-context__link--next" :to="'/articles/' + seriesNext.id" data-testid="series-next" @click="trackContinuationClick('series_click')">
               <small>{{ t('series.next') }}</small>
               <span>{{ seriesNext.articleTitle }}</span>
             </router-link>
           </div>
         </section>
-        <section v-if="article.relatedArticles && article.relatedArticles.length" class="related-articles" data-testid="related-articles" :aria-labelledby="'related-title-' + articleId">
+        <section v-if="article.relatedArticles && article.relatedArticles.length" ref="relatedArticlesRef" class="related-articles" data-testid="related-articles" data-continuation-event="related_impression" :aria-labelledby="'related-title-' + articleId">
           <h2 :id="'related-title-' + articleId">{{ t('newsletter.related') }}</h2>
           <div class="related-articles__grid">
-            <router-link v-for="related in article.relatedArticles" :key="related.id" :to="'/articles/' + related.id" class="related-article">
+            <router-link v-for="related in article.relatedArticles" :key="related.id" :to="'/articles/' + related.id" class="related-article" @click="trackContinuationClick('related_click')">
               <span>{{ related.categoryName || t('settings.default-category') }}</span>
               <strong>{{ related.articleTitle }}</strong>
             </router-link>
@@ -216,7 +218,8 @@ import {
   ref,
   toRefs,
   provide,
-  getCurrentInstance
+  getCurrentInstance,
+  watch
 } from 'vue'
 import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -285,6 +288,8 @@ export default defineComponent({
     const userToken = computed(() => Boolean(userStore.token))
     const seriesInfo = ref<any>(null)
     const seriesArticles = ref<any[]>([])
+    const seriesContextRef = ref<HTMLElement | null>(null)
+    const relatedArticlesRef = ref<HTMLElement | null>(null)
     const seriesIndex = computed(() => seriesArticles.value.findIndex((item) => Number(item?.id) === Number(reactiveData.articleId)))
     const seriesPrevious = computed(() => (seriesIndex.value > 0 ? seriesArticles.value[seriesIndex.value - 1] : null))
     const seriesNext = computed(() => (
@@ -302,6 +307,9 @@ export default defineComponent({
     let readingStartedAt: number | null = null
     let readingMaxScrollPercent = 0
     let readingSessionSent = false
+    let continuationObserver: IntersectionObserver | null = null
+    const continuationTimers = new Map<Element, number>()
+    const continuationImpressions = new Set<string>()
 
     const resetReadingSession = () => {
       readingSessionId = createReadingSessionId()
@@ -327,8 +335,14 @@ export default defineComponent({
       readingMaxScrollPercent = Math.max(readingMaxScrollPercent, depth)
     }
     const handleReadingVisibility = () => {
-      if (document.hidden) pauseReadingSession()
-      else startReadingSession()
+      if (document.hidden) {
+        clearContinuationTimers()
+        continuationObserver?.disconnect()
+        pauseReadingSession()
+        return
+      }
+      startReadingSession()
+      scheduleContinuationTracking()
     }
     const flushReadingSession = () => {
       if (readingSessionSent || !reactiveData.articleId) return
@@ -350,8 +364,93 @@ export default defineComponent({
         keepalive: true
       }).catch(() => undefined)
     }
+    const continuationEventUrl = (articleId: number) => `${API_BASE_URL}/public/articles/${encodeURIComponent(String(articleId))}/continuation-events`
+
+    const sendContinuationEvent = (eventType: string) => {
+      const articleId = Number(reactiveData.articleId)
+      if (!Number.isFinite(articleId) || articleId <= 0 || typeof navigator === 'undefined') return
+      const payload = JSON.stringify({ eventType })
+      const url = continuationEventUrl(articleId)
+      if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) return
+      void fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true
+      }).catch(() => undefined)
+    }
+
+    const trackContinuationClick = (eventType: string) => {
+      sendContinuationEvent(eventType)
+    }
+
+    const clearContinuationTimers = () => {
+      for (const timer of continuationTimers.values()) window.clearTimeout(timer)
+      continuationTimers.clear()
+    }
+
+    const continuationImpressionKey = (element: Element) => `${reactiveData.articleId}:${element.getAttribute('data-continuation-event') || ''}`
+
+    const handleContinuationIntersection = (entries: IntersectionObserverEntry[]) => {
+      for (const entry of entries) {
+        const eventType = entry.target.getAttribute('data-continuation-event')
+        if (!eventType) continue
+        const key = continuationImpressionKey(entry.target)
+        if (continuationImpressions.has(key)) continue
+        if (entry.isIntersecting && !document.hidden) {
+          if (continuationTimers.has(entry.target)) continue
+          const timer = window.setTimeout(() => {
+            continuationTimers.delete(entry.target)
+            if (!continuationImpressions.has(key)) {
+              continuationImpressions.add(key)
+              sendContinuationEvent(eventType)
+            }
+            continuationObserver?.unobserve(entry.target)
+          }, 1000)
+          continuationTimers.set(entry.target, timer)
+          continue
+        }
+        const timer = continuationTimers.get(entry.target)
+        if (timer !== undefined) {
+          window.clearTimeout(timer)
+          continuationTimers.delete(entry.target)
+        }
+      }
+    }
+
+    const observeContinuationSection = (element: HTMLElement | null) => {
+      if (!element || !reactiveData.articleId) return
+      const eventType = element.getAttribute('data-continuation-event')
+      if (!eventType) return
+      const key = continuationImpressionKey(element)
+      if (continuationImpressions.has(key)) return
+      if (!continuationObserver) {
+        continuationImpressions.add(key)
+        sendContinuationEvent(eventType)
+        return
+      }
+      continuationObserver.observe(element)
+    }
+
+    const scheduleContinuationTracking = () => {
+      void nextTick(() => {
+        observeContinuationSection(seriesContextRef.value)
+        observeContinuationSection(relatedArticlesRef.value)
+      })
+    }
+
+    const resetContinuationTracking = () => {
+      clearContinuationTimers()
+      continuationImpressions.clear()
+      continuationObserver?.disconnect()
+    }
+
+    watch([() => reactiveData.article, seriesInfo, seriesArticles], scheduleContinuationTracking, { flush: 'post' })
     commentStore.type = 1
     onMounted(() => {
+      if (typeof IntersectionObserver !== 'undefined') {
+        continuationObserver = new IntersectionObserver(handleContinuationIntersection, { threshold: 0.5 })
+      }
       document.addEventListener('visibilitychange', handleReadingVisibility)
       window.addEventListener('scroll', updateReadingScrollDepth, { passive: true })
       window.addEventListener('pagehide', flushReadingSession)
@@ -362,6 +461,7 @@ export default defineComponent({
     })
     onUnmounted(() => {
       flushReadingSession()
+      resetContinuationTracking()
       document.removeEventListener('visibilitychange', handleReadingVisibility)
       window.removeEventListener('scroll', updateReadingScrollDepth)
       window.removeEventListener('pagehide', flushReadingSession)
@@ -372,6 +472,7 @@ export default defineComponent({
     onBeforeRouteUpdate((to) => {
       flushReadingSession()
       resetReadingSession()
+      resetContinuationTracking()
       reactiveData.article = ''
       reactiveData.readTime = ''
       reactiveData.wordNum = ''
@@ -679,6 +780,9 @@ export default defineComponent({
       seriesIndex,
       seriesPrevious,
       seriesNext,
+      seriesContextRef,
+      relatedArticlesRef,
+      trackContinuationClick,
       toggleReaction
     }
   }

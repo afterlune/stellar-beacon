@@ -41,6 +41,19 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ArticleReadSession' }
       responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/articles/{articleId}/continuation-events:
+    post:
+      tags: [public]
+      summary: Record an anonymous article continuation event
+      description: Accepts one allow-listed series or related-reading impression/click event. It does not accept target, account, session, IP, User-Agent or referrer data.
+      operationId: trackArticleContinuationEvent
+      parameters: [{ $ref: '#/components/parameters/ArticleId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArticleContinuationEvent' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /public/archives:
     get: { tags: [public], summary: List article archives, operationId: listArchives, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/categories:
@@ -319,6 +332,13 @@ components:
         sessionId: { type: string, minLength: 8, maxLength: 128, example: 2ef87de3-6b32-4a86-a726-f3aed96b4a7d }
         activeMs: { type: integer, minimum: 3000, maximum: 7200000 }
         maxScrollPercent: { type: number, minimum: 0, maximum: 100 }
+    ArticleContinuationEvent:
+      type: object
+      required: [eventType]
+      properties:
+        eventType:
+          type: string
+          enum: [series_impression, series_click, related_impression, related_click]
   securitySchemes:
     bearerAuth:
       type: http

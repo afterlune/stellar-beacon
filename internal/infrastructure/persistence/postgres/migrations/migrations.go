@@ -74,6 +74,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyContentAnalyticsSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyContinuationAnalyticsSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -750,6 +753,44 @@ func applyContentAnalyticsSchema(ctx context.Context, engine *xorm.Engine) error
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit content analytics migration: %w", err)
+	}
+	return nil
+}
+
+// applyContinuationAnalyticsSchema adds counters for the two continuation
+// surfaces on an article page. The counters stay anonymous and aggregate at
+// the same per-article daily grain as the rest of content performance.
+func applyContinuationAnalyticsSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 13)").Get(&applied); err != nil {
+		return fmt.Errorf("check continuation analytics migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin continuation analytics migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`ALTER TABLE t_article_daily_metric ADD COLUMN IF NOT EXISTS series_impressions BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE t_article_daily_metric ADD COLUMN IF NOT EXISTS series_clicks BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE t_article_daily_metric ADD COLUMN IF NOT EXISTS related_impressions BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE t_article_daily_metric ADD COLUMN IF NOT EXISTS related_clicks BIGINT NOT NULL DEFAULT 0`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply continuation analytics schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 13, "continuation-analytics"); err != nil {
+		return fmt.Errorf("record continuation analytics migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit continuation analytics migration: %w", err)
 	}
 	return nil
 }

@@ -21,6 +21,12 @@ export default {
   'contentPerformance.trend.title': '阅读趋势',
   'contentPerformance.trend.emptyTitle': '该区间暂无阅读数据',
   'contentPerformance.trend.emptyDescription': '读者产生浏览和有效阅读后，这里会显示趋势。',
+  'contentPerformance.continuation.title': '续读效果',
+  'contentPerformance.continuation.series': '系列续读',
+  'contentPerformance.continuation.related': '相关阅读',
+  'contentPerformance.continuation.detail': '{clicks} 次点击 / {impressions} 次曝光',
+  'contentPerformance.continuation.emptyTitle': '该区间暂无续读数据',
+  'contentPerformance.continuation.emptyDescription': '系列或相关阅读进入视口并产生点击后，这里会显示转化趋势。',
   'contentPerformance.ranking.title': '文章表现排行',
   'contentPerformance.ranking.total': '共 {total} 篇文章',
   'contentPerformance.table.article': '文章',
@@ -30,6 +36,7 @@ export default {
   'contentPerformance.table.avgActiveTime': '平均阅读时长',
   'contentPerformance.table.completionRate': '读完率',
   'contentPerformance.table.effectiveSessions': '有效会话',
+  'contentPerformance.table.continuationRate': '续读率',
   'contentPerformance.table.actions': '操作',
   'contentPerformance.table.detail': '查看详情',
   'contentPerformance.empty': '该区间还没有文章表现数据',
@@ -40,5 +47,7 @@ export default {
   'contentPerformance.chart.views': '浏览量',
   'contentPerformance.chart.uniqueReaders': '独立读者',
   'contentPerformance.chart.completionRate': '读完率',
+  'contentPerformance.chart.seriesClickRate': '系列续读率',
+  'contentPerformance.chart.relatedClickRate': '相关阅读点击率',
   'contentPerformance.chart.tooltip.activeTime': '平均阅读时长'
 }

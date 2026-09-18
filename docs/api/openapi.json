@@ -17,6 +17,7 @@
     "/v1/public/articles/{articleId}": { "get": { "summary": "文章模块", "description": "获取文章详情" } },
     "/v1/public/articles/{articleId}/access": { "post": { "summary": "文章模块", "description": "校验文章密码" } },
     "/v1/public/articles/{articleId}/read-sessions": { "post": { "summary": "内容表现", "description": "上报匿名阅读会话（仅 sessionId、activeMs、maxScrollPercent）" } },
+    "/v1/public/articles/{articleId}/continuation-events": { "post": { "summary": "内容表现", "description": "上报匿名续读曝光或点击（仅系列、相关阅读与事件类型）" } },
     "/v1/public/archives": { "get": { "summary": "文章模块", "description": "获取文章归档" } },
     "/v1/public/categories": { "get": { "summary": "分类模块", "description": "获取分类" } },
     "/v1/public/tags": { "get": { "summary": "标签模块", "description": "获取标签" } },
@@ -121,6 +122,13 @@
           "sessionId": { "type": "string", "minLength": 8, "maxLength": 128 },
           "activeMs": { "type": "integer", "minimum": 3000, "maximum": 7200000 },
           "maxScrollPercent": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      },
+      "ArticleContinuationEvent": {
+        "type": "object",
+        "required": ["eventType"],
+        "properties": {
+          "eventType": { "type": "string", "enum": ["series_impression", "series_click", "related_impression", "related_click"] }
         }
       }
     }

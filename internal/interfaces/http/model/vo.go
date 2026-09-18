@@ -21,6 +21,13 @@ type ArticleReadSessionVO struct {
 	MaxScrollPercent float64 `json:"maxScrollPercent"`
 }
 
+// ArticleContinuationEventVO is an anonymous aggregate event from one of the
+// article page's continuation surfaces. It deliberately carries no target,
+// account or browser identifier.
+type ArticleContinuationEventVO struct {
+	EventType string `json:"eventType"`
+}
+
 type ArticleTopFeaturedVO struct {
 	Id         int `json:"id" form:"id"`
 	IsTop      int `json:"isTop" form:"isTop"`

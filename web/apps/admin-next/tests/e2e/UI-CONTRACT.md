@@ -1067,11 +1067,17 @@ surface under the article submenu. Its stable contract is intentionally small:
   `[data-testid="content-performance-avg-active-time"]`,
   `[data-testid="content-performance-completion-rate"]`,
   `[data-testid="content-performance-trend"]`,
+  `[data-testid="content-performance-continuation"]`,
+  `[data-testid="content-performance-continuation-series"]`,
+  `[data-testid="content-performance-continuation-related"]`,
   `[data-testid="content-performance-ranking"]` and
   `[data-testid="content-performance-detail"]`.
+- The continuation card and article detail render series/related impressions,
+  clicks and click-through rates from the aggregate daily counters.
 - The page never renders raw account, IP, User-Agent or referrer values; the
   reading-session endpoint accepts only `sessionId`, `activeMs` and
-  `maxScrollPercent`.
+  `maxScrollPercent`, while the continuation endpoint accepts only an
+  allow-listed event type.
 - `npm run test:admin` is a blocking CI step for the `admin-next` frontend
   matrix entry; the blog matrix does not install Playwright browsers.
 

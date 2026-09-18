@@ -20,6 +20,19 @@ let jobLogGroupsRequested = false
 let contentAnalyticsRange = ''
 let contentAnalyticsSort = ''
 
+function continuationMetrics(seriesImpressions = 100, seriesClicks = 20, relatedImpressions = 150, relatedClicks = 30) {
+  const totalClicks = seriesClicks + relatedClicks
+  const totalImpressions = seriesImpressions + relatedImpressions
+  return {
+    seriesImpressions,
+    seriesClicks,
+    seriesClickRate: seriesImpressions ? Number((seriesClicks / seriesImpressions * 100).toFixed(2)) : 0,
+    relatedImpressions,
+    relatedClicks,
+    relatedClickRate: relatedImpressions ? Number((relatedClicks / relatedImpressions * 100).toFixed(2)) : 0,
+    continuationRate: totalImpressions ? Number((totalClicks / totalImpressions * 100).toFixed(2)) : 0
+  }
+}
 const defaultWebsiteConfig = {
   name: '星际信标',
   englishName: 'Stellar Beacon',
@@ -298,10 +311,10 @@ test.beforeEach(async ({ page }) => {
           data: {
             range: requestURL.searchParams.get('range') || '7d',
             unit: 'day',
-            overview: { views: 12345, uniqueReaders: 1234, effectiveSessions: 20, avgActiveMs: 65000, completionRate: 66.67 },
+            overview: { views: 12345, uniqueReaders: 1234, effectiveSessions: 20, avgActiveMs: 65000, completionRate: 66.67, continuation: continuationMetrics() },
             trend: [
-              { period: '2026-09-17', views: 6000, uniqueReaders: 600, effectiveSessions: 10, avgActiveMs: 60000, completionRate: 60 },
-              { period: '2026-09-18', views: 6345, uniqueReaders: 634, effectiveSessions: 10, avgActiveMs: 70000, completionRate: 73.34 }
+              { period: '2026-09-17', views: 6000, uniqueReaders: 600, effectiveSessions: 10, avgActiveMs: 60000, completionRate: 60, continuation: continuationMetrics(40, 8, 60, 12) },
+              { period: '2026-09-18', views: 6345, uniqueReaders: 634, effectiveSessions: 10, avgActiveMs: 70000, completionRate: 73.34, continuation: continuationMetrics(60, 15, 90, 21) }
             ],
             generatedAt: '2026-09-18T10:00:00Z'
           }
@@ -331,7 +344,8 @@ test.beforeEach(async ({ page }) => {
               uniqueReaders: 1234,
               effectiveSessions: 20,
               avgActiveMs: 65000,
-              completionRate: 66.67
+              completionRate: 66.67,
+              continuation: continuationMetrics()
             }],
             count: 1
           }
@@ -354,10 +368,10 @@ test.beforeEach(async ({ page }) => {
             articleCover: '',
             categoryName: '测试分类',
             createTime: '2026-09-01T00:00:00Z',
-            overview: { views: 12345, uniqueReaders: 1234, effectiveSessions: 20, avgActiveMs: 65000, completionRate: 66.67 },
+            overview: { views: 12345, uniqueReaders: 1234, effectiveSessions: 20, avgActiveMs: 65000, completionRate: 66.67, continuation: continuationMetrics() },
             trend: [
-              { period: '2026-09-17', views: 6000, uniqueReaders: 600, effectiveSessions: 10, avgActiveMs: 60000, completionRate: 60 },
-              { period: '2026-09-18', views: 6345, uniqueReaders: 634, effectiveSessions: 10, avgActiveMs: 70000, completionRate: 73.34 }
+              { period: '2026-09-17', views: 6000, uniqueReaders: 600, effectiveSessions: 10, avgActiveMs: 60000, completionRate: 60, continuation: continuationMetrics(40, 8, 60, 12) },
+              { period: '2026-09-18', views: 6345, uniqueReaders: 634, effectiveSessions: 10, avgActiveMs: 70000, completionRate: 73.34, continuation: continuationMetrics(60, 15, 90, 21) }
             ]
           }
         })
@@ -1214,6 +1228,9 @@ test('renders content performance and opens the article detail drawer', async ({
   await expect(page.getByTestId('content-performance-avg-active-time')).toContainText('1m 5s')
   await expect(page.getByTestId('content-performance-completion-rate')).toContainText('66.67%')
   await expect(page.getByTestId('content-performance-trend')).toBeVisible()
+  await expect(page.getByTestId('content-performance-continuation')).toBeVisible()
+  await expect(page.getByTestId('content-performance-continuation-series')).toContainText('20.00%')
+  await expect(page.getByTestId('content-performance-continuation-related')).toContainText('20.00%')
   await expect(page.getByTestId('content-performance-ranking').getByText('内容表现测试文章')).toBeVisible()
   expect(contentAnalyticsRange).toBe('7d')
   expect(contentAnalyticsSort).toBe('views')
@@ -1225,6 +1242,8 @@ test('renders content performance and opens the article detail drawer', async ({
   await expect(page.getByTestId('content-performance-detail')).toBeVisible()
   await expect(page.getByTestId('content-performance-detail')).toContainText('内容表现测试文章')
   await expect(page.getByTestId('content-performance-detail')).toContainText('12,345')
+  await expect(page.getByTestId('content-performance-detail')).toContainText('系列续读')
+  await expect(page.getByTestId('content-performance-detail')).toContainText('相关阅读')
   expect(pageErrors()).toEqual([])
 })
 

@@ -80,6 +80,44 @@ func (r *MyContentAnalyticsRepo) RecordReadSession(ctx context.Context, articleI
 	return nil
 }
 
+func (r *MyContentAnalyticsRepo) RecordContinuationEvent(ctx context.Context, articleID int, day time.Time, eventType port.ContinuationEventType) error {
+	if articleID <= 0 || !eventType.Valid() {
+		return nil
+	}
+	session, err := r.session(ctx, "content_analytics.record_continuation_event")
+	if err != nil {
+		return err
+	}
+	var seriesImpressions, seriesClicks, relatedImpressions, relatedClicks int
+	switch eventType {
+	case port.ContinuationEventSeriesImpression:
+		seriesImpressions = 1
+	case port.ContinuationEventSeriesClick:
+		seriesClicks = 1
+	case port.ContinuationEventRelatedImpression:
+		relatedImpressions = 1
+	case port.ContinuationEventRelatedClick:
+		relatedClicks = 1
+	}
+	_, err = session.Exec(`
+		INSERT INTO t_article_daily_metric (
+			article_id, metric_date, series_impressions, series_clicks,
+			related_impressions, related_clicks
+		)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT (article_id, metric_date) DO UPDATE
+		SET series_impressions = t_article_daily_metric.series_impressions + EXCLUDED.series_impressions,
+		    series_clicks = t_article_daily_metric.series_clicks + EXCLUDED.series_clicks,
+		    related_impressions = t_article_daily_metric.related_impressions + EXCLUDED.related_impressions,
+		    related_clicks = t_article_daily_metric.related_clicks + EXCLUDED.related_clicks,
+		    update_time = CURRENT_TIMESTAMP
+	`, articleID, day.Format("2006-01-02"), seriesImpressions, seriesClicks, relatedImpressions, relatedClicks)
+	if err != nil {
+		return apperrors.Unavailable("content_analytics.record_continuation_event", err)
+	}
+	return nil
+}
+
 func (r *MyContentAnalyticsRepo) ListDailyMetrics(ctx context.Context, startDate, endDate string) ([]port.ContentDailyMetric, error) {
 	session, err := r.session(ctx, "content_analytics.daily_metrics")
 	if err != nil {
@@ -92,7 +130,11 @@ func (r *MyContentAnalyticsRepo) ListDailyMetrics(ctx context.Context, startDate
 		       COALESCE(SUM(unique_readers), 0) AS unique_readers,
 		       COALESCE(SUM(effective_sessions), 0) AS effective_sessions,
 		       COALESCE(SUM(total_active_ms), 0) AS total_active_ms,
-		       COALESCE(SUM(completed_sessions), 0) AS completed_sessions
+		       COALESCE(SUM(completed_sessions), 0) AS completed_sessions,
+		       COALESCE(SUM(series_impressions), 0) AS series_impressions,
+		       COALESCE(SUM(series_clicks), 0) AS series_clicks,
+		       COALESCE(SUM(related_impressions), 0) AS related_impressions,
+		       COALESCE(SUM(related_clicks), 0) AS related_clicks
 		FROM t_article_daily_metric
 		WHERE metric_date >= ? AND metric_date <= ?
 		GROUP BY metric_date
@@ -119,7 +161,11 @@ func (r *MyContentAnalyticsRepo) ListArticleMetrics(ctx context.Context, startDa
 		       COALESCE(SUM(m.unique_readers), 0) AS unique_readers,
 		       COALESCE(SUM(m.effective_sessions), 0) AS effective_sessions,
 		       COALESCE(SUM(m.total_active_ms), 0) AS total_active_ms,
-		       COALESCE(SUM(m.completed_sessions), 0) AS completed_sessions
+		       COALESCE(SUM(m.completed_sessions), 0) AS completed_sessions,
+		       COALESCE(SUM(m.series_impressions), 0) AS series_impressions,
+		       COALESCE(SUM(m.series_clicks), 0) AS series_clicks,
+		       COALESCE(SUM(m.related_impressions), 0) AS related_impressions,
+		       COALESCE(SUM(m.related_clicks), 0) AS related_clicks
 		FROM t_article_daily_metric m
 		LEFT JOIN t_article a ON a.id = m.article_id
 		LEFT JOIN t_category c ON c.id = a.category_id
@@ -147,7 +193,11 @@ func (r *MyContentAnalyticsRepo) GetArticleDailyMetrics(ctx context.Context, art
 		       COALESCE(SUM(unique_readers), 0) AS unique_readers,
 		       COALESCE(SUM(effective_sessions), 0) AS effective_sessions,
 		       COALESCE(SUM(total_active_ms), 0) AS total_active_ms,
-		       COALESCE(SUM(completed_sessions), 0) AS completed_sessions
+		       COALESCE(SUM(completed_sessions), 0) AS completed_sessions,
+		       COALESCE(SUM(series_impressions), 0) AS series_impressions,
+		       COALESCE(SUM(series_clicks), 0) AS series_clicks,
+		       COALESCE(SUM(related_impressions), 0) AS related_impressions,
+		       COALESCE(SUM(related_clicks), 0) AS related_clicks
 		FROM t_article_daily_metric
 		WHERE article_id = ? AND metric_date >= ? AND metric_date <= ?
 		GROUP BY metric_date

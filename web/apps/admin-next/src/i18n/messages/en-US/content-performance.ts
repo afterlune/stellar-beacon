@@ -21,6 +21,12 @@ export default {
   'contentPerformance.trend.title': 'Reading trend',
   'contentPerformance.trend.emptyTitle': 'No reading data in this range',
   'contentPerformance.trend.emptyDescription': 'Trends appear after readers view and spend time on articles.',
+  'contentPerformance.continuation.title': 'Continuation effectiveness',
+  'contentPerformance.continuation.series': 'Collection continuation',
+  'contentPerformance.continuation.related': 'Related reading',
+  'contentPerformance.continuation.detail': '{clicks} clicks / {impressions} impressions',
+  'contentPerformance.continuation.emptyTitle': 'No continuation data in this range',
+  'contentPerformance.continuation.emptyDescription': 'Trends appear after continuation sections become visible and receive clicks.',
   'contentPerformance.ranking.title': 'Article performance ranking',
   'contentPerformance.ranking.total': '{total} articles',
   'contentPerformance.table.article': 'Article',
@@ -30,6 +36,7 @@ export default {
   'contentPerformance.table.avgActiveTime': 'Avg. reading time',
   'contentPerformance.table.completionRate': 'Completion rate',
   'contentPerformance.table.effectiveSessions': 'Effective sessions',
+  'contentPerformance.table.continuationRate': 'Continuation rate',
   'contentPerformance.table.actions': 'Actions',
   'contentPerformance.table.detail': 'View detail',
   'contentPerformance.empty': 'No article performance data in this range',
@@ -40,5 +47,7 @@ export default {
   'contentPerformance.chart.views': 'Views',
   'contentPerformance.chart.uniqueReaders': 'Unique readers',
   'contentPerformance.chart.completionRate': 'Completion rate',
+  'contentPerformance.chart.seriesClickRate': 'Collection continuation rate',
+  'contentPerformance.chart.relatedClickRate': 'Related reading click rate',
   'contentPerformance.chart.tooltip.activeTime': 'Avg. reading time'
 }

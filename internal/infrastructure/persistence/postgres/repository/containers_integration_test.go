@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
@@ -116,7 +117,7 @@ CREATE TABLE t_article_daily_metric (
     id SERIAL PRIMARY KEY, article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
     metric_date DATE NOT NULL, views BIGINT NOT NULL DEFAULT 0, unique_readers BIGINT NOT NULL DEFAULT 0,
     effective_sessions BIGINT NOT NULL DEFAULT 0, total_active_ms BIGINT NOT NULL DEFAULT 0,
-    completed_sessions BIGINT NOT NULL DEFAULT 0, create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_sessions BIGINT NOT NULL DEFAULT 0, series_impressions BIGINT NOT NULL DEFAULT 0, series_clicks BIGINT NOT NULL DEFAULT 0, related_impressions BIGINT NOT NULL DEFAULT 0, related_clicks BIGINT NOT NULL DEFAULT 0, create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (article_id, metric_date)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
@@ -223,17 +224,39 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	if err := contentAnalytics.RecordReadSession(ctx, 1, time.Now(), 2000, 50, 1); err != nil {
 		t.Fatalf("record non-effective content analytics session: %v", err)
 	}
+	for _, eventType := range []port.ContinuationEventType{
+		port.ContinuationEventSeriesImpression,
+		port.ContinuationEventSeriesClick,
+		port.ContinuationEventRelatedImpression,
+		port.ContinuationEventRelatedImpression,
+		port.ContinuationEventRelatedClick,
+	} {
+		if err := contentAnalytics.RecordContinuationEvent(ctx, 1, time.Now(), eventType); err != nil {
+			t.Fatalf("record continuation event %s: %v", eventType, err)
+		}
+	}
 	dailyMetrics, err := contentAnalytics.GetArticleDailyMetrics(ctx, 1, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
-	if err != nil || len(dailyMetrics) != 1 || dailyMetrics[0].Views != 3 || dailyMetrics[0].CompletedSessions != 2 {
+	if err != nil || len(dailyMetrics) != 1 || dailyMetrics[0].Views != 3 || dailyMetrics[0].CompletedSessions != 2 ||
+		dailyMetrics[0].SeriesImpressions != 1 || dailyMetrics[0].SeriesClicks != 1 ||
+		dailyMetrics[0].RelatedImpressions != 2 || dailyMetrics[0].RelatedClicks != 1 {
 		t.Fatalf("unexpected content analytics daily metrics: metrics=%v err=%v", dailyMetrics, err)
 	}
 	siteDailyMetrics, err := contentAnalytics.ListDailyMetrics(ctx, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
-	if err != nil || len(siteDailyMetrics) != 1 || siteDailyMetrics[0].EffectiveSessions != 2 {
+	if err != nil || len(siteDailyMetrics) != 1 || siteDailyMetrics[0].EffectiveSessions != 2 ||
+		siteDailyMetrics[0].SeriesImpressions != 1 || siteDailyMetrics[0].RelatedImpressions != 2 {
 		t.Fatalf("unexpected site content analytics metrics: metrics=%v err=%v", siteDailyMetrics, err)
 	}
 	articleMetrics, err := contentAnalytics.ListArticleMetrics(ctx, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
-	if err != nil || len(articleMetrics) != 1 || articleMetrics[0].ArticleId != 1 || articleMetrics[0].CompletedSessions != 2 {
+	if err != nil || len(articleMetrics) != 1 || articleMetrics[0].ArticleId != 1 || articleMetrics[0].CompletedSessions != 2 ||
+		articleMetrics[0].SeriesClicks != 1 || articleMetrics[0].RelatedClicks != 1 {
 		t.Fatalf("unexpected article content analytics metrics: metrics=%v err=%v", articleMetrics, err)
+	}
+	if err := contentAnalytics.RecordContinuationEvent(ctx, 2, time.Now(), port.ContinuationEventSeriesClick); err != nil {
+		t.Fatalf("create continuation-only metric row: %v", err)
+	}
+	continuationOnly, err := contentAnalytics.GetArticleDailyMetrics(ctx, 2, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
+	if err != nil || len(continuationOnly) != 1 || continuationOnly[0].Views != 0 || continuationOnly[0].SeriesClicks != 1 {
+		t.Fatalf("unexpected continuation-only metrics: metrics=%v err=%v", continuationOnly, err)
 	}
 	roles, err := NewRoleRepository(xormEngine).ListRolesByUserInfoID(ctx, 1)
 	if err != nil || len(roles) != 1 || roles[0] != "user" {

@@ -45,13 +45,23 @@ func (c *contentAnalyticsCache) PFCount(context.Context, ...string) (int64, erro
 
 type contentAnalyticsRecordingRepo struct {
 	fakeContentAnalyticsRepository
-	sessions    int
-	dailyRows   []port.ContentDailyMetric
-	articleRows []port.ContentArticleMetric
+	sessions           int
+	continuationEvents []port.ContinuationEventType
+	continuationErr    error
+	dailyRows          []port.ContentDailyMetric
+	articleRows        []port.ContentArticleMetric
 }
 
 func (r *contentAnalyticsRecordingRepo) RecordReadSession(context.Context, int, time.Time, int, int, int64) error {
 	r.sessions++
+	return nil
+}
+
+func (r *contentAnalyticsRecordingRepo) RecordContinuationEvent(_ context.Context, _ int, _ time.Time, eventType port.ContinuationEventType) error {
+	if r.continuationErr != nil {
+		return r.continuationErr
+	}
+	r.continuationEvents = append(r.continuationEvents, eventType)
 	return nil
 }
 
@@ -82,6 +92,106 @@ func newContentAnalyticsTestContext(articleID, payload string) *gin.Context {
 	return c
 }
 
+func newContinuationEventTestContext(articleID, payload string) *gin.Context {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/public/articles/"+articleID+"/continuation-events", strings.NewReader(payload))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "articleId", Value: articleID}}
+	return c
+}
+
+func TestTrackContinuationEventRecordsAllowedEvents(t *testing.T) {
+	for _, eventType := range []port.ContinuationEventType{
+		port.ContinuationEventSeriesImpression,
+		port.ContinuationEventSeriesClick,
+		port.ContinuationEventRelatedImpression,
+		port.ContinuationEventRelatedClick,
+	} {
+		repo := &contentAnalyticsRecordingRepo{}
+		svc, err := NewContentAnalyticsService(ContentAnalyticsServiceDeps{
+			Repo: repo, Articles: &contentAnalyticsArticleRepo{article: entity.TArticle{Id: 7, Status: 1}},
+			Cache: &contentAnalyticsCache{}, Visitor: fakeServiceVisitor{},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := svc.TrackContinuationEvent(newContinuationEventTestContext("7", `{"eventType":"`+string(eventType)+`"}`))
+		if !result.Flag || len(repo.continuationEvents) != 1 || repo.continuationEvents[0] != eventType {
+			t.Fatalf("event %s was not recorded: result=%+v events=%v", eventType, result, repo.continuationEvents)
+		}
+	}
+}
+
+func TestTrackContinuationEventValidatesInputsAndArticle(t *testing.T) {
+	tests := []struct {
+		name    string
+		article entity.TArticle
+		payload string
+	}{
+		{name: "invalid event", article: entity.TArticle{Id: 7, Status: 1}, payload: `{"eventType":"other"}`},
+		{name: "malformed payload", article: entity.TArticle{Id: 7, Status: 1}, payload: `{`},
+		{name: "unpublished article", article: entity.TArticle{Id: 7, Status: 3}, payload: `{"eventType":"related_click"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := &contentAnalyticsRecordingRepo{}
+			svc, err := NewContentAnalyticsService(ContentAnalyticsServiceDeps{
+				Repo: repo, Articles: &contentAnalyticsArticleRepo{article: test.article},
+				Cache: &contentAnalyticsCache{}, Visitor: fakeServiceVisitor{},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := svc.TrackContinuationEvent(newContinuationEventTestContext("7", test.payload))
+			if result.Flag || len(repo.continuationEvents) != 0 {
+				t.Fatalf("expected rejected event: result=%+v events=%v", result, repo.continuationEvents)
+			}
+		})
+	}
+}
+
+func TestTrackContinuationEventSkipsBots(t *testing.T) {
+	repo := &contentAnalyticsRecordingRepo{}
+	svc, err := NewContentAnalyticsService(ContentAnalyticsServiceDeps{
+		Repo: repo, Articles: &contentAnalyticsArticleRepo{article: entity.TArticle{Id: 7, Status: 1}},
+		Cache: &contentAnalyticsCache{}, Visitor: contentAnalyticsBotVisitor{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := svc.TrackContinuationEvent(newContinuationEventTestContext("7", `{"eventType":"series_impression"}`))
+	if !result.Flag || len(repo.continuationEvents) != 0 {
+		t.Fatalf("bot event should be a no-op: result=%+v events=%v", result, repo.continuationEvents)
+	}
+}
+
+func TestTrackContinuationEventPropagatesRepositoryFailure(t *testing.T) {
+	repo := &contentAnalyticsRecordingRepo{continuationErr: context.DeadlineExceeded}
+	svc, err := NewContentAnalyticsService(ContentAnalyticsServiceDeps{
+		Repo: repo, Articles: &contentAnalyticsArticleRepo{article: entity.TArticle{Id: 7, Status: 1}},
+		Cache: &contentAnalyticsCache{}, Visitor: fakeServiceVisitor{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := svc.TrackContinuationEvent(newContinuationEventTestContext("7", `{"eventType":"related_impression"}`))
+	if result.Flag {
+		t.Fatalf("expected repository failure, got %+v", result)
+	}
+}
+func TestContentContinuationMetricsRates(t *testing.T) {
+	metrics := contentContinuationMetrics(port.ContentDailyMetric{
+		SeriesImpressions: 4, SeriesClicks: 1,
+		RelatedImpressions: 8, RelatedClicks: 2,
+	})
+	if metrics.SeriesClickRate != 25 || metrics.RelatedClickRate != 25 || metrics.ContinuationRate != 25 {
+		t.Fatalf("unexpected continuation metrics: %+v", metrics)
+	}
+	if zero := contentContinuationMetrics(port.ContentDailyMetric{}); zero.ContinuationRate != 0 {
+		t.Fatalf("zero denominator should produce zero rate: %+v", zero)
+	}
+}
 func TestTrackReadSessionIsIdempotent(t *testing.T) {
 	repo := &contentAnalyticsRecordingRepo{}
 	cache := &contentAnalyticsCache{pfCount: 1}
@@ -217,6 +327,30 @@ func TestListContentAnalyticsArticlesSortsAndPaginates(t *testing.T) {
 	}
 }
 
+func TestListContentAnalyticsArticlesSortsByContinuationRate(t *testing.T) {
+	repo := &contentAnalyticsRecordingRepo{articleRows: []port.ContentArticleMetric{
+		{ArticleId: 1, ArticleTitle: "low continuation", Views: 100, SeriesImpressions: 100, SeriesClicks: 5, RelatedImpressions: 100, RelatedClicks: 5},
+		{ArticleId: 2, ArticleTitle: "high continuation", Views: 10, SeriesImpressions: 100, SeriesClicks: 20, RelatedImpressions: 100, RelatedClicks: 20},
+	}}
+	svc, err := NewContentAnalyticsService(ContentAnalyticsServiceDeps{
+		Repo: repo, Articles: &contentAnalyticsArticleRepo{}, Cache: &contentAnalyticsCache{}, Visitor: fakeServiceVisitor{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := svc.ListContentAnalyticsArticles(context.Background(), "7d", "continuationRate", 1, 1)
+	if !result.Flag {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	page, ok := result.Data.(model.PageResultDTO)
+	if !ok {
+		t.Fatalf("unexpected page type: %T", result.Data)
+	}
+	records, ok := page.Records.([]model.ContentArticlePerformanceDTO)
+	if !ok || len(records) != 1 || records[0].ArticleID != 2 || records[0].Continuation.ContinuationRate != 20 {
+		t.Fatalf("unexpected continuation sort: %#v", page.Records)
+	}
+}
 func TestResolveContentAnalyticsRange(t *testing.T) {
 	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
 	if window := resolveContentAnalyticsRange("90d", now); len(window.Days) != 90 || window.Unit != "day" {

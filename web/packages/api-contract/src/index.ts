@@ -300,12 +300,23 @@ export interface AdminDashboardAnalytics {
 
 export type ContentAnalyticsRange = '7d' | '30d' | '90d' | '12m'
 
+export interface ContentContinuationMetrics {
+  seriesImpressions: number
+  seriesClicks: number
+  seriesClickRate: number
+  relatedImpressions: number
+  relatedClicks: number
+  relatedClickRate: number
+  continuationRate: number
+}
+
 export interface ContentAnalyticsOverview {
   views: number
   uniqueReaders: number
   effectiveSessions: number
   avgActiveMs: number
   completionRate: number
+  continuation: ContentContinuationMetrics
 }
 
 export interface ContentAnalyticsTrend extends ContentAnalyticsOverview {
@@ -331,6 +342,7 @@ export interface ContentArticlePerformance {
   effectiveSessions: number
   avgActiveMs: number
   completionRate: number
+  continuation: ContentContinuationMetrics
 }
 
 export interface ContentArticleAnalyticsDetail {

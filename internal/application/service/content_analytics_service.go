@@ -29,6 +29,7 @@ const (
 
 type ContentAnalyticsService interface {
 	TrackReadSession(c *gin.Context) model.ResultVO
+	TrackContinuationEvent(c *gin.Context) model.ResultVO
 	GetContentAnalytics(ctx context.Context, rangeValue string) model.ResultVO
 	ListContentAnalyticsArticles(ctx context.Context, rangeValue, sortBy string, current, size int) model.ResultVO
 	GetContentAnalyticsArticle(ctx context.Context, articleID int, rangeValue string) model.ResultVO
@@ -144,6 +145,52 @@ func (s *MyContentAnalyticsService) TrackReadSession(c *gin.Context) model.Resul
 	return model.ResultOk()
 }
 
+func (s *MyContentAnalyticsService) TrackContinuationEvent(c *gin.Context) model.ResultVO {
+	articleID, err := strconv.Atoi(c.Param("articleId"))
+	if err != nil || articleID <= 0 {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	var vo model.ArticleContinuationEventVO
+	if err := c.ShouldBindJSON(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	eventType := port.ContinuationEventType(strings.TrimSpace(vo.EventType))
+	if !eventType.Valid() {
+		return model.ResultFailWithMessage("不支持的续读事件类型")
+	}
+	article, err := s.articles.GetArticleRecord(c.Request.Context(), articleID)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if article.Id == 0 || article.IsDelete != 0 || article.Status != 1 {
+		return model.ResultFailWithMessage("文章不存在")
+	}
+	identity, err := s.visitor.Resolve(c.Request.Context(), c.Request)
+	if err != nil {
+		return model.ResultFailWithMessage("无法识别续读事件")
+	}
+	if identity.IsBot {
+		return model.ResultOk()
+	}
+	readerKey := strings.TrimSpace(identity.Fingerprint)
+	if readerKey == "" {
+		readerKey = c.ClientIP() + "\x00" + c.Request.UserAgent()
+	}
+	if s.limiter != nil {
+		allowed, limitErr := allowRateLimit(c.Request.Context(), s.limiter, "content:continuation-event:", readerKey, 120, time.Minute)
+		if limitErr != nil {
+			return model.ResultFromError(limitErr)
+		}
+		if !allowed {
+			return model.ResultFailWithCodeAndMessage(42900, "请求过于频繁，请稍后再试")
+		}
+	}
+	if err := s.repo.RecordContinuationEvent(c.Request.Context(), articleID, timeNow(), eventType); err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOk()
+}
+
 func (s *MyContentAnalyticsService) GetContentAnalytics(ctx context.Context, rangeValue string) model.ResultVO {
 	window := resolveContentAnalyticsRange(rangeValue, timeNow())
 	rows, err := s.repo.ListDailyMetrics(ctx, window.Start.Format("2006-01-02"), window.End.Format("2006-01-02"))
@@ -236,6 +283,7 @@ func (s *MyContentAnalyticsService) contentTrend(ctx context.Context, window con
 			EffectiveSessions: overview.EffectiveSessions,
 			AvgActiveMs:       overview.AvgActiveMs,
 			CompletionRate:    overview.CompletionRate,
+			Continuation:      overview.Continuation,
 		})
 	}
 	return trend
@@ -370,6 +418,10 @@ func contentTotals(rows []port.ContentDailyMetric) port.ContentDailyMetric {
 		totals.EffectiveSessions += row.EffectiveSessions
 		totals.TotalActiveMs += row.TotalActiveMs
 		totals.CompletedSessions += row.CompletedSessions
+		totals.SeriesImpressions += row.SeriesImpressions
+		totals.SeriesClicks += row.SeriesClicks
+		totals.RelatedImpressions += row.RelatedImpressions
+		totals.RelatedClicks += row.RelatedClicks
 	}
 	return totals
 }
@@ -383,6 +435,10 @@ func contentTotalsForDays(byDate map[string]port.ContentDailyMetric, days []time
 		totals.EffectiveSessions += row.EffectiveSessions
 		totals.TotalActiveMs += row.TotalActiveMs
 		totals.CompletedSessions += row.CompletedSessions
+		totals.SeriesImpressions += row.SeriesImpressions
+		totals.SeriesClicks += row.SeriesClicks
+		totals.RelatedImpressions += row.RelatedImpressions
+		totals.RelatedClicks += row.RelatedClicks
 	}
 	return totals
 }
@@ -402,16 +458,40 @@ func overviewFromContentMetrics(metric port.ContentDailyMetric) model.ContentAna
 		EffectiveSessions: metric.EffectiveSessions,
 		AvgActiveMs:       avgActiveMs,
 		CompletionRate:    completionRate,
+		Continuation:      contentContinuationMetrics(metric),
 	}
+}
+
+func contentContinuationMetrics(metric port.ContentDailyMetric) model.ContentContinuationMetricsDTO {
+	return model.ContentContinuationMetricsDTO{
+		SeriesImpressions:  metric.SeriesImpressions,
+		SeriesClicks:       metric.SeriesClicks,
+		SeriesClickRate:    contentPercentage(metric.SeriesClicks, metric.SeriesImpressions),
+		RelatedImpressions: metric.RelatedImpressions,
+		RelatedClicks:      metric.RelatedClicks,
+		RelatedClickRate:   contentPercentage(metric.RelatedClicks, metric.RelatedImpressions),
+		ContinuationRate:   contentPercentage(metric.SeriesClicks+metric.RelatedClicks, metric.SeriesImpressions+metric.RelatedImpressions),
+	}
+}
+
+func contentPercentage(numerator, denominator int64) float64 {
+	if denominator <= 0 {
+		return 0
+	}
+	return math.Round(float64(numerator)*10000/float64(denominator)) / 100
 }
 
 func articlePerformanceDTO(row port.ContentArticleMetric) model.ContentArticlePerformanceDTO {
 	overview := overviewFromContentMetrics(port.ContentDailyMetric{
-		Views:             row.Views,
-		UniqueReaders:     row.UniqueReaders,
-		EffectiveSessions: row.EffectiveSessions,
-		TotalActiveMs:     row.TotalActiveMs,
-		CompletedSessions: row.CompletedSessions,
+		Views:              row.Views,
+		UniqueReaders:      row.UniqueReaders,
+		EffectiveSessions:  row.EffectiveSessions,
+		TotalActiveMs:      row.TotalActiveMs,
+		CompletedSessions:  row.CompletedSessions,
+		SeriesImpressions:  row.SeriesImpressions,
+		SeriesClicks:       row.SeriesClicks,
+		RelatedImpressions: row.RelatedImpressions,
+		RelatedClicks:      row.RelatedClicks,
 	})
 	return model.ContentArticlePerformanceDTO{
 		ArticleID:         row.ArticleId,
@@ -424,6 +504,7 @@ func articlePerformanceDTO(row port.ContentArticleMetric) model.ContentArticlePe
 		EffectiveSessions: overview.EffectiveSessions,
 		AvgActiveMs:       overview.AvgActiveMs,
 		CompletionRate:    overview.CompletionRate,
+		Continuation:      overview.Continuation,
 	}
 }
 
@@ -447,6 +528,10 @@ func sortContentArticles(items []model.ContentArticlePerformanceDTO, sortBy stri
 		less = func(i, j int) bool { return items[i].AvgActiveMs > items[j].AvgActiveMs }
 	case "completionRate":
 		less = func(i, j int) bool { return items[i].CompletionRate > items[j].CompletionRate }
+	case "continuationRate":
+		less = func(i, j int) bool {
+			return items[i].Continuation.ContinuationRate > items[j].Continuation.ContinuationRate
+		}
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if less(i, j) {

@@ -39,6 +39,7 @@ func RouterSetup(router *gin.Engine) {
 	articles.GET("/:articleId", api.GetArticleById)
 	articles.POST("/:articleId/access", api.AccessArticle)
 	articles.POST("/:articleId/read-sessions", api.TrackArticleReadSession)
+	articles.POST("/:articleId/continuation-events", api.TrackArticleContinuationEvent)
 	articles.GET("/by-tag", api.ListArticlesByTagId)
 	articles.GET("/search", api.ListArticlesBySearch)
 	public.GET("/archives", api.ListArchives)

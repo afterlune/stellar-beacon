@@ -144,5 +144,8 @@ export default {
   },
   getSeriesDetail: (seriesId: any) => {
     return http.get('/public/series/' + encodeURIComponent(seriesId))
+  },
+  trackContinuationEvent: (params: { articleId: number; eventType: string }) => {
+    return http.post(`/public/articles/${encodeURIComponent(params.articleId)}/continuation-events`, { eventType: params.eventType })
   }
 }

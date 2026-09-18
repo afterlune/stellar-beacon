@@ -98,21 +98,33 @@ type DashboardAnalyticsDTO struct {
 	GeneratedAt time.Time                  `json:"generatedAt"`
 }
 
+type ContentContinuationMetricsDTO struct {
+	SeriesImpressions  int64   `json:"seriesImpressions"`
+	SeriesClicks       int64   `json:"seriesClicks"`
+	SeriesClickRate    float64 `json:"seriesClickRate"`
+	RelatedImpressions int64   `json:"relatedImpressions"`
+	RelatedClicks      int64   `json:"relatedClicks"`
+	RelatedClickRate   float64 `json:"relatedClickRate"`
+	ContinuationRate   float64 `json:"continuationRate"`
+}
+
 type ContentAnalyticsOverviewDTO struct {
-	Views             int64   `json:"views"`
-	UniqueReaders     int64   `json:"uniqueReaders"`
-	EffectiveSessions int64   `json:"effectiveSessions"`
-	AvgActiveMs       int64   `json:"avgActiveMs"`
-	CompletionRate    float64 `json:"completionRate"`
+	Views             int64                         `json:"views"`
+	UniqueReaders     int64                         `json:"uniqueReaders"`
+	EffectiveSessions int64                         `json:"effectiveSessions"`
+	AvgActiveMs       int64                         `json:"avgActiveMs"`
+	CompletionRate    float64                       `json:"completionRate"`
+	Continuation      ContentContinuationMetricsDTO `json:"continuation"`
 }
 
 type ContentAnalyticsTrendDTO struct {
-	Period            string  `json:"period"`
-	Views             int64   `json:"views"`
-	UniqueReaders     int64   `json:"uniqueReaders"`
-	EffectiveSessions int64   `json:"effectiveSessions"`
-	AvgActiveMs       int64   `json:"avgActiveMs"`
-	CompletionRate    float64 `json:"completionRate"`
+	Period            string                        `json:"period"`
+	Views             int64                         `json:"views"`
+	UniqueReaders     int64                         `json:"uniqueReaders"`
+	EffectiveSessions int64                         `json:"effectiveSessions"`
+	AvgActiveMs       int64                         `json:"avgActiveMs"`
+	CompletionRate    float64                       `json:"completionRate"`
+	Continuation      ContentContinuationMetricsDTO `json:"continuation"`
 }
 
 type ContentAnalyticsDTO struct {
@@ -124,16 +136,17 @@ type ContentAnalyticsDTO struct {
 }
 
 type ContentArticlePerformanceDTO struct {
-	ArticleID         int       `json:"articleId"`
-	ArticleTitle      string    `json:"articleTitle"`
-	ArticleCover      string    `json:"articleCover"`
-	CategoryName      string    `json:"categoryName"`
-	CreateTime        time.Time `json:"createTime"`
-	Views             int64     `json:"views"`
-	UniqueReaders     int64     `json:"uniqueReaders"`
-	EffectiveSessions int64     `json:"effectiveSessions"`
-	AvgActiveMs       int64     `json:"avgActiveMs"`
-	CompletionRate    float64   `json:"completionRate"`
+	ArticleID         int                           `json:"articleId"`
+	ArticleTitle      string                        `json:"articleTitle"`
+	ArticleCover      string                        `json:"articleCover"`
+	CategoryName      string                        `json:"categoryName"`
+	CreateTime        time.Time                     `json:"createTime"`
+	Views             int64                         `json:"views"`
+	UniqueReaders     int64                         `json:"uniqueReaders"`
+	EffectiveSessions int64                         `json:"effectiveSessions"`
+	AvgActiveMs       int64                         `json:"avgActiveMs"`
+	CompletionRate    float64                       `json:"completionRate"`
+	Continuation      ContentContinuationMetricsDTO `json:"continuation"`
 }
 
 type ContentAnalyticsArticleDetailDTO struct {

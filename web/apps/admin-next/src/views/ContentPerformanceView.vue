@@ -42,6 +42,26 @@
         :description="t('contentPerformance.trend.emptyDescription')" />
     </a-card>
 
+    <a-card class="admin-panel content-performance-continuation" :bordered="false" :title="t('contentPerformance.continuation.title')" data-testid="content-performance-continuation">
+      <div class="content-performance-continuation__summary">
+        <div data-testid="content-performance-continuation-series">
+          <span>{{ t('contentPerformance.continuation.series') }}</span>
+          <strong>{{ formatPercent(analytics.overview.continuation.seriesClickRate) }}</strong>
+          <small>{{ t('contentPerformance.continuation.detail', { clicks: formatNumber(analytics.overview.continuation.seriesClicks), impressions: formatNumber(analytics.overview.continuation.seriesImpressions) }) }}</small>
+        </div>
+        <div data-testid="content-performance-continuation-related">
+          <span>{{ t('contentPerformance.continuation.related') }}</span>
+          <strong>{{ formatPercent(analytics.overview.continuation.relatedClickRate) }}</strong>
+          <small>{{ t('contentPerformance.continuation.detail', { clicks: formatNumber(analytics.overview.continuation.relatedClicks), impressions: formatNumber(analytics.overview.continuation.relatedImpressions) }) }}</small>
+        </div>
+      </div>
+      <AdminEChart v-if="analytics.trend.length" :option="continuationTrendOption" height="280px" />
+      <AdminEmptyState
+        v-else
+        :title="t('contentPerformance.continuation.emptyTitle')"
+        :description="t('contentPerformance.continuation.emptyDescription')" />
+    </a-card>
+
     <a-card class="admin-panel content-performance-ranking" :bordered="false" :title="t('contentPerformance.ranking.title')" data-testid="content-performance-ranking">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
@@ -50,6 +70,7 @@
             <a-option value="uniqueReaders">{{ t('contentPerformance.table.uniqueReaders') }}</a-option>
             <a-option value="avgActiveMs">{{ t('contentPerformance.table.avgActiveTime') }}</a-option>
             <a-option value="completionRate">{{ t('contentPerformance.table.completionRate') }}</a-option>
+            <a-option value="continuationRate">{{ t('contentPerformance.table.continuationRate') }}</a-option>
           </a-select>
         </div>
         <span class="admin-toolbar-caption">{{ t('contentPerformance.ranking.total', { total }) }}</span>
@@ -78,6 +99,7 @@
           <template #uniqueReaders="{ record }">{{ formatNumber(record.uniqueReaders) }}</template>
           <template #avgActiveMs="{ record }">{{ formatDuration(record.avgActiveMs) }}</template>
           <template #completionRate="{ record }">{{ formatPercent(record.completionRate) }}</template>
+          <template #continuationRate="{ record }">{{ formatPercent(record.continuation.continuationRate) }}</template>
           <template #effectiveSessions="{ record }">{{ formatNumber(record.effectiveSessions) }}</template>
           <template #actions="{ record }">
             <a-button type="text" size="small" @click="openDetail(record.articleId)">{{ t('contentPerformance.table.detail') }}</a-button>
@@ -103,8 +125,19 @@
             <div><span>{{ t('contentPerformance.table.uniqueReaders') }}</span><strong>{{ formatNumber(detail.overview.uniqueReaders) }}</strong></div>
             <div><span>{{ t('contentPerformance.table.avgActiveTime') }}</span><strong>{{ formatDuration(detail.overview.avgActiveMs) }}</strong></div>
             <div><span>{{ t('contentPerformance.table.completionRate') }}</span><strong>{{ formatPercent(detail.overview.completionRate) }}</strong></div>
+            <div>
+              <span>{{ t('contentPerformance.continuation.series') }}</span>
+              <strong>{{ formatPercent(detail.overview.continuation.seriesClickRate) }}</strong>
+              <small>{{ t('contentPerformance.continuation.detail', { clicks: formatNumber(detail.overview.continuation.seriesClicks), impressions: formatNumber(detail.overview.continuation.seriesImpressions) }) }}</small>
+            </div>
+            <div>
+              <span>{{ t('contentPerformance.continuation.related') }}</span>
+              <strong>{{ formatPercent(detail.overview.continuation.relatedClickRate) }}</strong>
+              <small>{{ t('contentPerformance.continuation.detail', { clicks: formatNumber(detail.overview.continuation.relatedClicks), impressions: formatNumber(detail.overview.continuation.relatedImpressions) }) }}</small>
+            </div>
           </div>
           <AdminEChart v-if="detail.trend.length" :option="detailTrendOption" height="300px" />
+          <AdminEChart v-if="detail.trend.length" :option="detailContinuationTrendOption" height="260px" />
           <AdminEmptyState
             v-else
             :title="t('contentPerformance.trend.emptyTitle')"
@@ -119,7 +152,7 @@
 <script lang="ts">
 import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
 import { IconBook, IconCheckCircle, IconClockCircle, IconEye, IconRefresh, IconUserGroup } from '@arco-design/web-vue/es/icon'
-import type { AdminContentAnalytics, ContentAnalyticsOverview, ContentAnalyticsRange, ContentAnalyticsTrend, ContentArticleAnalyticsDetail, ContentArticlePerformance } from '@stellar-beacon/api-contract'
+import type { AdminContentAnalytics, ContentAnalyticsOverview, ContentAnalyticsRange, ContentAnalyticsTrend, ContentArticleAnalyticsDetail, ContentArticlePerformance, ContentContinuationMetrics } from '@stellar-beacon/api-contract'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminEChart from '@/components/AdminEChart.vue'
@@ -131,8 +164,20 @@ import { useThemeStore } from '@/stores/theme'
 import { chartSeriesColor, verticalFade } from '@/utils/chart-theme'
 import { formatDateTime, formatNumber, isHttpUrl } from '@/utils/format'
 
+function emptyContinuation(): ContentContinuationMetrics {
+  return {
+    seriesImpressions: 0,
+    seriesClicks: 0,
+    seriesClickRate: 0,
+    relatedImpressions: 0,
+    relatedClicks: 0,
+    relatedClickRate: 0,
+    continuationRate: 0
+  }
+}
+
 function emptyOverview(): ContentAnalyticsOverview {
-  return { views: 0, uniqueReaders: 0, effectiveSessions: 0, avgActiveMs: 0, completionRate: 0 }
+  return { views: 0, uniqueReaders: 0, effectiveSessions: 0, avgActiveMs: 0, completionRate: 0, continuation: emptyContinuation() }
 }
 
 function emptyAnalytics(): AdminContentAnalytics {
@@ -173,6 +218,7 @@ export default defineComponent({
       { title: t('contentPerformance.table.avgActiveTime'), dataIndex: 'avgActiveMs', slotName: 'avgActiveMs', width: 150 },
       { title: t('contentPerformance.table.completionRate'), dataIndex: 'completionRate', slotName: 'completionRate', width: 120 },
       { title: t('contentPerformance.table.effectiveSessions'), dataIndex: 'effectiveSessions', slotName: 'effectiveSessions', width: 120 },
+      { title: t('contentPerformance.table.continuationRate'), dataIndex: 'continuationRate', slotName: 'continuationRate', width: 130 },
       { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 120 }
     ])
 
@@ -186,7 +232,9 @@ export default defineComponent({
 
     const rangeLabel = computed(() => t(`contentPerformance.range.${range.value === '7d' ? 'days7' : range.value === '30d' ? 'days30' : range.value === '90d' ? 'days90' : 'months12'}`))
     const trendOption = computed(() => trendChart(analytics.trend, analytics.unit))
+    const continuationTrendOption = computed(() => continuationTrendChart(analytics.trend, analytics.unit))
     const detailTrendOption = computed(() => trendChart(detail.value?.trend || [], analytics.unit))
+    const detailContinuationTrendOption = computed(() => continuationTrendChart(detail.value?.trend || [], analytics.unit))
 
     const load = async () => {
       loading.value = true
@@ -245,6 +293,22 @@ export default defineComponent({
       }
     }
 
+    function continuationTrendChart(rows: ContentAnalyticsTrend[], unit: 'day' | 'month'): Record<string, unknown> {
+      const first = chartSeriesColor(themeStore.theme, 0)
+      const second = chartSeriesColor(themeStore.theme, 1)
+      return {
+        tooltip: { trigger: 'axis' },
+        legend: { top: 0, right: 0 },
+        grid: { left: 4, right: 20, top: 36, bottom: 2, containLabel: true },
+        xAxis: { type: 'category', boundaryGap: false, data: rows.map((item) => unit === 'month' ? item.period : item.period.slice(5)) },
+        yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%' } },
+        series: [
+          { name: t('contentPerformance.chart.seriesClickRate'), type: 'line', smooth: true, showSymbol: false, lineStyle: { color: first, width: 2.4 }, itemStyle: { color: first }, data: rows.map((item) => item.continuation.seriesClickRate) },
+          { name: t('contentPerformance.chart.relatedClickRate'), type: 'line', smooth: true, showSymbol: false, lineStyle: { color: second, width: 2.2 }, itemStyle: { color: second }, data: rows.map((item) => item.continuation.relatedClickRate) }
+        ]
+      }
+    }
+
     function trendChart(rows: ContentAnalyticsTrend[], unit: 'day' | 'month'): Record<string, unknown> {
       const first = chartSeriesColor(themeStore.theme, 0)
       const second = chartSeriesColor(themeStore.theme, 1)
@@ -286,7 +350,9 @@ export default defineComponent({
       pagination,
       rangeLabel,
       trendOption,
+      continuationTrendOption,
       detailTrendOption,
+      detailContinuationTrendOption,
       load,
       reload,
       changePage,
@@ -328,9 +394,41 @@ function formatDuration(value: unknown): string {
   height: 300px;
 }
 
+.content-performance-continuation {
+  margin-top: 16px;
+}
+
+.content-performance-continuation__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.content-performance-continuation__summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 10px;
+  background: var(--color-fill-1);
+}
+
+.content-performance-continuation__summary span,
+.content-performance-continuation__summary small {
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.content-performance-continuation__summary strong {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
 .content-performance-ranking {
   margin-top: 16px;
 }
+
 
 .content-performance-article {
   display: flex;
@@ -407,6 +505,11 @@ function formatDuration(value: unknown): string {
   display: block;
 }
 
+.content-performance-detail-stats small {
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+
 .content-performance-detail-stats span {
   color: var(--admin-muted);
   font-size: 12px;
@@ -418,8 +521,15 @@ function formatDuration(value: unknown): string {
 }
 
 @media (max-width: 800px) {
+  .content-performance-continuation__summary,
   .content-performance-detail-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .content-performance-continuation__summary {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -71,6 +71,11 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
     [void](Assert-IntegrationApiSuccess -Response $readSession -Name "content analytics read session attempt $attempt")
 }
 
+foreach ($eventType in @('series_impression', 'series_click', 'related_impression', 'related_click')) {
+    $continuationBody = @{ eventType = $eventType } | ConvertTo-Json -Compress
+    $continuation = Invoke-IntegrationRequest -Uri "$blogBase/api/v1/public/articles/$contentArticleId/continuation-events" -Method POST -ContentType 'application/json' -Body $continuationBody
+    [void](Assert-IntegrationApiSuccess -Response $continuation -Name "content analytics continuation event $eventType")
+}
 $loginBody = 'username=' + [uri]::EscapeDataString($env:E2E_ADMIN_EMAIL) + '&password=' + [uri]::EscapeDataString($env:E2E_ADMIN_PASSWORD)
 $login = Invoke-IntegrationRequest -Uri "$adminBase/api/v1/auth/login" -Method POST -ContentType 'application/x-www-form-urlencoded' -Body $loginBody
 $loginPayload = Assert-IntegrationApiSuccess -Response $login -Name 'admin login'
@@ -109,6 +114,10 @@ $contentAnalyticsDetailResponse = Invoke-IntegrationRequest -Uri "$adminBase/api
 $contentAnalyticsDetail = Assert-IntegrationApiSuccess -Response $contentAnalyticsDetailResponse -Name 'content analytics article detail API'
 if ([int]$contentAnalyticsDetail.data.overview.views -lt 1 -or [int]$contentAnalyticsDetail.data.overview.effectiveSessions -lt 1) {
     throw "content analytics did not persist the smoke reading session: $($contentAnalyticsDetailResponse.Content)"
+}
+$continuationOverview = $contentAnalyticsDetail.data.overview.continuation
+if ([int]$continuationOverview.seriesImpressions -lt 1 -or [int]$continuationOverview.seriesClicks -lt 1 -or [int]$continuationOverview.relatedImpressions -lt 1 -or [int]$continuationOverview.relatedClicks -lt 1) {
+    throw "content analytics did not persist the smoke continuation events: $($contentAnalyticsDetailResponse.Content)"
 }
 
 $adminListApi = @(

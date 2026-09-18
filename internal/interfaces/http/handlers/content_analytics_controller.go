@@ -15,6 +15,13 @@ func TrackArticleReadSession(c *gin.Context) {
 	c.JSON(http.StatusOK, contentAnalyticsService.TrackReadSession(c))
 }
 
+// TrackArticleContinuationEvent records an anonymous aggregate event from the
+// series context or related-reading section on an article page.
+// @Router /v1/public/articles/{articleId}/continuation-events [POST]
+func TrackArticleContinuationEvent(c *gin.Context) {
+	c.JSON(http.StatusOK, contentAnalyticsService.TrackContinuationEvent(c))
+}
+
 // GetContentAnalytics returns the site-wide article performance overview.
 // @Router /v1/admin/content/analytics [GET]
 func GetContentAnalytics(c *gin.Context) {
