@@ -60,12 +60,13 @@ type FriendLinkRepository interface {
 type JobFilter struct {
 	JobName  string
 	JobGroup string
-	Status   int
+	Status   *int
 }
 
 type JobRepository interface {
 	Get(ctx context.Context, id int) (entity.TJob, error)
 	List(ctx context.Context, current, size int, filter JobFilter) ([]entity.TJob, int, error)
+	ListEnabled(ctx context.Context) ([]entity.TJob, error)
 	ListGroups(ctx context.Context) ([]string, error)
 	SaveOrUpdate(ctx context.Context, job entity.TJob) error
 	Delete(ctx context.Context, ids []int) error
@@ -83,6 +84,7 @@ type JobLogFilter struct {
 
 type JobLogRepository interface {
 	List(ctx context.Context, current, size int, filter JobLogFilter) ([]entity.TJobLog, int64, error)
+	Create(ctx context.Context, log entity.TJobLog) error
 	Delete(ctx context.Context, ids []int) error
 	Clean(ctx context.Context) error
 	ListGroups(ctx context.Context) (string, error)

@@ -239,25 +239,23 @@ list and shifts `first()`/`nth(k)` onto the wrong field.
 | --- | --- | --- |
 | Sider click / URL | `page.getByText('定时任务')`, `/quartz$` | 670-671 |
 | Heading role | `getByRole('main').getByRole('heading', { name: '定时任务' })` visible | 672 |
-| Run-once button | `page.getByRole('button', { name: '执行一次' })` `toBeEnabled()` then clicked | 673-674 |
+| Run-once button | `rowWithText(page, name).getByRole('button', { name: '执行一次', exact: true })` `toBeEnabled()` then clicked | 673-674 |
 | Popconfirm | `page.locator('.arco-popconfirm:visible').getByRole('button', { name: '确定' })` | 675 |
 | Create button | `page.getByRole('button', { name: '新增' })` | 677 |
 | Dialog | `page.locator('.arco-modal:visible')` | 678 |
-| Dialog text-input ordinals **[FRAGILE]** | `jobInputs.nth(0)` = 任务名称, `nth(1)` = 任务分组, `nth(2)` = 调用目标, `nth(3)` = Cron 表达式 | 679-683 |
+| Dialog fields | Label-scoped 任务名称 / 任务分组 / Cron 表达式 inputs; 调用目标 is an Arco select with a registered target such as `userArea.refresh` | 679-683 |
 | Confirm | `jobDialog.getByRole('button', { name: '确定' })` | 684 |
 | Edit button **[FRAGILE]** | `page.getByRole('button', { name: '编辑' })` — page-wide, must be the only match | 685 |
 | Dialog text | `page.locator('.arco-modal:visible')` `toContainText('编辑任务')` | 686 |
 | Table | `.arco-table` visible | integration-full-crud.spec.ts:141 |
-| Row-scoped edit | `rowWithText(page, name).getByRole('button', { name: '编辑', exact: true })` | integration-full-crud.spec.ts:153 |
+| Row-scoped edit | `rowWithText(page, name).getByRole('button', { name: '编辑', exact: true })` | integration-full-crud.spec.ts:160 |
 | Dialog text | `modal` `toContainText('编辑任务')` | integration-full-crud.spec.ts:155 |
-| Status toggle | `row.locator('.arco-switch')` — if count > 0, clicked twice, each time expecting `PUT /api/v1/admin/jobs/status` | integration-full-crud.spec.ts:163-167 |
-| Row-scoped delete | `/删除|移除/` via `deleteTableRow` | integration-full-crud.spec.ts:171, 442 |
+| Manual run | Row-scoped 执行一次 waits for `PUT /api/v1/admin/jobs/run`, then verifies one `jobName`-filtered row from `/api/v1/admin/logs/jobs` | integration-full-crud.spec.ts:186-191 |
+| Status toggle | `row.locator('.arco-switch')` — if count > 0, clicked twice, each time expecting `PUT /api/v1/admin/jobs/status` | integration-full-crud.spec.ts:194-198 |
+| Row-scoped delete | `/删除|移除/` via `deleteTableRow` | integration-full-crud.spec.ts:200, 442 |
 
-**[FRAGILE]** `getByRole('button', { name: '执行一次' })` at 673-674 is page-wide and non-exact. Today it resolves
-to the enabled row button; a second 执行一次 anywhere (a duplicate toolbar action, or the modal's 错误策略 option
-rendered as a button-like element) makes it ambiguous. The 新增 dialog also contains an `a-option` with the text
-`执行一次` (JobsView.vue:85), which is why the create-dialog save must not be preceded by an unscoped
-`执行一次` lookup while that select is open.
+The manual-run lookup must stay row-scoped. Target selection is a closed allowlist supplied by
+`GET /api/v1/admin/jobs/targets`; Cron expressions are standard five fields and no misfire selector is rendered.
 
 `javascript:` The visible heading assertion (672) requires `AdminPageHeader` (or whatever renders the page title) to
 keep emitting a real heading element — `getByRole('heading', { name: '定时任务' })` resolves to 0 if the title
@@ -664,11 +662,11 @@ at 643.
 
 | Test line | Dialog | Ordinal meaning that must hold |
 | --- | --- | --- |
-| 679-683 | `/quartz` create | `input[type="text"]` nth 0=任务名称, 1=任务分组, 2=调用目标, 3=Cron |
+| 679-683 | `/quartz` create | label-scoped 任务名称, 任务分组 and Cron; target select option `userArea.refresh` |
 | 710-713 | `/albums` create | nth 0=相册名称, then the **only** textarea=相册描述, then nth 1=封面 URL |
 | 740-742 | `/menus` create | nth 0=菜单名称, 1=路径, 2=组件路径 |
 | 668 | `/roles` create | `input[type="text"]` first=角色名 |
-| integration-full-crud.spec.ts:144-148 | `/quartz` create | same 4 ordinals |
+| integration-full-crud.spec.ts:167-176 | `/quartz` create | same label-scoped fields and target select |
 | integration-full-crud.spec.ts:116-119 | `/albums` create | same 3 ordinals as 710-713 |
 | integration-full-crud.spec.ts:212-219 | `/menus`/`/resources` create | menus: 0=name,1=path,2=component; resources: 0=name,1=url |
 | integration-full-crud.spec.ts:126, 184, 191, 227, 345, 369 | edit dialogs | `input[type="text"]`.first() = the entity name |

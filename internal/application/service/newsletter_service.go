@@ -41,7 +41,6 @@ type NewsletterServiceDeps struct {
 	Articles port.ArticleRepository
 	Mailer   port.Mailer
 	Limiter  port.RateLimiter
-	Growth   port.GrowthRepository
 }
 
 type MyNewsletterService struct {
@@ -49,7 +48,6 @@ type MyNewsletterService struct {
 	articles port.ArticleRepository
 	mailer   port.Mailer
 	limiter  port.RateLimiter
-	growth   port.GrowthRepository
 	baseURL  string
 }
 
@@ -64,7 +62,7 @@ func NewNewsletterService(deps NewsletterServiceDeps) (*MyNewsletterService, err
 		return nil, missingServiceDependency("newsletter", "mailer")
 	}
 	return &MyNewsletterService{
-		repo: deps.Repo, articles: deps.Articles, mailer: deps.Mailer, limiter: deps.Limiter, growth: deps.Growth,
+		repo: deps.Repo, articles: deps.Articles, mailer: deps.Mailer, limiter: deps.Limiter,
 		baseURL: strings.TrimRight(config.PublicSiteURL, "/"),
 	}, nil
 }
@@ -269,27 +267,13 @@ func (s *MyNewsletterService) EnqueueArticle(ctx context.Context, articleID int)
 func (s *MyNewsletterService) Run(ctx context.Context) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
-	maintenance := time.NewTicker(24 * time.Hour)
-	defer maintenance.Stop()
-	s.cleanupGrowthEvents(ctx)
 	for {
 		s.processOne(ctx)
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-		case <-maintenance.C:
-			s.cleanupGrowthEvents(ctx)
 		}
-	}
-}
-
-func (s *MyNewsletterService) cleanupGrowthEvents(ctx context.Context) {
-	if s.growth == nil {
-		return
-	}
-	if err := s.growth.Cleanup(ctx, time.Now().Add(-180*24*time.Hour)); err != nil {
-		slog.ErrorContext(ctx, "cleanup growth events failed", "error", err)
 	}
 }
 

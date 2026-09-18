@@ -48,6 +48,24 @@ https://example.com {
 		}
 	}
 
+	handle /healthz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /readyz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
 	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot)
 	handle @seoCrawler {
 		reverse_proxy https://172.17.0.1:7777 {
@@ -97,6 +115,24 @@ https://example.com:8008 {
         header Access-Control-Allow-Headers "*"
         header Access-Control-Expose-Headers "*"
         header Access-Control-Allow-Credentials "true"
+	}
+
+	handle /healthz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /readyz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
 	}
 
 	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot)

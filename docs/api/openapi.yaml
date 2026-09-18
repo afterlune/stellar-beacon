@@ -220,6 +220,8 @@ paths:
     get: { tags: [admin], summary: Get job, operationId: getJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/jobs/groups:
     get: { tags: [admin], summary: List job groups, operationId: listJobGroups, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/targets:
+    get: { tags: [admin], summary: List executable job targets, operationId: listJobTargets, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/jobs/status:
     put: { tags: [admin], summary: Update job status, operationId: updateJobStatus, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/jobs/run:

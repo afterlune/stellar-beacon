@@ -134,7 +134,21 @@ type JobRunVO struct {
 type JobSearchVO struct {
 	JobName  string `json:"jobName"`
 	JobGroup string `json:"jobGroup"`
-	Status   int    `json:"status"`
+	Status   *int   `json:"status" form:"status"`
+}
+
+type JobTargetDTO struct {
+	Target      string `json:"target"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CronExample string `json:"cronExample"`
+}
+
+type JobRunOutcomeDTO struct {
+	JobId     int    `json:"jobId"`
+	Target    string `json:"target"`
+	Processed bool   `json:"processed"`
+	Message   string `json:"message"`
 }
 
 type JobStatusVO struct {

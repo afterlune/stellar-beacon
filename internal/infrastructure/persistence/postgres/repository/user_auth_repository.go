@@ -161,3 +161,15 @@ func (u *MyUserAuthRepo) UpdateLoginMetadata(ctx context.Context, user entity.TU
 		return nil
 	})
 }
+
+func (u *MyUserAuthRepo) ListAreaSources(ctx context.Context) ([]port.UserAreaSource, error) {
+	session, err := u.authSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var sources []port.UserAreaSource
+	if err := session.SQL("SELECT ip_source FROM t_user_auth").Find(&sources); err != nil {
+		return nil, apperrors.Wrap(apperrors.KindUnavailable, "auth.list_area_sources", err)
+	}
+	return sources, nil
+}

@@ -225,6 +225,10 @@ func shouldRecordException(ctx context.Context, code string) bool {
 
 func Log() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.Request.URL.Path == "/healthz" || c.Request.URL.Path == "/readyz" {
+			c.Next()
+			return
+		}
 		blw := &bodyLog{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 		c.Writer = blw
 		// 创建一个缓冲区
@@ -323,7 +327,7 @@ func Log() gin.HandlerFunc {
 
 func SpiderReject() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.URL.Path == "/healthz" || isSeoRoute(c.Request.URL.Path) {
+		if c.Request.URL.Path == "/healthz" || c.Request.URL.Path == "/readyz" || isSeoRoute(c.Request.URL.Path) {
 			c.Next()
 			return
 		}

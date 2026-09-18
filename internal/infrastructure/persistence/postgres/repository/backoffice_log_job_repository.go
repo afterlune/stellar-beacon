@@ -94,6 +94,17 @@ func (r *MyJobLogRepo) List(ctx context.Context, current, size int, filter port.
 	return logs, count, nil
 }
 
+func (r *MyJobLogRepo) Create(ctx context.Context, log entity.TJobLog) error {
+	session, err := repoSession(r.engine, ctx, "job_log.create")
+	if err != nil {
+		return err
+	}
+	if _, err := session.Insert(&log); err != nil {
+		return apperrors.Unavailable("job_log.create", err)
+	}
+	return nil
+}
+
 func (r *MyJobLogRepo) Delete(ctx context.Context, ids []int) error {
 	if len(ids) == 0 {
 		return nil
@@ -135,7 +146,7 @@ func (r *MyJobRepository) Get(ctx context.Context, id int) (entity.TJob, error) 
 		return entity.TJob{}, err
 	}
 	var job entity.TJob
-	found, err := session.ID(id).Get(&job)
+	found, err := session.Where("id = ?", id).Get(&job)
 	if err != nil {
 		return entity.TJob{}, apperrors.Unavailable("job.get", err)
 	}
@@ -162,6 +173,18 @@ func (r *MyJobRepository) List(ctx context.Context, current, size int, filter po
 		return nil, 0, apperrors.Unavailable("job.list", err)
 	}
 	return jobs, count, nil
+}
+
+func (r *MyJobRepository) ListEnabled(ctx context.Context) ([]entity.TJob, error) {
+	session, err := repoSession(r.engine, ctx, "job.list_enabled")
+	if err != nil {
+		return nil, err
+	}
+	var jobs []entity.TJob
+	if err := session.Where("status = ?", 1).OrderBy("id ASC").Find(&jobs); err != nil {
+		return nil, apperrors.Unavailable("job.list_enabled", err)
+	}
+	return jobs, nil
 }
 
 func (r *MyJobRepository) ListGroups(ctx context.Context) ([]string, error) {
@@ -328,9 +351,9 @@ func jobFilter(filter port.JobFilter) (string, []interface{}) {
 		clauses = append(clauses, "job_group = ?")
 		args = append(args, filter.JobGroup)
 	}
-	if filter.Status != 0 {
+	if filter.Status != nil {
 		clauses = append(clauses, "status = ?")
-		args = append(args, filter.Status)
+		args = append(args, *filter.Status)
 	}
 	if len(clauses) == 0 {
 		return "", args

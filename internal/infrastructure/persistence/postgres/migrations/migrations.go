@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/casbin/xorm-adapter/v2"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/robfig/cron/v3"
 	"xorm.io/xorm"
 )
 
@@ -64,6 +66,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 		return err
 	}
 	if err := applyScheduledPublishSchema(ctx, engine); err != nil {
+		return err
+	}
+	if err := applyJobSchedulerSchema(ctx, engine); err != nil {
 		return err
 	}
 	return nil
@@ -599,6 +604,129 @@ func applyScheduledPublishSchema(ctx context.Context, engine *xorm.Engine) error
 		return fmt.Errorf("commit scheduled publish migration: %w", err)
 	}
 	return nil
+}
+
+// applyJobSchedulerSchema converts the legacy Quartz-shaped task table to the
+// standard five-field scheduler. Known targets are migrated and unknown
+// targets remain visible but paused so custom configurations are not lost.
+func applyJobSchedulerSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 11)").Get(&applied); err != nil {
+		return fmt.Errorf("check job scheduler migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin job scheduler migration: %w", err)
+	}
+	defer session.Rollback()
+
+	var jobs []entity.TJob
+	if err := session.OrderBy("id ASC").Find(&jobs); err != nil {
+		return fmt.Errorf("load legacy jobs: %w", err)
+	}
+	knownTargets := map[string]string{
+		"auroraQuartz.statisticalUserArea": "userArea.refresh",
+		"auroraQuartz.clearJobLogs":        "jobLogs.cleanup",
+	}
+	registered := map[string]bool{
+		"article.publishScheduled": true,
+		"growth.cleanup":           true,
+		"jobLogs.cleanup":          true,
+		"userArea.refresh":         true,
+	}
+	for _, job := range jobs {
+		target := strings.TrimSpace(job.InvokeTarget)
+		if migrated, ok := knownTargets[target]; ok {
+			target = migrated
+		}
+		expression := normalizeLegacyCron(job.CronExpression)
+		status := job.Status
+		remark := job.Remark
+		if !registered[target] || !validStandardCron(expression) {
+			status = 0
+			remark = appendMigrationRemark(remark, "migration 11: target or cron is not supported")
+		}
+		if _, err := session.Exec(`
+			UPDATE t_job
+			SET invoke_target = ?, cron_expression = ?, misfire_policy = 3,
+			    concurrent = 0, status = ?, remark = ?, update_time = CURRENT_TIMESTAMP
+			WHERE id = ?
+		`, target, expression, status, remark, job.Id); err != nil {
+			return fmt.Errorf("migrate job %d: %w", job.Id, err)
+		}
+	}
+
+	seedJobs := []struct {
+		name, group, target, expression, remark string
+	}{
+		{"发布定时文章", "系统", "article.publishScheduled", "* * * * *", "每分钟发布到期的定时文章"},
+		{"清理增长事件", "系统", "growth.cleanup", "20 3 * * *", "每天删除 180 天前的增长事件"},
+		{"清理任务日志", "系统", "jobLogs.cleanup", "0 4 * * *", "每天清理任务执行日志"},
+		{"刷新用户地域统计", "系统", "userArea.refresh", "*/30 * * * *", "每 30 分钟刷新用户地域分布"},
+	}
+	for _, seed := range seedJobs {
+		var exists bool
+		if _, err := session.SQL("SELECT EXISTS (SELECT 1 FROM t_job WHERE invoke_target = ?)", seed.target).Get(&exists); err != nil {
+			return fmt.Errorf("check default job %q: %w", seed.target, err)
+		}
+		if exists {
+			continue
+		}
+		if _, err := session.Insert(&entity.TJob{
+			JobName: seed.name, JobGroup: seed.group, InvokeTarget: seed.target,
+			CronExpression: seed.expression, MisfirePolicy: 3, Concurrent: 0,
+			Status: 1, Remark: seed.remark,
+		}); err != nil {
+			return fmt.Errorf("seed default job %q: %w", seed.target, err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 11, "job-scheduler"); err != nil {
+		return fmt.Errorf("record job scheduler migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit job scheduler migration: %w", err)
+	}
+	return nil
+}
+
+func normalizeLegacyCron(expression string) string {
+	fields := strings.Fields(strings.TrimSpace(expression))
+	if len(fields) == 6 {
+		fields = fields[1:]
+	}
+	for index := range fields {
+		if fields[index] == "?" {
+			fields[index] = "*"
+		}
+	}
+	return strings.Join(fields, " ")
+}
+
+func validStandardCron(expression string) bool {
+	if len(strings.Fields(strings.TrimSpace(expression))) != 5 {
+		return false
+	}
+	_, err := cron.ParseStandard(expression)
+	return err == nil
+}
+
+func appendMigrationRemark(remark, addition string) string {
+	remark = strings.TrimSpace(remark)
+	if remark == "" {
+		return addition
+	}
+	value := remark + "; " + addition
+	if len(value) > 500 {
+		return value[:500]
+	}
+	return value
 }
 
 func seedMenus(session *xorm.Session) error {

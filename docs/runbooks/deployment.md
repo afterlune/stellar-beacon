@@ -38,6 +38,10 @@ docker compose --env-file .env.production -f deploy/compose/production-standalon
 docker compose --env-file .env.production -f deploy/compose/production-standalone.yaml --profile minio up -d --build
 ```
 
+后台任务使用标准五段 Cron，并以容器/主机的 `TZ` 为执行时区；当前 Compose 默认为 `Asia/Shanghai`。停机期间错过的执行会被跳过。API 进程使用 Redis 互斥避免多实例重复运行同一任务，并在收到 `SIGINT`/`SIGTERM` 后先停止 HTTP，再停止任务与后台 worker。
+
+`/healthz` 是存活检查，服务进程存在即返回 200；`/readyz` 是就绪检查，启动完成后返回 200，停机过程中返回 503。现有 Compose 健康检查继续使用 `/healthz`，运维监控和负载均衡应使用 `/readyz`，避免 Redis 或邮件等外部依赖的短时故障触发容器重启。
+
 不要用 `down -v` 做常规更新，它会删除数据库、对象文件和密钥卷。发布前备份 PostgreSQL 与对象存储；至少异机保留数据库转储和 MinIO/OSS 对象副本。数据库备份示例：
 
 ```shell

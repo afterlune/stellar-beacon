@@ -216,17 +216,19 @@ type FriendLinkDTO struct {
 }
 
 type JobDTO struct {
-	Id             int       `json:"id"`
-	JobName        string    `json:"jobName"`
-	JobGroup       string    `json:"jobGroup"`
-	InvokeTarget   string    `json:"invokeTarget"`
-	CronExpression string    `json:"cronExpression"`
-	MisfirePolicy  string    `json:"misfirePolicy"`
-	Concurrent     int       `json:"concurrent"`
-	Status         int       `json:"status"`
-	CreateTime     time.Time `json:"createTime"`
-	Remark         string    `json:"remark"`
-	NextValidTime  time.Time `json:"nextValidTime"`
+	Id             int        `json:"id"`
+	JobName        string     `json:"jobName"`
+	JobGroup       string     `json:"jobGroup"`
+	InvokeTarget   string     `json:"invokeTarget"`
+	CronExpression string     `json:"cronExpression"`
+	MisfirePolicy  string     `json:"misfirePolicy"`
+	Concurrent     int        `json:"concurrent"`
+	Status         int        `json:"status"`
+	CreateTime     time.Time  `json:"createTime"`
+	Remark         string     `json:"remark"`
+	NextValidTime  *time.Time `json:"nextValidTime,omitempty"`
+	CanRunOnce     bool       `json:"canRunOnce"`
+	RunOnceReason  string     `json:"runOnceReason,omitempty"`
 }
 
 type JobLogDTO struct {

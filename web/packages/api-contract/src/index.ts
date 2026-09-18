@@ -123,15 +123,24 @@ export interface AdminJob {
   remark?: string
   createTime?: string
   updateTime?: string
+  nextValidTime?: string
   canRunOnce?: boolean
   runOnceReason?: string
   [key: string]: unknown
+}
+
+export interface AdminJobTarget {
+  target: string
+  name: string
+  description: string
+  cronExample: string
 }
 
 export interface JobRunOutcome {
   jobId: number
   target: string
   processed: boolean
+  message?: string
 }
 
 export interface UserRole {

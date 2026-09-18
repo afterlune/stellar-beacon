@@ -78,3 +78,12 @@ func RunJob(c *gin.Context) {
 func ListJobGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, jobService.ListJobGroup(c))
 }
+
+// ListJobTargets
+// @Summary      定时任务模块
+// @Description  获取可执行的内置任务目标
+// @Success      200 {object} model.ResultVO
+// @Router       /v1/admin/jobs/targets [GET]
+func ListJobTargets(c *gin.Context) {
+	c.JSON(http.StatusOK, jobService.ListJobTargets(c))
+}

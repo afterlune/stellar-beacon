@@ -7,6 +7,12 @@ $adminBase = 'http://127.0.0.1:18008'
 Wait-IntegrationHttp -Uri "$blogBase/"
 Wait-IntegrationHttp -Uri "$adminBase/"
 
+$ready = Invoke-IntegrationRequest -Uri "$blogBase/readyz"
+Assert-IntegrationStatus -Response $ready -Expected 200 -Name 'backend readiness'
+if ($ready.Content -notmatch '"ready":true') {
+    throw "backend readiness did not report ready: $($ready.Content)"
+}
+
 $blog = Invoke-IntegrationRequest -Uri "$blogBase/"
 Assert-IntegrationStatus -Response $blog -Expected 200 -Name 'blog frontend'
 if ($blog.Content -notmatch 'id="app"') { throw 'blog frontend HTML does not contain the Vue mount point' }
@@ -54,7 +60,8 @@ $authHeaders = @{ Authorization = "Bearer $token" }
 $adminApi = @(
     @{ Name = 'admin home API'; Uri = "$adminBase/api/v1/admin/dashboard" },
     @{ Name = 'admin menu API'; Uri = "$adminBase/api/v1/admin/me/menu" },
-    @{ Name = 'website config API'; Uri = "$adminBase/api/v1/admin/site" }
+    @{ Name = 'website config API'; Uri = "$adminBase/api/v1/admin/site" },
+    @{ Name = 'job targets API'; Uri = "$adminBase/api/v1/admin/jobs/targets" }
 )
 foreach ($item in $adminApi) {
     $response = Invoke-IntegrationRequest -Uri $item.Uri -Headers $authHeaders

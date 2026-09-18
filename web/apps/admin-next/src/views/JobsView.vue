@@ -75,6 +75,9 @@
           <template #cron="{ record }">
             <span class="admin-mono-cell" :title="String(record.cronExpression || '')">{{ record.cronExpression || '—' }}</span>
           </template>
+          <template #nextRun="{ record }">
+            <span class="admin-cell-nowrap">{{ record.nextValidTime ? formatDateTime(record.nextValidTime) : '—' }}</span>
+          </template>
           <template #status="{ record }">
             <a-tooltip :content="Number(record.status) === 1 ? t('logs.jobs.pauseHint') : t('logs.jobs.resumeHint')">
               <a-switch
@@ -151,9 +154,19 @@
           </a-form-item>
         </div>
         <a-form-item field="invokeTarget" :label="t('logs.common.colInvokeTarget')" required>
-          <a-input v-model="editor.invokeTarget" maxlength="500" :placeholder="t('logs.jobs.targetPlaceholder')" />
+          <a-select v-model="editor.invokeTarget" :placeholder="t('logs.jobs.targetPlaceholder')" allow-search>
+            <a-option v-for="target in jobTargets" :key="target.target" :value="target.target">
+              {{ target.name }} ({{ target.target }})
+            </a-option>
+            <a-option v-if="legacyTarget" :value="editor.invokeTarget" disabled>
+              {{ editor.invokeTarget }} ({{ t('logs.jobs.unregisteredTarget') }})
+            </a-option>
+          </a-select>
           <template #help>
-            {{ t('logs.jobs.targetHelp') }}
+            <template v-if="selectedTarget">
+              {{ selectedTarget.description }} · {{ t('logs.jobs.targetCronExample', { cron: selectedTarget.cronExample }) }}
+            </template>
+            <template v-else>{{ t('logs.jobs.targetHelp') }}</template>
           </template>
         </a-form-item>
         <a-form-item field="cronExpression" :label="t('logs.jobs.cronLabel')" required>
@@ -161,19 +174,10 @@
           <template #help>{{ t('logs.jobs.cronHelp') }}</template>
         </a-form-item>
         <div class="admin-form-grid">
-          <a-form-item :label="t('logs.jobs.misfireLabel')">
-            <a-select v-model="editor.misfirePolicy">
-              <a-option :value="0">{{ t('logs.jobs.misfireDefault') }}</a-option>
-              <a-option :value="1">{{ t('logs.jobs.misfireFireNow') }}</a-option>
-              <a-option :value="2">{{ t('logs.jobs.misfireOnce') }}</a-option>
-              <a-option :value="3">{{ t('logs.jobs.misfireAbandon') }}</a-option>
-            </a-select>
-            <template #help>{{ t('logs.jobs.misfireHelp') }}</template>
-          </a-form-item>
           <a-form-item :label="t('logs.jobs.concurrentLabel')">
             <a-radio-group v-model="editor.concurrent">
-              <a-radio :value="0">{{ t('logs.jobs.concurrentAllow') }}</a-radio>
-              <a-radio :value="1">{{ t('logs.jobs.concurrentDeny') }}</a-radio>
+              <a-radio :value="0">{{ t('logs.jobs.concurrentDeny') }}</a-radio>
+              <a-radio :value="1">{{ t('logs.jobs.concurrentAllow') }}</a-radio>
             </a-radio-group>
             <template #help>{{ t('logs.jobs.concurrentHelp') }}</template>
           </a-form-item>
@@ -203,6 +207,7 @@ import {
   getAdminJob,
   listAdminJobs,
   listAdminJobGroups,
+  listAdminJobTargets,
   runAdminJob,
   saveAdminJob,
   updateAdminJobStatus
@@ -218,7 +223,7 @@ import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePre
 import { t } from '@/i18n'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
-import type { AdminJob } from '@stellar-beacon/api-contract'
+import type { AdminJob, AdminJobTarget } from '@stellar-beacon/api-contract'
 
 const VIEW_KEY = 'jobs'
 
@@ -228,6 +233,7 @@ const columns = computed(() => [
   { title: t('logs.jobs.colGroup'), dataIndex: 'jobGroup', slotName: 'group', width: 118 },
   { title: t('logs.common.colInvokeTarget'), dataIndex: 'invokeTarget', slotName: 'target', ellipsis: true, tooltip: true, minWidth: 180 },
   { title: t('logs.jobs.colCron'), dataIndex: 'cronExpression', slotName: 'cron', width: 156 },
+  { title: t('logs.jobs.colNextRun'), dataIndex: 'nextValidTime', slotName: 'nextRun', width: 168 },
   { title: t('common.status'), dataIndex: 'status', slotName: 'status', width: 118 },
   { title: t('logs.jobs.colCreateTime'), dataIndex: 'createTime', slotName: 'time', width: 168 },
   { title: t('common.actions'), dataIndex: 'actions', slotName: 'actions', width: 224 }
@@ -237,6 +243,7 @@ const keywords = ref('')
 const statusFilter = ref<'all' | '0' | '1'>('all')
 const groupFilter = ref<string | undefined>(undefined)
 const groupOptions = ref<string[]>([])
+const jobTargets = ref<AdminJobTarget[]>([])
 const selectedKeys = ref<number[]>([])
 const saving = ref(false)
 const editorLoading = ref(false)
@@ -250,7 +257,6 @@ const editor = reactive<AdminJob>({
   jobGroup: '',
   invokeTarget: '',
   cronExpression: '',
-  misfirePolicy: 0,
   concurrent: 0,
   status: 1,
   remark: ''
@@ -274,7 +280,8 @@ const {
     current: page,
     size,
     jobName: keywords.value.trim(),
-    jobGroup: groupFilter.value || ''
+    jobGroup: groupFilter.value || '',
+    ...(statusFilter.value === 'all' ? {} : { status: statusFilter.value })
   }, { signal }),
   { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('logs.jobs.loadFailed') }
 )
@@ -287,15 +294,12 @@ useQueryFilters([
   { key: 'page', ref: current }
 ], { onRestore: () => void load(), onSearch: () => void reload() })
 
-onMounted(() => void loadGroupOptions())
+onMounted(() => {
+  void loadGroupOptions()
+  void loadJobTargets()
+})
 
-/**
- * 任务列表接口只按「名称 / 分组 / 状态」过滤，其中 `status=0` 在后端等于「不过滤」，
- * 因此状态页签仍在本地生效（否则无法只看已暂停任务），分组与名称走服务端。
- */
-const jobs = computed(() => (statusFilter.value === 'all'
-  ? rows.value
-  : rows.value.filter((job) => Number(job.status) === Number(statusFilter.value))))
+const jobs = computed(() => rows.value)
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const hasFilters = computed(() => Boolean(keywords.value.trim()) || statusFilter.value !== 'all' || Boolean(groupFilter.value))
@@ -304,6 +308,8 @@ const editorGroupSuggestions = computed(() => {
   const current = editor.jobGroup.trim()
   return groupOptions.value.filter((group) => group !== current).slice(0, 8)
 })
+const selectedTarget = computed(() => jobTargets.value.find((target) => target.target === editor.invokeTarget))
+const legacyTarget = computed(() => Boolean(editor.invokeTarget) && !selectedTarget.value)
 
 /** 分组接口失败时静默降级：只是没有下拉选项，不影响列表本身。 */
 async function loadGroupOptions(): Promise<void> {
@@ -311,6 +317,14 @@ async function loadGroupOptions(): Promise<void> {
     groupOptions.value = await listAdminJobGroups()
   } catch {
     groupOptions.value = []
+  }
+}
+
+async function loadJobTargets(): Promise<void> {
+  try {
+    jobTargets.value = await listAdminJobTargets()
+  } catch {
+    jobTargets.value = []
   }
 }
 
@@ -373,7 +387,6 @@ function resetEditor(job?: AdminJob): void {
   editor.jobGroup = String(job?.jobGroup || '')
   editor.invokeTarget = String(job?.invokeTarget || '')
   editor.cronExpression = String(job?.cronExpression || '')
-  editor.misfirePolicy = Number(job?.misfirePolicy ?? 0)
   editor.concurrent = Number(job?.concurrent ?? 0)
   editor.status = Number(job?.status ?? 1)
   editor.remark = String(job?.remark || '')
@@ -394,7 +407,6 @@ async function saveEditor(): Promise<void> {
       jobGroup: editor.jobGroup.trim(),
       invokeTarget: editor.invokeTarget.trim(),
       cronExpression: editor.cronExpression.trim(),
-      misfirePolicy: Number(editor.misfirePolicy),
       concurrent: Number(editor.concurrent),
       status: Number(editor.status),
       remark: editor.remark?.trim() || ''
@@ -434,9 +446,9 @@ async function runOnce(job: AdminJob): Promise<void> {
   if (!job.canRunOnce || !Number.isFinite(jobId) || jobId <= 0) return
   runningId.value = jobId
   try {
-    const outcome = await runAdminJob(jobId, String(job.jobGroup || ''))
-    if (outcome.processed) Message.success(t('logs.jobs.runOnceDone'))
-    else runHint.value = t('logs.jobs.runOnceEmpty')
+    const outcome = await runAdminJob(jobId)
+    if (outcome.processed) Message.success(outcome.message || t('logs.jobs.runOnceDone'))
+    else runHint.value = outcome.message || t('logs.jobs.runOnceEmpty')
   } catch (error) {
     Message.error(apiErrorMessage(error, t('logs.jobs.runFailed')))
   } finally {

@@ -27,6 +27,22 @@
 		}
 	}
 
+	handle /healthz {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /readyz {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
 	handle_path /storage/* {
 		reverse_proxy minio:9000
 	}
@@ -87,6 +103,22 @@
 				tls_insecure_skip_verify
 			}
 			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle /healthz {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /readyz {
+		reverse_proxy https://backend:7777 {
+			transport http {
+				tls_insecure_skip_verify
+			}
 		}
 	}
 

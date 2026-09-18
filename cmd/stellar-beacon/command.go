@@ -7,11 +7,10 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/bootstrap"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/logging"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/notification"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
+	appruntime "github.com/eternallyzzz/stellar-beacon/internal/infrastructure/runtime"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/security/tls"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/shared"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/task"
 	httpapi "github.com/eternallyzzz/stellar-beacon/internal/interfaces/http"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/middleware"
 	"io"
@@ -19,7 +18,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -80,19 +81,19 @@ func runServer() error {
 		return err
 	}
 	defer serverLog.Close()
-	if err := bootstrap.Initialize(); err != nil {
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+	runtime, err := bootstrap.Initialize(appCtx)
+	if err != nil {
 		return fmt.Errorf("application initialization failed: %w", err)
 	}
 	repository.StartLogQueue(context.Background())
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		if err := repository.StopLogQueue(shutdownCtx); err != nil {
 			slog.Error("stop log queue failed", "error", err)
 		}
-		if err := notification.StopCommentQueue(shutdownCtx); err != nil {
-			slog.Error("stop comment notification queue failed", "error", err)
-		}
-		cancel()
 	}()
 
 	gin.SetMode(gin.ReleaseMode)
@@ -109,10 +110,44 @@ func runServer() error {
 
 	httpapi.RouterSetup(router)
 
-	listener()
+	servers := newServerSet(router)
+	serveErrors := make(chan error, 2)
+	go func() { serveErrors <- servers.h3.ListenAndServe() }()
+	go func() { serveErrors <- servers.h2.ListenAndServeTLS("", "") }()
 
-	//return router.Run(fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")))
-	return runH3(router)
+	appruntime.SetComponent("http", "ready")
+	appruntime.SetReady(true)
+	signalCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
+	var serveErr error
+	select {
+	case <-signalCtx.Done():
+		slog.Info("shutdown signal received")
+	case serveErr = <-serveErrors:
+	}
+
+	appruntime.SetReady(false)
+	appruntime.SetComponent("http", "stopping")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+	if err := servers.h2.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("shutdown HTTP/2 server failed", "error", err)
+	}
+	if err := servers.h3.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("shutdown HTTP/3 server failed", "error", err)
+	}
+	if err := runtime.Stop(shutdownCtx); err != nil {
+		slog.Error("stop application runtime failed", "error", err)
+	}
+	if err := repository.StopLogQueue(shutdownCtx); err != nil {
+		slog.Error("stop log queue failed", "error", err)
+	}
+	appruntime.SetComponent("http", "stopped")
+	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		return serveErr
+	}
+	return nil
 }
 
 func banner() error {
@@ -160,11 +195,12 @@ func settings() (*os.File, error) {
 	return file, nil
 }
 
-func listener() {
-	go task.StatisticsUserArea()
+type serverSet struct {
+	h2 *http.Server
+	h3 *http3.Server
 }
 
-func runH3(router *gin.Engine) error {
+func newServerSet(router *gin.Engine) serverSet {
 	cfg := tls.GenerateTLSConfig(0, "")
 	h3 := http3.Server{
 		Addr:      fmt.Sprintf("%s:%d", viper.GetString("listen.host"), viper.GetInt("listen.port")),
@@ -191,16 +227,5 @@ func runH3(router *gin.Engine) error {
 			router.ServeHTTP(w, r)
 		}),
 	}
-	go func() {
-		if err := h.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("HTTP/3 companion server failed", "error", err)
-		}
-	}()
-	return h3.ListenAndServe()
-}
-
-type H2Handler func(http.ResponseWriter, *http.Request)
-
-func (f H2Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f(w, r)
+	return serverSet{h2: &h, h3: &h3}
 }

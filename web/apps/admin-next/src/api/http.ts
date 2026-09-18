@@ -1,7 +1,7 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticleView, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticleView, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
 export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
@@ -140,7 +140,6 @@ export async function saveAdminJob(payload: {
   jobGroup: string
   invokeTarget: string
   cronExpression: string
-  misfirePolicy: number
   concurrent: number
   status: number
   remark: string
@@ -161,8 +160,13 @@ export async function updateAdminJobStatus(id: number, status: number): Promise<
   responseData(response)
 }
 
-export async function runAdminJob(id: number, jobGroup: string): Promise<JobRunOutcome> {
-  const response = await http.put<ResultVO<JobRunOutcome>>('admin/jobs/run', { id, jobGroup })
+export async function runAdminJob(id: number): Promise<JobRunOutcome> {
+  const response = await http.put<ResultVO<JobRunOutcome>>('admin/jobs/run', { id })
+  return responseData(response)
+}
+
+export async function listAdminJobTargets(): Promise<AdminJobTarget[]> {
+  const response = await http.get<ResultVO<AdminJobTarget[]>>('admin/jobs/targets')
   return responseData(response)
 }
 

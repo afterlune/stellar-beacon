@@ -4,6 +4,7 @@ import (
 	api "github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/handlers"
 	"net/http"
 
+	appruntime "github.com/eternallyzzz/stellar-beacon/internal/infrastructure/runtime"
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,6 +13,14 @@ import (
 func RouterSetup(router *gin.Engine) {
 	router.GET("/healthz", func(c *gin.Context) {
 		c.Status(http.StatusOK)
+	})
+	router.GET("/readyz", func(c *gin.Context) {
+		state := appruntime.Snapshot()
+		if !state.Ready {
+			c.JSON(http.StatusServiceUnavailable, state)
+			return
+		}
+		c.JSON(http.StatusOK, state)
 	})
 	router.GET("/articles/:articleId", api.RenderArticleSEO)
 	router.GET("/sitemap.xml", api.RenderSitemap)
@@ -173,6 +182,7 @@ func RouterSetup(router *gin.Engine) {
 	admin.PUT("/jobs/status", api.UpdateJobStatus)
 	admin.PUT("/jobs/run", api.RunJob)
 	admin.GET("/jobs/groups", api.ListJobGroup)
+	admin.GET("/jobs/targets", api.ListJobTargets)
 	admin.GET("/logs/jobs", api.ListJobLogs)
 	admin.DELETE("/logs/jobs", api.DeleteJobLogs)
 	admin.DELETE("/logs/jobs/clean", api.CleanJobLogs)

@@ -518,7 +518,7 @@ test.beforeEach(async ({ page }) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 33, jobName: '定时任务', jobGroup: '默认', invokeTarget: 'article.cleanup', status: 1, startTime: '2026-08-29T10:00:00Z' }], count: 1 } })
+          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 33, jobName: '定时任务', jobGroup: '默认', invokeTarget: 'userArea.refresh', status: 1, startTime: '2026-08-29T10:00:00Z' }], count: 1 } })
         })
       } else {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
@@ -536,7 +536,7 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 85, jobName: '定时任务', jobGroup: '默认', invokeTarget: 'article.cleanup', cronExpression: '0 0 * * * ?', misfirePolicy: '2', concurrent: 0, status: 1, remark: '夜间执行' } })
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 85, jobName: '定时任务', jobGroup: '默认', invokeTarget: 'userArea.refresh', cronExpression: '*/30 * * * *', concurrent: 0, status: 1, remark: '夜间执行', canRunOnce: true, nextValidTime: '2026-08-29T10:30:00Z' } })
       })
       return
     }
@@ -551,7 +551,16 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '任务已执行一次', data: { jobId: 85, target: 'article.cleanup', processed: true } })
+        body: JSON.stringify({ flag: true, code: 20000, message: '任务已执行一次', data: { jobId: 85, target: 'userArea.refresh', processed: true, message: 'user area cache refreshed' } })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/jobs/targets') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: [{ target: 'userArea.refresh', name: '刷新用户地域统计', description: '刷新用户地域分布', cronExample: '*/30 * * * *' }] })
       })
       return
     }
@@ -561,7 +570,7 @@ test.beforeEach(async ({ page }) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 85, jobName: '定时任务', jobGroup: '默认', invokeTarget: 'article.cleanup', cronExpression: '0 0 * * * ?', misfirePolicy: 2, concurrent: 0, status: 1, remark: '夜间执行', canRunOnce: true, createTime: '2026-08-29T10:00:00Z' }], count: 1 } })
+          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 85, jobName: '定时任务', jobGroup: '默认', invokeTarget: 'userArea.refresh', cronExpression: '*/30 * * * *', concurrent: 0, status: 1, remark: '夜间执行', canRunOnce: true, nextValidTime: '2026-08-29T10:30:00Z', createTime: '2026-08-29T10:00:00Z' }], count: 1 } })
         })
       } else {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
@@ -764,11 +773,11 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await expect.poll(() => runJobCalled).toBe(true)
   await page.getByRole('button', { name: '新增' }).click()
   const jobDialog = page.locator('.arco-modal:visible')
-  const jobInputs = jobDialog.locator('input[type="text"]')
-  await jobInputs.nth(0).fill('新任务')
-  await jobInputs.nth(1).fill('默认')
-  await jobInputs.nth(2).fill('article.cleanup')
-  await jobInputs.nth(3).fill('0 0 * * * ?')
+  await jobDialog.locator('.arco-form-item').filter({ has: page.locator('.arco-form-item-label', { hasText: '任务名称' }) }).locator('input').first().fill('新任务')
+  await jobDialog.locator('.arco-form-item').filter({ has: page.locator('.arco-form-item-label', { hasText: '任务分组' }) }).locator('input').first().fill('默认')
+  await jobDialog.locator('.arco-form-item').filter({ has: page.locator('.arco-form-item-label', { hasText: '调用目标' }) }).locator('.arco-select').first().click()
+  await page.locator('.arco-select-option:visible').filter({ hasText: 'userArea.refresh' }).first().click()
+  await jobDialog.locator('.arco-form-item').filter({ has: page.locator('.arco-form-item-label', { hasText: 'Cron 表达式' }) }).locator('input').first().fill('*/30 * * * *')
   await jobDialog.getByRole('button', { name: '确定' }).click()
   await page.getByRole('button', { name: '编辑' }).click()
   await expect(page.locator('.arco-modal:visible')).toContainText('编辑任务')

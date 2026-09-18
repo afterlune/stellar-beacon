@@ -35,6 +35,9 @@ func (f *fakeAuthRepository) UpdatePasswordByID(context.Context, int, string) er
 func (f *fakeAuthRepository) UpdateLoginMetadata(context.Context, entity.TUserAuth) error {
 	return nil
 }
+func (f *fakeAuthRepository) ListAreaSources(context.Context) ([]port.UserAreaSource, error) {
+	return nil, nil
+}
 
 func TestUserAuthServiceAuthenticatesThroughPort(t *testing.T) {
 	hash, err := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.MinCost)

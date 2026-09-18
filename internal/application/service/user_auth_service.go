@@ -31,6 +31,7 @@ type UserAuthService interface {
 	CheckUserAuth(ctx context.Context, vo model.UserVO) *model.UserDetailsDTO
 	Authenticate(ctx context.Context, vo model.UserVO) (*model.UserDetailsDTO, error)
 	UpdateUserIp(ctx context.Context, user entity.TUserAuth) error
+	RefreshUserAreas(ctx context.Context) (bool, error)
 }
 
 type MyUserAuthService struct {
@@ -167,6 +168,44 @@ func (u *MyUserAuthService) ListUserAreas(c *gin.Context) model.ResultVO {
 		break
 	}
 	return model.ResultOkWithData(userAreaDTOs)
+}
+
+// RefreshUserAreas is the scheduler-facing projection of the former
+// background user-area ticker. It reads through the repository port and writes
+// only the cached aggregate used by the admin dashboard.
+func (u *MyUserAuthService) RefreshUserAreas(ctx context.Context) (bool, error) {
+	if u.cache == nil {
+		return false, apperrors.Unavailable("auth.user_areas", nil)
+	}
+	sources, err := u.authRepository().ListAreaSources(ctx)
+	if err != nil {
+		return false, err
+	}
+	counts := make(map[string]int64)
+	for _, source := range sources {
+		parts := strings.Split(source.IpSource, "|")
+		if len(parts) <= 2 {
+			continue
+		}
+		region := parts[2]
+		province := region
+		if strings.HasSuffix(region, "省") {
+			province = strings.TrimSuffix(region, "省")
+		}
+		counts[province]++
+	}
+	areas := make([]model.UserAreaDTO, 0, len(counts))
+	for name, value := range counts {
+		areas = append(areas, model.UserAreaDTO{Name: name, Value: value})
+	}
+	encoded, err := json.Marshal(areas)
+	if err != nil {
+		return false, err
+	}
+	if err := u.cache.Set(ctx, UserArea, encoded, 0); err != nil {
+		return false, err
+	}
+	return len(areas) > 0, nil
 }
 
 func (u *MyUserAuthService) ListUsers(c *gin.Context) model.ResultVO {

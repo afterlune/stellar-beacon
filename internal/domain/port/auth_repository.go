@@ -19,4 +19,9 @@ type AuthRepository interface {
 	UpdatePassword(ctx context.Context, username, password string) error
 	UpdatePasswordByID(ctx context.Context, id int, password string) error
 	UpdateLoginMetadata(ctx context.Context, user entity.TUserAuth) error
+	ListAreaSources(ctx context.Context) ([]UserAreaSource, error)
+}
+
+type UserAreaSource struct {
+	IpSource string `json:"ipSource" xorm:"ip_source"`
 }

@@ -31,14 +31,14 @@ func jobFilters(vo *model.JobSearchVO) (string, []interface{}) {
 		query += "j.job_group = ?"
 		args = append(args, vo.JobGroup)
 	}
-	if vo.Status != 0 {
+	if vo.Status != nil {
 		if query == "" {
 			query = " WHERE "
 		} else {
 			query += " AND "
 		}
 		query += "j.status = ?"
-		args = append(args, vo.Status)
+		args = append(args, *vo.Status)
 	}
 	return query, args
 }

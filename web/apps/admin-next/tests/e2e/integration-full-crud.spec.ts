@@ -40,7 +40,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
     await traceStep('link-application', () => runFriendLinkApplicationRoundTrip(page, token, suffix))
     await traceStep('scheduled-publish', () => runScheduledPublishRoundTrip(page, token, suffix))
     await traceStep('album', () => runAlbumCRUD(page, suffix))
-    await traceStep('job', () => runJobCRUD(page, suffix))
+    await traceStep('job', () => runJobCRUD(page, token, suffix))
     await traceStep('role', () => runRoleCRUD(page, suffix))
     await traceStep('menus', () => runPermissionCRUD(page, 'menus', suffix))
     await traceStep('resources', () => runPermissionCRUD(page, 'resources', suffix))
@@ -156,18 +156,21 @@ async function runAlbumCRUD(page: Page, suffix: string): Promise<void> {
   await expect(rowWithText(page, editedName)).toHaveCount(0)
 }
 
-async function runJobCRUD(page: Page, suffix: string): Promise<void> {
+async function runJobCRUD(page: Page, token: string, suffix: string): Promise<void> {
   const name = `e2e-job-${suffix}`
   const editedName = `e2e-job-edited-${suffix}`
   await page.goto('/quartz', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.arco-table')).toBeVisible()
   await page.getByRole('button', { name: '新增', exact: true }).click()
   let modal = visibleModal(page)
-  let inputs = modal.locator('input[type="text"]')
-  await inputs.nth(0).fill(name)
-  await inputs.nth(1).fill('e2e')
-  await inputs.nth(2).fill('article.cleanup')
-  await inputs.nth(3).fill('0 0 1 1 1 ?')
+  await fillFieldByLabel(page, modal, '任务名称', name)
+  await fillFieldByLabel(page, modal, '任务分组', 'e2e')
+  const targetSelect = modal.locator('.arco-form-item')
+    .filter({ has: page.locator('.arco-form-item-label', { hasText: '调用目标' }) })
+    .locator('.arco-select')
+    .first()
+  await selectOption(page, targetSelect, 'userArea.refresh')
+  await fillFieldByLabel(page, modal, 'Cron 表达式', '*/30 * * * *')
   await expectMutation(page, '/api/v1/admin/jobs', 'POST', () => modal.getByRole('button', { name: '确定', exact: true }).click())
   await filterTable(page, '/api/v1/admin/jobs', name, 'jobName')
   await expect(rowWithText(page, name)).toBeVisible()
@@ -175,11 +178,19 @@ async function runJobCRUD(page: Page, suffix: string): Promise<void> {
   await rowWithText(page, name).getByRole('button', { name: '编辑', exact: true }).click()
   modal = visibleModal(page)
   await expect(modal).toContainText('编辑任务')
-  inputs = modal.locator('input[type="text"]')
-  await inputs.nth(0).fill(editedName)
+  await fillFieldByLabel(page, modal, '任务名称', editedName)
   await expectMutation(page, '/api/v1/admin/jobs', 'PUT', () => modal.getByRole('button', { name: '确定', exact: true }).click())
   await filterTable(page, '/api/v1/admin/jobs', editedName, 'jobName')
   await expect(rowWithText(page, editedName)).toBeVisible()
+
+  await rowWithText(page, editedName).getByRole('button', { name: '执行一次', exact: true }).click()
+  await expectMutation(page, '/api/v1/admin/jobs/run', 'PUT', () => page.locator('.arco-popconfirm:visible').getByRole('button', { name: '确定', exact: true }).click())
+  const logResponse = await page.request.get(`/api/v1/admin/logs/jobs?current=1&size=20&jobName=${encodeURIComponent(editedName)}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  expect(logResponse.status(), 'job log query').toBe(200)
+  const logPayload = await logResponse.json() as { data?: { items?: unknown[]; records?: unknown[] } }
+  expect((logPayload.data?.items || logPayload.data?.records || []).length, 'manual job log').toBeGreaterThan(0)
 
   const row = rowWithText(page, editedName)
   const toggle = row.locator('.arco-switch')

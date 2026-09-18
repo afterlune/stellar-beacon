@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"sync"
+
 	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/cache"
@@ -10,6 +12,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/notification"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
+	appruntime "github.com/eternallyzzz/stellar-beacon/internal/infrastructure/runtime"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/search/meilisearch"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/storage/object"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/task"
@@ -21,21 +24,42 @@ import (
 // Initialize is the composition root for application services.  The only
 // layer that resolves the xorm engine and concrete repositories is this
 // package; controllers and application services receive domain ports.
-func Initialize() error {
+type Runtime struct {
+	cancel         context.CancelFunc
+	scheduler      *task.Scheduler
+	newsletter     *service.MyNewsletterService
+	newsletterDone chan struct{}
+	commentQueue   *notification.CommentQueue
+
+	stopOnce sync.Once
+	stopErr  error
+}
+
+// Initialize is the composition root for application services. The only layer
+// that resolves the xorm engine and concrete repositories is this package;
+// controllers and application services receive domain ports.
+func Initialize(parent context.Context) (*Runtime, error) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	runCtx, cancel := context.WithCancel(parent)
 	engine := ormInit.GetEngine()
 	if engine == nil {
-		return errors.Unavailable("bootstrap.database", nil)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.database", nil)
 	}
 	redisConfig := new(config.Redis).Redis()
 	redisCache := cache.NewRedisCache(redisConfig)
 	ossStorage, err := oss.NewObjectStorage(new(config.Oss).Oss())
 	if err != nil {
-		return errors.Unavailable("bootstrap.storage", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.storage", err)
 	}
 	searcher := search.NewMeiliSearcher(new(config.MeiliSearch).MeiliSearch())
 	smtpMailer := mailer.NewSMTPMailer(new(config.Email).Email())
 	visitorResolver := visitor.NewResolver()
-	notification.StartCommentQueue(context.Background(), notification.NewMailerSender(smtpMailer))
+	commentQueue := notification.StartCommentQueue(context.Background(), notification.NewMailerSender(smtpMailer))
+	appruntime.SetComponent("commentQueue", "ready")
 
 	site := repository.NewSiteInfoRepo(engine)
 	article := repository.NewArticleRepo(engine)
@@ -74,21 +98,25 @@ func Initialize() error {
 		Growth:     growthRepo,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.stellar_beacon_info", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.stellar_beacon_info", err)
 	}
 	newsletterService, err := service.NewNewsletterService(service.NewsletterServiceDeps{
-		Repo: newsletterRepo, Articles: article, Mailer: smtpMailer, Limiter: redisCache, Growth: growthRepo,
+		Repo: newsletterRepo, Articles: article, Mailer: smtpMailer, Limiter: redisCache,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.newsletter", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.newsletter", err)
 	}
 	growthService, err := service.NewGrowthService(service.GrowthServiceDeps{Repo: growthRepo, Limiter: redisCache})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.growth", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.growth", err)
 	}
 	seoService, err := service.NewSeoService(article)
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.seo", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.seo", err)
 	}
 	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
 		Repo:       article,
@@ -99,7 +127,8 @@ func Initialize() error {
 		Newsletter: newsletterService,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.article", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.article", err)
 	}
 	commentService, err := service.NewCommentService(service.CommentServiceDeps{
 		Repo:          comment,
@@ -110,7 +139,8 @@ func Initialize() error {
 		Limiter:       redisCache,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.comment", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.comment", err)
 	}
 	articleReactionService, err := service.NewArticleReactionService(service.ArticleReactionServiceDeps{
 		Repo:     articleReaction,
@@ -118,7 +148,8 @@ func Initialize() error {
 		Limiter:  redisCache,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.article_reaction", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.article_reaction", err)
 	}
 	photoAlbumService, err := service.NewPhotoAlbumService(service.PhotoAlbumServiceDeps{
 		Repo:    photoAlbum,
@@ -126,7 +157,8 @@ func Initialize() error {
 		Storage: ossStorage,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.photo_album", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.photo_album", err)
 	}
 	photoService, err := service.NewPhotoService(service.PhotoServiceDeps{
 		Repo:    photo,
@@ -134,7 +166,8 @@ func Initialize() error {
 		Storage: ossStorage,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.photo", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.photo", err)
 	}
 	talkService, err := service.NewTalkService(service.TalkServiceDeps{
 		Repo:     talk,
@@ -142,7 +175,8 @@ func Initialize() error {
 		Storage:  ossStorage,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.talk", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.talk", err)
 	}
 	userAuthService, err := service.NewUserAuthService(service.UserAuthServiceDeps{
 		Repo:    auth,
@@ -152,7 +186,8 @@ func Initialize() error {
 		Visitor: visitorResolver,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.user_auth", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.user_auth", err)
 	}
 	userInfoService, err := service.NewUserInfoService(service.UserInfoServiceDeps{
 		Repo:    userInfo,
@@ -160,16 +195,28 @@ func Initialize() error {
 		Storage: ossStorage,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.user_info", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.user_info", err)
 	}
 	seriesService, err := service.NewSeriesService(service.SeriesServiceDeps{
 		Repo:     series,
 		Articles: article,
 	})
 	if err != nil {
-		return errors.Unavailable("bootstrap.service.series", err)
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.series", err)
 	}
 	mediaService := service.NewMediaService(ossStorage)
+
+	scheduler := task.NewScheduler(job, jobLog, redisCache)
+	if err := task.RegisterDefaultTargets(scheduler, task.DefaultTargetsDeps{
+		Articles: article, Newsletter: newsletterService, Growth: growthRepo,
+		JobLogs: jobLog, UserAreas: userAuthService,
+	}); err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.scheduler.targets", err)
+	}
+	jobService := service.NewJobService(job, scheduler)
 
 	api.ConfigureServices(api.Services{
 		Article:         articleService,
@@ -181,7 +228,7 @@ func Initialize() error {
 		ErrorLog:        service.NewErrorLogService(errorLog),
 		FriendLink:      service.NewFriendLinkService(friendLink),
 		JobLog:          service.NewJobLogService(jobLog),
-		Job:             service.NewJobService(job),
+		Job:             jobService,
 		Menu:            service.NewMenuService(menu),
 		Media:           mediaService,
 		OperationLog:    service.NewOperationLogService(operationLog),
@@ -199,7 +246,54 @@ func Initialize() error {
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)
-	go newsletterService.Run(context.Background())
-	go task.PublishScheduledArticles(context.Background(), article, newsletterService)
-	return nil
+	newsletterDone := make(chan struct{})
+	go func() {
+		defer close(newsletterDone)
+		newsletterService.Run(runCtx)
+	}()
+	appruntime.SetComponent("newsletter", "ready")
+	if err := scheduler.Start(runCtx); err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.scheduler.start", err)
+	}
+	appruntime.SetComponent("scheduler", "ready")
+	return &Runtime{
+		cancel: cancel, scheduler: scheduler, newsletter: newsletterService,
+		newsletterDone: newsletterDone, commentQueue: commentQueue,
+	}, nil
+}
+
+func (r *Runtime) Stop(ctx context.Context) error {
+	if r == nil {
+		return nil
+	}
+	r.stopOnce.Do(func() {
+		appruntime.SetReady(false)
+		appruntime.SetComponent("scheduler", "stopping")
+		if r.scheduler != nil {
+			r.stopErr = r.scheduler.Stop(ctx)
+		}
+		appruntime.SetComponent("scheduler", "stopped")
+		if r.cancel != nil {
+			r.cancel()
+		}
+		if r.newsletterDone != nil {
+			select {
+			case <-r.newsletterDone:
+			case <-ctx.Done():
+				if r.stopErr == nil {
+					r.stopErr = ctx.Err()
+				}
+			}
+		}
+		if r.commentQueue != nil {
+			appruntime.SetComponent("commentQueue", "stopping")
+			if err := r.commentQueue.Stop(ctx); err != nil && r.stopErr == nil {
+				r.stopErr = err
+			}
+			appruntime.SetComponent("commentQueue", "stopped")
+		}
+		appruntime.SetComponent("newsletter", "stopped")
+	})
+	return r.stopErr
 }
