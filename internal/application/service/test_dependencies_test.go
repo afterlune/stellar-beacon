@@ -47,6 +47,12 @@ func (fakeServiceCache) SIsMember(context.Context, string, any) (bool, error) {
 func (fakeServiceCache) SAdd(context.Context, string, ...any) (int64, error) {
 	return 1, nil
 }
+func (fakeServiceCache) PFAdd(context.Context, string, ...any) (int64, error) {
+	return 1, nil
+}
+func (fakeServiceCache) PFCount(context.Context, ...string) (int64, error) {
+	return 0, nil
+}
 func (fakeServiceCache) IncrBy(context.Context, string, int64) (int64, error) {
 	return 1, nil
 }
@@ -114,6 +120,28 @@ func (f *fakeArticleReactionRepository) ListArticleIDsByUser(context.Context, in
 	return nil, 0, nil
 }
 
+type fakeContentAnalyticsRepository struct{}
+
+func (fakeContentAnalyticsRepository) RecordView(context.Context, int, time.Time) error {
+	return nil
+}
+
+func (fakeContentAnalyticsRepository) RecordReadSession(context.Context, int, time.Time, int, int, int64) error {
+	return nil
+}
+
+func (fakeContentAnalyticsRepository) ListDailyMetrics(context.Context, string, string) ([]port.ContentDailyMetric, error) {
+	return nil, nil
+}
+
+func (fakeContentAnalyticsRepository) ListArticleMetrics(context.Context, string, string) ([]port.ContentArticleMetric, error) {
+	return nil, nil
+}
+
+func (fakeContentAnalyticsRepository) GetArticleDailyMetrics(context.Context, int, string, string) ([]port.ContentDailyMetric, error) {
+	return nil, nil
+}
+
 type fakeStellarBeaconInfoService struct{}
 
 func (fakeStellarBeaconInfoService) Report(*http.Request) model.ResultVO { return model.ResultOk() }
@@ -151,11 +179,12 @@ func mustArticleService(t *testing.T, repo port.ArticleRepository, searcher port
 		searcher = &fakeArticleSearcher{}
 	}
 	service, err := NewArticleService(ArticleServiceDeps{
-		Repo:      repo,
-		Reactions: &fakeArticleReactionRepository{},
-		Cache:     fakeServiceCache{},
-		Storage:   fakeServiceStorage{},
-		Search:    searcher,
+		Repo:             repo,
+		Reactions:        &fakeArticleReactionRepository{},
+		ContentAnalytics: fakeContentAnalyticsRepository{},
+		Cache:            fakeServiceCache{},
+		Storage:          fakeServiceStorage{},
+		Search:           searcher,
 	})
 	if err != nil {
 		t.Fatal(err)

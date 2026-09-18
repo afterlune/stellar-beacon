@@ -9,12 +9,13 @@ import (
 // cases. Keeping the fields named prevents accidental argument reordering at
 // the composition root.
 type ArticleServiceDeps struct {
-	Repo       port.ArticleRepository
-	Reactions  port.ArticleReactionRepository
-	Cache      port.Cache
-	Storage    port.ObjectStorage
-	Search     port.ArticleSearcher
-	Newsletter port.NewsletterEnqueuer
+	Repo             port.ArticleRepository
+	Reactions        port.ArticleReactionRepository
+	ContentAnalytics port.ContentAnalyticsRepository
+	Cache            port.Cache
+	Storage          port.ObjectStorage
+	Search           port.ArticleSearcher
+	Newsletter       port.NewsletterEnqueuer
 }
 
 // StellarBeaconInfoServiceDeps contains the site-information use-case ports.
@@ -27,6 +28,17 @@ type StellarBeaconInfoServiceDeps struct {
 	Visitor    port.VisitorResolver
 	Newsletter port.NewsletterRepository
 	Growth     port.GrowthRepository
+}
+
+// ContentAnalyticsServiceDeps contains the aggregate store plus the
+// collaborators needed to validate articles and deduplicate anonymous
+// readers.
+type ContentAnalyticsServiceDeps struct {
+	Repo     port.ContentAnalyticsRepository
+	Articles port.ArticleRepository
+	Cache    port.Cache
+	Visitor  port.VisitorResolver
+	Limiter  port.RateLimiter
 }
 
 // UserInfoServiceDeps contains the user-profile use-case ports.
@@ -126,6 +138,9 @@ func (d ArticleServiceDeps) validate() error {
 	if d.Reactions == nil {
 		return missingServiceDependency("article", "reaction repository")
 	}
+	if d.ContentAnalytics == nil {
+		return missingServiceDependency("article", "content analytics repository")
+	}
 	return nil
 }
 
@@ -147,6 +162,22 @@ func (d StellarBeaconInfoServiceDeps) validate() error {
 	}
 	if d.Visitor == nil {
 		return missingServiceDependency("stellar_beacon_info", "visitor")
+	}
+	return nil
+}
+
+func (d ContentAnalyticsServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("content_analytics", "repository")
+	}
+	if d.Articles == nil {
+		return missingServiceDependency("content_analytics", "article repository")
+	}
+	if d.Cache == nil {
+		return missingServiceDependency("content_analytics", "cache")
+	}
+	if d.Visitor == nil {
+		return missingServiceDependency("content_analytics", "visitor resolver")
 	}
 	return nil
 }

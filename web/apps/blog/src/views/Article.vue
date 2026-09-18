@@ -216,6 +216,12 @@ import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 import { pageCount, pageRecords } from '@/utils/page'
 import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
 import { useSeoMeta } from '@/composables/useSeoMeta'
+import { API_BASE_URL } from '@stellar-beacon/api-client'
+
+function createReadingSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return `read-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+}
 
 export default defineComponent({
   name: 'Article',
@@ -260,19 +266,81 @@ export default defineComponent({
       current: 1,
       size: 7
     })
+    let readingSessionId = createReadingSessionId()
+    let readingActiveMs = 0
+    let readingStartedAt: number | null = null
+    let readingMaxScrollPercent = 0
+    let readingSessionSent = false
+
+    const resetReadingSession = () => {
+      readingSessionId = createReadingSessionId()
+      readingActiveMs = 0
+      readingStartedAt = null
+      readingMaxScrollPercent = 0
+      readingSessionSent = false
+    }
+    const pauseReadingSession = () => {
+      if (readingStartedAt === null) return
+      readingActiveMs += performance.now() - readingStartedAt
+      readingStartedAt = null
+    }
+    const startReadingSession = () => {
+      if (readingSessionSent || readingStartedAt !== null) return
+      readingStartedAt = performance.now()
+      updateReadingScrollDepth()
+    }
+    const updateReadingScrollDepth = () => {
+      const root = document.documentElement
+      const scrollable = Math.max(1, root.scrollHeight - window.innerHeight)
+      const depth = Math.min(100, Math.max(0, ((window.scrollY + window.innerHeight) / (scrollable + window.innerHeight)) * 100))
+      readingMaxScrollPercent = Math.max(readingMaxScrollPercent, depth)
+    }
+    const handleReadingVisibility = () => {
+      if (document.hidden) pauseReadingSession()
+      else startReadingSession()
+    }
+    const flushReadingSession = () => {
+      if (readingSessionSent || !reactiveData.articleId) return
+      pauseReadingSession()
+      const activeMs = Math.min(7200000, Math.max(0, Math.round(readingActiveMs)))
+      if (activeMs < 3000) return
+      readingSessionSent = true
+      const payload = JSON.stringify({
+        sessionId: readingSessionId,
+        activeMs,
+        maxScrollPercent: Math.round(readingMaxScrollPercent * 100) / 100
+      })
+      const url = `${API_BASE_URL}/public/articles/${encodeURIComponent(reactiveData.articleId)}/read-sessions`
+      if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) return
+      void fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true
+      }).catch(() => undefined)
+    }
     commentStore.type = 1
     onMounted(() => {
+      document.addEventListener('visibilitychange', handleReadingVisibility)
+      window.addEventListener('scroll', updateReadingScrollDepth, { passive: true })
+      window.addEventListener('pagehide', flushReadingSession)
       reactiveData.articleId = route.params.articleId
       toPageTop()
       fetchArticle()
       fetchComments()
     })
     onUnmounted(() => {
+      flushReadingSession()
+      document.removeEventListener('visibilitychange', handleReadingVisibility)
+      window.removeEventListener('scroll', updateReadingScrollDepth)
+      window.removeEventListener('pagehide', flushReadingSession)
       commonStore.resetHeaderImage()
       reactiveData.article = ''
       tocbot.destroy()
     })
     onBeforeRouteUpdate((to) => {
+      flushReadingSession()
+      resetReadingSession()
       reactiveData.article = ''
       reactiveData.readTime = ''
       reactiveData.wordNum = ''
@@ -384,6 +452,7 @@ export default defineComponent({
           reactiveData.wordNum = Math.round(deleteHTMLTag(article.articleContent).length / 100) / 10 + 'k'
           reactiveData.readTime = Math.round(deleteHTMLTag(article.articleContent).length / 400) + 'mins'
           loading.value = false
+          startReadingSession()
           nextTick(() => {
             Prism.highlightAll()
             initTocbot()

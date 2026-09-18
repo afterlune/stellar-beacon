@@ -83,6 +83,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	userInfo := repository.NewUserInfoRepo(engine)
 	newsletterRepo := repository.NewNewsletterRepo(engine)
 	growthRepo := repository.NewGrowthRepo(engine)
+	contentAnalyticsRepo := repository.NewContentAnalyticsRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -113,18 +114,26 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.service.growth", err)
 	}
+	contentAnalyticsService, err := service.NewContentAnalyticsService(service.ContentAnalyticsServiceDeps{
+		Repo: contentAnalyticsRepo, Articles: article, Cache: redisCache, Visitor: visitorResolver, Limiter: redisCache,
+	})
+	if err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.content_analytics", err)
+	}
 	seoService, err := service.NewSeoService(article)
 	if err != nil {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.service.seo", err)
 	}
 	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
-		Repo:       article,
-		Reactions:  articleReaction,
-		Cache:      redisCache,
-		Storage:    ossStorage,
-		Search:     searcher,
-		Newsletter: newsletterService,
+		Repo:             article,
+		Reactions:        articleReaction,
+		ContentAnalytics: contentAnalyticsRepo,
+		Cache:            redisCache,
+		Storage:          ossStorage,
+		Search:           searcher,
+		Newsletter:       newsletterService,
 	})
 	if err != nil {
 		cancel()
@@ -219,30 +228,31 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	jobService := service.NewJobService(job, scheduler)
 
 	api.ConfigureServices(api.Services{
-		Article:         articleService,
-		ArticleReaction: articleReactionService,
-		Series:          seriesService,
-		StellarBeacon:   stellarBeacon,
-		Category:        service.NewCategoryService(category),
-		Comment:         commentService,
-		ErrorLog:        service.NewErrorLogService(errorLog),
-		FriendLink:      service.NewFriendLinkService(friendLink),
-		JobLog:          service.NewJobLogService(jobLog),
-		Job:             jobService,
-		Menu:            service.NewMenuService(menu),
-		Media:           mediaService,
-		OperationLog:    service.NewOperationLogService(operationLog),
-		PhotoAlbum:      photoAlbumService,
-		Photo:           photoService,
-		Resource:        service.NewResourceService(resource),
-		Role:            service.NewRoleService(role),
-		Tag:             service.NewTagService(tag),
-		Talk:            talkService,
-		UserAuth:        userAuthService,
-		UserInfo:        userInfoService,
-		Seo:             seoService,
-		Newsletter:      newsletterService,
-		Growth:          growthService,
+		Article:          articleService,
+		ArticleReaction:  articleReactionService,
+		Series:           seriesService,
+		StellarBeacon:    stellarBeacon,
+		Category:         service.NewCategoryService(category),
+		Comment:          commentService,
+		ErrorLog:         service.NewErrorLogService(errorLog),
+		FriendLink:       service.NewFriendLinkService(friendLink),
+		JobLog:           service.NewJobLogService(jobLog),
+		Job:              jobService,
+		Menu:             service.NewMenuService(menu),
+		Media:            mediaService,
+		OperationLog:     service.NewOperationLogService(operationLog),
+		PhotoAlbum:       photoAlbumService,
+		Photo:            photoService,
+		Resource:         service.NewResourceService(resource),
+		Role:             service.NewRoleService(role),
+		Tag:              service.NewTagService(tag),
+		Talk:             talkService,
+		UserAuth:         userAuthService,
+		UserInfo:         userInfoService,
+		Seo:              seoService,
+		Newsletter:       newsletterService,
+		Growth:           growthService,
+		ContentAnalytics: contentAnalyticsService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

@@ -46,6 +46,7 @@ const VIEWS = {
   resource: () => import('@/views/ResourceView.vue'),
   friendLink: () => import('@/views/FriendLinksView.vue'),
   series: () => import('@/views/SeriesView.vue'),
+  contentPerformance: () => import('@/views/ContentPerformanceView.vue'),
   website: () => import('@/views/WebsiteView.vue'),
   about: () => import('@/views/AboutView.vue'),
   setting: () => import('@/views/SettingView.vue')
@@ -79,6 +80,8 @@ const componentRegistry: Record<string, MenuViewComponent> = {
   '/menu/Menu.vue': VIEWS.menu,
   '/resource/Resource.vue': VIEWS.resource,
   '/friendLink/FriendLink.vue': VIEWS.friendLink,
+  '/series/Series.vue': VIEWS.series,
+  '/content/ContentPerformance.vue': VIEWS.contentPerformance,
   '/website/Website.vue': VIEWS.website,
   '/about/About.vue': VIEWS.about,
   '/setting/Setting.vue': VIEWS.setting

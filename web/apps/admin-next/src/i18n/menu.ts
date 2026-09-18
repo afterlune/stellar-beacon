@@ -23,7 +23,8 @@ const SEGMENT_ALIASES: Record<string, string> = {
   'talk-list': 'talkList',
   delete: 'photoTrash',
   category: 'categories',
-  tag: 'tags'
+  tag: 'tags',
+  'content-performance': 'contentPerformance'
 }
 
 const cache = new Map<string, string>()
@@ -77,7 +78,8 @@ const NAME_KEYS: Record<string, string> = {
   仪表盘: 'dashboard',
   工作台: 'workplace',
   监控: 'monitor',
-  订阅与增长: 'growth'
+  订阅与增长: 'growth',
+  内容表现: 'contentPerformance'
 }
 
 /**

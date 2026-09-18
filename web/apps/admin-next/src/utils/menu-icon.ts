@@ -59,6 +59,8 @@ const PATH_ICONS: Record<string, Component> = {
   '/article-list': IconUnorderedList,
   '/categories': IconFolder,
   '/tags': IconTags,
+  '/series': IconUnorderedList,
+  '/content-performance': IconDashboard,
 
   '/talk-submenu': IconMessage,
   '/talk-list': IconUnorderedList,

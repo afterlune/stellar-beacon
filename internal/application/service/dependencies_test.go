@@ -59,9 +59,10 @@ func TestServiceConstructorsRejectMissingDependencies(t *testing.T) {
 
 func TestArticleServiceRejectsMissingSearchDependency(t *testing.T) {
 	_, err := NewArticleService(ArticleServiceDeps{
-		Repo:    &fakeArticleRepository{},
-		Cache:   fakeServiceCache{},
-		Storage: fakeServiceStorage{},
+		Repo:             &fakeArticleRepository{},
+		ContentAnalytics: fakeContentAnalyticsRepository{},
+		Cache:            fakeServiceCache{},
+		Storage:          fakeServiceStorage{},
 	})
 	if err == nil || !apperrors.IsKind(err, apperrors.KindValidation) {
 		t.Fatalf("expected validation error, got %v", err)

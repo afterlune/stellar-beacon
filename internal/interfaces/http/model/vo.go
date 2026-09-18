@@ -13,6 +13,14 @@ type ArticlePasswordVO struct {
 	ArticlePassword string `json:"articlePassword"`
 }
 
+// ArticleReadSessionVO is the privacy-minimal browser reading report. It has
+// no account, IP, user-agent or referrer field by design.
+type ArticleReadSessionVO struct {
+	SessionID        string  `json:"sessionId"`
+	ActiveMs         int     `json:"activeMs"`
+	MaxScrollPercent float64 `json:"maxScrollPercent"`
+}
+
 type ArticleTopFeaturedVO struct {
 	Id         int `json:"id" form:"id"`
 	IsTop      int `json:"isTop" form:"isTop"`

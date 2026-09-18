@@ -237,6 +237,21 @@ type TUniqueView struct {
 	UpdateTime time.Time `xorm:"updated comment('更新时间') DATETIME"`
 }
 
+// TArticleDailyMetric stores only aggregate article performance counters.
+// Reader identity stays in Redis HyperLogLogs and is never persisted here.
+type TArticleDailyMetric struct {
+	Id                int       `xorm:"autoincr not null pk unique INTEGER"`
+	ArticleId         int       `xorm:"article_id not null unique(article_day) index INTEGER"`
+	MetricDate        time.Time `xorm:"metric_date not null unique(article_day) index DATE"`
+	Views             int64     `xorm:"not null default 0 BIGINT"`
+	UniqueReaders     int64     `xorm:"not null default 0 BIGINT"`
+	EffectiveSessions int64     `xorm:"not null default 0 BIGINT"`
+	TotalActiveMs     int64     `xorm:"not null default 0 BIGINT"`
+	CompletedSessions int64     `xorm:"not null default 0 BIGINT"`
+	CreateTime        time.Time `xorm:"created not null DATETIME"`
+	UpdateTime        time.Time `xorm:"updated not null DATETIME"`
+}
+
 type TUserAuth struct {
 	Id            int       `xorm:"autoincr not null pk unique INTEGER"`
 	UserInfoId    int       `xorm:"not null comment('用户信息id') INTEGER"`

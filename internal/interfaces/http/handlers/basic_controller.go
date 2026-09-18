@@ -3,57 +3,59 @@ package api
 import "github.com/eternallyzzz/stellar-beacon/internal/application/service"
 
 var (
-	articleService         service.ArticleService           = new(service.MyArticleService)
-	articleReactionService service.ArticleReactionService   = new(service.MyArticleReactionService)
-	seriesService          service.SeriesService            = new(service.MySeriesService)
-	stellarBeaconService   service.StellarBeaconInfoService = new(service.MyStellarBeaconInfoService)
-	categoryService        service.CategoryService          = new(service.MyCategoryService)
-	commentService         service.CommentService           = new(service.MyCommentService)
-	errorLogService        service.ErrorLogService          = new(service.MyErrorLogService)
-	friendLinkService      service.FriendLinkService        = new(service.MyFriendLinkService)
-	jobLogService          service.JobLogService            = new(service.MyJobLogService)
-	jobService             service.JobService               = new(service.MyJobService)
-	menuService            service.MenuService              = new(service.MyMenuSService)
-	mediaService           service.MediaService             = new(service.MyMediaService)
-	operationLogService    service.OperationLogService      = new(service.MyOperationLogService)
-	photoAlbumService      service.PhotoAlbumService        = new(service.MyPhotoAlbumService)
-	photoService           service.PhotoService             = new(service.MyPhotoService)
-	resourceService        service.ResourceService          = new(service.MyResourceService)
-	roleService            service.RoleService              = new(service.MyRoleService)
-	tagService             service.TagService               = new(service.MyTagService)
-	talkService            service.TalkService              = new(service.MyTalkService)
-	userAuthService        service.UserAuthService          = new(service.MyUserAuthService)
-	userInfoService        service.UserInfoService          = new(service.MyUserInfoService)
-	seoService             service.SeoService               = new(service.MySeoService)
-	newsletterService      service.NewsletterService        = new(service.MyNewsletterService)
-	growthService          service.GrowthService            = new(service.MyGrowthService)
+	articleService          service.ArticleService           = new(service.MyArticleService)
+	articleReactionService  service.ArticleReactionService   = new(service.MyArticleReactionService)
+	seriesService           service.SeriesService            = new(service.MySeriesService)
+	stellarBeaconService    service.StellarBeaconInfoService = new(service.MyStellarBeaconInfoService)
+	categoryService         service.CategoryService          = new(service.MyCategoryService)
+	commentService          service.CommentService           = new(service.MyCommentService)
+	errorLogService         service.ErrorLogService          = new(service.MyErrorLogService)
+	friendLinkService       service.FriendLinkService        = new(service.MyFriendLinkService)
+	jobLogService           service.JobLogService            = new(service.MyJobLogService)
+	jobService              service.JobService               = new(service.MyJobService)
+	menuService             service.MenuService              = new(service.MyMenuSService)
+	mediaService            service.MediaService             = new(service.MyMediaService)
+	operationLogService     service.OperationLogService      = new(service.MyOperationLogService)
+	photoAlbumService       service.PhotoAlbumService        = new(service.MyPhotoAlbumService)
+	photoService            service.PhotoService             = new(service.MyPhotoService)
+	resourceService         service.ResourceService          = new(service.MyResourceService)
+	roleService             service.RoleService              = new(service.MyRoleService)
+	tagService              service.TagService               = new(service.MyTagService)
+	talkService             service.TalkService              = new(service.MyTalkService)
+	userAuthService         service.UserAuthService          = new(service.MyUserAuthService)
+	userInfoService         service.UserInfoService          = new(service.MyUserInfoService)
+	seoService              service.SeoService               = new(service.MySeoService)
+	newsletterService       service.NewsletterService        = new(service.MyNewsletterService)
+	growthService           service.GrowthService            = new(service.MyGrowthService)
+	contentAnalyticsService service.ContentAnalyticsService  = new(service.MyContentAnalyticsService)
 )
 
 type Services struct {
-	Article         service.ArticleService
-	ArticleReaction service.ArticleReactionService
-	Series          service.SeriesService
-	StellarBeacon   service.StellarBeaconInfoService
-	Category        service.CategoryService
-	Comment         service.CommentService
-	ErrorLog        service.ErrorLogService
-	FriendLink      service.FriendLinkService
-	JobLog          service.JobLogService
-	Job             service.JobService
-	Menu            service.MenuService
-	Media           service.MediaService
-	OperationLog    service.OperationLogService
-	PhotoAlbum      service.PhotoAlbumService
-	Photo           service.PhotoService
-	Resource        service.ResourceService
-	Role            service.RoleService
-	Tag             service.TagService
-	Talk            service.TalkService
-	UserAuth        service.UserAuthService
-	UserInfo        service.UserInfoService
-	Seo             service.SeoService
-	Newsletter      service.NewsletterService
-	Growth          service.GrowthService
+	Article          service.ArticleService
+	ArticleReaction  service.ArticleReactionService
+	Series           service.SeriesService
+	StellarBeacon    service.StellarBeaconInfoService
+	Category         service.CategoryService
+	Comment          service.CommentService
+	ErrorLog         service.ErrorLogService
+	FriendLink       service.FriendLinkService
+	JobLog           service.JobLogService
+	Job              service.JobService
+	Menu             service.MenuService
+	Media            service.MediaService
+	OperationLog     service.OperationLogService
+	PhotoAlbum       service.PhotoAlbumService
+	Photo            service.PhotoService
+	Resource         service.ResourceService
+	Role             service.RoleService
+	Tag              service.TagService
+	Talk             service.TalkService
+	UserAuth         service.UserAuthService
+	UserInfo         service.UserInfoService
+	Seo              service.SeoService
+	Newsletter       service.NewsletterService
+	Growth           service.GrowthService
+	ContentAnalytics service.ContentAnalyticsService
 }
 
 func ConfigureServices(s Services) {
@@ -81,4 +83,5 @@ func ConfigureServices(s Services) {
 	seoService = s.Seo
 	newsletterService = s.Newsletter
 	growthService = s.Growth
+	contentAnalyticsService = s.ContentAnalytics
 }

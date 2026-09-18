@@ -98,6 +98,54 @@ type DashboardAnalyticsDTO struct {
 	GeneratedAt time.Time                  `json:"generatedAt"`
 }
 
+type ContentAnalyticsOverviewDTO struct {
+	Views             int64   `json:"views"`
+	UniqueReaders     int64   `json:"uniqueReaders"`
+	EffectiveSessions int64   `json:"effectiveSessions"`
+	AvgActiveMs       int64   `json:"avgActiveMs"`
+	CompletionRate    float64 `json:"completionRate"`
+}
+
+type ContentAnalyticsTrendDTO struct {
+	Period            string  `json:"period"`
+	Views             int64   `json:"views"`
+	UniqueReaders     int64   `json:"uniqueReaders"`
+	EffectiveSessions int64   `json:"effectiveSessions"`
+	AvgActiveMs       int64   `json:"avgActiveMs"`
+	CompletionRate    float64 `json:"completionRate"`
+}
+
+type ContentAnalyticsDTO struct {
+	Range       string                      `json:"range"`
+	Unit        string                      `json:"unit"`
+	Overview    ContentAnalyticsOverviewDTO `json:"overview"`
+	Trend       []ContentAnalyticsTrendDTO  `json:"trend"`
+	GeneratedAt time.Time                   `json:"generatedAt"`
+}
+
+type ContentArticlePerformanceDTO struct {
+	ArticleID         int       `json:"articleId"`
+	ArticleTitle      string    `json:"articleTitle"`
+	ArticleCover      string    `json:"articleCover"`
+	CategoryName      string    `json:"categoryName"`
+	CreateTime        time.Time `json:"createTime"`
+	Views             int64     `json:"views"`
+	UniqueReaders     int64     `json:"uniqueReaders"`
+	EffectiveSessions int64     `json:"effectiveSessions"`
+	AvgActiveMs       int64     `json:"avgActiveMs"`
+	CompletionRate    float64   `json:"completionRate"`
+}
+
+type ContentAnalyticsArticleDetailDTO struct {
+	ArticleID    int                         `json:"articleId"`
+	ArticleTitle string                      `json:"articleTitle"`
+	ArticleCover string                      `json:"articleCover"`
+	CategoryName string                      `json:"categoryName"`
+	CreateTime   time.Time                   `json:"createTime"`
+	Overview     ContentAnalyticsOverviewDTO `json:"overview"`
+	Trend        []ContentAnalyticsTrendDTO  `json:"trend"`
+}
+
 type GrowthSubscriberStatsDTO struct {
 	Total            int64   `json:"total"`
 	Active           int64   `json:"active"`

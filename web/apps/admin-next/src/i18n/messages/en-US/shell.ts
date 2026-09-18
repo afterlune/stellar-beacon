@@ -61,6 +61,7 @@ export default {
   'nav.workplace': 'Workplace',
   'nav.monitor': 'Monitoring',
   'nav.growth': 'Subscriptions & growth',
+  'nav.contentPerformance': 'Content performance',
   'nav.unknownMenu': 'Untitled menu',
 
   /** Command palette (AdminCommandPalette). */

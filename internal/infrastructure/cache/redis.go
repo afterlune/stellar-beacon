@@ -136,6 +136,17 @@ func (r *RedisCache) SAdd(ctx context.Context, key string, values ...any) (int64
 	return r.client.SAdd(cacheContext(ctx), key, values...).Result()
 }
 
+func (r *RedisCache) PFAdd(ctx context.Context, key string, values ...any) (int64, error) {
+	return r.client.PFAdd(cacheContext(ctx), key, values...).Result()
+}
+
+func (r *RedisCache) PFCount(ctx context.Context, keys ...string) (int64, error) {
+	if len(keys) == 0 {
+		return 0, nil
+	}
+	return r.client.PFCount(cacheContext(ctx), keys...).Result()
+}
+
 func (r *RedisCache) IncrBy(ctx context.Context, key string, delta int64) (int64, error) {
 	return r.client.IncrBy(cacheContext(ctx), key, delta).Result()
 }

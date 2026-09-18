@@ -38,6 +38,7 @@ func RouterSetup(router *gin.Engine) {
 	articles.GET("/by-category", api.GetArticlesByCategoryId)
 	articles.GET("/:articleId", api.GetArticleById)
 	articles.POST("/:articleId/access", api.AccessArticle)
+	articles.POST("/:articleId/read-sessions", api.TrackArticleReadSession)
 	articles.GET("/by-tag", api.ListArticlesByTagId)
 	articles.GET("/search", api.ListArticlesBySearch)
 	public.GET("/archives", api.ListArchives)
@@ -84,6 +85,9 @@ func RouterSetup(router *gin.Engine) {
 
 	admin.GET("/dashboard", api.GetBlogBackInfo)
 	admin.GET("/dashboard/analytics", api.GetDashboardAnalytics)
+	admin.GET("/content/analytics", api.GetContentAnalytics)
+	admin.GET("/content/analytics/articles", api.ListContentAnalyticsArticles)
+	admin.GET("/content/analytics/articles/:articleId", api.GetContentAnalyticsArticle)
 	admin.GET("/growth/summary", api.GetGrowthSummary)
 	admin.GET("/newsletter/health", api.GetNewsletterHealth)
 	admin.GET("/newsletter/subscribers", api.ListNewsletterSubscribers)

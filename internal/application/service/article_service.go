@@ -46,12 +46,13 @@ type ArticleService interface {
 }
 
 type MyArticleService struct {
-	repo       port.ArticleRepository
-	reactions  port.ArticleReactionRepository
-	cache      port.Cache
-	storage    port.ObjectStorage
-	search     port.ArticleSearcher
-	newsletter port.NewsletterEnqueuer
+	repo             port.ArticleRepository
+	reactions        port.ArticleReactionRepository
+	contentAnalytics port.ContentAnalyticsRepository
+	cache            port.Cache
+	storage          port.ObjectStorage
+	search           port.ArticleSearcher
+	newsletter       port.NewsletterEnqueuer
 }
 
 func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
@@ -59,12 +60,13 @@ func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
 		return nil, err
 	}
 	return &MyArticleService{
-		repo:       deps.Repo,
-		reactions:  deps.Reactions,
-		cache:      deps.Cache,
-		storage:    deps.Storage,
-		search:     deps.Search,
-		newsletter: deps.Newsletter,
+		repo:             deps.Repo,
+		reactions:        deps.Reactions,
+		contentAnalytics: deps.ContentAnalytics,
+		cache:            deps.Cache,
+		storage:          deps.Storage,
+		search:           deps.Search,
+		newsletter:       deps.Newsletter,
 	}, nil
 }
 
@@ -264,6 +266,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 			} else {
 				sanitizePublicArticle(&dto)
 				a.attachArticleReactionCounts(c.Request.Context(), &dto)
+				a.updateArticleViewsCount(c.Request.Context(), articleId)
 				if a.cache != nil {
 					if _, err := a.cache.Expire(c.Request.Context(), articleId, time.Hour*1); err != nil {
 						slog.WarnContext(c.Request.Context(), "refresh article cache TTL failed", "error", err)
@@ -387,12 +390,20 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 }
 
 func (a *MyArticleService) updateArticleViewsCount(ctx context.Context, articleId string) {
-	if a.cache == nil {
-		slog.WarnContext(ctx, "article view cache is not configured")
+	if a.cache != nil {
+		if _, err := a.cache.ZIncrBy(ctx, ArticleViewsCount, 1, articleId); err != nil {
+			slog.ErrorContext(ctx, "increment article view count failed", "error", err)
+		}
+	}
+	if a.contentAnalytics == nil {
 		return
 	}
-	if _, err := a.cache.ZIncrBy(ctx, ArticleViewsCount, 1, articleId); err != nil {
-		slog.ErrorContext(ctx, "increment article view count failed", "error", err)
+	id, err := strconv.Atoi(articleId)
+	if err != nil || id <= 0 {
+		return
+	}
+	if err := a.contentAnalytics.RecordView(ctx, id, timeNow()); err != nil {
+		slog.WarnContext(ctx, "record article daily view failed", "articleId", id, "error", err)
 	}
 }
 

@@ -28,6 +28,19 @@ paths:
     get: { tags: [public], summary: Get article detail, operationId: getArticle, parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/articles/{articleId}/access:
     post: { tags: [public], summary: Verify article password, operationId: accessArticle, parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/{articleId}/read-sessions:
+    post:
+      tags: [public]
+      summary: Record an anonymous article reading session
+      description: Accepts only a session id, active milliseconds and maximum scroll percentage. It does not accept or persist account, IP, User-Agent or referrer data.
+      operationId: trackArticleReadSession
+      parameters: [{ $ref: '#/components/parameters/ArticleId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArticleReadSession' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /public/archives:
     get: { tags: [public], summary: List article archives, operationId: listArchives, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/categories:
@@ -92,6 +105,36 @@ paths:
     get: { tags: [auth], summary: Read reaction state for a set of articles, operationId: listArticleReactionStates, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/dashboard:
     get: { tags: [admin], summary: Get dashboard information, operationId: getAdminDashboard, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/content/analytics:
+    get:
+      tags: [admin]
+      summary: Get site-wide content performance
+      operationId: getContentAnalytics
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AnalyticsRange' }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/content/analytics/articles:
+    get:
+      tags: [admin]
+      summary: List article performance with cross-day unique readers
+      operationId: listContentAnalyticsArticles
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AnalyticsRange' }
+        - { name: sort, in: query, schema: { type: string, enum: [views, uniqueReaders, effectiveSessions, avgActiveMs, completionRate], default: views } }
+        - { name: current, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/content/analytics/articles/{articleId}:
+    get:
+      tags: [admin]
+      summary: Get one article's performance detail
+      operationId: getContentAnalyticsArticle
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ArticleId' }
+        - { $ref: '#/components/parameters/AnalyticsRange' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /admin/articles:
     get: { tags: [admin], summary: List admin articles, operationId: listAdminArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     post: { tags: [admin], summary: Save an article, operationId: saveAdminArticle, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
@@ -246,6 +289,7 @@ components:
     CommentId: { name: commentId, in: path, required: true, schema: { type: integer, format: int64 } }
     TalkId: { name: talkId, in: path, required: true, schema: { type: integer, format: int64 } }
     UserInfoId: { name: userInfoId, in: path, required: true, schema: { type: integer, format: int64 } }
+    AnalyticsRange: { name: range, in: query, schema: { type: string, enum: [7d, 30d, 90d, 12m], default: 7d } }
   responses:
     Result:
       description: Versioned API response
@@ -268,6 +312,13 @@ components:
         total: { type: integer, format: int64 }
         page: { type: integer, minimum: 1 }
         pageSize: { type: integer, minimum: 0 }
+    ArticleReadSession:
+      type: object
+      required: [sessionId, activeMs, maxScrollPercent]
+      properties:
+        sessionId: { type: string, minLength: 8, maxLength: 128, example: 2ef87de3-6b32-4a86-a726-f3aed96b4a7d }
+        activeMs: { type: integer, minimum: 3000, maximum: 7200000 }
+        maxScrollPercent: { type: number, minimum: 0, maximum: 100 }
   securitySchemes:
     bearerAuth:
       type: http

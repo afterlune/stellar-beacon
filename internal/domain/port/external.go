@@ -32,6 +32,9 @@ type Cache interface {
 	SIsMember(context.Context, string, any) (bool, error)
 	SAdd(context.Context, string, ...any) (int64, error)
 
+	PFAdd(context.Context, string, ...any) (int64, error)
+	PFCount(context.Context, ...string) (int64, error)
+
 	IncrBy(context.Context, string, int64) (int64, error)
 	ZIncrBy(context.Context, string, float64, string) (float64, error)
 	ZScore(context.Context, string, string) (float64, error)

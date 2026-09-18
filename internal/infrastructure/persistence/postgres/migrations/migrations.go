@@ -71,6 +71,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyJobSchedulerSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyContentAnalyticsSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -113,6 +116,7 @@ func applySchema(engine *xorm.Engine) error {
 		new(entity.TRoleMenu), new(entity.TRoleResource), new(entity.TSeries), new(entity.TTag),
 		new(entity.TTalk), new(entity.TUniqueView), new(entity.TUserAuth),
 		new(entity.TUserInfo), new(entity.TUserRole), new(entity.TWebsiteConfig),
+		new(entity.TArticleDailyMetric),
 	}
 	if err := engine.Sync2(models...); err != nil {
 		return fmt.Errorf("create application tables: %w", err)
@@ -248,6 +252,7 @@ var defaultMenus = []menuSeed{
 	{name: "分类管理", path: "/categories", component: "/category/Category.vue", icon: "category", order: 4, parentPath: "/article-submenu"},
 	{name: "标签管理", path: "/tags", component: "/tag/Tag.vue", icon: "tags", order: 5, parentPath: "/article-submenu"},
 	{name: "系列管理", path: "/series", component: "/series/Series.vue", icon: "list", order: 6, parentPath: "/article-submenu"},
+	{name: "内容表现", path: "/content-performance", component: "/content/ContentPerformance.vue", icon: "chart", order: 7, parentPath: "/article-submenu"},
 	{name: "评论管理", path: "/comments", component: "/comment/Comment.vue", icon: "comments", order: 1, parentPath: "/message-submenu"},
 	{name: "说说列表", path: "/talk-list", component: "/talk/TalkList.vue", icon: "list", order: 1, parentPath: "/talk-submenu"},
 	{name: "发布说说", path: "/talks", component: "/talk/Talk.vue", icon: "pen", order: 2, parentPath: "/talk-submenu"},
@@ -692,6 +697,59 @@ func applyJobSchedulerSchema(ctx context.Context, engine *xorm.Engine) error {
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit job scheduler migration: %w", err)
+	}
+	return nil
+}
+
+// applyContentAnalyticsSchema adds privacy-preserving daily article metrics
+// and the admin entry point for the content performance dashboard.
+func applyContentAnalyticsSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 12)").Get(&applied); err != nil {
+		return fmt.Errorf("check content analytics migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin content analytics migration: %w", err)
+	}
+	defer session.Rollback()
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS t_article_daily_metric (
+			id SERIAL PRIMARY KEY,
+			article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			metric_date DATE NOT NULL,
+			views BIGINT NOT NULL DEFAULT 0,
+			unique_readers BIGINT NOT NULL DEFAULT 0,
+			effective_sessions BIGINT NOT NULL DEFAULT 0,
+			total_active_ms BIGINT NOT NULL DEFAULT 0,
+			completed_sessions BIGINT NOT NULL DEFAULT 0,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (article_id, metric_date)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_article_daily_metric_date ON t_article_daily_metric(metric_date)`,
+	} {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply content analytics schema: %w", err)
+		}
+	}
+	if err := seedMenus(session); err != nil {
+		return err
+	}
+	if err := seedResourcesAndPolicies(session); err != nil {
+		return err
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 12, "content-analytics"); err != nil {
+		return fmt.Errorf("record content analytics migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit content analytics migration: %w", err)
 	}
 	return nil
 }

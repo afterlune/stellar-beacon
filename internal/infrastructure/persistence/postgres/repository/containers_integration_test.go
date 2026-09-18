@@ -71,6 +71,7 @@ CREATE TABLE t_user_info (
     id INTEGER PRIMARY KEY,
     email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
     intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
+    notify_comment SMALLINT NOT NULL DEFAULT 1,
     is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
 );
 CREATE TABLE t_user_auth (
@@ -108,6 +109,13 @@ CREATE TABLE t_article (
     is_featured SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL,
     type SMALLINT NOT NULL, password VARCHAR(255), original_url VARCHAR(255),
     create_time TIMESTAMP, update_time TIMESTAMP
+);
+CREATE TABLE t_article_daily_metric (
+    id SERIAL PRIMARY KEY, article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+    metric_date DATE NOT NULL, views BIGINT NOT NULL DEFAULT 0, unique_readers BIGINT NOT NULL DEFAULT 0,
+    effective_sessions BIGINT NOT NULL DEFAULT 0, total_active_ms BIGINT NOT NULL DEFAULT 0,
+    completed_sessions BIGINT NOT NULL DEFAULT 0, create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (article_id, metric_date)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
@@ -127,7 +135,8 @@ INSERT INTO t_role_menu (id, role_id, menu_id) VALUES (1, 1, 1);
 INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1);
 INSERT INTO t_photo_album (id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 'integration album', 'integration', '', 0, 1);
 INSERT INTO t_photo (id, album_id, photo_name, photo_src, is_delete) VALUES (1, 1, 'integration photo', 'https://example.com/photo.jpg', 0);
-INSERT INTO t_article (id, user_id, article_title, article_content, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 'integration article', 'content', 0, 0, 0, 1, 1);`); err != nil {
+INSERT INTO t_article (id, user_id, article_title, article_content, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 'integration article', 'content', 0, 0, 0, 1, 1);
+INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions) VALUES (1, CURRENT_DATE, 2, 1, 1, 5000, 1);`); err != nil {
 		t.Fatalf("insert repository fixtures: %v", err)
 	}
 
@@ -158,6 +167,17 @@ INSERT INTO t_article (id, user_id, article_title, article_content, is_top, is_f
 	rankedArticles, err := site.ListArticleRank(ctx, []int{1})
 	if err != nil || len(rankedArticles) != 1 || rankedArticles[0].ArticleTitle != "integration article" {
 		t.Fatalf("unexpected article rank result: articles=%v err=%v", rankedArticles, err)
+	}
+	contentAnalytics := NewContentAnalyticsRepo(xormEngine)
+	if err := contentAnalytics.RecordView(ctx, 1, time.Now()); err != nil {
+		t.Fatalf("record content analytics view: %v", err)
+	}
+	if err := contentAnalytics.RecordReadSession(ctx, 1, time.Now(), 4200, 95, 1); err != nil {
+		t.Fatalf("record content analytics session: %v", err)
+	}
+	dailyMetrics, err := contentAnalytics.GetArticleDailyMetrics(ctx, 1, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
+	if err != nil || len(dailyMetrics) != 1 || dailyMetrics[0].Views != 3 || dailyMetrics[0].CompletedSessions != 2 {
+		t.Fatalf("unexpected content analytics daily metrics: metrics=%v err=%v", dailyMetrics, err)
 	}
 	roles, err := NewRoleRepository(xormEngine).ListRolesByUserInfoID(ctx, 1)
 	if err != nil || len(roles) != 1 || roles[0] != "user" {

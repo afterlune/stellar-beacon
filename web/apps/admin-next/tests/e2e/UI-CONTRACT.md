@@ -1047,6 +1047,24 @@ one article. The counters are plain text (formatted through `formatNumber`), not
 inputs, and the columns are registered in `ArticleListView.vue`'s column list —
 removing them or moving the testids to a shared wrapper breaks the gated suite.
 
+### Content performance page
+
+`/content-performance` (`ContentPerformanceView.vue`) is a read-only analytics
+surface under the article submenu. Its stable contract is intentionally small:
+
+- The page root keeps the shared `.admin-page` container and the header exposes
+  the four range controls (`7d`, `30d`, `90d`, `12m`) plus the common refresh
+  button.
+- The summary uses `AdminStatCard` for views, unique readers, average effective
+  reading time and completion rate. The trend uses `AdminEChart`; the ranking
+  uses the shared `.arco-table` and a row-scoped `查看详情` text button.
+- The detail drawer loads `/admin/content/analytics/articles/{articleId}` and
+  must not add a second page-wide `确定`/`编辑` action that can collide with the
+  strict-mode locators documented in §0.
+- The page never renders raw account, IP, User-Agent or referrer values; the
+  reading-session endpoint accepts only `sessionId`, `activeMs` and
+  `maxScrollPercent`.
+
 ### Local verification commands
 
 ```bash

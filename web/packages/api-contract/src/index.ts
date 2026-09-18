@@ -298,6 +298,51 @@ export interface AdminDashboardAnalytics {
   generatedAt: string
 }
 
+export type ContentAnalyticsRange = '7d' | '30d' | '90d' | '12m'
+
+export interface ContentAnalyticsOverview {
+  views: number
+  uniqueReaders: number
+  effectiveSessions: number
+  avgActiveMs: number
+  completionRate: number
+}
+
+export interface ContentAnalyticsTrend extends ContentAnalyticsOverview {
+  period: string
+}
+
+export interface AdminContentAnalytics {
+  range: ContentAnalyticsRange
+  unit: 'day' | 'month'
+  overview: ContentAnalyticsOverview
+  trend: ContentAnalyticsTrend[]
+  generatedAt: string
+}
+
+export interface ContentArticlePerformance {
+  articleId: number
+  articleTitle: string
+  articleCover: string
+  categoryName: string
+  createTime: string
+  views: number
+  uniqueReaders: number
+  effectiveSessions: number
+  avgActiveMs: number
+  completionRate: number
+}
+
+export interface ContentArticleAnalyticsDetail {
+  articleId: number
+  articleTitle: string
+  articleCover: string
+  categoryName: string
+  createTime: string
+  overview: ContentAnalyticsOverview
+  trend: ContentAnalyticsTrend[]
+}
+
 export interface AdminMediaAsset {
   key: string
   url: string
