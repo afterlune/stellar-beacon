@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page">
+  <section class="admin-page" data-testid="content-performance-page">
     <AdminPageHeader :title="t('contentPerformance.title')" :description="t('contentPerformance.description')">
       <template #actions>
         <a-radio-group v-model="range" type="button" :disabled="loading" @change="reload">
@@ -26,10 +26,11 @@
         :value="stat.value"
         :caption="stat.caption"
         :icon="stat.icon"
-        :tone="stat.tone" />
+        :tone="stat.tone"
+        :data-testid="stat.testId" />
     </div>
 
-    <a-card class="admin-panel" :bordered="false" :title="t('contentPerformance.trend.title')">
+    <a-card class="admin-panel" :bordered="false" :title="t('contentPerformance.trend.title')" data-testid="content-performance-trend">
       <template #extra>
         <span class="admin-muted-cell">{{ rangeLabel }} · {{ analytics.unit === 'month' ? t('contentPerformance.unit.month') : t('contentPerformance.unit.day') }}</span>
       </template>
@@ -41,7 +42,7 @@
         :description="t('contentPerformance.trend.emptyDescription')" />
     </a-card>
 
-    <a-card class="admin-panel content-performance-ranking" :bordered="false" :title="t('contentPerformance.ranking.title')">
+    <a-card class="admin-panel content-performance-ranking" :bordered="false" :title="t('contentPerformance.ranking.title')" data-testid="content-performance-ranking">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
           <a-select v-model="sort" style="width: 180px" @change="reload">
@@ -89,24 +90,26 @@
     <a-drawer v-model:visible="detailVisible" width="720px" :footer="false" :title="t('contentPerformance.detail.title')">
       <AdminErrorState v-if="detailError" :error="detailError" :title="t('contentPerformance.detail.loadFailed')" @retry="reloadDetail" />
       <template v-else-if="detail">
-        <div class="content-performance-detail-head">
-          <img v-if="isHttpUrl(detail.articleCover)" :src="detail.articleCover" alt="" />
-          <div>
-            <h3>{{ detail.articleTitle || t('contentPerformance.untitled') }}</h3>
-            <span>{{ detail.categoryName || t('contentPerformance.uncategorized') }} · {{ formatDateTime(detail.createTime) }}</span>
+        <div data-testid="content-performance-detail">
+          <div class="content-performance-detail-head">
+            <img v-if="isHttpUrl(detail.articleCover)" :src="detail.articleCover" alt="" />
+            <div>
+              <h3>{{ detail.articleTitle || t('contentPerformance.untitled') }}</h3>
+              <span>{{ detail.categoryName || t('contentPerformance.uncategorized') }} · {{ formatDateTime(detail.createTime) }}</span>
+            </div>
           </div>
+          <div class="content-performance-detail-stats">
+            <div><span>{{ t('contentPerformance.table.views') }}</span><strong>{{ formatNumber(detail.overview.views) }}</strong></div>
+            <div><span>{{ t('contentPerformance.table.uniqueReaders') }}</span><strong>{{ formatNumber(detail.overview.uniqueReaders) }}</strong></div>
+            <div><span>{{ t('contentPerformance.table.avgActiveTime') }}</span><strong>{{ formatDuration(detail.overview.avgActiveMs) }}</strong></div>
+            <div><span>{{ t('contentPerformance.table.completionRate') }}</span><strong>{{ formatPercent(detail.overview.completionRate) }}</strong></div>
+          </div>
+          <AdminEChart v-if="detail.trend.length" :option="detailTrendOption" height="300px" />
+          <AdminEmptyState
+            v-else
+            :title="t('contentPerformance.trend.emptyTitle')"
+            :description="t('contentPerformance.trend.emptyDescription')" />
         </div>
-        <div class="content-performance-detail-stats">
-          <div><span>{{ t('contentPerformance.table.views') }}</span><strong>{{ formatNumber(detail.overview.views) }}</strong></div>
-          <div><span>{{ t('contentPerformance.table.uniqueReaders') }}</span><strong>{{ formatNumber(detail.overview.uniqueReaders) }}</strong></div>
-          <div><span>{{ t('contentPerformance.table.avgActiveTime') }}</span><strong>{{ formatDuration(detail.overview.avgActiveMs) }}</strong></div>
-          <div><span>{{ t('contentPerformance.table.completionRate') }}</span><strong>{{ formatPercent(detail.overview.completionRate) }}</strong></div>
-        </div>
-        <AdminEChart v-if="detail.trend.length" :option="detailTrendOption" height="300px" />
-        <AdminEmptyState
-          v-else
-          :title="t('contentPerformance.trend.emptyTitle')"
-          :description="t('contentPerformance.trend.emptyDescription')" />
       </template>
       <div v-else class="admin-skeleton content-performance-chart-skeleton" />
     </a-drawer>
@@ -157,10 +160,10 @@ export default defineComponent({
     const detailArticleID = ref(0)
 
     const stats = computed(() => [
-      { label: t('contentPerformance.stats.views'), value: formatNumber(analytics.overview.views), caption: t('contentPerformance.stats.viewsCaption'), icon: IconEye, tone: 'blue' as const },
-      { label: t('contentPerformance.stats.uniqueReaders'), value: formatNumber(analytics.overview.uniqueReaders), caption: t('contentPerformance.stats.uniqueReadersCaption'), icon: IconUserGroup, tone: 'violet' as const },
-      { label: t('contentPerformance.stats.avgActiveTime'), value: formatDuration(analytics.overview.avgActiveMs), caption: t('contentPerformance.stats.avgActiveTimeCaption'), icon: IconClockCircle, tone: 'warm' as const },
-      { label: t('contentPerformance.stats.completionRate'), value: formatPercent(analytics.overview.completionRate), caption: t('contentPerformance.stats.completionRateCaption'), icon: IconCheckCircle, tone: 'green' as const }
+      { testId: 'content-performance-views', label: t('contentPerformance.stats.views'), value: formatNumber(analytics.overview.views), caption: t('contentPerformance.stats.viewsCaption'), icon: IconEye, tone: 'blue' as const },
+      { testId: 'content-performance-unique-readers', label: t('contentPerformance.stats.uniqueReaders'), value: formatNumber(analytics.overview.uniqueReaders), caption: t('contentPerformance.stats.uniqueReadersCaption'), icon: IconUserGroup, tone: 'violet' as const },
+      { testId: 'content-performance-avg-active-time', label: t('contentPerformance.stats.avgActiveTime'), value: formatDuration(analytics.overview.avgActiveMs), caption: t('contentPerformance.stats.avgActiveTimeCaption'), icon: IconClockCircle, tone: 'warm' as const },
+      { testId: 'content-performance-completion-rate', label: t('contentPerformance.stats.completionRate'), value: formatPercent(analytics.overview.completionRate), caption: t('contentPerformance.stats.completionRateCaption'), icon: IconCheckCircle, tone: 'green' as const }
     ])
 
     const columns = computed(() => [

@@ -46,6 +46,16 @@ jobs:
         working-directory: web
         run: npm run build:${{ matrix.app == 'admin-next' && 'admin' || 'blog' }}
 
+      - name: Install Playwright Chromium
+        if: matrix.app == 'admin-next'
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run admin baseline E2E
+        if: matrix.app == 'admin-next'
+        working-directory: web
+        run: npm run test:admin
+
   test:
     runs-on: ubuntu-latest
     steps:

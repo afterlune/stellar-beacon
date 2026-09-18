@@ -20,7 +20,7 @@ type ContentDailyMetric struct {
 
 // ContentArticleMetric is one article's aggregate for a reporting range.
 type ContentArticleMetric struct {
-	ArticleID         int       `json:"articleId"`
+	ArticleId         int       `json:"articleId"`
 	ArticleTitle      string    `json:"articleTitle"`
 	ArticleCover      string    `json:"articleCover"`
 	CategoryName      string    `json:"categoryName"`

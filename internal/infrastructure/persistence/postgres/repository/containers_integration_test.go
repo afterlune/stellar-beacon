@@ -175,9 +175,20 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	if err := contentAnalytics.RecordReadSession(ctx, 1, time.Now(), 4200, 95, 1); err != nil {
 		t.Fatalf("record content analytics session: %v", err)
 	}
+	if err := contentAnalytics.RecordReadSession(ctx, 1, time.Now(), 2000, 50, 1); err != nil {
+		t.Fatalf("record non-effective content analytics session: %v", err)
+	}
 	dailyMetrics, err := contentAnalytics.GetArticleDailyMetrics(ctx, 1, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
 	if err != nil || len(dailyMetrics) != 1 || dailyMetrics[0].Views != 3 || dailyMetrics[0].CompletedSessions != 2 {
 		t.Fatalf("unexpected content analytics daily metrics: metrics=%v err=%v", dailyMetrics, err)
+	}
+	siteDailyMetrics, err := contentAnalytics.ListDailyMetrics(ctx, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
+	if err != nil || len(siteDailyMetrics) != 1 || siteDailyMetrics[0].EffectiveSessions != 2 {
+		t.Fatalf("unexpected site content analytics metrics: metrics=%v err=%v", siteDailyMetrics, err)
+	}
+	articleMetrics, err := contentAnalytics.ListArticleMetrics(ctx, time.Now().Format("2006-01-02"), time.Now().Format("2006-01-02"))
+	if err != nil || len(articleMetrics) != 1 || articleMetrics[0].ArticleId != 1 || articleMetrics[0].CompletedSessions != 2 {
+		t.Fatalf("unexpected article content analytics metrics: metrics=%v err=%v", articleMetrics, err)
 	}
 	roles, err := NewRoleRepository(xormEngine).ListRolesByUserInfoID(ctx, 1)
 	if err != nil || len(roles) != 1 || roles[0] != "user" {
@@ -220,6 +231,16 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	value, err := client.Get(ctx, "integration:probe").Result()
 	if err != nil || value != "ok" {
 		t.Fatalf("read redis probe: value=%q err=%v", value, err)
+	}
+	if err := client.PFAdd(ctx, "content:readers:day-one", "reader-a", "reader-b").Err(); err != nil {
+		t.Fatalf("write first reader hyperloglog: %v", err)
+	}
+	if err := client.PFAdd(ctx, "content:readers:day-two", "reader-b", "reader-c").Err(); err != nil {
+		t.Fatalf("write second reader hyperloglog: %v", err)
+	}
+	uniqueReaders, err := client.PFCount(ctx, "content:readers:day-one", "content:readers:day-two").Result()
+	if err != nil || uniqueReaders != 3 {
+		t.Fatalf("unexpected hyperloglog union count: count=%d err=%v", uniqueReaders, err)
 	}
 }
 

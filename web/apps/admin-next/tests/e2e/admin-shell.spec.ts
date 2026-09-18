@@ -17,6 +17,8 @@ let articleExported = false
 let photoMovePayload: { photoIds?: number[]; albumId?: number } | null = null
 let jobGroupsRequested = false
 let jobLogGroupsRequested = false
+let contentAnalyticsRange = ''
+let contentAnalyticsSort = ''
 
 const defaultWebsiteConfig = {
   name: '星际信标',
@@ -50,6 +52,8 @@ test.beforeEach(async ({ page }) => {
   photoMovePayload = null
   jobGroupsRequested = false
   jobLogGroupsRequested = false
+  contentAnalyticsRange = ''
+  contentAnalyticsSort = ''
   websiteConfig = { ...defaultWebsiteConfig }
   aboutContent = defaultAboutContent
   profile = { nickname: '测试管理员', intro: '保持公开资料边界', website: 'https://example.com/admin' }
@@ -115,6 +119,12 @@ test.beforeEach(async ({ page }) => {
                   path: '/article-list',
                   component: '/article/ArticleList.vue',
                   icon: 'iconfont el-icon-document',
+                  hidden: false
+                },
+                {
+                  name: '内容表现',
+                  path: '/content-performance',
+                  component: '/content/ContentPerformance.vue',
                   hidden: false
                 },
                 {
@@ -272,6 +282,84 @@ test.beforeEach(async ({ page }) => {
               ]
             }
           ]
+        })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/content/analytics') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          flag: true,
+          code: 20000,
+          message: '操作成功',
+          data: {
+            range: requestURL.searchParams.get('range') || '7d',
+            unit: 'day',
+            overview: { views: 12345, uniqueReaders: 1234, effectiveSessions: 20, avgActiveMs: 65000, completionRate: 66.67 },
+            trend: [
+              { period: '2026-09-17', views: 6000, uniqueReaders: 600, effectiveSessions: 10, avgActiveMs: 60000, completionRate: 60 },
+              { period: '2026-09-18', views: 6345, uniqueReaders: 634, effectiveSessions: 10, avgActiveMs: 70000, completionRate: 73.34 }
+            ],
+            generatedAt: '2026-09-18T10:00:00Z'
+          }
+        })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/content/analytics/articles') {
+      contentAnalyticsRange = requestURL.searchParams.get('range') || ''
+      contentAnalyticsSort = requestURL.searchParams.get('sort') || ''
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          flag: true,
+          code: 20000,
+          message: '操作成功',
+          data: {
+            records: [{
+              articleId: 7,
+              articleTitle: '内容表现测试文章',
+              articleCover: '',
+              categoryName: '测试分类',
+              createTime: '2026-09-01T00:00:00Z',
+              views: 12345,
+              uniqueReaders: 1234,
+              effectiveSessions: 20,
+              avgActiveMs: 65000,
+              completionRate: 66.67
+            }],
+            count: 1
+          }
+        })
+      })
+      return
+    }
+
+    if (requestURL.pathname === '/api/v1/admin/content/analytics/articles/7') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          flag: true,
+          code: 20000,
+          message: '操作成功',
+          data: {
+            articleId: 7,
+            articleTitle: '内容表现测试文章',
+            articleCover: '',
+            categoryName: '测试分类',
+            createTime: '2026-09-01T00:00:00Z',
+            overview: { views: 12345, uniqueReaders: 1234, effectiveSessions: 20, avgActiveMs: 65000, completionRate: 66.67 },
+            trend: [
+              { period: '2026-09-17', views: 6000, uniqueReaders: 600, effectiveSessions: 10, avgActiveMs: 60000, completionRate: 60 },
+              { period: '2026-09-18', views: 6345, uniqueReaders: 634, effectiveSessions: 10, avgActiveMs: 70000, completionRate: 73.34 }
+            ]
+          }
         })
       })
       return
@@ -1067,6 +1155,7 @@ test('all migrated routes keep their menu permission and survive a refresh', asy
   const routes = [
     '/',
     '/article-list',
+    '/content-performance',
     '/articles',
     '/articles/42',
     '/categories',
@@ -1106,6 +1195,36 @@ test('all migrated routes keep their menu permission and survive a refresh', asy
     await expect(page.locator('.admin-content'), `${route} refresh`).not.toContainText('页面不存在')
   }
 
+  expect(pageErrors()).toEqual([])
+})
+
+test('renders content performance and opens the article detail drawer', async ({ page }) => {
+  const pageErrors = capturePageErrors(page)
+  await page.goto('/login')
+  await page.getByTestId('login-username').locator('input').fill('admin@example.com')
+  await page.getByTestId('login-password').locator('input').fill('password')
+  await page.getByTestId('login-submit').click()
+  await expect(page).toHaveURL(/\/$/)
+
+  await page.locator('.admin-sider').getByText('内容表现', { exact: true }).click()
+  await expect(page).toHaveURL(/\/content-performance$/)
+  await expect(page.getByTestId('content-performance-page')).toBeVisible()
+  await expect(page.getByTestId('content-performance-views')).toContainText('12,345')
+  await expect(page.getByTestId('content-performance-unique-readers')).toContainText('1,234')
+  await expect(page.getByTestId('content-performance-avg-active-time')).toContainText('1m 5s')
+  await expect(page.getByTestId('content-performance-completion-rate')).toContainText('66.67%')
+  await expect(page.getByTestId('content-performance-trend')).toBeVisible()
+  await expect(page.getByTestId('content-performance-ranking').getByText('内容表现测试文章')).toBeVisible()
+  expect(contentAnalyticsRange).toBe('7d')
+  expect(contentAnalyticsSort).toBe('views')
+
+  await page.getByText('近 30 天', { exact: true }).click()
+  await expect.poll(() => contentAnalyticsRange).toBe('30d')
+
+  await page.getByRole('button', { name: '查看详情' }).click()
+  await expect(page.getByTestId('content-performance-detail')).toBeVisible()
+  await expect(page.getByTestId('content-performance-detail')).toContainText('内容表现测试文章')
+  await expect(page.getByTestId('content-performance-detail')).toContainText('12,345')
   expect(pageErrors()).toEqual([])
 })
 

@@ -73,4 +73,4 @@ pwsh ./scripts/integration/down.ps1 -RemoveVolumes
 
 ## API 验收
 
-接口入口是 `/api/v1/public`、`/api/v1/auth` 和 `/api/v1/admin`。正常响应为 `code: "OK"`；分页响应必须包含 `items`、`total`、`page`、`pageSize`。使用 `scripts/integration/smoke.ps1` 验证 Caddy、前后端、PostgreSQL、Redis、Meilisearch 和 MinIO 链路。
+接口入口是 `/api/v1/public`、`/api/v1/auth` 和 `/api/v1/admin`。正常响应为 `code: "OK"`；分页响应必须包含 `items`、`total`、`page`、`pageSize`。使用 `scripts/integration/smoke.ps1` 验证 Caddy、前后端、PostgreSQL、Redis、Meilisearch 和 MinIO 链路；smoke 还会用隔离环境中的公开文章完成一次阅读会话上报，并校验管理端内容表现概览、文章列表和详情接口。

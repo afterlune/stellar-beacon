@@ -1061,9 +1061,19 @@ surface under the article submenu. Its stable contract is intentionally small:
 - The detail drawer loads `/admin/content/analytics/articles/{articleId}` and
   must not add a second page-wide `确定`/`编辑` action that can collide with the
   strict-mode locators documented in §0.
+- Stable selectors are `[data-testid="content-performance-page"]`,
+  `[data-testid="content-performance-views"]`,
+  `[data-testid="content-performance-unique-readers"]`,
+  `[data-testid="content-performance-avg-active-time"]`,
+  `[data-testid="content-performance-completion-rate"]`,
+  `[data-testid="content-performance-trend"]`,
+  `[data-testid="content-performance-ranking"]` and
+  `[data-testid="content-performance-detail"]`.
 - The page never renders raw account, IP, User-Agent or referrer values; the
   reading-session endpoint accepts only `sessionId`, `activeMs` and
   `maxScrollPercent`.
+- `npm run test:admin` is a blocking CI step for the `admin-next` frontend
+  matrix entry; the blog matrix does not install Playwright browsers.
 
 ### Local verification commands
 
@@ -1073,5 +1083,5 @@ npx vue-tsc --noEmit -p apps/admin-next/tsconfig.json                       # 0 
 npx vue-tsc --noEmit -p apps/admin-next/tsconfig.json \
   --noUnusedLocals --noUnusedParameters                                     # 0 errors
 npm run build:admin                                                         # vite build
-npm run test:admin                                                          # 6 passed / 5 skipped
+npm run test:admin                                                          # 8 passed / 5 skipped
 ```

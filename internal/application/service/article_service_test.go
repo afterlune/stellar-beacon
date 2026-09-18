@@ -24,6 +24,34 @@ type fakeArticleSearcher struct {
 	err  error
 }
 
+type recordingArticleCache struct {
+	fakeServiceCache
+	value      string
+	viewWrites int
+}
+
+func (c *recordingArticleCache) Get(context.Context, string) (string, error) {
+	if c.value == "" {
+		return "", port.ErrCacheMiss
+	}
+	return c.value, nil
+}
+
+func (c *recordingArticleCache) ZIncrBy(context.Context, string, float64, string) (float64, error) {
+	c.viewWrites++
+	return float64(c.viewWrites), nil
+}
+
+type recordingContentAnalyticsRepo struct {
+	fakeContentAnalyticsRepository
+	viewWrites int
+}
+
+func (r *recordingContentAnalyticsRepo) RecordView(context.Context, int, time.Time) error {
+	r.viewWrites++
+	return nil
+}
+
 func (f *fakeArticleSearcher) Search(context.Context, string) ([]port.ArticleSearchHit, error) {
 	return f.hits, f.err
 }
@@ -184,6 +212,42 @@ func TestArticleServiceUsesTypedSearchPort(t *testing.T) {
 	}
 	if hits[0].ArticleTitle != "<mark>title</mark>" || hits[0].ArticleContent != "<mark>content</mark>" {
 		t.Fatalf("highlighted fields were not applied: %#v", hits[0])
+	}
+}
+
+func TestArticleServiceCountsCachedPublicViews(t *testing.T) {
+	cache := &recordingArticleCache{value: `{"id":7,"status":1,"isDelete":0,"articleTitle":"cached"}`}
+	content := &recordingContentAnalyticsRepo{}
+	service, err := NewArticleService(ArticleServiceDeps{
+		Repo: &fakeArticleRepository{}, Reactions: &fakeArticleReactionRepository{},
+		ContentAnalytics: content, Cache: cache, Storage: fakeServiceStorage{}, Search: &fakeArticleSearcher{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := articleRequestContext("/v1/public/articles/7")
+	ctx.Params = gin.Params{{Key: "articleId", Value: "7"}}
+	result := service.GetArticleById(ctx)
+	if !result.Flag || cache.viewWrites != 1 || content.viewWrites != 1 {
+		t.Fatalf("cached public article should count one view: result=%+v cache=%d analytics=%d", result, cache.viewWrites, content.viewWrites)
+	}
+}
+
+func TestArticleServiceDoesNotCountNonPublicCachedViews(t *testing.T) {
+	cache := &recordingArticleCache{value: `{"id":7,"status":3,"isDelete":0,"articleTitle":"draft"}`}
+	content := &recordingContentAnalyticsRepo{}
+	service, err := NewArticleService(ArticleServiceDeps{
+		Repo: &fakeArticleRepository{}, Reactions: &fakeArticleReactionRepository{},
+		ContentAnalytics: content, Cache: cache, Storage: fakeServiceStorage{}, Search: &fakeArticleSearcher{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := articleRequestContext("/v1/public/articles/7")
+	ctx.Params = gin.Params{{Key: "articleId", Value: "7"}}
+	_ = service.GetArticleById(ctx)
+	if cache.viewWrites != 0 || content.viewWrites != 0 {
+		t.Fatalf("non-public cached article must not count views: cache=%d analytics=%d", cache.viewWrites, content.viewWrites)
 	}
 }
 

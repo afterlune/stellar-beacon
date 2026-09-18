@@ -103,3 +103,33 @@ func TestRedisCacheAllowUsesAtomicWindowCounter(t *testing.T) {
 		t.Fatalf("TTL = %s, want a positive value no greater than one minute", ttl)
 	}
 }
+
+func TestRedisCacheHyperLogLogDeduplicatesMembers(t *testing.T) {
+	cache, _, cleanup := newTestCache(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	if _, err := cache.PFAdd(ctx, "content:readers:2026-09-18", "reader-a", "reader-b"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.PFAdd(ctx, "content:readers:2026-09-18", "reader-a"); err != nil {
+		t.Fatal(err)
+	}
+	count, err := cache.PFCount(ctx, "content:readers:2026-09-18")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("count = %d, want 2", count)
+	}
+}
+
+func TestRedisCachePFCountWithoutKeysIsZero(t *testing.T) {
+	cache, _, cleanup := newTestCache(t)
+	defer cleanup()
+
+	count, err := cache.PFCount(context.Background())
+	if err != nil || count != 0 {
+		t.Fatalf("PFCount() = (%d, %v), want (0, nil)", count, err)
+	}
+}

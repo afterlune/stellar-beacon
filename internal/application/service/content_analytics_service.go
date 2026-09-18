@@ -178,7 +178,7 @@ func (s *MyContentAnalyticsService) ListContentAnalyticsArticles(ctx context.Con
 	items := make([]model.ContentArticlePerformanceDTO, 0, len(rows))
 	for _, row := range rows {
 		item := articlePerformanceDTO(row)
-		item.UniqueReaders = s.uniqueReadersForArticleDays(ctx, row.ArticleID, window.Days, contentDailyFallback(rows, row.ArticleID))
+		item.UniqueReaders = s.uniqueReadersForArticleDays(ctx, row.ArticleId, window.Days, contentDailyFallback(rows, row.ArticleId))
 		items = append(items, item)
 	}
 	sortContentArticles(items, sortBy)
@@ -414,7 +414,7 @@ func articlePerformanceDTO(row port.ContentArticleMetric) model.ContentArticlePe
 		CompletedSessions: row.CompletedSessions,
 	})
 	return model.ContentArticlePerformanceDTO{
-		ArticleID:         row.ArticleID,
+		ArticleID:         row.ArticleId,
 		ArticleTitle:      row.ArticleTitle,
 		ArticleCover:      row.ArticleCover,
 		CategoryName:      row.CategoryName,
@@ -429,7 +429,7 @@ func articlePerformanceDTO(row port.ContentArticleMetric) model.ContentArticlePe
 
 func contentDailyFallback(rows []port.ContentArticleMetric, articleID int) int64 {
 	for _, row := range rows {
-		if row.ArticleID == articleID {
+		if row.ArticleId == articleID {
 			return row.UniqueReaders
 		}
 	}

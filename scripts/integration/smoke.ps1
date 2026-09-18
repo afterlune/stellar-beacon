@@ -50,6 +50,27 @@ foreach ($item in $publicApi) {
     [void](Assert-IntegrationApiSuccess -Response $response -Name $item.Name)
 }
 
+$publicArticleListResponse = Invoke-IntegrationRequest -Uri "$blogBase/api/v1/public/articles?current=1&size=10"
+$publicArticleList = Assert-IntegrationApiSuccess -Response $publicArticleListResponse -Name 'public article list for content analytics'
+$publicArticle = @($publicArticleList.data.items) | Where-Object { [int]$_.status -eq 1 } | Select-Object -First 1
+if ($null -eq $publicArticle) {
+    throw 'content analytics smoke requires at least one published article'
+}
+$contentArticleId = [int]$publicArticle.id
+$articleResponse = Invoke-IntegrationRequest -Uri "$blogBase/api/v1/public/articles/$contentArticleId"
+[void](Assert-IntegrationApiSuccess -Response $articleResponse -Name 'public article detail for content analytics')
+
+$readSessionId = [guid]::NewGuid().ToString()
+$readSessionBody = @{
+    sessionId = $readSessionId
+    activeMs = 5000
+    maxScrollPercent = 95
+} | ConvertTo-Json -Compress
+for ($attempt = 1; $attempt -le 2; $attempt++) {
+    $readSession = Invoke-IntegrationRequest -Uri "$blogBase/api/v1/public/articles/$contentArticleId/read-sessions" -Method POST -ContentType 'application/json' -Body $readSessionBody
+    [void](Assert-IntegrationApiSuccess -Response $readSession -Name "content analytics read session attempt $attempt")
+}
+
 $loginBody = 'username=' + [uri]::EscapeDataString($env:E2E_ADMIN_EMAIL) + '&password=' + [uri]::EscapeDataString($env:E2E_ADMIN_PASSWORD)
 $login = Invoke-IntegrationRequest -Uri "$adminBase/api/v1/auth/login" -Method POST -ContentType 'application/x-www-form-urlencoded' -Body $loginBody
 $loginPayload = Assert-IntegrationApiSuccess -Response $login -Name 'admin login'
@@ -61,7 +82,9 @@ $adminApi = @(
     @{ Name = 'admin home API'; Uri = "$adminBase/api/v1/admin/dashboard" },
     @{ Name = 'admin menu API'; Uri = "$adminBase/api/v1/admin/me/menu" },
     @{ Name = 'website config API'; Uri = "$adminBase/api/v1/admin/site" },
-    @{ Name = 'job targets API'; Uri = "$adminBase/api/v1/admin/jobs/targets" }
+    @{ Name = 'job targets API'; Uri = "$adminBase/api/v1/admin/jobs/targets" },
+    @{ Name = 'content analytics overview API'; Uri = "$adminBase/api/v1/admin/content/analytics?range=7d" },
+    @{ Name = 'content analytics article list API'; Uri = "$adminBase/api/v1/admin/content/analytics/articles?range=7d&sort=views&current=1&size=10" }
 )
 foreach ($item in $adminApi) {
     $response = Invoke-IntegrationRequest -Uri $item.Uri -Headers $authHeaders
@@ -80,6 +103,12 @@ foreach ($item in $adminApi) {
             }
         }
     }
+}
+
+$contentAnalyticsDetailResponse = Invoke-IntegrationRequest -Uri "$adminBase/api/v1/admin/content/analytics/articles/${contentArticleId}?range=7d" -Headers $authHeaders
+$contentAnalyticsDetail = Assert-IntegrationApiSuccess -Response $contentAnalyticsDetailResponse -Name 'content analytics article detail API'
+if ([int]$contentAnalyticsDetail.data.overview.views -lt 1 -or [int]$contentAnalyticsDetail.data.overview.effectiveSessions -lt 1) {
+    throw "content analytics did not persist the smoke reading session: $($contentAnalyticsDetailResponse.Content)"
 }
 
 $adminListApi = @(
