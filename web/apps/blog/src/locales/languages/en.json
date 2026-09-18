@@ -61,6 +61,7 @@
     "tips-open-menu": "Open menu",
     "tips-back-to-home": "Back to home",
     "tips-open-search": "Open search",
+    "tips-open-toc": "Open article toc",
     "default-category": "Article",
     "default-tag": "unsorted",
     "empty-tag": "Current no tags were found.",
@@ -130,6 +131,15 @@
     "backToSeries": "Open the collection",
     "progress": "Collection progress {current}/{total}",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "startReading": "Start reading",
+    "continueReading": "Continue reading",
+    "readProgress": "Read {completed}/{total}",
+    "read": "Read",
+    "recent": "Recent"
+  },
+  "reader": {
+    "tocTitle": "Article contents",
+    "tocEmpty": "There are no sections in this article yet."
   }
 }

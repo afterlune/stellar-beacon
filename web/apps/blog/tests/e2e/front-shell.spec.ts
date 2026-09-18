@@ -7,7 +7,7 @@ function articleFixture(id: number, title: string) {
     id,
     articleTitle: title,
     articleContent: '正文内容',
-    articleContentHtml: '<p>正文内容</p>',
+    articleContentHtml: `<h2 id="article-section-${id}">第一节</h2><p>正文内容</p><h2>第二节</h2>${Array.from({ length: 16 }, (_, index) => `<p>第 ${index + 1} 段测试内容，用于验证移动端目录和系列阅读进度。</p>`).join('')}`,
     articleCover: '',
     categoryName: '测试分类',
     status: 1,
@@ -126,27 +126,79 @@ test.describe('mobile front shell', () => {
 
 test.describe('article reading experience', () => {
   test('tracks visible continuation impressions and clicks', async ({ page }) => {
+    test.setTimeout(60_000)
     const events: Array<{ articleId: number; eventType: string; targetType?: string; targetId?: number; placement?: string; position?: number }> = []
     await mockArticleReading(page, (event) => events.push(event))
 
-    await page.goto('/articles/8')
-    await page.getByTestId('series-context').scrollIntoViewIfNeeded()
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
+    await page.getByTestId('series-context').evaluate((element) => (element as HTMLElement).scrollIntoView({ block: 'center' }))
     await expect.poll(() => events.filter((event) => event.articleId === 8 && event.eventType === 'series_impression').length).toBe(1)
     await page.getByTestId('series-next').evaluate((element) => (element as HTMLElement).click())
     await expect(page).toHaveURL(/\/articles\/9$/)
     await expect.poll(() => events.filter((event) => event.articleId === 8 && event.eventType === 'series_click').length).toBe(1)
     expect(events.find((event) => event.eventType === 'series_click')).toMatchObject({ targetType: 'article', targetId: 9, placement: 'series_next', position: 0 })
 
-    await page.goto('/articles/8')
-    await page.getByTestId('related-articles').scrollIntoViewIfNeeded()
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
+    await page.getByTestId('related-articles').evaluate((element) => (element as HTMLElement).scrollIntoView({ block: 'center' }))
     await expect.poll(() => events.filter((event) => event.articleId === 8 && event.eventType === 'related_impression').length).toBe(1)
     await page.getByTestId('related-articles').locator('a').first().evaluate((element) => (element as HTMLElement).click())
     await expect.poll(() => events.filter((event) => event.articleId === 8 && event.eventType === 'related_click').length).toBe(1)
     expect(events.find((event) => event.eventType === 'related_click')).toMatchObject({ targetType: 'article', targetId: 20, placement: 'related', position: 1 })
   })
-  test('keeps series navigation separate from related reading', async ({ page }) => {
+  test('opens the mobile reader toc and jumps to a section', async ({ page }, testInfo) => {
+    test.setTimeout(60_000)
+    test.skip(testInfo.project.name !== 'mobile', 'This case only applies to the mobile project')
     await mockArticleReading(page)
-    await page.goto('/articles/8')
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
+
+    await page.locator('.Ob-Navigator-ball').click()
+    const tocAction = page.locator('#Ob-Navigator-toc')
+    await expect(tocAction).toBeVisible()
+    await tocAction.click()
+
+    const drawer = page.getByTestId('article-reader-drawer')
+    await expect(drawer).toBeVisible()
+    await expect(drawer).toContainText('第一节')
+    await expect(drawer).toContainText('阅读系列')
+    await drawer.getByRole('button', { name: '第二节' }).click()
+
+    await expect(drawer).not.toBeVisible()
+    await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#article-heading-2')
+  })
+
+  test('persists completed series progress and offers the next article', async ({ page }) => {
+    test.setTimeout(60_000)
+    await mockArticleReading(page)
+    await page.goto('/articles/7', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
+    await page.waitForTimeout(3200)
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+
+    await expect.poll(() => page.evaluate(() => {
+      const raw = localStorage.getItem('stellar-beacon.reader.series-progress.v1')
+      if (!raw) return false
+      const progress = JSON.parse(raw) as Record<string, { completedArticleIds?: number[] }>
+      return progress['3']?.completedArticleIds?.includes(7) || false
+    })).toBe(true)
+
+    await page.goto('/series/3', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('series-progress')).toContainText(/已读 1\/3|Read 1\/3/)
+    const continueLink = page.getByTestId('series-continue')
+    await expect(continueLink).toContainText('系列第二篇')
+    await expect(continueLink).toHaveAttribute('href', '/articles/8')
+  })
+  test('ignores malformed local series progress', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('stellar-beacon.reader.series-progress.v1', '{broken'))
+    await mockArticleReading(page)
+    await page.goto('/series/3', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('series-progress')).toContainText(/已读 0\/3|Read 0\/3/)
+    await expect(page.getByTestId('series-continue')).toContainText('系列第一篇')
+  })
+  test('keeps series navigation separate from related reading', async ({ page }) => {
+    test.setTimeout(60_000)
+    await mockArticleReading(page)
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
 
     const series = page.getByTestId('series-context')
     await expect(series).toBeVisible()
@@ -160,7 +212,7 @@ test.describe('article reading experience', () => {
     await expect(related).toContainText('分类相关文章')
     await expect(related).not.toContainText('系列第一篇')
 
-    await page.goto('/articles/7')
+    await page.goto('/articles/7', { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('series-previous')).toHaveCount(0)
     await expect(page.getByTestId('series-next')).toContainText('系列第二篇')
 

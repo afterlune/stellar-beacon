@@ -57,31 +57,46 @@
           {{ t('settings.tips-open-search') }}
         </span>
       </li>
+      <li v-if="showArticleToc" id="Ob-Navigator-toc" class="brand-gradient" @click.stop.prevent="handleOpenReader">
+        <div>
+          <svg-icon class="text-ob-bright stroke-current" icon-class="toc" />
+        </div>
+        <span class="Ob-Navigator-tips">
+          {{ t('settings.tips-open-toc') }}
+        </span>
+      </li>
     </ul>
+    <ArticleReaderDrawer v-model:visible="readerDrawerVisible" />
   </div>
 </template>
 
 <script lang="ts">
 // @ts-nocheck
 import { useAppStore } from '@/stores/app'
-import { computed, defineComponent, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNavigatorStore } from '@/stores/navigator'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useSearchStore } from '@/stores/search'
 import { useCommonStore } from '@/stores/common'
+import { useReaderStore } from '@/stores/reader'
+import ArticleReaderDrawer from '@/components/ArticleReaderDrawer.vue'
 
 export default defineComponent({
   name: 'AuroraNavigator',
+  components: { ArticleReaderDrawer },
   setup() {
     const appStore = useAppStore()
     const commonStore = useCommonStore()
     const { t } = useI18n()
     const navigatorStore = useNavigatorStore()
     const searchStore = useSearchStore()
+    const readerStore = useReaderStore()
+    const route = useRoute()
     const router = useRouter()
     const progress = ref(0)
     const scrolling = ref(false)
+    const readerDrawerVisible = ref(false)
     let time = ref(0)
     let scrollingHandler: any
     let menuReopenHandler: any
@@ -92,6 +107,10 @@ export default defineComponent({
     onUnmounted(() => {
       document.removeEventListener('scroll', scrollHandler)
     })
+    watch(() => route.fullPath, () => {
+      if (route.name !== 'Articles') readerDrawerVisible.value = false
+    })
+
     const scrollHandler = () => {
       clearTimeout(scrollingHandler)
       clearTimeout(menuReopenHandler)
@@ -140,12 +159,19 @@ export default defineComponent({
       navigatorStore.setOpenNavigator(false)
       searchStore.setOpenModal(status)
     }
+    const handleOpenReader = () => {
+      navigatorStore.setOpenNavigator(false)
+      readerDrawerVisible.value = true
+    }
+
     return {
 
       showProgress: computed(() => {
         return progress.value > 5
       }),
       isMobile: computed(() => commonStore.isMobile),
+      showArticleToc: computed(() => commonStore.isMobile && route.name === 'Articles' && readerStore.tocItems.length > 0),
+      readerDrawerVisible,
       openNavigator: computed(() => navigatorStore.openNavigator),
       progress,
       handleNavigatorToggle,
@@ -153,6 +179,7 @@ export default defineComponent({
       handleOpenMenu,
       handleGoHome,
       handleSearch,
+      handleOpenReader,
       scrolling,
       t
     }
@@ -238,5 +265,8 @@ export default defineComponent({
       @apply flex justify-center items-center w-full h-full rounded-full;
     }
   }
+}
+#Ob-Navigator.Ob-Navigator--open .Ob-Navigator-submenu li:nth-of-type(5) {
+  transform: translateY(calc(3rem * -4));
 }
 </style>

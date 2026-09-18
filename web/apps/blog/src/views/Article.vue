@@ -242,6 +242,8 @@ import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 import { pageCount, pageRecords } from '@/utils/page'
 import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
 import { useSeoMeta } from '@/composables/useSeoMeta'
+import { useReaderStore } from '@/stores/reader'
+import { scrollToArticleHeading } from '@/utils/article-reader'
 import { API_BASE_URL } from '@stellar-beacon/api-client'
 
 function createReadingSessionId(): string {
@@ -260,6 +262,7 @@ export default defineComponent({
     const router = useRouter()
     const { t } = useI18n()
     const { setSeo } = useSeoMeta()
+    const readerStore = useReaderStore()
     const loading = ref(true)
     const articleRef = ref()
     const md = new MarkdownIt({ html: true })
@@ -308,10 +311,43 @@ export default defineComponent({
     let readingMaxScrollPercent = 0
     let readingSessionSent = false
     let continuationObserver: IntersectionObserver | null = null
+    let tocObserver: IntersectionObserver | null = null
+    let readingCompletionTimer: number | null = null
+    let seriesCompletionMarked = false
     const continuationTimers = new Map<Element, number>()
     const continuationImpressions = new Set<string>()
 
+    const clearReadingCompletionTimer = () => {
+      if (readingCompletionTimer === null) return
+      window.clearTimeout(readingCompletionTimer)
+      readingCompletionTimer = null
+    }
+    const currentReadingActiveMs = () => (
+      readingActiveMs + (readingStartedAt === null ? 0 : performance.now() - readingStartedAt)
+    )
+    const maybeMarkSeriesCompleted = () => {
+      if (seriesCompletionMarked || readingMaxScrollPercent < 90) return
+      const seriesId = Number(seriesInfo.value?.id || 0)
+      const articleId = Number(reactiveData.articleId)
+      if (!seriesId || !articleId || currentReadingActiveMs() < 3000) return
+      readerStore.markCompleted(seriesId, articleId)
+      seriesCompletionMarked = true
+      clearReadingCompletionTimer()
+    }
+    const scheduleSeriesCompletionCheck = () => {
+      clearReadingCompletionTimer()
+      if (seriesCompletionMarked) return
+      const remaining = Math.max(0, 3000 - currentReadingActiveMs())
+      if (remaining === 0) {
+        maybeMarkSeriesCompleted()
+        return
+      }
+      readingCompletionTimer = window.setTimeout(maybeMarkSeriesCompleted, remaining)
+    }
+
     const resetReadingSession = () => {
+      clearReadingCompletionTimer()
+      seriesCompletionMarked = false
       readingSessionId = createReadingSessionId()
       readingActiveMs = 0
       readingStartedAt = null
@@ -319,6 +355,7 @@ export default defineComponent({
       readingSessionSent = false
     }
     const pauseReadingSession = () => {
+      clearReadingCompletionTimer()
       if (readingStartedAt === null) return
       readingActiveMs += performance.now() - readingStartedAt
       readingStartedAt = null
@@ -326,6 +363,7 @@ export default defineComponent({
     const startReadingSession = () => {
       if (readingSessionSent || readingStartedAt !== null) return
       readingStartedAt = performance.now()
+      scheduleSeriesCompletionCheck()
       updateReadingScrollDepth()
     }
     const updateReadingScrollDepth = () => {
@@ -333,6 +371,8 @@ export default defineComponent({
       const scrollable = Math.max(1, root.scrollHeight - window.innerHeight)
       const depth = Math.min(100, Math.max(0, ((window.scrollY + window.innerHeight) / (scrollable + window.innerHeight)) * 100))
       readingMaxScrollPercent = Math.max(readingMaxScrollPercent, depth)
+      maybeMarkSeriesCompleted()
+      scheduleSeriesCompletionCheck()
     }
     const handleReadingVisibility = () => {
       if (document.hidden) {
@@ -345,6 +385,7 @@ export default defineComponent({
       scheduleContinuationTracking()
     }
     const flushReadingSession = () => {
+      maybeMarkSeriesCompleted()
       if (readingSessionSent || !reactiveData.articleId) return
       pauseReadingSession()
       const activeMs = Math.min(7200000, Math.max(0, Math.round(readingActiveMs)))
@@ -471,6 +512,10 @@ export default defineComponent({
       document.removeEventListener('visibilitychange', handleReadingVisibility)
       window.removeEventListener('scroll', updateReadingScrollDepth)
       window.removeEventListener('pagehide', flushReadingSession)
+      clearReadingCompletionTimer()
+      tocObserver?.disconnect()
+      tocObserver = null
+      readerStore.clearArticleContext()
       commonStore.resetHeaderImage()
       reactiveData.article = ''
       tocbot.destroy()
@@ -479,6 +524,9 @@ export default defineComponent({
       flushReadingSession()
       resetReadingSession()
       resetContinuationTracking()
+      tocObserver?.disconnect()
+      tocObserver = null
+      readerStore.clearArticleContext()
       reactiveData.article = ''
       reactiveData.readTime = ''
       reactiveData.wordNum = ''
@@ -523,29 +571,59 @@ export default defineComponent({
       v3ImgPreviewFn({ images: reactiveData.images, index: reactiveData.images.indexOf(index) })
     }
     const initTocbot = () => {
-      let nodes = articleRef.value.children
-      if (nodes.length) {
-        for (let i = 0; i < nodes.length; i++) {
-          let node = nodes[i]
-          let reg = /^H[1-4]{1}$/
-          if (reg.exec(node.tagName)) {
-            node.id = i
-          }
+      if (!articleRef.value) return
+      tocbot.destroy()
+      tocObserver?.disconnect()
+      tocObserver = null
+
+      const headings = Array.from(articleRef.value.querySelectorAll('h1, h2, h3')) as HTMLElement[]
+      const usedIds = new Set<string>()
+      const tocItems = headings.map((heading, index) => {
+        const baseId = heading.id || `article-heading-${index + 1}`
+        let id = baseId
+        let suffix = 2
+        while (usedIds.has(id)) {
+          id = `${baseId}-${suffix}`
+          suffix++
         }
+        usedIds.add(id)
+        heading.id = id
+        return {
+          id,
+          text: heading.textContent?.trim() || t('titles.toc'),
+          level: Number(heading.tagName.slice(1))
+        }
+      })
+      readerStore.setTocItems(tocItems)
+
+      if (typeof IntersectionObserver !== 'undefined' && headings.length) {
+        tocObserver = new IntersectionObserver((entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)
+          if (visible[0]) readerStore.setActiveHeading(visible[0].target.id)
+        }, { rootMargin: '-96px 0px -68% 0px', threshold: 0 })
+        headings.forEach((heading) => tocObserver?.observe(heading))
       }
+
       tocbot.init({
         tocSelector: '#toc1',
         contentSelector: '.post-html',
         headingSelector: 'h1, h2, h3',
-        onClick: function (e) {
-          e.preventDefault()
+        onClick: (event: MouseEvent) => {
+          event.preventDefault()
+          const link = event.currentTarget as HTMLAnchorElement | null
+          const id = decodeURIComponent(link?.getAttribute('href')?.slice(1) || '')
+          if (id && scrollToArticleHeading(id)) readerStore.setActiveHeading(id)
         }
       })
+
       const imgs = articleRef.value.getElementsByTagName('img')
-      for (var i = 0; i < imgs.length; i++) {
+      for (let i = 0; i < imgs.length; i++) {
         reactiveData.images.push(imgs[i].src)
-        imgs[i].addEventListener('click', function (e: any) {
-          handlePreview(e.target.currentSrc)
+        imgs[i].addEventListener('click', (event: Event) => {
+          const target = event.target as HTMLImageElement
+          handlePreview(target.currentSrc)
         })
       }
     }
@@ -701,18 +779,40 @@ export default defineComponent({
     const fetchSeriesInfo = (article: any) => {
       seriesInfo.value = null
       seriesArticles.value = []
+      readerStore.setSeriesContext(null)
       const seriesId = Number(article?.seriesId || 0)
       if (!seriesId) return
       api
         .getSeriesDetail(seriesId)
         .then(({ data }: any) => {
           const payload = data?.data || {}
-          seriesInfo.value = payload.series || null
-          seriesArticles.value = Array.isArray(payload.articles) ? payload.articles : []
+          const series = payload.series || null
+          const articles: any[] = Array.isArray(payload.articles) ? payload.articles : []
+          const articleId = Number(reactiveData.articleId)
+          const currentIndex = articles.findIndex((item) => Number(item?.id) === articleId)
+          const previous = currentIndex > 0 ? articles[currentIndex - 1] : null
+          const next = currentIndex >= 0 && currentIndex < articles.length - 1 ? articles[currentIndex + 1] : null
+          seriesInfo.value = series
+          seriesArticles.value = articles
+          readerStore.setSeriesContext({
+            id: seriesId,
+            name: String(series?.seriesName || ''),
+            articleIds: articles.map((item) => Number(item?.id)).filter((id) => Number.isInteger(id) && id > 0),
+            currentArticleId: articleId,
+            currentIndex,
+            total: articles.length,
+            previous: previous ? { id: Number(previous.id), articleTitle: String(previous.articleTitle || '') } : null,
+            next: next ? { id: Number(next.id), articleTitle: String(next.articleTitle || '') } : null
+          })
+          if (articleId > 0) {
+            readerStore.markOpened(seriesId, articleId)
+            scheduleSeriesCompletionCheck()
+          }
         })
         .catch(() => {
           seriesInfo.value = null
           seriesArticles.value = []
+          readerStore.setSeriesContext(null)
         })
     }
     const fetchReactionStates = () => {

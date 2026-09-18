@@ -61,6 +61,7 @@
     "tips-open-menu": "打开菜单",
     "tips-back-to-home": "返回首页",
     "tips-open-search": "打开搜索",
+    "tips-open-toc": "打开文章目录",
     "default-category": "文章",
     "default-tag": "未分类",
     "empty-tag": "目前没有标签",
@@ -130,6 +131,15 @@
     "backToSeries": "查看系列",
     "progress": "系列进度 {current}/{total}",
     "previous": "上一篇",
-    "next": "下一篇"
+    "next": "下一篇",
+    "startReading": "开始阅读",
+    "continueReading": "继续阅读",
+    "readProgress": "已读 {completed}/{total}",
+    "read": "已读",
+    "recent": "最近阅读"
+  },
+  "reader": {
+    "tocTitle": "文章目录",
+    "tocEmpty": "正文暂无章节"
   }
 }
