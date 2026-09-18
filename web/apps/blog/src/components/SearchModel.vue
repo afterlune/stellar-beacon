@@ -56,7 +56,7 @@
         <div id="Search-Dropdown" class="search-dropdown" v-if="searchResults !== null">
           <div>
             <section v-if="searchResults.length > 0">
-              <div class="search-hit-label">Found {{ searchResults.length }} records</div>
+              <div class="search-hit-label"><span>{{ t('search.previewCount', { total: searchResultTotal }) }}</span><button type="button" class="search-view-all" @click="openSearchPage">{{ t('search.viewAll') }}</button></div>
               <ul id="search-menu">
                 <li
                   v-for="(result, index) in searchResults"
@@ -79,8 +79,8 @@
                         </svg>
                       </div>
                       <div class="search-hit-content-wrapper">
-                        <span class="search-hit-title" v-html="result.articleContent"></span>
-                        <span class="search-hit-path" v-html="result.articleTitle"></span>
+                        <span class="search-hit-title" v-html="safeSearchHighlight(result.articleContent)"></span>
+                        <span class="search-hit-path" v-html="safeSearchHighlight(result.articleTitle)"></span>
                       </div>
                       <div class="search-hit-action">
                         <svg class="DocSearch-Hit-Select-Icon" width="20" height="20" viewBox="0 0 20 20">
@@ -99,6 +99,15 @@
                   </a>
                 </li>
               </ul>
+              <section v-if="topicMatches.length" class="search-topic-preview" data-testid="search-topic-preview">
+                <div class="search-hit-label">{{ t('search.matchingTopics') }}</div>
+                <div class="search-topic-preview__grid">
+                  <router-link v-for="topic in topicMatches" :key="`${topic.type}-${topic.id}`" :to="topic.path">
+                    <small>{{ topicLabel(topic.type) }}</small>
+                    <strong>{{ topic.name }}</strong>
+                  </router-link>
+                </div>
+              </section>
             </section>
             <section v-else>
               <div class="search-hit-label">
@@ -126,8 +135,8 @@
                         </svg>
                       </div>
                       <div class="search-hit-content-wrapper">
-                        <span class="search-hit-title" v-html="result.articleContent"></span>
-                        <span class="search-hit-path" v-html="result.articleTitle"></span>
+                        <span class="search-hit-title" v-html="safeSearchHighlight(result.articleContent)"></span>
+                        <span class="search-hit-path" v-html="safeSearchHighlight(result.articleTitle)"></span>
                       </div>
                       <div class="search-hit-action">
                         <svg class="DocSearch-Hit-Select-Icon" width="20" height="20" viewBox="0 0 20 20">
@@ -242,28 +251,38 @@
 
 <script lang="ts">
 import { useSearchStore } from '@/stores/search'
-import { computed, defineComponent, onMounted, onUnmounted, onUpdated, ref, watch } from 'vue'
+import { computed, defineComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import api from '@/api/api'
 import { useLocalStore } from '@/stores/local'
+import { useDiscoveryStore, type DiscoveryTopic } from '@/stores/discovery'
+import { normalizeSearchPage, safeSearchHighlight } from '@/utils/search'
+import type { ArticleSearchResult } from '@stellar-beacon/api-contract'
 
 export default defineComponent({
   name: 'SearchModel',
   setup() {
     const searchStore = useSearchStore()
     const localStore = useLocalStore()
+    const discoveryStore = useDiscoveryStore()
     const searchInput = ref<HTMLDivElement>()
     const searchIndexStatus = ref(false)
-    const searchResults = ref<any>([])
+    const searchResults = ref<ArticleSearchResult[]>([])
+    const searchResultTotal = ref(0)
+    let searchRequestVersion = 0
     const router = useRouter()
     const openModal = ref(false)
     const openSearchContainer = ref(false)
     const keywords = ref('')
-    const recentResults = ref()
+    const recentResults = ref<any[]>([])
     const menuActiveIndex = ref(0)
     const menuMaxIndex = ref(0)
     const isEmpty = ref(false)
+    const topicMatches = computed(() => {
+      const groups = discoveryStore.topicGroups(keywords.value)
+      return [...groups.series, ...groups.categories, ...groups.tags].slice(0, 3)
+    })
     const { t } = useI18n()
     onMounted(() => {
       initSearch()
@@ -271,26 +290,24 @@ export default defineComponent({
         if (searchInput.value) searchInput.value.focus()
       }, 200)
     })
-    onUpdated(() => {
-      keywords.value = ''
-      searchResults.value = []
 
-      setTimeout(() => {
-        if (searchInput.value) searchInput.value.focus()
-      }, 200)
-    })
     onUnmounted(() => {
       document.body.classList.remove('modal--active')
     })
     watch(
       () => searchStore.openModal,
-      (status: any) => {
-        if (!(status instanceof Boolean)) {
-          reloadRecentResult()
+      (status: boolean) => {
+        reloadRecentResult()
+        if (status) {
+          keywords.value = ''
+          searchResults.value = []
+          searchResultTotal.value = 0
+          isEmpty.value = false
         }
         openModal.value = status
         setTimeout(() => {
           openSearchContainer.value = status
+          if (status && searchInput.value) searchInput.value.focus()
         }, 200)
       }
     )
@@ -361,35 +378,55 @@ export default defineComponent({
       }
     }
     const handleEnterDown = () => {
-      if (searchResults.value.length === 0 && recentResults.value.length > 0) {
-        console.log(recentResults)
+      if (keywords.value.trim()) {
+        openSearchPage()
+        return
+      }
+      if (recentResults.value.length > 0) {
         handleLinkClick(recentResults.value[menuActiveIndex.value])
-      } else if (searchResults.value.length > 0) {
-        handleLinkClick(searchResults.value[menuActiveIndex.value])
       }
     }
-    const searchKeywords = (e: any) => {
-      if (e.target.value !== '') {
-        let params = {
-          keywords: e.target.value
-        }
-        api.searchArticles(params).then(({ data }) => {
-          searchResults.value = data.data
-          if (searchResults.value.length > 0) {
-            resetIndex(searchResults.value.length)
-            isEmpty.value = false
-          } else {
-            isEmpty.value = true
-          }
-        })
-      } else {
+    const searchKeywords = async (event: Event) => {
+      const value = (event.target as HTMLInputElement).value.trim()
+      if (!value) {
+        searchRequestVersion++
         isEmpty.value = false
         searchResults.value = []
+        searchResultTotal.value = 0
         resetIndex(recentResults.value.length)
+        return
+      }
+      const version = ++searchRequestVersion
+      try {
+        await discoveryStore.load()
+        const { data } = await api.searchArticles({ keywords: value, current: 1, size: 5 })
+        if (version !== searchRequestVersion) return
+        const page = normalizeSearchPage(data?.data)
+        searchResults.value = page.items
+        searchResultTotal.value = page.total
+        resetIndex(searchResults.value.length)
+        isEmpty.value = searchResults.value.length === 0
+      } catch {
+        if (version !== searchRequestVersion) return
+        searchResults.value = []
+        searchResultTotal.value = 0
+        isEmpty.value = true
       }
     }
+    const openSearchPage = () => {
+      const value = keywords.value.trim()
+      if (!value) return
+      searchStore.setOpenModal(false)
+      void router.push({ path: '/search', query: { q: value } })
+    }
+    const topicLabel = (type: DiscoveryTopic['type']) => {
+      if (type === 'series') return t('menu.series')
+      if (type === 'category') return t('menu.categories')
+      return t('menu.tags')
+    }
     const reloadRecentResult = () => {
-      recentResults.value = localStore.recentSearch.reverse()
+      const stored = Array.isArray(localStore.recentSearch) ? localStore.recentSearch : []
+      recentResults.value = [...stored].reverse()
       resetIndex(recentResults.value.length)
     }
     const resetIndex = (max: number) => {
@@ -404,12 +441,17 @@ export default defineComponent({
       openModal: computed(() => openModal.value),
       openSearchContainer: computed(() => openSearchContainer.value),
       searchResultsCount: computed(() => {
-        return t('settings.search-result').replace('[total]', String(searchResults.value.length))
+        return t('settings.search-result').replace('[total]', String(searchResultTotal.value))
       }),
       handleStatusChange,
       handleLinkClick,
       searchInput,
       searchResults,
+      searchResultTotal,
+      topicMatches,
+      topicLabel,
+      openSearchPage,
+      safeSearchHighlight,
       keywords,
       isEmpty,
       searchKeywords,

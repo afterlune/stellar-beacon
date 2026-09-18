@@ -34,6 +34,57 @@
         </div>
       </div>
     </section>
+    <section class="home-discovery" data-testid="home-discovery" aria-labelledby="home-discovery-title">
+      <header class="home-discovery__head">
+        <div>
+          <p>{{ t('discovery.eyebrow') }}</p>
+          <h2 id="home-discovery-title">{{ t('discovery.title') }}</h2>
+        </div>
+        <p>{{ t('discovery.description') }}</p>
+      </header>
+
+      <div v-if="featuredSeries.length" class="home-discovery__series">
+        <router-link
+          v-for="item in featuredSeries"
+          :key="item.id"
+          class="home-discovery__series-card"
+          :to="`/series/${item.id}`">
+          <span>{{ t('discovery.seriesCount', { count: item.articleCount }) }}</span>
+          <strong>{{ item.seriesName }}</strong>
+          <p>{{ item.seriesDesc || t('discovery.seriesFallback') }}</p>
+        </router-link>
+      </div>
+
+      <div class="home-discovery__topics">
+        <section>
+          <h3>{{ t('menu.categories') }}</h3>
+          <div class="home-discovery__links">
+            <router-link
+              v-for="category in topCategories"
+              :key="category.id"
+              :to="`/categories/${category.id}?name=${encodeURIComponent(category.categoryName)}`">
+              {{ category.categoryName }} <span>{{ category.articleCount }}</span>
+            </router-link>
+          </div>
+        </section>
+        <section>
+          <h3>{{ t('menu.tags') }}</h3>
+          <div class="home-discovery__links">
+            <router-link
+              v-for="tag in topTags"
+              :key="tag.id"
+              :to="`/tags/${tag.id}?tagName=${encodeURIComponent(tag.tagName)}`">
+              #{{ tag.tagName }} <span>{{ tag.count }}</span>
+            </router-link>
+          </div>
+        </section>
+      </div>
+
+      <div class="home-discovery__quick">
+        <router-link to="/search">{{ t('discovery.search') }} →</router-link>
+        <router-link to="/archives">{{ t('menu.archives') }} →</router-link>
+      </div>
+    </section>
     <Feature v-if="themeConfig.feature">
       <FeatureList />
     </Feature>
@@ -105,6 +156,7 @@
 
 <script lang="ts">
 import { computed, defineComponent, onMounted, ref, toRefs, toRef, reactive } from 'vue'
+import { storeToRefs } from 'pinia'
 import { Feature, FeatureList } from '@/components/Feature'
 import { ArticleCard, HorizontalArticle } from '@/components/ArticleCard'
 import { Title } from '@/components/Title'
@@ -119,6 +171,7 @@ import MarkdownIt from 'markdown-it'
 import api from '@/api/api'
 import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
 import { useSeoMeta } from '@/composables/useSeoMeta'
+import { useDiscoveryStore } from '@/stores/discovery'
 
 export default defineComponent({
   name: 'Home',
@@ -142,6 +195,8 @@ export default defineComponent({
     const userStore = useUserStore()
     const articleStore = useArticleStore()
     const categoryStore = useCategoryStore()
+    const discoveryStore = useDiscoveryStore()
+    const { featuredSeries, topCategories, topTags } = storeToRefs(discoveryStore)
     const { t } = useI18n()
     const { setSeo } = useSeoMeta()
     const expanderClass = ref({
@@ -173,6 +228,7 @@ export default defineComponent({
       fetchTopAndFeatured()
       fetchCategories()
       fetchArticles()
+      void discoveryStore.load()
       const articleListEl = document.getElementById('article-list')
       articleOffset.value = articleListEl && articleListEl instanceof HTMLElement ? articleListEl.offsetTop + 120 : 0
     })
@@ -290,6 +346,9 @@ export default defineComponent({
       ...toRefs(reactiveData),
       ...toRefs(articleStore.$state),
       categories: toRef(categoryStore.$state, 'categories'),
+      featuredSeries,
+      topCategories,
+      topTags,
 
       themeConfig: computed(() => appStore.themeConfig),
       websiteConfig: computed(() => appStore.websiteConfig),
@@ -323,6 +382,116 @@ export default defineComponent({
     .article-footer {
       margin-top: 13px;
     }
+  }
+}
+.home-discovery {
+  margin: 28px 0 36px;
+  padding: clamp(20px, 4vw, 36px);
+  border: 1px solid var(--border-hairline);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-solid) 84%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
+}
+.home-discovery__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.home-discovery__head p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+.home-discovery__head > div > p {
+  margin-bottom: 6px;
+  color: var(--color-ob);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.home-discovery__head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+}
+.home-discovery__series {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+.home-discovery__series-card {
+  display: grid;
+  gap: 8px;
+  min-height: 150px;
+  padding: 17px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 13px;
+  color: inherit;
+  text-decoration: none;
+}
+.home-discovery__series-card:hover {
+  border-color: var(--color-ob);
+}
+.home-discovery__series-card span,
+.home-discovery__series-card p,
+.home-discovery__links span {
+  color: var(--text-ob-dim);
+  font-size: 0.75rem;
+}
+.home-discovery__series-card strong {
+  align-self: center;
+  font-size: 1.1rem;
+}
+.home-discovery__series-card p {
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.home-discovery__topics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+.home-discovery__topics h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+.home-discovery__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.home-discovery__links a,
+.home-discovery__quick a {
+  padding: 6px 10px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 999px;
+  color: inherit;
+  text-decoration: none;
+}
+.home-discovery__links a:hover,
+.home-discovery__quick a:hover {
+  border-color: var(--color-ob);
+  color: var(--color-ob);
+}
+.home-discovery__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+@media (max-width: 700px) {
+  .home-discovery__head,
+  .home-discovery__topics {
+    grid-template-columns: 1fr;
+  }
+  .home-discovery__head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

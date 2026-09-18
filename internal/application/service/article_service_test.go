@@ -21,8 +21,11 @@ type fakeArticleRepository struct {
 }
 
 type fakeArticleSearcher struct {
-	hits []port.ArticleSearchHit
-	err  error
+	hits      []port.ArticleSearchHit
+	total     int64
+	err       error
+	gotOffset int
+	gotLimit  int
 }
 
 type recordingArticleCache struct {
@@ -53,8 +56,14 @@ func (r *recordingContentAnalyticsRepo) RecordView(context.Context, int, time.Ti
 	return nil
 }
 
-func (f *fakeArticleSearcher) Search(context.Context, string) ([]port.ArticleSearchHit, error) {
-	return f.hits, f.err
+func (f *fakeArticleSearcher) Search(_ context.Context, _ string, offset, limit int) (port.ArticleSearchPage, error) {
+	f.gotOffset = offset
+	f.gotLimit = limit
+	total := f.total
+	if total == 0 {
+		total = int64(len(f.hits))
+	}
+	return port.ArticleSearchPage{Hits: f.hits, Total: total}, f.err
 }
 
 func (f *fakeArticleRepository) ListTopAndFeaturedArticles(context.Context) ([]*port.ArticleCard, error) {
@@ -201,21 +210,53 @@ func TestArticleServiceSortsArchivesNewestFirst(t *testing.T) {
 }
 
 func TestArticleServiceUsesTypedSearchPort(t *testing.T) {
-	service := mustArticleService(t, &fakeArticleRepository{}, &fakeArticleSearcher{hits: []port.ArticleSearchHit{{
+	searcher := &fakeArticleSearcher{hits: []port.ArticleSearchHit{{
 		ArticleSearch:      port.ArticleSearch{Id: 7, ArticleTitle: "raw title", ArticleContent: "raw content"},
 		HighlightedTitle:   "<mark>title</mark>",
 		HighlightedContent: "<mark>content</mark>",
-	}}})
-	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title"))
+	}}, total: 7}
+	service := mustArticleService(t, &fakeArticleRepository{}, searcher)
+	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title&current=2&size=3"))
 	if !result.Flag {
 		t.Fatalf("unexpected result: %+v", result)
 	}
-	hits, ok := result.Data.([]model.ArticleSearchDTO)
+	page, ok := result.Data.(model.PageResultDTO)
+	if !ok || page.Count != 7 || page.Page != 2 || page.PageSize != 3 {
+		t.Fatalf("unexpected search page: %#v", result.Data)
+	}
+	hits, ok := page.Records.([]model.ArticleSearchDTO)
 	if !ok || len(hits) != 1 {
-		t.Fatalf("unexpected search result: %#v", result.Data)
+		t.Fatalf("unexpected search result: %#v", page.Records)
 	}
 	if hits[0].ArticleTitle != "<mark>title</mark>" || hits[0].ArticleContent != "<mark>content</mark>" {
 		t.Fatalf("highlighted fields were not applied: %#v", hits[0])
+	}
+	if searcher.gotOffset != 3 || searcher.gotLimit != 3 {
+		t.Fatalf("pagination was not forwarded: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)
+	}
+}
+
+func TestArticleServiceSearchNormalizesPagingAndEmptyKeywords(t *testing.T) {
+	searcher := &fakeArticleSearcher{}
+	service := mustArticleService(t, &fakeArticleRepository{}, searcher)
+	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title&current=-4&size=500"))
+	page, ok := result.Data.(model.PageResultDTO)
+	if !ok || page.Page != 1 || page.PageSize != 50 {
+		t.Fatalf("paging was not clamped: %#v", result.Data)
+	}
+	if searcher.gotOffset != 0 || searcher.gotLimit != 50 {
+		t.Fatalf("clamped paging was not forwarded: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)
+	}
+
+	searcher.gotOffset = -1
+	searcher.gotLimit = -1
+	empty := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=&current=2&size=9"))
+	emptyPage, ok := empty.Data.(model.PageResultDTO)
+	if !ok || emptyPage.Count != 0 || emptyPage.Page != 2 || emptyPage.PageSize != 9 {
+		t.Fatalf("empty search page = %#v", empty.Data)
+	}
+	if searcher.gotOffset != -1 || searcher.gotLimit != -1 {
+		t.Fatalf("empty keyword search should not call the searcher: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)
 	}
 }
 

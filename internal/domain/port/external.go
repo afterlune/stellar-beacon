@@ -88,9 +88,16 @@ type ArticleSearchHit struct {
 	HighlightedContent string
 }
 
-// ArticleSearcher provides article search to the application layer.
+// ArticleSearchPage contains one page of typed search results and the total
+// number of matching public articles.
+type ArticleSearchPage struct {
+	Hits  []ArticleSearchHit
+	Total int64
+}
+
+// ArticleSearcher provides paginated article search to the application layer.
 type ArticleSearcher interface {
-	Search(context.Context, string) ([]ArticleSearchHit, error)
+	Search(context.Context, string, int, int) (ArticleSearchPage, error)
 }
 
 // EmailMessage is the provider-neutral email command used by services.

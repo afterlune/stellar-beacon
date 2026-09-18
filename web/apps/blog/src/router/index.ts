@@ -1,6 +1,6 @@
-import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'Home',
@@ -22,19 +22,38 @@ const routes = [
     component: () => import('../views/Talk.vue')
   },
   {
+    path: '/search',
+    name: 'Search',
+    component: () => import('../views/Search.vue')
+  },
+  {
     path: '/archives',
     name: 'Archives',
     component: () => import('../views/Archives.vue')
   },
   {
     path: '/article-list/:tagId',
-    name: 'ArticleList',
-    component: () => import('../views/ArticleList.vue')
+    redirect: (to) => ({ path: `/tags/${to.params.tagId}`, query: to.query })
   },
   {
     path: '/tags',
     name: 'Tags',
     component: () => import('../views/Tags.vue')
+  },
+  {
+    path: '/tags/:tagId',
+    name: 'TagArticles',
+    component: () => import('../views/ArticleList.vue')
+  },
+  {
+    path: '/categories',
+    name: 'Categories',
+    component: () => import('../views/Categories.vue')
+  },
+  {
+    path: '/categories/:categoryId',
+    name: 'CategoryArticles',
+    component: () => import('../views/ArticleList.vue')
   },
   {
     path: '/about',
@@ -61,13 +80,11 @@ const routes = [
     name: 'Series',
     component: () => import('../views/SeriesList.vue')
   },
-
   {
     path: '/series/:seriesId',
     name: 'SeriesDetail',
     component: () => import('../views/SeriesDetail.vue')
   },
-
   {
     path: '/favorites',
     name: 'Favorites',
@@ -93,8 +110,7 @@ const routes = [
   },
   {
     path: '/:catchAll(.*)',
-    redirect: '/404',
-    hidden: true
+    redirect: '/404'
   }
 ]
 

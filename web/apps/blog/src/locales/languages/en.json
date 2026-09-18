@@ -3,6 +3,7 @@
     "home": "Home",
     "about": "About",
     "archives": "Archives",
+    "series": "Collections",
     "categories": "Categories",
     "tags": "Tags",
     "post": "Article",
@@ -141,5 +142,39 @@
   "reader": {
     "tocTitle": "Article contents",
     "tocEmpty": "There are no sections in this article yet."
+  },
+  "discovery": {
+    "eyebrow": "CONTENT MAP",
+    "title": "Enter the archive from one place",
+    "description": "Browse by collection, category and tag, or search a topic directly.",
+    "seriesCount": "{count} articles",
+    "seriesFallback": "A collection that keeps growing",
+    "search": "Search everything"
+  },
+  "categories": {
+    "empty": "No categories yet",
+    "browse": "Browse",
+    "articleCount": "{count} articles"
+  },
+  "taxonomy": {
+    "emptyArticles": "There are no published articles in this section yet."
+  },
+  "search": {
+    "eyebrow": "SITE SEARCH",
+    "title": "Find the article you need",
+    "description": "Search titles and body text, then keep exploring by collection, category and tag.",
+    "placeholder": "Enter keywords",
+    "submit": "Search",
+    "matchingTopics": "Matching topics",
+    "suggestedTopics": "Suggested topics",
+    "topicHint": "Or jump straight into a topic",
+    "articleResults": "Article results",
+    "resultCount": "{total} articles found",
+    "emptyPrompt": "Type a keyword to start searching.",
+    "empty": "No matching articles found.",
+    "openArticle": "Read",
+    "loadFailed": "Search is unavailable right now. Please try again.",
+    "previewCount": "{total} results",
+    "viewAll": "View all"
   }
 }

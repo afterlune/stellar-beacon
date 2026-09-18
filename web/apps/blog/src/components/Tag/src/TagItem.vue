@@ -2,7 +2,7 @@
   <router-link
     class="tag-pill"
     :class="`tag-pill-${size || 'md'}`"
-    :to="{ path: '/article-list/' + id, query: { tagName: name } }">
+    :to="{ path: '/tags/' + id, query: { tagName: name } }">
     <em class="tag-pill-hash">#</em>
     <span class="tag-pill-name">{{ name }}</span>
     <span class="tag-pill-count">{{ count }}</span>

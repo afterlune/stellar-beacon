@@ -25,7 +25,7 @@
     <div id="loading-bar-wrapper" :class="loadingBarClass"></div>
   </div>
   <Footer id="footer" />
-  <div class="App-Mobile-sidebar" v-if="isMobile">
+  <div class="App-Mobile-sidebar" :class="{ 'is-open': navigatorStore.openMenu }" v-if="isMobile">
     <div id="App-Mobile-Profile" class="App-Mobile-wrapper">
       <MobileMenu />
     </div>
@@ -40,6 +40,7 @@ import { computed, defineComponent, onBeforeMount, onUnmounted, ref, watch } fro
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useCommonStore } from '@/stores/common'
+import { useNavigatorStore } from '@/stores/navigator'
 import HeaderMain from '@/components/Header/src/Header.vue'
 import Footer from '@/components/Footer.vue'
 import MobileMenu from '@/components/MobileMenu.vue'
@@ -63,6 +64,7 @@ export default defineComponent({
   setup() {
     const appStore = useAppStore()
     const commonStore = useCommonStore()
+    const navigatorStore = useNavigatorStore()
     const route = useRoute()
     const { setSeo } = useSeoMeta()
     const MOBILE_WITH = 996
@@ -153,6 +155,7 @@ export default defineComponent({
       }),
 
       isMobile: computed(() => commonStore.isMobile),
+      navigatorStore,
       appWrapperClass,
       loadingBarClass
     }
@@ -213,6 +216,13 @@ body {
 
   .App-Mobile-sidebar {
     @apply fixed top-0 bottom-0 left-0;
+    // The drawer stays mounted while closed; keep it from swallowing taps
+    // meant for the page underneath it.
+    pointer-events: none;
+
+    &.is-open {
+      pointer-events: auto;
+    }
   }
   .App-Mobile-wrapper {
     @apply relative overflow-y-auto h-full -mr-4 pr-6 pl-4 pt-8 opacity-0;

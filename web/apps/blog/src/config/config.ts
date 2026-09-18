@@ -10,6 +10,24 @@ export default {
       children: []
     },
     {
+      name: 'Categories',
+      path: '/categories',
+      i18n: {
+        cn: '分类',
+        en: 'Categories'
+      },
+      children: []
+    },
+    {
+      name: 'Series',
+      path: '/series',
+      i18n: {
+        cn: '系列',
+        en: 'Collections'
+      },
+      children: []
+    },
+    {
       name: 'Talks',
       path: '/talks',
       i18n: {

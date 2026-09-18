@@ -3,6 +3,7 @@
     "home": "首页",
     "about": "关于",
     "archives": "归档",
+    "series": "系列",
     "categories": "分类",
     "tags": "标签",
     "post": "文章",
@@ -141,5 +142,39 @@
   "reader": {
     "tocTitle": "文章目录",
     "tocEmpty": "正文暂无章节"
+  },
+  "discovery": {
+    "eyebrow": "内容导航",
+    "title": "从一个入口进入整站内容",
+    "description": "按系列、分类与标签浏览，或者直接检索你关心的主题。",
+    "seriesCount": "{count} 篇",
+    "seriesFallback": "持续更新的系列文章",
+    "search": "搜索全站"
+  },
+  "categories": {
+    "empty": "还没有分类",
+    "browse": "浏览",
+    "articleCount": "{count} 篇"
+  },
+  "taxonomy": {
+    "emptyArticles": "这个目录下还没有公开文章。"
+  },
+  "search": {
+    "eyebrow": "全站检索",
+    "title": "找到你需要的文章",
+    "description": "在标题与正文中检索，也可以按系列、分类与标签继续探索。",
+    "placeholder": "输入关键词",
+    "submit": "搜索",
+    "matchingTopics": "匹配的主题",
+    "suggestedTopics": "推荐主题",
+    "topicHint": "也可以直接进入一个主题",
+    "articleResults": "文章结果",
+    "resultCount": "共找到 {total} 篇",
+    "emptyPrompt": "输入关键词开始搜索。",
+    "empty": "没有找到匹配的文章。",
+    "openArticle": "阅读",
+    "loadFailed": "搜索暂时不可用，请稍后再试。",
+    "previewCount": "找到 {total} 条结果",
+    "viewAll": "查看全部"
   }
 }

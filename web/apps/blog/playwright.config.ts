@@ -16,17 +16,24 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    launchOptions: process.env.BLOG_PLAYWRIGHT_CHROMIUM_PATH
-      ? { executablePath: process.env.BLOG_PLAYWRIGHT_CHROMIUM_PATH }
-      : undefined
+    launchOptions: {
+      // A system-wide proxy client can intercept loopback traffic and stall
+      // navigations; the suite only talks to its local server.
+      args: ['--no-proxy-server'],
+      ...(process.env.BLOG_PLAYWRIGHT_CHROMIUM_PATH
+        ? { executablePath: process.env.BLOG_PLAYWRIGHT_CHROMIUM_PATH }
+        : {})
+    }
   },
   outputDir: 'test-results/artifacts',
   webServer: useLocalServer
     ? {
-        command: 'npm run serve -- --host 127.0.0.1 --port 8080',
+        // Serve the production bundle: the dev server rewrites every module on
+        // demand, which makes the article routes slow and flaky under test.
+        command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 8080',
         url: baseURL,
         reuseExistingServer: true,
-        timeout: 120_000,
+        timeout: 180_000,
         stdout: 'pipe',
         stderr: 'pipe'
       }

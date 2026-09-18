@@ -805,19 +805,32 @@ func (a *MyArticleService) ExportArticles(c *gin.Context) model.ResultVO {
 }
 
 func (a *MyArticleService) ListArticlesBySearch(c *gin.Context) model.ResultVO {
-	keywords := c.Query("keywords")
+	keywords := strings.TrimSpace(c.Query("keywords"))
+	current, _ := strconv.Atoi(c.DefaultQuery("current", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+	if current < 1 {
+		current = 1
+	}
+	if size < 1 {
+		size = 20
+	}
+	if size > 50 {
+		size = 50
+	}
 	if keywords == "" {
-		return model.ResultOk()
+		return model.ResultOkWithData(model.PageResultDTO{
+			Records: []model.ArticleSearchDTO{}, Count: 0, Page: current, PageSize: size,
+		})
 	}
 	if a.search == nil {
 		return model.ResultFromError(apperrors.Unavailable("article.search", nil))
 	}
-	hits, err := a.search.Search(c.Request.Context(), keywords)
+	page, err := a.search.Search(c.Request.Context(), keywords, (current-1)*size, size)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
-	articleSearchDTOs := make([]model.ArticleSearchDTO, 0, len(hits))
-	for _, hit := range hits {
+	articleSearchDTOs := make([]model.ArticleSearchDTO, 0, len(page.Hits))
+	for _, hit := range page.Hits {
 		dto := model.ArticleSearchDTO(hit.ArticleSearch)
 		if hit.HighlightedTitle != "" {
 			dto.ArticleTitle = hit.HighlightedTitle
@@ -828,5 +841,7 @@ func (a *MyArticleService) ListArticlesBySearch(c *gin.Context) model.ResultVO {
 		articleSearchDTOs = append(articleSearchDTOs, dto)
 	}
 
-	return model.ResultOkWithData(articleSearchDTOs)
+	return model.ResultOkWithData(model.PageResultDTO{
+		Records: articleSearchDTOs, Count: int(page.Total), Page: current, PageSize: size,
+	})
 }

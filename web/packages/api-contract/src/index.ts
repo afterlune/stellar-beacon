@@ -194,6 +194,13 @@ export interface NewsletterDelivery {
   [key: string]: unknown
 }
 
+export interface ArticleSearchResult {
+  id: number
+  articleTitle: string
+  articleContent: string
+  status: number
+  isDelete: number
+}
 export interface GrowthSummaryItem {
   eventName: string
   day: string

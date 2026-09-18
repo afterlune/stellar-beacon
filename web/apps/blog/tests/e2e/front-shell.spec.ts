@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const routes = ['/archives', '/tags', '/talks', '/friends', '/message', '/about', '/photos/0']
+const routes = ['/archives', '/categories', '/series', '/search', '/tags', '/talks', '/friends', '/message', '/about', '/photos/0']
 
 function articleFixture(id: number, title: string) {
   return {
@@ -219,5 +219,292 @@ test.describe('article reading experience', () => {
     await page.goto('/articles/9')
     await expect(page.getByTestId('series-previous')).toContainText('系列第二篇')
     await expect(page.getByTestId('series-next')).toHaveCount(0)
+  })
+})
+
+
+
+function searchHitFixture(id: number, title: string, content: string) {
+  return { id, articleTitle: title, articleContent: content, status: 1, isDelete: 0 }
+}
+
+async function mockContentDiscovery(page: Page, options: { searchFails?: boolean } = {}): Promise<void> {
+  await page.route('**/api/v1/**', async (route) => {
+    const url = new URL(route.request().url())
+    const path = url.pathname
+    const fulfill = (data: unknown, status = 200) => route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(status >= 400
+        ? { code: 'ERROR', message: 'request failed', data: null }
+        : { code: 'OK', message: '操作成功', data })
+    })
+
+    if (path === '/api/v1/public/') {
+      await fulfill({
+        viewCount: 0,
+        articleCount: 0,
+        talkCount: 0,
+        categoryCount: 0,
+        tagCount: 0,
+        websiteConfigDTO: {
+          name: 'Stellar Beacon',
+          englishName: 'Stellar Beacon',
+          author: '测试作者',
+          authorIntro: '',
+          notice: '',
+          multiLanguage: 0
+        }
+      })
+      return
+    }
+    if (path === '/api/v1/public/categories') {
+      await fulfill([
+        { id: 1, categoryName: '工程实践', articleCount: 9 },
+        { id: 2, categoryName: '系统设计', articleCount: 4 }
+      ])
+      return
+    }
+    if (path === '/api/v1/public/tags') {
+      await fulfill([
+        { id: 1, tagName: 'Go', count: 6 },
+        { id: 2, tagName: 'Vue', count: 3 }
+      ])
+      return
+    }
+    if (path === '/api/v1/public/tags/top') {
+      await fulfill([])
+      return
+    }
+    if (path === '/api/v1/public/series') {
+      await fulfill([
+        {
+          id: 3,
+          seriesName: '阅读系列',
+          seriesDesc: '从零搭建阅读体验',
+          cover: '',
+          articleCount: 3,
+          updateTime: '2026-09-18T10:00:00+08:00'
+        }
+      ])
+      return
+    }
+    if (path === '/api/v1/public/albums' || path === '/api/v1/public/comments/top') {
+      await fulfill([])
+      return
+    }
+    if (path === '/api/v1/public/articles/featured') {
+      await fulfill({ topArticle: null, featuredArticles: [] })
+      return
+    }
+    if (path === '/api/v1/public/articles') {
+      await fulfill({ items: [], records: [], total: 0, count: 0, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/public/articles/search') {
+      if (options.searchFails) {
+        await fulfill(null, 500)
+        return
+      }
+      const keywords = url.searchParams.get('keywords') || ''
+      if (keywords.includes('无结果')) {
+        await fulfill({ items: [], total: 0, page: 1, pageSize: 20 })
+        return
+      }
+      if (keywords.includes('xss')) {
+        await fulfill({
+          items: [searchHitFixture(99, '危险 <img src=x onerror="window.__searchXss = true">', '正文 <mark>高亮</mark>')],
+          total: 1,
+          page: 1,
+          pageSize: 5
+        })
+        return
+      }
+      const current = Math.max(1, Number(url.searchParams.get('current') || 1) || 1)
+      const size = Math.max(1, Number(url.searchParams.get('size') || 20) || 20)
+      const total = 25
+      const items = []
+      for (let index = 0; index < size; index += 1) {
+        const id = (current - 1) * size + index + 1
+        if (id > total) break
+        items.push(searchHitFixture(id, `第 ${id} 篇匹配文章`, '正文包含 <mark>关键词</mark> 高亮'))
+      }
+      await fulfill({ items, total, page: current, pageSize: size })
+      return
+    }
+    if (path === '/api/v1/public/articles/by-category' || path === '/api/v1/public/articles/by-tag') {
+      await fulfill({
+        items: [{
+          id: 31,
+          articleTitle: '目录文章',
+          articleContent: '目录正文',
+          categoryName: '工程实践',
+          status: 1,
+          createTime: '2026-09-18T10:00:00+08:00',
+          updateTime: '2026-09-18T10:00:00+08:00',
+          tags: [],
+          author: { nickname: '作者', avatar: '', website: '' },
+          likeCount: 0,
+          favoriteCount: 0
+        }],
+        records: [],
+        total: 1,
+        count: 1,
+        page: 1,
+        pageSize: 12
+      })
+      return
+    }
+    await fulfill(null)
+  })
+}
+
+test.describe('content discovery', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      document.cookie = 'locale=cn; path=/'
+    })
+  })
+
+  test('home surfaces series, categories, tags and search entry', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const discovery = page.getByTestId('home-discovery')
+    await expect(discovery).toBeVisible()
+    await expect(discovery).toContainText('阅读系列')
+
+    const categoryLink = discovery.getByRole('link', { name: /工程实践/ })
+    await expect(categoryLink).toBeVisible()
+    await expect(categoryLink).toHaveAttribute('href', /\/categories\/1\?name=/)
+
+    const tagLink = discovery.getByRole('link', { name: /Go/ })
+    await expect(tagLink).toHaveAttribute('href', /\/tags\/1\?tagName=/)
+
+    await expect(discovery.getByRole('link', { name: /搜索全站/ })).toHaveAttribute('href', '/search')
+    await expect(discovery.getByRole('link', { name: /归档/ })).toHaveAttribute('href', '/archives')
+  })
+
+  test('category overview links into a category article list', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/categories', { waitUntil: 'domcontentloaded' })
+
+    const grid = page.getByTestId('categories-grid')
+    await expect(grid).toBeVisible()
+    await grid.getByRole('link', { name: /工程实践/ }).click()
+
+    await expect(page).toHaveURL(/\/categories\/1\?name=/)
+    await expect(page.locator('.post-title')).toContainText('工程实践')
+    await expect(page.locator('.tag-article')).toContainText('目录文章')
+  })
+
+  test('tag route serves its article list and keeps the legacy path working', async ({ page }) => {
+    await mockContentDiscovery(page)
+
+    await page.goto('/tags/1?tagName=Go', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('.post-title')).toContainText('Go')
+    await expect(page.locator('.tag-article')).toContainText('目录文章')
+
+    await page.goto('/article-list/1?tagName=Go', { waitUntil: 'domcontentloaded' })
+    await expect(page).toHaveURL(/\/tags\/1\?tagName=Go$/)
+    await expect(page.locator('.tag-article')).toContainText('目录文章')
+  })
+
+  test('search page paginates results and restores state from the URL', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/search?q=关键词&page=2', { waitUntil: 'domcontentloaded' })
+
+    const results = page.getByTestId('search-results')
+    await expect(results).toContainText('共找到 25 篇')
+    await expect(page.locator('.search-page__list li')).toHaveCount(5)
+    await expect(page.locator('.paginator .active')).toContainText('2')
+
+    await page.locator('.paginator li').first().click()
+    await expect.poll(() => new URL(page.url()).searchParams.get('page')).toBeNull()
+    await expect(page.locator('.search-page__list li')).toHaveCount(20)
+  })
+
+  test('search page offers matching topic shortcuts', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/search?q=阅读', { waitUntil: 'domcontentloaded' })
+
+    const topics = page.getByTestId('search-topics')
+    await expect(topics).toBeVisible()
+    await expect(topics).toContainText('阅读系列')
+    await expect(topics.getByRole('link', { name: /阅读系列/ })).toHaveAttribute('href', '/series/3')
+  })
+
+  test('search page reports empty results and backend failures', async ({ page }) => {
+    const options: { searchFails?: boolean } = {}
+    await mockContentDiscovery(page, options)
+
+    await page.goto('/search?q=无结果', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('search-results')).toContainText('没有找到匹配的文章。')
+
+    options.searchFails = true
+    await page.goto('/search?q=关键词', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('alert')).toContainText('搜索暂时不可用，请稍后再试。')
+  })
+
+  test('search highlights escape untrusted markup', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/search?q=xss', { waitUntil: 'domcontentloaded' })
+
+    const first = page.locator('.search-page__list li').first()
+    await expect(first).toContainText('<img src=x onerror="window.__searchXss = true">')
+    await expect(first.locator('img')).toHaveCount(0)
+    expect(await page.evaluate(() => (window as unknown as { __searchXss?: boolean }).__searchXss)).toBeUndefined()
+  })
+
+  test('search modal previews five hits, shows topics and opens the full search', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.locator('[data-dia="search"]').click()
+
+    const input = page.locator('#search-input')
+    await expect(input).toBeVisible()
+    await input.fill('阅读')
+
+    await expect(page.locator('#search-menu li')).toHaveCount(5)
+    await expect(page.getByTestId('search-topic-preview')).toContainText('阅读系列')
+    await expect(page.locator('.search-hit-title mark').first()).toBeVisible()
+
+    await page.locator('.search-view-all').click()
+    await expect(page).toHaveURL(/\/search\?q=/)
+    await expect(page.getByTestId('search-results')).toContainText('共找到 25 篇')
+  })
+
+  test('desktop navigation links into categories and series', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Desktop header navigation only')
+    await mockContentDiscovery(page)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    await page.locator('[data-menu="Categories"]').click()
+    await expect(page).toHaveURL(/\/categories$/)
+    await expect(page.getByTestId('categories-grid')).toContainText('工程实践')
+
+    await page.locator('[data-menu="Series"]').click()
+    await expect(page).toHaveURL(/\/series$/)
+    await expect(page.locator('.series-page')).toContainText('阅读系列')
+  })
+
+  test('mobile drawer links into categories and series', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'Mobile drawer navigation only')
+    await mockContentDiscovery(page)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const drawer = page.locator('#App-Mobile-Profile')
+    await page.locator('[data-dia="menu"]').evaluate((element) => (element as HTMLElement).click())
+    await expect(drawer).toHaveCSS('opacity', '1')
+
+    const drawerNav = drawer.locator('ul').last()
+    await expect(drawerNav.getByText('分类', { exact: true })).toBeVisible()
+    await expect(drawerNav.getByText('系列', { exact: true })).toBeVisible()
+
+    await drawerNav.getByText('系列', { exact: true }).click()
+    await expect(page).toHaveURL(/\/series$/)
+    await expect(page.locator('.series-page')).toContainText('阅读系列')
   })
 })

@@ -23,6 +23,11 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 8080,
+      watch: {
+        // Playwright streams videos and traces into the project while the dev
+        // server runs; do not let the watcher churn on its own output.
+        ignored: ['**/test-results/**', '**/playwright-report/**', '**/dist/**']
+      },
       proxy: {
         '/api': {
           target: apiTarget,
