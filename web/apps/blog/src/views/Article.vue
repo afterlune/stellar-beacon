@@ -139,7 +139,30 @@
           </router-link>
           <span v-if="reactionMessage" class="article-actions__message">{{ reactionMessage }}</span>
         </div>
-        <section v-if="article.relatedArticles && article.relatedArticles.length" class="related-articles" :aria-labelledby="'related-title-' + articleId">
+        <section
+          v-if="seriesInfo && seriesIndex >= 0"
+          class="series-context"
+          data-testid="series-context"
+          :aria-label="t('series.inSeries', { name: seriesInfo.seriesName })">
+          <div class="series-context__head">
+            <div>
+              <span class="series-context__eyebrow">{{ t('series.progress', { current: seriesIndex + 1, total: seriesArticles.length }) }}</span>
+              <strong>{{ seriesInfo.seriesName }}</strong>
+            </div>
+            <router-link :to="'/series/' + seriesInfo.id">{{ t('series.backToSeries') }}</router-link>
+          </div>
+          <div class="series-context__nav">
+            <router-link v-if="seriesPrevious" class="series-context__link" :to="'/articles/' + seriesPrevious.id" data-testid="series-previous">
+              <small>{{ t('series.previous') }}</small>
+              <span>{{ seriesPrevious.articleTitle }}</span>
+            </router-link>
+            <router-link v-if="seriesNext" class="series-context__link series-context__link--next" :to="'/articles/' + seriesNext.id" data-testid="series-next">
+              <small>{{ t('series.next') }}</small>
+              <span>{{ seriesNext.articleTitle }}</span>
+            </router-link>
+          </div>
+        </section>
+        <section v-if="article.relatedArticles && article.relatedArticles.length" class="related-articles" data-testid="related-articles" :aria-labelledby="'related-title-' + articleId">
           <h2 :id="'related-title-' + articleId">{{ t('newsletter.related') }}</h2>
           <div class="related-articles__grid">
             <router-link v-for="related in article.relatedArticles" :key="related.id" :to="'/articles/' + related.id" class="related-article">
@@ -261,6 +284,14 @@ export default defineComponent({
     })
     const userToken = computed(() => Boolean(userStore.token))
     const seriesInfo = ref<any>(null)
+    const seriesArticles = ref<any[]>([])
+    const seriesIndex = computed(() => seriesArticles.value.findIndex((item) => Number(item?.id) === Number(reactiveData.articleId)))
+    const seriesPrevious = computed(() => (seriesIndex.value > 0 ? seriesArticles.value[seriesIndex.value - 1] : null))
+    const seriesNext = computed(() => (
+      seriesIndex.value >= 0 && seriesIndex.value < seriesArticles.value.length - 1
+        ? seriesArticles.value[seriesIndex.value + 1]
+        : null
+    ))
     const navigatorShareAvailable = computed(() => typeof navigator !== 'undefined' && typeof navigator.share === 'function')
     const pageInfo = reactive({
       current: 1,
@@ -350,6 +381,8 @@ export default defineComponent({
       reactiveData.nextArticleCard = ''
       shareMessage.value = ''
       reactionMessage.value = ''
+      seriesInfo.value = null
+      seriesArticles.value = []
       reactions.like = false
       reactions.favorite = false
       reactiveData.articleId = to.params.articleId
@@ -560,15 +593,19 @@ export default defineComponent({
     // The article payload only carries the series id; the badge needs its name.
     const fetchSeriesInfo = (article: any) => {
       seriesInfo.value = null
+      seriesArticles.value = []
       const seriesId = Number(article?.seriesId || 0)
       if (!seriesId) return
       api
         .getSeriesDetail(seriesId)
         .then(({ data }: any) => {
-          seriesInfo.value = data?.data?.series || null
+          const payload = data?.data || {}
+          seriesInfo.value = payload.series || null
+          seriesArticles.value = Array.isArray(payload.articles) ? payload.articles : []
         })
         .catch(() => {
           seriesInfo.value = null
+          seriesArticles.value = []
         })
     }
     const fetchReactionStates = () => {
@@ -638,6 +675,10 @@ export default defineComponent({
       reactionMessage,
       userToken,
       seriesInfo,
+      seriesArticles,
+      seriesIndex,
+      seriesPrevious,
+      seriesNext,
       toggleReaction
     }
   }
@@ -775,6 +816,27 @@ export default defineComponent({
 .article-reaction--active { border-color: var(--color-ob); color: var(--color-ob); }
 .article-reaction__count { font-variant-numeric: tabular-nums; opacity: .7; }
 .article-reaction__link { font-size: .82rem; opacity: .7; text-decoration: underline; }
+.series-context {
+  margin: 2.5rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--text-ob-dim) 24%, transparent);
+  border-radius: .9rem;
+  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
+}
+.series-context__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
+.series-context__head strong { display: block; margin-top: .2rem; }
+.series-context__head > a { color: var(--color-ob); font-size: .82rem; white-space: nowrap; }
+.series-context__eyebrow { color: var(--text-ob-dim); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
+.series-context__nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
+.series-context__link { display: flex; min-height: 74px; flex-direction: column; justify-content: space-between; gap: .35rem; padding: .75rem .85rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 20%, transparent); border-radius: .7rem; color: inherit; text-decoration: none; }
+.series-context__link:hover { border-color: var(--color-ob); }
+.series-context__link small { color: var(--text-ob-dim); font-size: .7rem; }
+.series-context__link span { line-height: 1.4; }
+.series-context__link--next { text-align: right; }
+@media (max-width: 640px) {
+  .series-context__head { align-items: flex-start; }
+  .series-context__link--next { text-align: left; }
+}
 .related-articles { margin: 2.5rem 0; }
 .related-articles h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.45rem; }
 .related-articles__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }

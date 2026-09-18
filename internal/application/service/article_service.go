@@ -340,7 +340,7 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 			return model.ResultFromError(err)
 		}
 	}
-	if related, _, relatedErr := a.articleRepository().ListArticles(c.Request.Context(), 1, 6); relatedErr == nil {
+	if related, relatedErr := a.articleRepository().ListRelatedArticles(c.Request.Context(), data.Id, article.CategoryId, article.SeriesId, 3); relatedErr == nil {
 		data.RelatedArticles = make([]port.ArticleCard, 0, 3)
 		for _, candidate := range related {
 			if candidate == nil || candidate.Id == data.Id || candidate.Status != 1 {

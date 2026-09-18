@@ -17,6 +17,7 @@ import (
 type fakeArticleRepository struct {
 	listErr  error
 	archives []port.ArticleCard
+	related  []*port.ArticleCard
 }
 
 type fakeArticleSearcher struct {
@@ -73,6 +74,9 @@ func (f *fakeArticleRepository) ListArticleCardsByIDs(context.Context, []int) ([
 }
 func (f *fakeArticleRepository) ListArticleCardsBySeries(context.Context, int) ([]*port.ArticleCard, error) {
 	return nil, nil
+}
+func (f *fakeArticleRepository) ListRelatedArticles(context.Context, int, int, int, int) ([]*port.ArticleCard, error) {
+	return f.related, nil
 }
 func (f *fakeArticleRepository) PublishDueArticles(context.Context) ([]int, error) {
 	return nil, nil

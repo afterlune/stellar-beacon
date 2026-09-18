@@ -149,6 +149,55 @@ func (a *MyArticleRepo) ListArticleCardsBySeries(ctx context.Context, seriesID i
 	return articles, nil
 }
 
+// ListRelatedArticles returns rule-ranked public articles for the reading
+// page. Same-series articles are deliberately excluded; fallback rows fill
+// sparse matches without reintroducing the current article or its series.
+func (a *MyArticleRepo) ListRelatedArticles(ctx context.Context, articleID, categoryID, seriesID, limit int) ([]*port.ArticleCard, error) {
+	if articleID <= 0 || limit <= 0 {
+		return []*port.ArticleCard{}, nil
+	}
+	if limit > 10 {
+		limit = 10
+	}
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var related []*port.ArticleCard
+	if err := session.SQL(pgsql.ListRelatedArticles, articleID, seriesID, articleID, categoryID, limit).Find(&related); err != nil {
+		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.related", err)
+	}
+	if len(related) < limit {
+		var fallback []*port.ArticleCard
+		if err := session.SQL(pgsql.ListRelatedFallback, articleID, seriesID, limit).Find(&fallback); err != nil {
+			return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.related_fallback", err)
+		}
+		seen := make(map[int]bool, len(related)+len(fallback))
+		for _, article := range related {
+			if article != nil {
+				seen[article.Id] = true
+			}
+		}
+		for _, article := range fallback {
+			if article == nil || seen[article.Id] {
+				continue
+			}
+			related = append(related, article)
+			seen[article.Id] = true
+			if len(related) == limit {
+				break
+			}
+		}
+	}
+	for _, article := range related {
+		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return related, nil
+}
+
 // PublishDueArticles flips every due scheduled article (status 4) to public and
 // returns their ids. The conditional update is atomic, so two instances cannot
 // publish the same article twice.

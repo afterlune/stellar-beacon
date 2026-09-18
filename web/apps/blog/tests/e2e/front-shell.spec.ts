@@ -1,6 +1,76 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const routes = ['/archives', '/tags', '/talks', '/friends', '/message', '/about', '/photos/0']
+
+function articleFixture(id: number, title: string) {
+  return {
+    id,
+    articleTitle: title,
+    articleContent: '正文内容',
+    articleContentHtml: '<p>正文内容</p>',
+    articleCover: '',
+    categoryName: '测试分类',
+    status: 1,
+    createTime: '2026-09-18T10:00:00+08:00',
+    updateTime: '2026-09-18T10:00:00+08:00',
+    seriesId: 3,
+    seriesOrder: id - 6,
+    tags: [{ id: 1, tagName: '测试标签' }],
+    author: { nickname: '测试作者', avatar: '', website: '' },
+    likeCount: 0,
+    favoriteCount: 0,
+    relatedArticles: [
+      { id: 20, articleTitle: '标签相关文章', categoryName: '另一分类' },
+      { id: 21, articleTitle: '分类相关文章', categoryName: '测试分类' }
+    ],
+    preArticleCard: { id: 0, articleContent: '' },
+    nextArticleCard: { id: 0, articleContent: '' }
+  }
+}
+
+async function mockArticleReading(page: Page): Promise<void> {
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/v1/public/reports/visit') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'OK', message: '操作成功', data: null }) })
+      return
+    }
+    const articleMatch = path.match(/^\/api\/v1\/public\/articles\/(\d+)$/)
+    if (articleMatch) {
+      const id = Number(articleMatch[1])
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', message: '操作成功', data: articleFixture(id, `系列第${id - 6}篇`) })
+      })
+      return
+    }
+    if (path === '/api/v1/public/series/3') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'OK',
+          message: '操作成功',
+          data: {
+            series: { id: 3, seriesName: '阅读系列' },
+            articles: [
+              { id: 7, articleTitle: '系列第一篇' },
+              { id: 8, articleTitle: '系列第二篇' },
+              { id: 9, articleTitle: '系列第三篇' }
+            ]
+          }
+        })
+      })
+      return
+    }
+    if (path === '/api/v1/public/comments') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'OK', message: '操作成功', data: { items: [], total: 0, page: 1, pageSize: 7 } }) })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'OK', message: '操作成功', data: null }) })
+  })
+}
 
 test.describe('blog front shell', () => {
   test('renders the new editorial shell and navigates between pages', async ({ page }, testInfo) => {
@@ -44,5 +114,32 @@ test.describe('mobile front shell', () => {
 
     await page.locator('#App-Mobile-Profile').getByText(/^(about|关于)$/i).click()
     await expect(page).toHaveURL(/\/about$/)
+  })
+})
+
+test.describe('article reading experience', () => {
+  test('keeps series navigation separate from related reading', async ({ page }) => {
+    await mockArticleReading(page)
+    await page.goto('/articles/8')
+
+    const series = page.getByTestId('series-context')
+    await expect(series).toBeVisible()
+    await expect(series).toContainText('阅读系列')
+    await expect(series).toContainText(/系列进度 2\/3|Collection progress 2\/3/)
+    await expect(page.getByTestId('series-previous')).toContainText('系列第一篇')
+    await expect(page.getByTestId('series-next')).toContainText('系列第三篇')
+
+    const related = page.getByTestId('related-articles')
+    await expect(related).toContainText('标签相关文章')
+    await expect(related).toContainText('分类相关文章')
+    await expect(related).not.toContainText('系列第一篇')
+
+    await page.goto('/articles/7')
+    await expect(page.getByTestId('series-previous')).toHaveCount(0)
+    await expect(page.getByTestId('series-next')).toContainText('系列第二篇')
+
+    await page.goto('/articles/9')
+    await expect(page.getByTestId('series-previous')).toContainText('系列第二篇')
+    await expect(page.getByTestId('series-next')).toHaveCount(0)
   })
 })

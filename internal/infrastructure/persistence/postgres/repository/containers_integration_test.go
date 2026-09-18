@@ -105,11 +105,13 @@ CREATE TABLE t_photo (id INTEGER PRIMARY KEY, album_id INTEGER NOT NULL, photo_n
 CREATE TABLE t_article (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, category_id INTEGER, article_cover VARCHAR(1024),
     article_title VARCHAR(50) NOT NULL, article_content TEXT NOT NULL, article_content_html TEXT,
+    series_id INTEGER, series_order INTEGER,
     is_top SMALLINT NOT NULL,
     is_featured SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL,
     type SMALLINT NOT NULL, password VARCHAR(255), original_url VARCHAR(255),
     create_time TIMESTAMP, update_time TIMESTAMP
 );
+CREATE TABLE t_article_tag (id INTEGER PRIMARY KEY, article_id INTEGER NOT NULL, tag_id INTEGER NOT NULL);
 CREATE TABLE t_article_daily_metric (
     id SERIAL PRIMARY KEY, article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
     metric_date DATE NOT NULL, views BIGINT NOT NULL DEFAULT 0, unique_readers BIGINT NOT NULL DEFAULT 0,
@@ -124,8 +126,8 @@ INSERT INTO t_user_info (id, email, nickname, avatar, is_subscribe, is_disable) 
 INSERT INTO t_user_auth (id, user_info_id, username, password, login_type) VALUES (1, 1, 'integration@example.com', 'hashed-password', 1);
 INSERT INTO t_role (id, role_name, is_disable) VALUES (1, 'user', 0);
 INSERT INTO t_user_role (id, user_id, role_id) VALUES (1, 1, 1);
-INSERT INTO t_category (id, category_name) VALUES (1, 'integration category');
-INSERT INTO t_tag (id, tag_name) VALUES (1, 'integration tag');
+INSERT INTO t_category (id, category_name) VALUES (1, 'integration category'), (2, 'second category');
+INSERT INTO t_tag (id, tag_name) VALUES (1, 'integration tag'), (2, 'second tag'), (3, 'third tag'), (4, 'fourth tag');
 INSERT INTO t_talk (id, user_id, content, is_top, status) VALUES (1, 1, 'integration talk', 0, 1);
 INSERT INTO t_website_config (id, config) VALUES (1, '{"name":"integration"}');
 INSERT INTO t_about (id, content) VALUES (1, '{"content":"integration"}');
@@ -135,7 +137,20 @@ INSERT INTO t_role_menu (id, role_id, menu_id) VALUES (1, 1, 1);
 INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1);
 INSERT INTO t_photo_album (id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 'integration album', 'integration', '', 0, 1);
 INSERT INTO t_photo (id, album_id, photo_name, photo_src, is_delete) VALUES (1, 1, 'integration photo', 'https://example.com/photo.jpg', 0);
-INSERT INTO t_article (id, user_id, article_title, article_content, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 'integration article', 'content', 0, 0, 0, 1, 1);
+INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 1, 'integration article', 'content', 10, 1, 0, 0, 0, 1, 1);
+INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES
+    (2, 1, 1, 'same series article', 'content', 10, 2, 0, 0, 0, 1, 1),
+    (3, 1, 2, 'shared tag article', 'content', NULL, 0, 0, 0, 0, 1, 1),
+    (4, 1, 1, 'same category article', 'content', NULL, 0, 0, 0, 0, 1, 1),
+    (5, 1, 1, 'same series article two', 'content', 10, 3, 0, 0, 0, 1, 1),
+    (6, 1, 2, 'recent fallback article', 'content', NULL, 0, 0, 0, 0, 1, 1);
+INSERT INTO t_article_tag (id, article_id, tag_id) VALUES
+    (1, 1, 1),
+    (2, 2, 1), (3, 2, 2),
+    (4, 3, 1),
+    (5, 4, 3),
+    (6, 5, 1),
+    (7, 6, 4);
 INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions) VALUES (1, CURRENT_DATE, 2, 1, 1, 5000, 1);`); err != nil {
 		t.Fatalf("insert repository fixtures: %v", err)
 	}
@@ -156,17 +171,47 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	if err != nil {
 		t.Fatalf("read article repository fixture: %v", err)
 	}
-	if count != 1 || len(articles) != 1 || articles[0].ArticleTitle != "integration article" {
+	if count != 6 || len(articles) != 6 {
 		t.Fatalf("unexpected article repository result: count=%d articles=%+v", count, articles)
 	}
 	site := NewSiteInfoRepo(xormEngine)
 	articleCount, err := site.CountArticles(ctx)
-	if err != nil || articleCount != 1 {
+	if err != nil || articleCount != 6 {
 		t.Fatalf("unexpected site article count: count=%d err=%v", articleCount, err)
 	}
 	rankedArticles, err := site.ListArticleRank(ctx, []int{1})
 	if err != nil || len(rankedArticles) != 1 || rankedArticles[0].ArticleTitle != "integration article" {
 		t.Fatalf("unexpected article rank result: articles=%v err=%v", rankedArticles, err)
+	}
+	relatedArticles, err := NewArticleRepo(xormEngine).ListRelatedArticles(ctx, 1, 1, 10, 3)
+	if err != nil || len(relatedArticles) != 3 {
+		t.Fatalf("unexpected related article result: articles=%v err=%v", relatedArticles, err)
+	}
+	relatedIDs := []int{relatedArticles[0].Id, relatedArticles[1].Id, relatedArticles[2].Id}
+	if relatedIDs[0] != 3 || relatedIDs[1] != 4 || relatedIDs[2] != 6 {
+		t.Fatalf("unexpected related article order: %v", relatedIDs)
+	}
+	for _, article := range relatedArticles {
+		if article.Id == 1 || article.Id == 2 || article.Id == 5 {
+			t.Fatalf("current or same-series article leaked into related results: %v", relatedIDs)
+		}
+	}
+	relatedWithoutSeries, err := NewArticleRepo(xormEngine).ListRelatedArticles(ctx, 3, 2, 0, 4)
+	relatedWithoutSeriesIDs := make([]int, 0, len(relatedWithoutSeries))
+	for _, article := range relatedWithoutSeries {
+		relatedWithoutSeriesIDs = append(relatedWithoutSeriesIDs, article.Id)
+	}
+	if err != nil || len(relatedWithoutSeries) != 4 {
+		t.Fatalf("articles without a series should still receive recommendations: ids=%v err=%v", relatedWithoutSeriesIDs, err)
+	}
+	hasNonSeriesRecommendation := false
+	for _, article := range relatedWithoutSeries {
+		if article.Id == 6 {
+			hasNonSeriesRecommendation = true
+		}
+	}
+	if !hasNonSeriesRecommendation {
+		t.Fatalf("non-series article missing from recommendations: %v", relatedWithoutSeries)
 	}
 	contentAnalytics := NewContentAnalyticsRepo(xormEngine)
 	if err := contentAnalytics.RecordView(ctx, 1, time.Now()); err != nil {

@@ -127,6 +127,9 @@
     "empty": "No collections yet",
     "emptyArticles": "This collection has no published article yet",
     "inSeries": "Part of the collection \"{name}\"",
-    "backToSeries": "Open the collection"
+    "backToSeries": "Open the collection",
+    "progress": "Collection progress {current}/{total}",
+    "previous": "Previous",
+    "next": "Next"
   }
 }

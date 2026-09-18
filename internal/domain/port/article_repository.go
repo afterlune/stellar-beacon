@@ -14,6 +14,7 @@ type ArticleRepository interface {
 	GetArticlesByCategoryID(ctx context.Context, current, size, categoryID int) ([]*ArticleCard, int, error)
 	ListArticleCardsByIDs(ctx context.Context, articleIDs []int) ([]*ArticleCard, error)
 	ListArticleCardsBySeries(ctx context.Context, seriesID int) ([]*ArticleCard, error)
+	ListRelatedArticles(ctx context.Context, articleID, categoryID, seriesID, limit int) ([]*ArticleCard, error)
 	GetArticleByID(ctx context.Context, articleID int) (Article, error)
 	GetPreArticleByID(ctx context.Context, articleID int) (ArticleCard, error)
 	GetNextArticleByID(ctx context.Context, articleID int) (ArticleCard, error)

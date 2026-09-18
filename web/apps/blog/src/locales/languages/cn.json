@@ -127,6 +127,9 @@
     "empty": "还没有系列",
     "emptyArticles": "这个系列还没有公开文章",
     "inSeries": "本文属于系列《{name}》",
-    "backToSeries": "查看系列"
+    "backToSeries": "查看系列",
+    "progress": "系列进度 {current}/{total}",
+    "previous": "上一篇",
+    "next": "下一篇"
   }
 }
