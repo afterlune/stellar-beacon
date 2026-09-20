@@ -336,6 +336,53 @@ export interface StudioProfile {
   intro: string
   website: string
 }
+export interface PublicAuthorSummary {
+  id: number
+  handle: string
+  nickname: string
+  avatar: string
+  intro?: string
+  website?: string
+}
+
+export interface PublicAuthorProfile extends PublicAuthorSummary {
+  articleCount?: number
+  talkCount?: number
+  seriesCount?: number
+  followerCount: number
+  isFollowing?: boolean
+}
+
+export type FollowContentType = 'article' | 'talk'
+
+export interface FollowUser {
+  id: number
+  handle: string
+  nickname: string
+  avatar: string
+  intro?: string
+  followedAt?: string
+}
+
+export interface FollowFeedItem {
+  eventId: number
+  contentType: FollowContentType
+  contentId: number
+  author: PublicAuthorSummary
+  title: string
+  excerpt: string
+  cover?: string
+  images?: string[]
+  publishedAt: string
+}
+
+export interface FollowNotification extends FollowFeedItem {
+  read: boolean
+}
+
+export interface FollowNotificationPage extends Page<FollowNotification> {
+  unreadCount: number
+}
 
 export interface AdminUser {
   id?: number

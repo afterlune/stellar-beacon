@@ -11,8 +11,12 @@
           <span class="author-hero__handle">@{{ author.handle }}</span>
           <p class="author-hero__intro">{{ author.intro || '这位作者还没有写下简介。' }}</p>
           <a v-if="author.website" :href="author.website" target="_blank" rel="noopener noreferrer">{{ author.website }}</a>
+          <div class="author-hero__actions">
+            <FollowButton v-if="!isSelf" :author-id="author.id" :following="Boolean(author.isFollowing)" @changed="followChanged" />
+          </div>
         </div>
         <dl class="author-hero__stats">
+          <div><dt>{{ author.followerCount || 0 }}</dt><dd>关注者</dd></div>
           <div><dt>{{ author.articleCount }}</dt><dd>公开文章</dd></div>
           <div><dt>{{ author.talkCount }}</dt><dd>公开随想</dd></div>
           <div><dt>{{ author.seriesCount }}</dt><dd>公开系列</dd></div>
@@ -62,16 +66,20 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref } from 'vue'
+import { computed, defineComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api/api'
+import FollowButton from '@/components/FollowButton.vue'
+import { useUserStore } from '@/stores/user'
 
 const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="120" height="120"%3E%3Crect width="120" height="120" rx="60" fill="%23172554"/%3E%3Ccircle cx="60" cy="44" r="21" fill="%239bb8ff"/%3E%3Cpath d="M20 108c4-27 21-41 40-41s36 14 40 41" fill="%239bb8ff"/%3E%3C/svg%3E'
 
 export default defineComponent({
   name: 'Author',
+  components: { FollowButton },
   setup() {
     const route = useRoute()
+    const userStore = useUserStore()
     const author = ref<any>(null)
     const records = ref<any[]>([])
     const tab = ref<'articles' | 'talks' | 'series'>('articles')
@@ -84,6 +92,15 @@ export default defineComponent({
     const handle = String(route.params.handle || '')
 
     const responseData = (response: any) => response?.data?.data || {}
+    const isSelf = computed(() => {
+      const currentID = Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0)
+      return currentID > 0 && currentID === Number(author.value?.id || 0)
+    })
+    const followChanged = (following: boolean) => {
+      if (!author.value) return
+      author.value.isFollowing = following
+      author.value.followerCount = Math.max(0, Number(author.value.followerCount || 0) + (following ? 1 : -1))
+    }
 
     const loadAuthor = async () => {
       loadingAuthor.value = true
@@ -142,7 +159,7 @@ export default defineComponent({
       await loadContent(true)
     })
 
-    return { author, records, tab, loading, loadingAuthor, error, total, defaultAvatar, switchTab, loadMore, excerpt, formatDate }
+    return { author, records, tab, loading, loadingAuthor, error, total, defaultAvatar, switchTab, loadMore, excerpt, formatDate, isSelf, followChanged }
   }
 })
 </script>
@@ -157,6 +174,7 @@ export default defineComponent({
 .author-hero h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.6rem); letter-spacing: -.05em; }
 .author-hero__handle { display: inline-block; margin-top: 6px; color: var(--text-ob-dim); font-size: 13px; }
 .author-hero__intro { max-width: 620px; margin: 18px 0 8px; color: var(--text-ob-dim); line-height: 1.75; }
+.author-hero__actions { margin-top: 16px; }
 .author-hero__copy a { display: inline-flex; align-items: center; min-height: 24px; color: var(--color-ob); font-size: 12px; text-decoration: none; }
 .author-hero__stats { display: grid; grid-template-columns: repeat(3, auto); gap: 20px; margin: 0; }
 .author-hero__stats div { text-align: center; }

@@ -84,6 +84,29 @@ type TContentOperationAuditItem struct {
 	Result         string `xorm:"result not null VARCHAR(16)" json:"result"`
 }
 
+// TUserFollow is the reader-to-author relationship. Event cursors avoid
+// per-follower notification fan-out while preserving unread semantics.
+type TUserFollow struct {
+	Id              int       `xorm:"autoincr not null pk unique BIGINT" json:"id"`
+	FollowerId      int       `xorm:"follower_id not null unique(follower_author) index INTEGER" json:"followerId"`
+	AuthorId        int       `xorm:"author_id not null unique(follower_author) index INTEGER" json:"authorId"`
+	StartEventId    int64     `xorm:"start_event_id not null default 0 BIGINT" json:"startEventId"`
+	LastReadEventId int64     `xorm:"last_read_event_id not null default 0 BIGINT" json:"lastReadEventId"`
+	CreateTime      time.Time `xorm:"created not null created_at DATETIME" json:"createTime"`
+	UpdateTime      time.Time `xorm:"updated not null updated_at DATETIME" json:"updateTime"`
+}
+
+// TAuthorPublishEvent records the first public-visible transition of an
+// article or talk. Source rows remain authoritative for availability.
+type TAuthorPublishEvent struct {
+	Id          int64     `xorm:"autoincr not null pk unique BIGINT" json:"id"`
+	AuthorId    int       `xorm:"author_id not null index INTEGER" json:"authorId"`
+	ContentType string    `xorm:"content_type not null unique(author_content) VARCHAR(16)" json:"contentType"`
+	ContentId   int       `xorm:"content_id not null unique(author_content) BIGINT" json:"contentId"`
+	PublishedAt time.Time `xorm:"published_at not null index DATETIME" json:"publishedAt"`
+	CreateTime  time.Time `xorm:"created not null created_at DATETIME" json:"createTime"`
+}
+
 // TSeries groups articles into an ordered collection. The relation lives on
 // t_article.series_id so an article belongs to at most one series.
 type TSeries struct {

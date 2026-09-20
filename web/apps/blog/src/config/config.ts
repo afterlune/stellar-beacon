@@ -37,6 +37,24 @@ export default {
       children: []
     },
     {
+      name: 'Authors',
+      path: '/authors',
+      i18n: {
+        cn: '作者',
+        en: 'Authors'
+      },
+      children: []
+    },
+    {
+      name: 'Following',
+      path: '/following',
+      i18n: {
+        cn: '关注',
+        en: 'Following'
+      },
+      children: []
+    },
+    {
       name: 'About',
       path: '/about',
       i18n: {

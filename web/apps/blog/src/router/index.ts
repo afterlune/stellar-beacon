@@ -65,6 +65,23 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/Author.vue')
   },
   {
+    path: '/authors',
+    name: 'Authors',
+    component: () => import('../views/Authors.vue')
+  },
+  {
+    path: '/following',
+    name: 'Following',
+    component: () => import('../views/Following.vue'),
+    meta: { requiresAuth: true, hideBanner: true }
+  },
+  {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('../views/Notifications.vue'),
+    meta: { requiresAuth: true, hideBanner: true }
+  },
+  {
     path: '/studio',
     component: () => import('../views/studio/StudioShell.vue'),
     meta: { requiresAuth: true, hideBanner: true },

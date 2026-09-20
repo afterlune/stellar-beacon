@@ -69,12 +69,14 @@ type StudioBatchMutation struct {
 }
 
 type StudioDashboard struct {
-	ArticleCount  int `json:"articleCount"`
-	DraftCount    int `json:"draftCount"`
-	PrivateCount  int `json:"privateCount"`
-	TalkCount     int `json:"talkCount"`
-	SeriesCount   int `json:"seriesCount"`
-	FavoriteCount int `json:"favoriteCount"`
+	ArticleCount   int `json:"articleCount"`
+	DraftCount     int `json:"draftCount"`
+	PrivateCount   int `json:"privateCount"`
+	TalkCount      int `json:"talkCount"`
+	SeriesCount    int `json:"seriesCount"`
+	FavoriteCount  int `json:"favoriteCount"`
+	FollowerCount  int `json:"followerCount"`
+	FollowingCount int `json:"followingCount"`
 }
 
 type StudioProfile struct {
@@ -86,17 +88,19 @@ type StudioProfile struct {
 }
 type AuthorCard struct {
 	PublicAuthor
-	ArticleCount int `json:"articleCount"`
-	TalkCount    int `json:"talkCount"`
-	SeriesCount  int `json:"seriesCount"`
+	ArticleCount  int  `json:"articleCount"`
+	TalkCount     int  `json:"talkCount"`
+	SeriesCount   int  `json:"seriesCount"`
+	FollowerCount int  `json:"followerCount"`
+	IsFollowing   bool `json:"isFollowing,omitempty"`
 }
 
 // PlatformRepository owns cross-owner discovery and owner-scoped editing. It
 // deliberately keeps ownership predicates inside persistence methods so callers
 // cannot forget a user_id filter.
 type PlatformRepository interface {
-	GetAuthorByHandle(ctx context.Context, handle string) (AuthorCard, error)
-	ListAuthors(ctx context.Context, current, size int) ([]*AuthorCard, int, error)
+	GetAuthorByHandle(ctx context.Context, handle string, viewerID int) (AuthorCard, error)
+	ListAuthors(ctx context.Context, current, size, viewerID int) ([]*AuthorCard, int, error)
 	StudioDashboard(ctx context.Context, userID int) (StudioDashboard, error)
 	GetStudioProfile(ctx context.Context, userID int) (StudioProfile, error)
 	UpdateAuthorProfile(ctx context.Context, userID int, handle, nickname, intro, website string) error

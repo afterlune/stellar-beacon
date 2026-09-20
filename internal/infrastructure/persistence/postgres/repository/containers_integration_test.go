@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	_ "github.com/lib/pq"
@@ -89,7 +90,7 @@ CREATE TABLE t_role (
 CREATE TABLE t_user_role (id INTEGER PRIMARY KEY, user_id INTEGER, role_id INTEGER);
 CREATE TABLE t_category (id INTEGER PRIMARY KEY, category_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_tag (id INTEGER PRIMARY KEY, tag_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
-CREATE TABLE t_talk (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, content TEXT NOT NULL, images TEXT, is_top SMALLINT NOT NULL, status SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_talk (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, content TEXT NOT NULL, images TEXT, is_top SMALLINT NOT NULL, status SMALLINT NOT NULL, moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible', moderation_reason VARCHAR(255), moderated_by INTEGER DEFAULT 0, moderated_at TIMESTAMP, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_comment (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_unique_view (id INTEGER PRIMARY KEY, views_count INTEGER NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_website_config (id INTEGER PRIMARY KEY, config TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
@@ -106,15 +107,16 @@ CREATE TABLE t_role_resource (id INTEGER PRIMARY KEY, role_id INTEGER, resource_
 CREATE TABLE t_photo_album (id INTEGER PRIMARY KEY, album_name VARCHAR(50) NOT NULL, album_desc VARCHAR(100) NOT NULL, album_cover VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_photo (id INTEGER PRIMARY KEY, album_id INTEGER NOT NULL, photo_name VARCHAR(50) NOT NULL, photo_desc VARCHAR(100), photo_src VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_series (
-    id INTEGER PRIMARY KEY, series_name VARCHAR(50) NOT NULL, series_desc VARCHAR(255), cover VARCHAR(1024),
-    is_delete SMALLINT NOT NULL DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL DEFAULT 0, series_name VARCHAR(50) NOT NULL, series_desc VARCHAR(255), cover VARCHAR(1024),
+    is_delete SMALLINT NOT NULL DEFAULT 0, status SMALLINT NOT NULL DEFAULT 1,
+    moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible', create_time TIMESTAMP, update_time TIMESTAMP
 );CREATE TABLE t_article (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, category_id INTEGER, article_cover VARCHAR(1024),
     article_title VARCHAR(50) NOT NULL, article_content TEXT NOT NULL, article_content_html TEXT,
     series_id INTEGER, series_order INTEGER,
     is_top SMALLINT NOT NULL,
     is_featured SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL,
-    scheduled_at TIMESTAMP, moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible',
+    scheduled_at TIMESTAMP, moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible', moderation_reason VARCHAR(255), moderated_by INTEGER DEFAULT 0, moderated_at TIMESTAMP,
     type SMALLINT NOT NULL, password VARCHAR(255), original_url VARCHAR(255),
     create_time TIMESTAMP, update_time TIMESTAMP
 );
@@ -153,11 +155,24 @@ CREATE TABLE t_content_operation_audit_item (
     id BIGSERIAL PRIMARY KEY, audit_id BIGINT NOT NULL REFERENCES t_content_operation_audit(id) ON DELETE CASCADE,
     content_id INTEGER NOT NULL, title VARCHAR(255) NOT NULL DEFAULT '', previous_status SMALLINT NOT NULL,
     next_status SMALLINT NOT NULL, result VARCHAR(16) NOT NULL
+);
+CREATE TABLE t_user_follow (
+    id BIGSERIAL PRIMARY KEY, follower_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    author_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    start_event_id BIGINT NOT NULL DEFAULT 0, last_read_event_id BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (follower_id, author_id), CHECK (follower_id <> author_id)
+);
+CREATE TABLE t_author_publish_event (
+    id BIGSERIAL PRIMARY KEY, author_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    content_type VARCHAR(16) NOT NULL, content_id BIGINT NOT NULL,
+    published_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (content_type, content_id)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
 	if _, err := db.ExecContext(ctx, `
-INSERT INTO t_user_info (id, handle, email, nickname, avatar, is_subscribe, is_disable) VALUES (1, 'integration', 'integration@example.com', 'integration', '', 0, 0);
+INSERT INTO t_user_info (id, handle, email, nickname, avatar, is_subscribe, is_disable) VALUES (1, 'integration', 'integration@example.com', 'integration', '', 0, 0), (2, 'reader', 'reader@example.com', 'reader', '', 0, 0);
 INSERT INTO t_user_auth (id, user_info_id, username, password, login_type) VALUES (1, 1, 'integration@example.com', 'hashed-password', 1);
 INSERT INTO t_role (id, role_name, is_disable) VALUES (1, 'user', 0);
 INSERT INTO t_user_role (id, user_id, role_id) VALUES (1, 1, 1);
@@ -172,7 +187,7 @@ INSERT INTO t_role_menu (id, role_id, menu_id) VALUES (1, 1, 1);
 INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1);
 INSERT INTO t_photo_album (id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 'integration album', 'integration', '', 0, 1);
 INSERT INTO t_photo (id, album_id, photo_name, photo_src, is_delete) VALUES (1, 1, 'integration photo', 'https://example.com/photo.jpg', 0);
-INSERT INTO t_series (id, series_name, is_delete) VALUES (10, 'integration series', 0);INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 1, 'integration article', 'content', 10, 1, 0, 0, 0, 1, 1);
+INSERT INTO t_series (id, user_id, series_name, is_delete, status) VALUES (10, 1, 'integration series', 0, 1);INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 1, 'integration article', 'content', 10, 1, 0, 0, 0, 1, 1);
 INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, scheduled_at, is_top, is_featured, is_delete, status, type) VALUES (7, 1, 1, 'scheduled integration article', 'content', NULL, 0, CURRENT_TIMESTAMP - INTERVAL '1 minute', 0, 0, 0, 4, 1);
 INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES
     (2, 1, 1, 'same series article', 'content', 10, 2, 0, 0, 0, 1, 1),
@@ -187,7 +202,8 @@ INSERT INTO t_article_tag (id, article_id, tag_id) VALUES
     (5, 4, 3),
     (6, 5, 1),
     (7, 6, 4);
-INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions) VALUES (1, CURRENT_DATE, 2, 1, 1, 5000, 1);`); err != nil {
+INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions) VALUES (1, CURRENT_DATE, 2, 1, 1, 5000, 1);
+SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_talk));`); err != nil {
 		t.Fatalf("insert repository fixtures: %v", err)
 	}
 
@@ -284,6 +300,21 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 		articleMetrics[0].SeriesClicks != 0 || articleMetrics[0].RelatedClicks != 0 {
 		t.Fatalf("unexpected article content analytics metrics: metrics=%v err=%v", articleMetrics, err)
 	}
+	platformRepo := NewPlatformRepo(xormEngine)
+	followRepo := NewFollowRepo(xormEngine)
+	if err := followRepo.Follow(ctx, 2, 1); err != nil {
+		t.Fatalf("follow author: %v", err)
+	}
+	if err := followRepo.Follow(ctx, 2, 1); err != nil {
+		t.Fatalf("repeat follow must be idempotent: %v", err)
+	}
+	if err := followRepo.Follow(ctx, 1, 1); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("self follow must fail, got %v", err)
+	}
+	authorCard, err := platformRepo.GetAuthorByHandle(ctx, "integration", 2)
+	if err != nil || authorCard.FollowerCount != 1 || !authorCard.IsFollowing {
+		t.Fatalf("unexpected followed author card: author=%+v err=%v", authorCard, err)
+	}
 	published, err := NewArticleRepo(xormEngine).PublishDueScheduledArticles(ctx, time.Now(), 10)
 	if err != nil || len(published) != 1 || published[0].ArticleID != 7 || published[0].NotificationState != port.ScheduledNotificationPending {
 		t.Fatalf("unexpected scheduled publication result: published=%+v err=%v", published, err)
@@ -291,7 +322,46 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	if err := NewArticleRepo(xormEngine).MarkScheduledNotificationFailed(ctx, published[0].RecordID, "smtp unavailable", nil); err != nil {
 		t.Fatalf("mark scheduled notification failed: %v", err)
 	}
-	platformRepo := NewPlatformRepo(xormEngine)
+	feed, feedCount, err := followRepo.ListFollowFeed(ctx, 2, "", 1, 10)
+	if err != nil || feedCount != 1 || len(feed) != 1 || feed[0].ContentId != 7 || feed[0].ContentType != port.FollowContentArticle {
+		t.Fatalf("unexpected follow feed: feed=%+v count=%d err=%v", feed, feedCount, err)
+	}
+	if err := platformRepo.ModerateContent(ctx, "article", 7, 1, true, "integration hidden"); err != nil {
+		t.Fatalf("hide followed article: %v", err)
+	}
+	hiddenUnread, err := followRepo.UnreadNotificationCount(ctx, 2)
+	if err != nil || hiddenUnread != 0 {
+		t.Fatalf("hidden content must not remain unread: count=%d err=%v", hiddenUnread, err)
+	}
+	if err := platformRepo.ModerateContent(ctx, "article", 7, 1, false, ""); err != nil {
+		t.Fatalf("restore followed article: %v", err)
+	}
+	notifications, err := followRepo.ListNotifications(ctx, 2, 1, 10)
+	if err != nil || notifications.Count != 1 || notifications.UnreadCount != 1 || len(notifications.Records) != 1 {
+		t.Fatalf("unexpected follow notifications: notifications=%+v err=%v", notifications, err)
+	}
+	if err := followRepo.MarkNotificationsRead(ctx, 2); err != nil {
+		t.Fatalf("mark follow notifications read: %v", err)
+	}
+	unread, err := followRepo.UnreadNotificationCount(ctx, 2)
+	if err != nil || unread != 0 {
+		t.Fatalf("unexpected unread notification count: count=%d err=%v", unread, err)
+	}
+	if _, err := platformRepo.SaveOwnedTalk(ctx, entity.TTalk{UserId: 1, Content: "followed talk", Status: 1, ModerationStatus: "visible"}); err != nil {
+		t.Fatalf("publish followed talk: %v", err)
+	}
+	notifications, err = followRepo.ListNotifications(ctx, 2, 1, 10)
+	if err != nil || notifications.Count != 2 || notifications.UnreadCount != 1 {
+		t.Fatalf("unexpected talk follow notification: notifications=%+v err=%v", notifications, err)
+	}
+	following, followingCount, err := followRepo.ListFollowing(ctx, 2, 1, 10)
+	if err != nil || followingCount != 1 || len(following) != 1 || following[0].Id != 1 {
+		t.Fatalf("unexpected following list: users=%+v count=%d err=%v", following, followingCount, err)
+	}
+	followers, followerCount, err := followRepo.ListFollowers(ctx, 1, 1, 10)
+	if err != nil || followerCount != 1 || len(followers) != 1 || followers[0].Id != 2 {
+		t.Fatalf("unexpected follower list: users=%+v count=%d err=%v", followers, followerCount, err)
+	}
 	preview, err := platformRepo.PreviewOwnedContent(ctx, 1, port.StudioContentArticle, port.StudioFilter{Status: 1})
 	if err != nil || preview.Count < 1 || preview.MaxID < 1 {
 		t.Fatalf("unexpected batch preview: preview=%+v err=%v", preview, err)

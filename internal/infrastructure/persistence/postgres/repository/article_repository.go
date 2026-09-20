@@ -247,6 +247,11 @@ func (a *MyArticleRepo) PublishDueScheduledArticles(ctx context.Context, now tim
 			if _, err := session.Exec(`UPDATE t_article SET status = 1, update_time = ? WHERE id = ? AND status = 4 AND is_delete = 0`, now, row.Id); err != nil {
 				return apperrors.Unavailable("article.publish_scheduled.update", err)
 			}
+			if row.ModerationStatus == "visible" {
+				if err := recordAuthorPublishEvent(session, port.FollowContentArticle, row.Id, row.UserId, now); err != nil {
+					return err
+				}
+			}
 			var recordID int
 			if _, err := session.SQL(`
 				INSERT INTO t_article_publish_record
@@ -571,6 +576,7 @@ func (a *MyArticleRepo) GetArticleRecord(ctx context.Context, articleID int) (en
 }
 
 func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticle, categoryName string, tagNames []string) (entity.TArticle, error) {
+	wasPublic := false
 	err := ormInit.WithEngineTx(a.engine, ctx, func(session *xorm.Session) error {
 		var category entity.TCategory
 		if _, err := session.SQL("SELECT * FROM t_category WHERE category_name = ?", categoryName).Get(&category); err != nil {
@@ -586,6 +592,15 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 			article.CategoryId = category.Id
 		}
 		if article.Id != 0 {
+			var existing struct {
+				Status           int    `xorm:"status"`
+				IsDelete         int    `xorm:"is_delete"`
+				ModerationStatus string `xorm:"moderation_status"`
+			}
+			if _, err := session.SQL("SELECT status, is_delete, moderation_status FROM t_article WHERE id = ?", article.Id).Get(&existing); err != nil {
+				return apperrors.Wrap(apperrors.KindUnavailable, "article.publish_state", err)
+			}
+			wasPublic = existing.Status == 1 && existing.IsDelete == 0 && existing.ModerationStatus == "visible"
 			if _, err := session.ID(article.Id).MustCols("article_content_html").Update(&article); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.update", err)
 			}
@@ -595,6 +610,11 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 		if article.Id != 0 {
 			if _, err := session.Where("article_id = ?", article.Id).Delete(&entity.TArticleTag{}); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.delete_tags", err)
+			}
+		}
+		if !wasPublic {
+			if err := recordArticlePublishEvent(session, article.Id, time.Now()); err != nil {
+				return err
 			}
 		}
 		if len(tagNames) > 0 {
@@ -652,6 +672,11 @@ func (a *MyArticleRepo) UpdateDelete(ctx context.Context, ids []int, isDelete in
 			article := entity.TArticle{Id: id, IsDelete: isDelete}
 			if _, err := session.MustCols("is_delete").ID(id).Update(&article); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "article.update_delete", err)
+			}
+			if isDelete == 0 {
+				if err := recordArticlePublishEvent(session, id, time.Now()); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

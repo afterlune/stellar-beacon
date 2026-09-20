@@ -26,6 +26,8 @@
         <article><span>等待发布</span><strong>{{ operations.scheduledArticles || 0 }}</strong><small>当前定时队列</small></article>
         <article :class="{ 'is-danger': operations.failedNotifications > 0 }"><span>通知异常</span><strong>{{ operations.failedNotifications || 0 }}</strong><small>{{ operations.retryingNotifications || 0 }} 条自动重试中</small></article>
         <article><span>批量操作</span><strong>{{ operations.batchOperations || 0 }}</strong><small>区间内审计记录</small></article>
+        <article><span>关注者</span><strong>{{ dashboard.followerCount || 0 }}</strong><small><router-link to="/following?tab=followers">查看关注关系</router-link></small></article>
+        <article><span>关注中</span><strong>{{ dashboard.followingCount || 0 }}</strong><small><router-link to="/following?tab=following">管理关注</router-link></small></article>
       </div>
       <div class="studio-analytics-grid">
         <div class="studio-trend">
@@ -318,9 +320,9 @@ export default defineComponent({
 .studio-range-tabs, .studio-calendar-nav { display: flex; gap: 7px; align-items: center; }
 .studio-range-tabs button, .studio-calendar-nav button { padding: 7px 11px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
 .studio-range-tabs button.active { border-color: var(--color-ob); color: var(--color-ob); }
-.studio-operation-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.studio-operation-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .studio-operation-cards article { padding: 15px; border: 1px solid var(--border-hairline); border-radius: 13px; }
-.studio-operation-cards span, .studio-operation-cards small { display: block; color: var(--text-ob-dim); font-size: 10px; }
+.studio-operation-cards span, .studio-operation-cards small { display: block; color: var(--text-ob-dim); font-size: 10px; } .studio-operation-cards small a { color: var(--color-ob); text-decoration: none; }
 .studio-operation-cards strong { display: block; margin: 7px 0 4px; font-size: 1.5rem; }
 .studio-operation-cards article.is-danger strong { color: #df8177; }
 .studio-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 16px; margin-top: 16px; }

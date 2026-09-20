@@ -86,6 +86,21 @@ func (r *MyPlatformRepo) BatchUpdateOwnedContentStatus(ctx context.Context, user
 		if err != nil {
 			return 0, apperrors.Unavailable("platform.studio.content.batch-status.rows", err)
 		}
+		if status == 1 {
+			publishedAt := time.Now()
+			for _, row := range rows {
+				var err error
+				switch contentType {
+				case port.StudioContentArticle:
+					err = recordArticlePublishEvent(session, row.ID, publishedAt)
+				case port.StudioContentTalk:
+					err = recordTalkPublishEvent(session, row.ID, publishedAt)
+				}
+				if err != nil {
+					return 0, err
+				}
+			}
+		}
 		return int(affected), nil
 	}, func(studioBatchTarget) int { return status })
 }

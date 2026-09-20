@@ -120,14 +120,14 @@ func (s *MyPlatformService) Authors(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	authors, count, err := s.platformRepo().ListAuthors(c.Request.Context(), current, size)
+	authors, count, err := s.platformRepo().ListAuthors(c.Request.Context(), current, size, optionalUserID(c))
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOkWithData(model.PageResultDTO{Records: authors, Count: count})
 }
 func (s *MyPlatformService) Author(c *gin.Context) model.ResultVO {
-	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"))
+	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"), optionalUserID(c))
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -135,7 +135,7 @@ func (s *MyPlatformService) Author(c *gin.Context) model.ResultVO {
 }
 
 func (s *MyPlatformService) AuthorArticles(c *gin.Context) model.ResultVO {
-	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"))
+	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"), optionalUserID(c))
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -151,7 +151,7 @@ func (s *MyPlatformService) AuthorArticles(c *gin.Context) model.ResultVO {
 }
 
 func (s *MyPlatformService) AuthorTalks(c *gin.Context) model.ResultVO {
-	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"))
+	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"), optionalUserID(c))
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -167,7 +167,7 @@ func (s *MyPlatformService) AuthorTalks(c *gin.Context) model.ResultVO {
 }
 
 func (s *MyPlatformService) AuthorSeries(c *gin.Context) model.ResultVO {
-	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"))
+	author, err := s.platformRepo().GetAuthorByHandle(c.Request.Context(), c.Param("handle"), optionalUserID(c))
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -720,6 +720,12 @@ func (s *MyPlatformService) RetryScheduledPublication(c *gin.Context) model.Resu
 	return model.ResultOkWithData(record)
 }
 
+func optionalUserID(c *gin.Context) int {
+	if user, ok := currentUser(c); ok {
+		return user.UserInfoId
+	}
+	return 0
+}
 func studioAuditActor(c *gin.Context, user model.UserDetailsDTO) port.StudioAuditActor {
 	ip := strings.TrimSpace(c.ClientIP())
 	if ip == "" {

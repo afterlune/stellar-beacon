@@ -19,7 +19,7 @@ type MyPlatformRepo struct{ engine *xorm.Engine }
 
 func NewPlatformRepo(engine *xorm.Engine) *MyPlatformRepo { return &MyPlatformRepo{engine: engine} }
 
-func (r *MyPlatformRepo) GetAuthorByHandle(ctx context.Context, handle string) (port.AuthorCard, error) {
+func (r *MyPlatformRepo) GetAuthorByHandle(ctx context.Context, handle string, viewerID int) (port.AuthorCard, error) {
 	session, err := repoSession(r.engine, ctx, "platform.author")
 	if err != nil {
 		return port.AuthorCard{}, err
@@ -33,13 +33,13 @@ func (r *MyPlatformRepo) GetAuthorByHandle(ctx context.Context, handle string) (
 		return port.AuthorCard{}, apperrors.NotFound("platform.author.get")
 	}
 	author := port.AuthorCard{PublicAuthor: toPublicAuthor(user)}
-	if err := r.attachAuthorCounts(session, &author); err != nil {
+	if err := r.attachAuthorCounts(session, &author, viewerID); err != nil {
 		return port.AuthorCard{}, err
 	}
 	return author, nil
 }
 
-func (r *MyPlatformRepo) attachAuthorCounts(session *xorm.Session, author *port.AuthorCard) error {
+func (r *MyPlatformRepo) attachAuthorCounts(session *xorm.Session, author *port.AuthorCard, viewerID int) error {
 	if author == nil || author.Id <= 0 {
 		return nil
 	}
@@ -52,10 +52,21 @@ func (r *MyPlatformRepo) attachAuthorCounts(session *xorm.Session, author *port.
 	if _, err := session.SQL(`SELECT count(1) FROM t_series WHERE user_id = ? AND is_delete = 0 AND status = 1 AND moderation_status = 'visible'`, author.Id).Get(&author.SeriesCount); err != nil {
 		return apperrors.Unavailable("platform.author.series_count", err)
 	}
+	if _, err := session.SQL(`
+		SELECT count(1) FROM t_user_follow follow
+		JOIN t_user_info follower ON follower.id = follow.follower_id AND follower.is_disable = 0
+		WHERE follow.author_id = ?`, author.Id).Get(&author.FollowerCount); err != nil {
+		return apperrors.Unavailable("platform.author.follower_count", err)
+	}
+	if viewerID > 0 && viewerID != author.Id {
+		if _, err := session.SQL(`SELECT EXISTS (SELECT 1 FROM t_user_follow WHERE follower_id = ? AND author_id = ?)`, viewerID, author.Id).Get(&author.IsFollowing); err != nil {
+			return apperrors.Unavailable("platform.author.following", err)
+		}
+	}
 	return nil
 }
 
-func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size int) ([]*port.AuthorCard, int, error) {
+func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size, viewerID int) ([]*port.AuthorCard, int, error) {
 	session, err := repoSession(r.engine, ctx, "platform.authors")
 	if err != nil {
 		return nil, 0, err
@@ -103,7 +114,7 @@ func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size int) ([]
 	authors := make([]*port.AuthorCard, 0, len(users))
 	for _, user := range users {
 		author := &port.AuthorCard{PublicAuthor: toPublicAuthor(user)}
-		if err := r.attachAuthorCounts(session, author); err != nil {
+		if err := r.attachAuthorCounts(session, author, viewerID); err != nil {
 			return nil, 0, err
 		}
 		authors = append(authors, author)
@@ -127,6 +138,8 @@ func (r *MyPlatformRepo) StudioDashboard(ctx context.Context, userID int) (port.
 		{`SELECT count(1) FROM t_talk WHERE user_id = ?`, &dashboard.TalkCount},
 		{`SELECT count(1) FROM t_series WHERE user_id = ? AND is_delete = 0`, &dashboard.SeriesCount},
 		{`SELECT count(1) FROM t_article_reaction WHERE user_info_id = ? AND reaction = 'favorite'`, &dashboard.FavoriteCount},
+		{`SELECT count(1) FROM t_user_follow follow JOIN t_user_info follower ON follower.id = follow.follower_id AND follower.is_disable = 0 WHERE follow.author_id = ?`, &dashboard.FollowerCount},
+		{`SELECT count(1) FROM t_user_follow follow JOIN t_user_info author ON author.id = follow.author_id AND author.is_disable = 0 WHERE follow.follower_id = ?`, &dashboard.FollowingCount},
 	}
 	for _, item := range queries {
 		if _, err := session.SQL(item.sql, userID).Get(item.target); err != nil {
@@ -463,6 +476,7 @@ func (r *MyPlatformRepo) GetOwnedArticle(ctx context.Context, userID, articleID 
 }
 
 func (r *MyPlatformRepo) SaveOwnedArticle(ctx context.Context, userID int, article entity.TArticle, categoryID int, tagIDs []int) (entity.TArticle, error) {
+	wasPublic := false
 	err := ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
 		if categoryID > 0 {
 			ok, err := session.Where("id = ? AND user_id = ?", categoryID, userID).Exist(&entity.TCategory{})
@@ -515,6 +529,7 @@ func (r *MyPlatformRepo) SaveOwnedArticle(ctx context.Context, userID int, artic
 			if !found {
 				return apperrors.NotFound("platform.studio.article.update")
 			}
+			wasPublic = existing.Status == 1 && existing.IsDelete == 0 && existing.ModerationStatus == "visible"
 			if _, err := session.ID(article.Id).Where("user_id = ?", userID).Cols(
 				"category_id", "article_cover", "article_title", "article_content", "article_content_html",
 				"series_id", "series_order", "scheduled_at", "status", "type", "password", "original_url", "update_time",
@@ -528,6 +543,11 @@ func (r *MyPlatformRepo) SaveOwnedArticle(ctx context.Context, userID int, artic
 		for _, tagID := range uniqueTags {
 			if _, err := session.Insert(&entity.TArticleTag{ArticleId: article.Id, TagId: tagID}); err != nil {
 				return apperrors.Unavailable("platform.studio.article.tags.save", err)
+			}
+		}
+		if !wasPublic {
+			if err := recordArticlePublishEvent(session, article.Id, time.Now()); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -618,6 +638,7 @@ func (r *MyPlatformRepo) GetOwnedTalk(ctx context.Context, userID, talkID int) (
 }
 
 func (r *MyPlatformRepo) SaveOwnedTalk(ctx context.Context, talk entity.TTalk) (entity.TTalk, error) {
+	wasPublic := false
 	err := ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
 		if talk.Status == 0 {
 			talk.Status = 3
@@ -629,7 +650,7 @@ func (r *MyPlatformRepo) SaveOwnedTalk(ctx context.Context, talk entity.TTalk) (
 			if _, err := session.Insert(&talk); err != nil {
 				return apperrors.Unavailable("platform.studio.talk.create", err)
 			}
-			return nil
+			return recordTalkPublishEvent(session, talk.Id, time.Now())
 		}
 		var existing entity.TTalk
 		found, err := session.Where("id = ? AND user_id = ?", talk.Id, talk.UserId).Get(&existing)
@@ -639,10 +660,16 @@ func (r *MyPlatformRepo) SaveOwnedTalk(ctx context.Context, talk entity.TTalk) (
 		if !found {
 			return apperrors.NotFound("platform.studio.talk.update")
 		}
+		wasPublic = existing.Status == 1 && existing.ModerationStatus == "visible"
 		if _, err := session.ID(talk.Id).Where("user_id = ?", talk.UserId).Cols(
 			"content", "images", "is_top", "status", "update_time",
 		).Update(&talk); err != nil {
 			return apperrors.Unavailable("platform.studio.talk.update", err)
+		}
+		if !wasPublic {
+			if err := recordTalkPublishEvent(session, talk.Id, time.Now()); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -941,6 +968,14 @@ func (r *MyPlatformRepo) ModerateContent(ctx context.Context, contentType string
 		}
 		if affected, _ := result.RowsAffected(); affected == 0 {
 			return apperrors.NotFound("platform.moderation.update")
+		}
+		if !hidden {
+			switch contentType {
+			case "article":
+				return recordArticlePublishEvent(session, id, time.Now())
+			case "talk":
+				return recordTalkPublishEvent(session, id, time.Now())
+			}
 		}
 		return nil
 	})

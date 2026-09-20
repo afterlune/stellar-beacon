@@ -100,6 +100,118 @@ async function mockArticleReading(page: Page, onContinuationEvent?: (event: { ar
   })
 }
 
+async function mockSocialApi(page: Page) {
+  const saved = { following: false, unread: 1, readCalls: 0 }
+  const author = {
+    id: 1,
+    handle: 'integration',
+    nickname: '集成作者',
+    avatar: '',
+    intro: '记录长期写作。',
+    website: '',
+    articleCount: 2,
+    talkCount: 1,
+    seriesCount: 0,
+    followerCount: saved.following ? 1 : 0,
+    isFollowing: saved.following
+  }
+  await page.addInitScript(() => {
+    document.cookie = 'locale=cn; path=/'
+    sessionStorage.setItem('token', 'e2e-social-token')
+    sessionStorage.setItem('userStore', JSON.stringify({
+      userInfo: { userInfoId: 2, id: 2, nickname: '读者', handle: 'reader' },
+      token: 'e2e-social-token'
+    }))
+  })
+  await page.route('**/api/v1/**', async (route) => {
+    const url = new URL(route.request().url())
+    const path = url.pathname
+    const method = route.request().method()
+    const respond = (data: unknown) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'OK', message: '操作成功', flag: true, data })
+    })
+    if (path === '/api/v1/public/authors' && method === 'GET') {
+      await respond({ records: [{ ...author, followerCount: saved.following ? 1 : 0, isFollowing: saved.following }], count: 1, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/public/authors/integration' && method === 'GET') {
+      await respond({ ...author, followerCount: saved.following ? 1 : 0, isFollowing: saved.following })
+      return
+    }
+    if (path === '/api/v1/auth/me/following/1' && method === 'PUT') {
+      saved.following = true
+      await respond(null)
+      return
+    }
+    if (path === '/api/v1/auth/me/following/1' && method === 'DELETE') {
+      saved.following = false
+      await respond(null)
+      return
+    }
+    if (path === '/api/v1/auth/me/following-feed' && method === 'GET') {
+      await respond({
+        records: saved.following ? [{
+          eventId: 11,
+          contentType: 'article',
+          contentId: 8,
+          author: { ...author, followerCount: 1 },
+          title: '关注后的新文章',
+          excerpt: '这是一篇关注后发布的新文章。',
+          publishedAt: '2026-09-20T10:00:00+08:00'
+        }] : [],
+        count: saved.following ? 1 : 0,
+        page: 1,
+        pageSize: 12
+      })
+      return
+    }
+    if (path === '/api/v1/auth/me/following' && method === 'GET') {
+      await respond({ records: saved.following ? [{ ...author, followerCount: 1 }] : [], count: saved.following ? 1 : 0, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/auth/me/followers' && method === 'GET') {
+      await respond({ records: [], count: 0, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/auth/me/notifications/unread-count' && method === 'GET') {
+      await respond({ count: saved.following ? saved.unread : 0 })
+      return
+    }
+    if (path === '/api/v1/auth/me/notifications' && method === 'GET') {
+      await respond({
+        records: saved.following && saved.unread ? [{
+          eventId: 11,
+          contentType: 'article',
+          contentId: 8,
+          author,
+          title: '关注后的新文章',
+          excerpt: '这是一篇关注后发布的新文章。',
+          publishedAt: '2026-09-20T10:00:00+08:00',
+          read: false
+        }] : [],
+        count: saved.following && saved.unread ? 1 : 0,
+        page: 1,
+        pageSize: 20,
+        unreadCount: saved.following ? saved.unread : 0
+      })
+      return
+    }
+    if (path === '/api/v1/auth/me/notifications/read' && method === 'POST') {
+      saved.readCalls += 1
+      saved.unread = 0
+      await respond({ unreadCount: 0 })
+      return
+    }
+    if (path === '/api/v1/public/reports/visit') {
+      await respond(null)
+      return
+    }
+    await respond(null)
+  })
+  return saved
+}
 test.beforeEach(async ({ page }) => {
   // The blog shell loads KaTeX from a CDN. Tests must not depend on external
   // network availability or wait for that script during navigation.
@@ -150,6 +262,30 @@ test.describe('mobile front shell', () => {
   })
 })
 
+test.describe('author following', () => {
+  test('follows an author, opens the feed, and clears notifications', async ({ page }) => {
+    const saved = await mockSocialApi(page)
+    await page.goto('/u/integration', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('.author-hero__stats')).toContainText('关注者')
+    await page.getByRole('button', { name: '关注' }).click()
+    await expect(page.getByRole('button', { name: '已关注' })).toBeVisible()
+    expect(saved.following).toBe(true)
+
+    await page.goto('/authors', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '发现作者' })).toBeVisible()
+    await expect(page.getByText('集成作者').first()).toBeVisible()
+
+    await page.goto('/following', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '关注动态' })).toBeVisible()
+    await expect(page.getByText('关注后的新文章')).toBeVisible()
+
+    await page.locator('[data-dia="notifications"]').click()
+    await expect(page).toHaveURL(/\/notifications$/)
+    await expect(page.getByText('关注后的新文章')).toBeVisible()
+    await expect.poll(() => saved.readCalls).toBe(1)
+    expect(saved.unread).toBe(0)
+  })
+})
 test.describe('article reading experience', () => {
   test('tracks visible continuation impressions and clicks', async ({ page }) => {
     test.setTimeout(60_000)

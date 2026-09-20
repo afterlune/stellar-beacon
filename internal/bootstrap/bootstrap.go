@@ -87,6 +87,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	contentAnalyticsRepo := repository.NewContentAnalyticsRepo(engine)
 	studioOperations := repository.NewStudioOperationsRepo(engine)
 	contentAudit := repository.NewContentAuditRepo(engine)
+	followRepo := repository.NewFollowRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -265,6 +266,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		Growth:           growthService,
 		ContentAnalytics: contentAnalyticsService,
 		ContentAudit:     service.NewContentAuditService(contentAudit),
+		Follow:           service.NewFollowService(followRepo),
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

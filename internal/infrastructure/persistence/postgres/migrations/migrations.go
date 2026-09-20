@@ -89,6 +89,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyStudioOperationsSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyFollowSocialSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1178,6 +1181,63 @@ func applyStudioOperationsSchema(ctx context.Context, engine *xorm.Engine) error
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit studio operations migration: %w", err)
+	}
+	return nil
+}
+func applyFollowSocialSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 18)").Get(&applied); err != nil {
+		return fmt.Errorf("check follow social migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin follow social migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS t_user_follow (
+			id BIGSERIAL PRIMARY KEY,
+			follower_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			author_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			start_event_id BIGINT NOT NULL DEFAULT 0,
+			last_read_event_id BIGINT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (follower_id, author_id),
+			CHECK (follower_id <> author_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_follow_follower ON t_user_follow(follower_id, updated_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_follow_author ON t_user_follow(author_id, created_at DESC, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS t_author_publish_event (
+			id BIGSERIAL PRIMARY KEY,
+			author_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			content_type VARCHAR(16) NOT NULL,
+			content_id BIGINT NOT NULL,
+			published_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (content_type, content_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_author_publish_event_timeline ON t_author_publish_event(author_id, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_author_publish_event_published ON t_author_publish_event(published_at DESC, id DESC)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply follow social schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 18, "author-following"); err != nil {
+		return fmt.Errorf("record follow social migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit follow social migration: %w", err)
 	}
 	return nil
 }

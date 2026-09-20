@@ -1,4 +1,4 @@
-import type { StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
+import type { FollowContentType, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
 import { createApiClient } from '@stellar-beacon/api-client'
 
 // The presentation layer still reads `flag` while the shared client is being
@@ -180,6 +180,30 @@ export default {
   },
   getAuthorByHandle: (handle: string) => {
     return http.get('/public/authors/' + encodeURIComponent(handle))
+  },
+  getMyFollowing: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/following', { params })
+  },
+  getMyFollowers: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/followers', { params })
+  },
+  getFollowingFeed: (params: { type?: FollowContentType | 'all'; current?: number; size?: number }) => {
+    return http.get('/auth/me/following-feed', { params })
+  },
+  getFollowNotifications: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/notifications', { params })
+  },
+  getFollowNotificationUnreadCount: () => {
+    return http.get('/auth/me/notifications/unread-count')
+  },
+  markFollowNotificationsRead: () => {
+    return http.post('/auth/me/notifications/read')
+  },
+  followAuthor: (authorId: number) => {
+    return http.put('/auth/me/following/' + encodeURIComponent(authorId))
+  },
+  unfollowAuthor: (authorId: number) => {
+    return http.delete('/auth/me/following/' + encodeURIComponent(authorId))
   },
   getAuthorArticles: (handle: string, params: any) => {
     return http.get('/public/authors/' + encodeURIComponent(handle) + '/articles', { params })

@@ -8,6 +8,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
 	"strings"
+	"time"
 
 	"xorm.io/xorm"
 )
@@ -146,8 +147,18 @@ func (t *MyTalkRepo) GetAdmin(ctx context.Context, id int) (port.TalkAdmin, erro
 }
 
 func (t *MyTalkRepo) SaveOrUpdate(ctx context.Context, talk entity.TTalk) error {
+	wasPublic := false
 	return ormInit.WithEngineTx(t.engine, ctx, func(session *xorm.Session) error {
 		if talk.Id != 0 {
+			var existing entity.TTalk
+			found, err := session.ID(talk.Id).Get(&existing)
+			if err != nil {
+				return apperrors.Wrap(apperrors.KindUnavailable, "talk.publish_state", err)
+			}
+			if !found {
+				return apperrors.NotFound("talk.update")
+			}
+			wasPublic = existing.Status == 1 && existing.ModerationStatus == "visible"
 			result, err := session.Exec(
 				"UPDATE t_talk SET content = ?, images = ?, is_top = ?, status = ?, update_time = CURRENT_TIMESTAMP WHERE id = ?",
 				talk.Content,
@@ -166,12 +177,15 @@ func (t *MyTalkRepo) SaveOrUpdate(ctx context.Context, talk entity.TTalk) error 
 			if updated == 0 {
 				return apperrors.NotFound("talk.update")
 			}
+			if !wasPublic {
+				return recordTalkPublishEvent(session, talk.Id, time.Now())
+			}
 			return nil
 		}
 		if _, err := session.Insert(&talk); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "talk.create", err)
 		}
-		return nil
+		return recordTalkPublishEvent(session, talk.Id, time.Now())
 	})
 }
 

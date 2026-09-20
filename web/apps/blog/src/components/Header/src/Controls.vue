@@ -28,6 +28,15 @@
         <DropdownItem name="cn">中文</DropdownItem>
       </DropdownMenu>
     </Dropdown>
+    <span
+      v-if="userInfo !== ''"
+      class="ob-drop-shadow header-notification"
+      data-dia="notifications"
+      aria-label="发布提醒"
+      @click="openNotifications">
+      <svg-icon icon-class="notice" />
+      <i v-if="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</i>
+    </span>
     <template v-if="userInfo === ''">
       <span class="mr-3" @click="openLoginDialog">{{ t('settings.login') }}</span>
     </template>
@@ -43,6 +52,8 @@
         <DropdownMenu>
           <template v-if="!isMobile">
             <DropdownItem @click="openStudio">{{ $i18n.locale === 'cn' ? '创作台' : 'Studio' }}</DropdownItem>
+            <DropdownItem @click="openFollowing">{{ $i18n.locale === 'cn' ? '关注动态' : 'Following' }}</DropdownItem>
+            <DropdownItem @click="openNotifications">{{ $i18n.locale === 'cn' ? '发布提醒' : 'Notifications' }}</DropdownItem>
             <DropdownItem @click="openStudioProfile">{{ $i18n.locale === 'cn' ? '公开资料' : 'Public profile' }}</DropdownItem>
             <DropdownItem @click="openFavorites">{{ t('reactions.favorites') }}</DropdownItem>
             <DropdownItem @click="openUserCenter">{{ t('settings.personal-center') }}</DropdownItem>
@@ -130,11 +141,12 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, toRef, toRefs, reactive, getCurrentInstance, nextTick, watch } from 'vue'
+import { computed, defineComponent, toRef, toRefs, reactive, getCurrentInstance, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { Dropdown, DropdownMenu, DropdownItem } from '@/components/Dropdown'
 import { useAppStore } from '@/stores/app'
 import { useCommonStore } from '@/stores/common'
 import { useUserStore } from '@/stores/user'
+import { useSocialStore } from '@/stores/social'
 import { useRoute, useRouter } from 'vue-router'
 import ThemeToggle from '@/components/ToggleSwitch/ThemeToggle.vue'
 import api from '@/api/api'
@@ -159,6 +171,7 @@ export default defineComponent({
     const appStore = useAppStore()
     const commonStore = useCommonStore()
     const userStore = useUserStore()
+    const socialStore = useSocialStore()
     const searchStore = useSearchStore()
     const navigatorStore = useNavigatorStore()
     const router = useRouter()
@@ -184,9 +197,25 @@ export default defineComponent({
         document.getElementById('article-password-input')?.focus()
       })
     })
+    let unreadTimer: number | undefined
+    const refreshUnread = () => {
+      if (userStore.userInfo) void socialStore.refreshUnread()
+    }
     watch(() => route.query.login, () => {
       if (route.query.login === '1') reactiveDate.loginDialogVisible = true
     }, { immediate: true })
+    watch(() => userStore.userInfo, (value) => {
+      if (value) refreshUnread()
+      else socialStore.reset()
+    }, { immediate: true })
+    onMounted(() => {
+      window.addEventListener('focus', refreshUnread)
+      unreadTimer = window.setInterval(refreshUnread, 60000)
+    })
+    onUnmounted(() => {
+      window.removeEventListener('focus', refreshUnread)
+      if (unreadTimer) window.clearInterval(unreadTimer)
+    })
     const handleClick = (name: string): void => {
       appStore.changeLocale(name)
     }
@@ -253,6 +282,12 @@ export default defineComponent({
     }
     const openStudio = () => {
       router.push({ path: '/studio' })
+    }
+    const openNotifications = () => {
+      router.push({ path: '/notifications' })
+    }
+    const openFollowing = () => {
+      router.push({ path: '/following' })
     }
     const openStudioProfile = () => {
       router.push({ path: '/studio/profile' })
@@ -389,6 +424,9 @@ export default defineComponent({
       openUserCenter,
       openFavorites,
       openStudio,
+      openNotifications,
+      openFollowing,
+      unreadCount: computed(() => socialStore.unreadCount),
       openStudioProfile,
       openReading,
       openLoginDialog,
@@ -442,6 +480,25 @@ export default defineComponent({
 #submit-button {
   outline: none;
   background: var(--text-accent);
+}
+.header-notification {
+  position: relative;
+}
+.header-notification i {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-ob);
+  color: #081127;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 17px;
+  text-align: center;
 }
 .header-controls {
   gap: 2px;

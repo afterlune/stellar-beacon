@@ -87,6 +87,16 @@ paths:
     get: { tags: [public], summary: Get talk detail, operationId: getTalk, parameters: [{ $ref: '#/components/parameters/TalkId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/users/{userInfoId}:
     get: { tags: [public], summary: Get public user information, operationId: getPublicUser, parameters: [{ $ref: '#/components/parameters/UserInfoId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/authors:
+    get: { tags: [public], summary: List public authors, operationId: listPlatformAuthors, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/authors/{handle}:
+    get: { tags: [public], summary: Get a public author profile, operationId: getAuthorByHandle, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/authors/{handle}/articles:
+    get: { tags: [public], summary: List an author's public articles, operationId: listAuthorArticles, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/authors/{handle}/talks:
+    get: { tags: [public], summary: List an author's public talks, operationId: listAuthorTalks, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/authors/{handle}/series:
+    get: { tags: [public], summary: List an author's public series, operationId: listAuthorSeries, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/reports/visit:
     post: { tags: [public], summary: Report a visit, operationId: reportVisit, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/diagnostics/business-error:
@@ -111,6 +121,20 @@ paths:
     put: { tags: [auth], summary: Update subscription, operationId: updateSubscription, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/notifications:
     put: { tags: [auth], summary: Set the comment email notification preference, operationId: updateCommentNotice, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get: { tags: [auth], summary: List follow notifications, operationId: listFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notifications/unread-count:
+    get: { tags: [auth], summary: Count unread follow notifications, operationId: getUnreadFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notifications/read:
+    post: { tags: [auth], summary: Mark follow notifications read, operationId: markFollowNotificationsRead, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/following/{authorId}:
+    put: { tags: [auth], summary: Follow an author, operationId: followAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [auth], summary: Unfollow an author, operationId: unfollowAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/following:
+    get: { tags: [auth], summary: List authors followed by the current account, operationId: listFollowingAuthors, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/followers:
+    get: { tags: [auth], summary: List followers of the current account, operationId: listAuthorFollowers, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/following-feed:
+    get: { tags: [auth], summary: List content from followed authors, operationId: listFollowingFeed, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/reactions:
     put: { tags: [auth], summary: Set the like or favourite state of an article, operationId: toggleArticleReaction, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     get: { tags: [auth], summary: List the current account reactions, operationId: listMyArticleReactions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
