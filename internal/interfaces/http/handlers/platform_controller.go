@@ -33,6 +33,12 @@ func ListStudioSeries(c *gin.Context)   { c.JSON(http.StatusOK, platformService.
 func GetStudioSeries(c *gin.Context)    { c.JSON(http.StatusOK, platformService.GetOwnedSeries(c)) }
 func SaveStudioSeries(c *gin.Context)   { c.JSON(http.StatusOK, platformService.SaveOwnedSeries(c)) }
 func DeleteStudioSeries(c *gin.Context) { c.JSON(http.StatusOK, platformService.DeleteOwnedSeries(c)) }
+func BatchUpdateStudioContentStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, platformService.BatchUpdateContentStatus(c))
+}
+func BatchDeleteStudioContent(c *gin.Context) {
+	c.JSON(http.StatusOK, platformService.BatchDeleteContent(c))
+}
 
 func ListStudioCategories(c *gin.Context) {
 	c.JSON(http.StatusOK, platformService.ListOwnedCategories(c))

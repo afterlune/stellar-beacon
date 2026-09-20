@@ -97,6 +97,8 @@ func RouterSetup(router *gin.Engine) {
 	studio.POST("/series", api.SaveStudioSeries)
 	studio.PUT("/series/:seriesId", api.SaveStudioSeries)
 	studio.DELETE("/series/:seriesId", api.DeleteStudioSeries)
+	studio.PUT("/content/batch-status", api.BatchUpdateStudioContentStatus)
+	studio.DELETE("/content/batch", api.BatchDeleteStudioContent)
 	studio.GET("/categories", api.ListStudioCategories)
 	studio.POST("/categories", api.SaveStudioCategory)
 	studio.PUT("/categories/:categoryId", api.SaveStudioCategory)

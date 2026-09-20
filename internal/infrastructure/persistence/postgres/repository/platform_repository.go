@@ -406,12 +406,19 @@ func (r *MyPlatformRepo) ListOwnedArticles(ctx context.Context, userID int, filt
 	}
 	limit, offset := pgsql.Page(filter.Current, filter.Size)
 	pageArgs := append(append([]interface{}{}, args...), limit, offset)
+	order := "a.update_time DESC NULLS LAST, a.id DESC"
+	if filter.SeriesID > 0 {
+		order = "a.series_order ASC, a.id ASC"
+	} else if filter.Status == 4 {
+		order = "a.scheduled_at ASC NULLS LAST, a.id ASC"
+	}
 	var articles []*port.ArticleAdmin
 	if err := session.SQL(`
-		SELECT a.id, a.user_id, a.article_cover, a.article_title, a.is_top, a.is_featured, a.is_delete, a.status,
-		       a.moderation_status, a.moderation_reason, a.type, a.create_time, c.category_name
+		SELECT a.id, a.user_id, a.article_cover, a.article_title, a.series_id, a.series_order, a.scheduled_at,
+		       a.is_top, a.is_featured, a.is_delete, a.status, a.moderation_status, a.moderation_reason,
+		       a.type, a.create_time, c.category_name
 		FROM t_article a LEFT JOIN t_category c ON a.category_id = c.id
-		WHERE `+where+` ORDER BY a.update_time DESC NULLS LAST, a.id DESC LIMIT ? OFFSET ?`, pageArgs...).Find(&articles); err != nil {
+		WHERE `+where+` ORDER BY `+order+` LIMIT ? OFFSET ?`, pageArgs...).Find(&articles); err != nil {
 		return nil, 0, apperrors.Unavailable("platform.studio.articles.list", err)
 	}
 	return articles, count, nil
@@ -744,6 +751,144 @@ func (r *MyPlatformRepo) DeleteOwnedSeries(ctx context.Context, userID, seriesID
 	})
 }
 
+func (r *MyPlatformRepo) BatchUpdateOwnedContentStatus(ctx context.Context, userID int, contentType port.StudioContentType, ids []int, status int) (int, error) {
+	table, ok := studioContentTable(contentType)
+	ids = uniqueInts(ids)
+	if !ok || len(ids) == 0 || status < 1 || status > 3 {
+		return 0, apperrors.Invalid("platform.studio.content.batch-status", "invalid batch status request")
+	}
+	affected := 0
+	err := ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
+		existence := "SELECT count(1) FROM " + table + " WHERE user_id = ? AND id IN (" + questionMarks(len(ids)) + ")"
+		existenceArgs := make([]interface{}, 0, len(ids)+1)
+		existenceArgs = append(existenceArgs, userID)
+		for _, id := range ids {
+			existenceArgs = append(existenceArgs, id)
+		}
+		if contentType == port.StudioContentArticle || contentType == port.StudioContentSeries {
+			existence += " AND is_delete = 0"
+		}
+		var count int
+		if _, err := session.SQL(existence, existenceArgs...).Get(&count); err != nil {
+			return apperrors.Unavailable("platform.studio.content.batch-status.owner", err)
+		}
+		if count != len(ids) {
+			return apperrors.NotFound("platform.studio.content.batch-status")
+		}
+
+		update := "UPDATE " + table + " SET status = ?, update_time = ? WHERE user_id = ? AND id IN (" + questionMarks(len(ids)) + ")"
+		if contentType == port.StudioContentArticle {
+			update = "UPDATE t_article SET status = ?, password = '', scheduled_at = NULL, update_time = ? WHERE user_id = ? AND id IN (" + questionMarks(len(ids)) + ")"
+		}
+		updateArgs := make([]interface{}, 0, len(ids)+3)
+		updateArgs = append(updateArgs, status, time.Now(), userID)
+		for _, id := range ids {
+			updateArgs = append(updateArgs, id)
+		}
+		result, err := session.Exec(append([]interface{}{update}, updateArgs...)...)
+		if err != nil {
+			return apperrors.Unavailable("platform.studio.content.batch-status.update", err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return apperrors.Unavailable("platform.studio.content.batch-status.rows", err)
+		}
+		affected = int(rows)
+		return nil
+	})
+	return affected, err
+}
+
+func (r *MyPlatformRepo) BatchDeleteOwnedContent(ctx context.Context, userID int, contentType port.StudioContentType, ids []int) (int, error) {
+	table, ok := studioContentTable(contentType)
+	ids = uniqueInts(ids)
+	if !ok || len(ids) == 0 {
+		return 0, apperrors.Invalid("platform.studio.content.batch-delete", "invalid batch delete request")
+	}
+	affected := 0
+	err := ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
+		existence := "SELECT count(1) FROM " + table + " WHERE user_id = ? AND id IN (" + questionMarks(len(ids)) + ")"
+		existenceArgs := make([]interface{}, 0, len(ids)+1)
+		existenceArgs = append(existenceArgs, userID)
+		for _, id := range ids {
+			existenceArgs = append(existenceArgs, id)
+		}
+		if contentType == port.StudioContentArticle || contentType == port.StudioContentSeries {
+			existence += " AND is_delete = 0"
+		}
+		var count int
+		if _, err := session.SQL(existence, existenceArgs...).Get(&count); err != nil {
+			return apperrors.Unavailable("platform.studio.content.batch-delete.owner", err)
+		}
+		if count != len(ids) {
+			return apperrors.NotFound("platform.studio.content.batch-delete")
+		}
+
+		args := make([]interface{}, 0, len(ids)+1)
+		args = append(args, userID)
+		for _, id := range ids {
+			args = append(args, id)
+		}
+		placeholders := questionMarks(len(ids))
+		switch contentType {
+		case port.StudioContentArticle:
+			if _, err := session.Exec(append([]interface{}{"DELETE FROM t_article_tag WHERE article_id IN (SELECT id FROM t_article WHERE user_id = ? AND id IN (" + placeholders + "))"}, args...)...); err != nil {
+				return apperrors.Unavailable("platform.studio.content.batch-delete.tags", err)
+			}
+			result, err := session.Exec(append([]interface{}{"DELETE FROM t_article WHERE user_id = ? AND id IN (" + placeholders + ")"}, args...)...)
+			if err != nil {
+				return apperrors.Unavailable("platform.studio.content.batch-delete.articles", err)
+			}
+			rows, _ := result.RowsAffected()
+			affected = int(rows)
+		case port.StudioContentTalk:
+			result, err := session.Exec(append([]interface{}{"DELETE FROM t_talk WHERE user_id = ? AND id IN (" + placeholders + ")"}, args...)...)
+			if err != nil {
+				return apperrors.Unavailable("platform.studio.content.batch-delete.talks", err)
+			}
+			rows, _ := result.RowsAffected()
+			affected = int(rows)
+		case port.StudioContentSeries:
+			detachArgs := make([]interface{}, 0, len(ids)+1)
+			detachArgs = append(detachArgs, userID)
+			for _, id := range ids {
+				detachArgs = append(detachArgs, id)
+			}
+			if _, err := session.Exec(append([]interface{}{"UPDATE t_article SET series_id = NULL, series_order = 0 WHERE user_id = ? AND series_id IN (" + placeholders + ")"}, detachArgs...)...); err != nil {
+				return apperrors.Unavailable("platform.studio.content.batch-delete.detach", err)
+			}
+			result, err := session.Exec(append([]interface{}{"UPDATE t_series SET is_delete = 1, update_time = ? WHERE user_id = ? AND id IN (" + placeholders + ")", time.Now()}, args...)...)
+			if err != nil {
+				return apperrors.Unavailable("platform.studio.content.batch-delete.series", err)
+			}
+			rows, _ := result.RowsAffected()
+			affected = int(rows)
+		}
+		return nil
+	})
+	return affected, err
+}
+
+func studioContentTable(contentType port.StudioContentType) (string, bool) {
+	switch contentType {
+	case port.StudioContentArticle:
+		return "t_article", true
+	case port.StudioContentTalk:
+		return "t_talk", true
+	case port.StudioContentSeries:
+		return "t_series", true
+	default:
+		return "", false
+	}
+}
+
+func questionMarks(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	return strings.TrimRight(strings.Repeat("?,", count), ",")
+}
+
 func (r *MyPlatformRepo) ListOwnedCategories(ctx context.Context, userID int) ([]*port.Category, error) {
 	session, err := repoSession(r.engine, ctx, "platform.studio.categories")
 	if err != nil {
@@ -941,6 +1086,10 @@ func ownedFilter(userID int, filter port.StudioFilter, alias string) (string, []
 	if filter.Status > 0 {
 		where += " AND " + alias + ".status = ?"
 		args = append(args, filter.Status)
+	}
+	if alias == "a" && filter.SeriesID > 0 {
+		where += " AND " + alias + ".series_id = ?"
+		args = append(args, filter.SeriesID)
 	}
 	if strings.TrimSpace(filter.Keywords) != "" {
 		column := alias + ".article_title"

@@ -96,6 +96,17 @@ type StudioSeriesVO struct {
 	Visibility string `json:"visibility"`
 }
 
+type StudioBatchStatusVO struct {
+	Kind       string `json:"kind"`
+	Ids        []int  `json:"ids"`
+	Visibility string `json:"visibility"`
+}
+
+type StudioBatchDeleteVO struct {
+	Kind string `json:"kind"`
+	Ids  []int  `json:"ids"`
+}
+
 type StudioTaxonomyVO struct {
 	Id   int    `json:"id"`
 	Name string `json:"name"`

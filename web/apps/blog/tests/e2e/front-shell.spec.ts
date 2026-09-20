@@ -742,11 +742,28 @@ test.describe('front-end experience regressions', () => {
   })
 })
 
-async function mockStudioApi(page: Page, options: { draft?: unknown; profile?: any } = {}) {
+async function mockStudioApi(page: Page, options: {
+  draft?: unknown
+  profile?: any
+  articleItems?: any[]
+  talkItems?: any[]
+  seriesItems?: any[]
+  articleDetail?: any
+  talkDetail?: any
+  seriesDetail?: any
+} = {}) {
   const saved = {
     article: null as any,
     talk: null as any,
     series: null as any,
+    batchStatus: null as any,
+    batchDelete: null as any,
+    articleItems: options.articleItems || [{ id: 9, articleTitle: '我的私有草稿', status: 3, moderationStatus: 'visible', createTime: '2026-09-18T10:00:00+08:00' }],
+    talkItems: options.talkItems || [],
+    seriesItems: options.seriesItems || [],
+    articleDetail: options.articleDetail || null,
+    talkDetail: options.talkDetail || null,
+    seriesDetail: options.seriesDetail || null,
     profile: {
       handle: 'test-author',
       nickname: '测试作者',
@@ -800,16 +817,41 @@ async function mockStudioApi(page: Page, options: { draft?: unknown; profile?: a
       await respond('https://cdn.example.test/studio-upload.png')
       return
     }
-    if (url.pathname === '/api/v1/studio/articles' && method === 'GET') {
-      await respond({ items: [{ id: 9, articleTitle: '我的私有草稿', status: 3, moderationStatus: 'visible', createTime: '2026-09-18T10:00:00+08:00' }], total: 1, page: 1, pageSize: 12 })
+    if (url.pathname === '/api/v1/studio/content/batch-status' && method === 'PUT') {
+      saved.batchStatus = route.request().postDataJSON()
+      const ids = new Set(saved.batchStatus.ids || [])
+      for (const collection of [saved.articleItems, saved.talkItems, saved.seriesItems]) {
+        for (const item of collection) {
+          if (ids.has(Number(item.id))) item.status = ({ public: 1, private: 2, draft: 3 } as any)[saved.batchStatus.visibility]
+        }
+      }
+      await respond({ updated: ids.size })
       return
     }
-    if (url.pathname === '/api/v1/studio/articles/99' && method === 'GET') {
-      await respond({
-        id: 99,
-        articleTitle: saved.article?.articleTitle || '已保存文章',
-        articleContent: saved.article?.articleContent || '',
-        articleContentHtml: saved.article?.articleContentHtml || '',
+    if (url.pathname === '/api/v1/studio/content/batch' && method === 'DELETE') {
+      saved.batchDelete = route.request().postDataJSON()
+      const ids = new Set(saved.batchDelete.ids || [])
+      if (saved.batchDelete.kind === 'article') saved.articleItems = saved.articleItems.filter((item: any) => !ids.has(Number(item.id)))
+      if (saved.batchDelete.kind === 'talk') saved.talkItems = saved.talkItems.filter((item: any) => !ids.has(Number(item.id)))
+      if (saved.batchDelete.kind === 'series') saved.seriesItems = saved.seriesItems.filter((item: any) => !ids.has(Number(item.id)))
+      await respond({ deleted: ids.size })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/articles' && method === 'GET') {
+      const status = Number(url.searchParams.get('status') || 0)
+      const seriesId = Number(url.searchParams.get('seriesId') || 0)
+      const items = saved.articleItems.filter((item: any) => (!status || Number(item.status) === status) && (!seriesId || Number(item.seriesId) === seriesId))
+      await respond({ items, total: items.length, page: 1, pageSize: 12 })
+      return
+    }
+    if (/^\/api\/v1\/studio\/articles\/\d+$/.test(url.pathname) && method === 'GET') {
+      const id = Number(url.pathname.split('/').pop())
+      const detail = id === 99 && saved.article ? { ...saved.article, id: 99 } : saved.articleDetail
+      await respond(detail || {
+        id,
+        articleTitle: '已保存文章',
+        articleContent: '',
+        articleContentHtml: '',
         articleCover: '',
         categoryId: 0,
         tagNames: [],
@@ -828,13 +870,25 @@ async function mockStudioApi(page: Page, options: { draft?: unknown; profile?: a
       await respond({ id: 99 })
       return
     }
+    if (url.pathname === '/api/v1/studio/talks' && method === 'GET') {
+      await respond({ items: saved.talkItems, total: saved.talkItems.length, page: 1, pageSize: 12 })
+      return
+    }
+    if (/^\/api\/v1\/studio\/talks\/\d+$/.test(url.pathname) && method === 'GET') {
+      await respond(saved.talkDetail || { id: Number(url.pathname.split('/').pop()), content: '', images: '[]', status: 3, moderationStatus: 'visible' })
+      return
+    }
     if (url.pathname === '/api/v1/studio/talks' && method === 'POST') {
       saved.talk = route.request().postDataJSON()
       await respond({ id: 88 })
       return
     }
     if (url.pathname === '/api/v1/studio/series' && method === 'GET') {
-      await respond({ items: [], total: 0, page: 1, pageSize: 100 })
+      await respond({ items: saved.seriesItems, total: saved.seriesItems.length, page: 1, pageSize: 100 })
+      return
+    }
+    if (/^\/api\/v1\/studio\/series\/\d+$/.test(url.pathname) && method === 'GET') {
+      await respond(saved.seriesDetail || { id: Number(url.pathname.split('/').pop()), seriesName: '', seriesDesc: '', cover: '', status: 3, moderationStatus: 'visible' })
       return
     }
     if (url.pathname === '/api/v1/studio/series' && method === 'POST') {
@@ -907,6 +961,115 @@ test.describe('studio workspace', () => {
   })
 
 
+  test('shows the publish queue and opens the scheduled article filter', async ({ page }) => {
+    await mockStudioApi(page, {
+      articleItems: [
+        { id: 41, articleTitle: '下周发布的文章', status: 4, scheduledAt: '2026-10-08T09:30:00+08:00', moderationStatus: 'visible', createTime: '2026-09-20T09:00:00+08:00' },
+        { id: 42, articleTitle: '普通草稿', status: 3, moderationStatus: 'visible', createTime: '2026-09-19T09:00:00+08:00' }
+      ]
+    })
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('heading', { name: '发布队列' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /下周发布的文章/ })).toBeVisible()
+    await page.getByRole('link', { name: /管理全部 1 篇/ }).click()
+
+    await expect(page).toHaveURL(/\/studio\/articles\?status=4$/)
+    await expect(page.getByText('下周发布的文章')).toBeVisible()
+    await expect(page.locator('.studio-schedule')).toContainText('计划发布')
+    await expect(page.getByText('普通草稿')).toHaveCount(0)
+  })
+
+  test('previews article talk and series in their published page shapes', async ({ page }) => {
+    await mockStudioApi(page, {
+      articleDetail: {
+        id: 42,
+        articleTitle: '私有文章预览',
+        articleContent: '',
+        articleContentHtml: '<h2>正文信号</h2><script>alert(1)</script>',
+        articleCover: '',
+        categoryName: '工程',
+        status: 2,
+        type: 1,
+        moderationStatus: 'visible'
+      },
+      talkDetail: {
+        id: 8,
+        content: '随想预览正文',
+        images: '["https://cdn.example.test/talk.png"]',
+        status: 3,
+        moderationStatus: 'visible'
+      },
+      seriesDetail: {
+        id: 7,
+        seriesName: '系列预览',
+        seriesDesc: '系列说明',
+        cover: 'https://cdn.example.test/series.png',
+        status: 2,
+        moderationStatus: 'visible'
+      },
+      articleItems: [
+        { id: 42, articleTitle: '私有文章预览', status: 3, seriesId: 7, seriesOrder: 1, moderationStatus: 'visible', createTime: '2026-09-20T09:00:00+08:00' }
+      ]
+    })
+
+    await page.goto('/studio/articles/42/preview', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('未发布预览')).toBeVisible()
+    await expect(page.getByRole('heading', { name: '私有文章预览' })).toBeVisible()
+    await expect(page.locator('.studio-preview-content h2')).toHaveText('正文信号')
+    await expect(page.locator('.studio-preview-content script')).toHaveCount(0)
+
+    await page.goto('/studio/talks/8/preview', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('随想预览正文')).toBeVisible()
+    await expect(page.locator('.studio-preview-talk__images img')).toHaveCount(1)
+
+    await page.goto('/studio/series/7/preview', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '系列预览' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /私有文章预览/ })).toBeVisible()
+  })
+
+  test('applies batch visibility and batch deletes selected loaded content', async ({ page }) => {
+    const saved = await mockStudioApi(page, {
+      articleItems: [
+        { id: 51, articleTitle: '批量文章一', status: 3, moderationStatus: 'visible', createTime: '2026-09-20T09:00:00+08:00' },
+        { id: 52, articleTitle: '批量文章二', status: 3, moderationStatus: 'visible', createTime: '2026-09-20T08:00:00+08:00' }
+      ]
+    })
+    await page.goto('/studio/articles', { waitUntil: 'domcontentloaded' })
+
+    const checkboxes = page.locator('.studio-record__select input')
+    await checkboxes.nth(0).check()
+    await checkboxes.nth(1).check()
+    await page.getByLabel('批量状态').selectOption('1')
+    await page.getByRole('button', { name: '应用状态' }).click()
+    await expect(page.getByText('确认批量公开')).toBeVisible()
+    await page.getByRole('button', { name: '确认公开' }).click()
+
+    await expect.poll(() => saved.batchStatus?.ids?.length).toBe(2)
+    expect(saved.batchStatus?.visibility).toBe('public')
+    await expect(page.locator('.studio-badge.status-1')).toHaveCount(2)
+
+    await page.locator('.studio-record__select input').first().check()
+    await page.getByRole('button', { name: '批量删除' }).click()
+    await page.getByRole('button', { name: '确认删除' }).click()
+
+    await expect.poll(() => saved.batchDelete?.ids?.length).toBe(1)
+    await expect(page.locator('.studio-record')).toHaveCount(1)
+  })
+
+  test('copies a public content link from the studio list', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await mockStudioApi(page, {
+      articleItems: [
+        { id: 61, articleTitle: '公开分享文章', status: 1, moderationStatus: 'visible', createTime: '2026-09-20T09:00:00+08:00' }
+      ]
+    })
+    await page.goto('/studio/articles', { waitUntil: 'domcontentloaded' })
+    await page.getByRole('button', { name: '复制链接' }).click()
+
+    await expect(page.getByText('公开链接已复制')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('http://127.0.0.1:8080/articles/61')
+  })
   test('creates a draft in the dedicated article editor', async ({ page }) => {
     const saved = await mockStudioApi(page)
     await page.goto('/studio/articles', { waitUntil: 'domcontentloaded' })

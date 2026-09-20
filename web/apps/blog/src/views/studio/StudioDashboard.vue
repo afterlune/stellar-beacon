@@ -13,6 +13,21 @@
       </article>
     </section>
 
+    <section class="studio-panel studio-schedule-panel">
+      <header>
+        <div><p>PUBLISH QUEUE</p><h2>发布队列</h2></div>
+        <router-link v-if="scheduledTotal" to="/studio/articles?status=4">管理全部 {{ scheduledTotal }} 篇 →</router-link>
+      </header>
+      <div v-if="scheduledArticles.length" class="studio-schedule-list">
+        <router-link v-for="item in scheduledArticles" :key="item.id" :to="`/studio/articles/${item.id}/edit`">
+          <time>{{ formatDateTime(item.scheduledAt) }}</time>
+          <strong>{{ item.articleTitle }}</strong>
+          <span>编辑定时 →</span>
+        </router-link>
+      </div>
+      <p v-else class="studio-schedule-empty">当前没有待发布的定时文章。</p>
+    </section>
+
     <div class="studio-dashboard__grid">
       <section class="studio-panel studio-panel--profile">
         <header>
@@ -63,6 +78,8 @@ export default defineComponent({
     const userStore = useUserStore()
     const appStore = useAppStore()
     const dashboard = ref<Record<string, number>>({})
+    const scheduledArticles = ref<any[]>([])
+    const scheduledTotal = ref(0)
     const profile = reactive<StudioProfile>({
       handle: normalizeStudioHandle(userStore.userInfo?.handle),
       nickname: userStore.userInfo?.nickname || '',
@@ -92,6 +109,20 @@ export default defineComponent({
       }
     }
 
+    const loadSchedule = async () => {
+      try {
+        const response = await api.getStudioArticles({ current: 1, size: 3, status: 4 })
+        const data = response?.data?.data || {}
+        scheduledArticles.value = Array.isArray(data.records) ? data.records : Array.isArray(data.items) ? data.items : []
+        scheduledTotal.value = Number(data.count ?? data.total ?? 0)
+      } catch {
+        scheduledArticles.value = []
+        scheduledTotal.value = 0
+      }
+    }
+
+    const formatDateTime = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '待定'
+
     const loadProfile = async () => {
       try {
         const response = await api.getStudioProfile()
@@ -105,10 +136,14 @@ export default defineComponent({
 
     onMounted(() => {
       void loadDashboard()
+      void loadSchedule()
       void loadProfile()
     })
 
-    return { dashboard, profile, stats, defaultAvatar, completion, normalizedHandle, validHandle }
+    return {
+      dashboard, scheduledArticles, scheduledTotal, formatDateTime,
+      profile, stats, defaultAvatar, completion, normalizedHandle, validHandle
+    }
   }
 })
 </script>
@@ -124,6 +159,14 @@ export default defineComponent({
 .studio-stats span, .studio-stats small { display: block; color: var(--text-ob-dim); font-size: 10px; }
 .studio-stats strong { display: block; margin: 8px 0 4px; font-size: 1.45rem; }
 .studio-dashboard__grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 16px; }
+.studio-schedule-panel { margin-bottom: 16px; }
+.studio-schedule-panel header a { color: var(--color-ob); font-size: 12px; text-decoration: none; }
+.studio-schedule-list { display: grid; gap: 8px; }
+.studio-schedule-list a { display: grid; grid-template-columns: 165px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid var(--border-hairline); border-radius: 12px; color: inherit; text-decoration: none; }
+.studio-schedule-list time { color: var(--color-ob); font-size: 11px; }
+.studio-schedule-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-schedule-list span { color: var(--text-ob-dim); font-size: 11px; }
+.studio-schedule-empty { margin: 0; color: var(--text-ob-dim); font-size: 12px; }
 .studio-panel { padding: 24px; border: 1px solid var(--border-hairline); border-radius: 18px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
 .studio-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .studio-panel h2 { margin: 0; }
@@ -145,5 +188,5 @@ export default defineComponent({
 .studio-quick span { grid-column: 1; color: var(--text-ob-dim); font-size: 11px; }
 .studio-quick em { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--color-ob); font-style: normal; }
 @media (max-width: 980px) { .studio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .studio-dashboard__grid { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .studio-page-head { align-items: stretch; flex-direction: column; } .studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-profile-summary { grid-template-columns: 1fr; } .studio-profile-summary > img { width: 72px; height: 72px; } .studio-profile-progress, .studio-profile-actions { grid-column: auto; } }
+@media (max-width: 620px) { .studio-page-head { align-items: stretch; flex-direction: column; } .studio-schedule-list a { grid-template-columns: 1fr; } .studio-schedule-list span { display: none; } .studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-profile-summary { grid-template-columns: 1fr; } .studio-profile-summary > img { width: 72px; height: 72px; } .studio-profile-progress, .studio-profile-actions { grid-column: auto; } }
 </style>

@@ -42,6 +42,8 @@ type PlatformService interface {
 	GetOwnedSeries(c *gin.Context) model.ResultVO
 	SaveOwnedSeries(c *gin.Context) model.ResultVO
 	DeleteOwnedSeries(c *gin.Context) model.ResultVO
+	BatchUpdateContentStatus(c *gin.Context) model.ResultVO
+	BatchDeleteContent(c *gin.Context) model.ResultVO
 
 	ListOwnedCategories(c *gin.Context) model.ResultVO
 	SaveOwnedCategory(c *gin.Context) model.ResultVO
@@ -613,6 +615,103 @@ func (s *MyPlatformService) DeleteOwnedSeries(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
+func (s *MyPlatformService) BatchUpdateContentStatus(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	var vo model.StudioBatchStatusVO
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	contentType, ok := studioBatchContentType(vo.Kind)
+	if !ok {
+		return model.ResultFailWithMessage("内容类型不正确")
+	}
+	ids, message := studioBatchIDs(vo.Ids)
+	if message != "" {
+		return model.ResultFailWithMessage(message)
+	}
+	status, ok := visibilityStatus(vo.Visibility, false)
+	if !ok {
+		return model.ResultFailWithMessage("批量状态仅支持公开、私有或草稿")
+	}
+	updated, err := s.platformRepo().BatchUpdateOwnedContentStatus(c.Request.Context(), user.UserInfoId, contentType, ids, status)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if contentType == port.StudioContentArticle && s.cache != nil {
+		for _, id := range ids {
+			_ = s.cache.Delete(c.Request.Context(), strconv.Itoa(id))
+		}
+	}
+	return model.ResultOkWithData(map[string]int{"updated": updated})
+}
+
+func (s *MyPlatformService) BatchDeleteContent(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	var vo model.StudioBatchDeleteVO
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	contentType, ok := studioBatchContentType(vo.Kind)
+	if !ok {
+		return model.ResultFailWithMessage("内容类型不正确")
+	}
+	ids, message := studioBatchIDs(vo.Ids)
+	if message != "" {
+		return model.ResultFailWithMessage(message)
+	}
+	deleted, err := s.platformRepo().BatchDeleteOwnedContent(c.Request.Context(), user.UserInfoId, contentType, ids)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if contentType == port.StudioContentArticle && s.cache != nil {
+		for _, id := range ids {
+			_ = s.cache.Delete(c.Request.Context(), strconv.Itoa(id))
+		}
+	}
+	return model.ResultOkWithData(map[string]int{"deleted": deleted})
+}
+
+func studioBatchContentType(value string) (port.StudioContentType, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(port.StudioContentArticle):
+		return port.StudioContentArticle, true
+	case string(port.StudioContentTalk):
+		return port.StudioContentTalk, true
+	case string(port.StudioContentSeries):
+		return port.StudioContentSeries, true
+	default:
+		return "", false
+	}
+}
+
+func studioBatchIDs(values []int) ([]int, string) {
+	if len(values) == 0 {
+		return nil, "请选择要操作的内容"
+	}
+	seen := make(map[int]struct{}, len(values))
+	ids := make([]int, 0, len(values))
+	for _, value := range values {
+		if value <= 0 {
+			return nil, "内容 ID 不正确"
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		ids = append(ids, value)
+	}
+	if len(ids) > 100 {
+		return nil, "单次最多操作 100 条内容"
+	}
+	return ids, ""
+}
+
 func (s *MyPlatformService) ListOwnedCategories(c *gin.Context) model.ResultVO {
 	user, ok := currentUser(c)
 	if !ok {
@@ -811,7 +910,14 @@ func studioFilter(c *gin.Context) (port.StudioFilter, error) {
 			return port.StudioFilter{}, errInvalidPage
 		}
 	}
-	return port.StudioFilter{Current: current, Size: size, Status: status, Keywords: c.Query("keywords")}, nil
+	seriesID := 0
+	if raw := strings.TrimSpace(c.Query("seriesId")); raw != "" {
+		seriesID, err = strconv.Atoi(raw)
+		if err != nil || seriesID <= 0 {
+			return port.StudioFilter{}, errInvalidPage
+		}
+	}
+	return port.StudioFilter{Current: current, Size: size, Status: status, SeriesID: seriesID, Keywords: c.Query("keywords")}, nil
 }
 
 func pathID(c *gin.Context, name string) (int, error) {

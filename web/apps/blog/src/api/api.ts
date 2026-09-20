@@ -242,6 +242,12 @@ export default {
   deleteStudioSeries: (seriesId: number) => {
     return http.delete('/studio/series/' + encodeURIComponent(seriesId))
   },
+  batchUpdateStudioContentStatus: (params: any) => {
+    return http.put('/studio/content/batch-status', params)
+  },
+  batchDeleteStudioContent: (params: any) => {
+    return http.delete('/studio/content/batch', { data: params })
+  },
   getStudioCategories: () => {
     return http.get('/studio/categories')
   },

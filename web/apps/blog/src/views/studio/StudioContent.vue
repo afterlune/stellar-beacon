@@ -26,16 +26,41 @@
       </label>
     </section>
 
+    <section v-if="records.length" class="studio-batch-bar">
+      <label>
+        <input type="checkbox" :checked="allLoadedSelected" :aria-label="`全选当前已加载的${kindLabel}`" @change="toggleAllLoaded" />
+        全选当前已加载
+      </label>
+      <span>已选 {{ selectedIds.length }} 项</span>
+      <div>
+        <select v-model.number="batchStatus" aria-label="批量状态">
+          <option :value="1">公开</option>
+          <option :value="2">私有</option>
+          <option :value="3">草稿</option>
+        </select>
+        <button type="button" :disabled="!selectedIds.length" @click="applyBatchStatus">应用状态</button>
+        <button type="button" class="is-danger" :disabled="!selectedIds.length" @click="batchDelete">批量删除</button>
+        <button v-if="selectedIds.length" type="button" class="is-plain" @click="clearSelection">取消选择</button>
+      </div>
+    </section>
+
     <p v-if="loading && !records.length" class="studio-state">正在读取创作内容…</p>
     <p v-else-if="error" class="studio-state is-error">{{ error }}</p>
     <div v-else-if="records.length" class="studio-record-list">
-      <article v-for="item in records" :key="item.id" class="studio-record">
+      <article v-for="item in records" :key="item.id" class="studio-record" :class="{ 'is-selected': isSelected(item.id) }">
+        <label class="studio-record__select">
+          <input type="checkbox" :checked="isSelected(item.id)" :aria-label="`选择${item.articleTitle || item.content || item.seriesName}`" @change="toggleSelection(item.id)" />
+        </label>
+
         <template v-if="kind === 'article'">
           <div class="studio-record__main">
             <span class="studio-badge" :class="`status-${item.status}`">{{ statusLabel(item.status) }}</span>
             <span v-if="item.moderationStatus === 'hidden'" class="studio-badge is-danger">已隐藏</span>
             <h2>{{ item.articleTitle }}</h2>
             <p>{{ item.categoryName || '未分类' }} · {{ formatDate(item.createTime) }}</p>
+            <p v-if="item.status === 4 && item.scheduledAt" class="studio-schedule">
+              计划发布：{{ formatDateTime(item.scheduledAt) }}
+            </p>
             <small v-if="item.moderationReason">审核说明：{{ item.moderationReason }}</small>
           </div>
           <div class="studio-record__metrics">
@@ -47,6 +72,7 @@
         <template v-else-if="kind === 'talk'">
           <div class="studio-record__main">
             <span class="studio-badge" :class="`status-${item.status}`">{{ statusLabel(item.status) }}</span>
+            <span v-if="item.moderationStatus === 'hidden'" class="studio-badge is-danger">已隐藏</span>
             <h2 class="is-talk">{{ item.content }}</h2>
             <p>{{ formatDate(item.createTime) }}</p>
             <small v-if="item.moderationReason">审核说明：{{ item.moderationReason }}</small>
@@ -55,12 +81,16 @@
         <template v-else>
           <div class="studio-record__main">
             <span class="studio-badge" :class="`status-${item.status}`">{{ statusLabel(item.status) }}</span>
+            <span v-if="item.moderationStatus === 'hidden'" class="studio-badge is-danger">已隐藏</span>
             <h2>{{ item.seriesName }}</h2>
             <p>{{ item.seriesDesc || '暂无系列说明' }} · {{ item.articleCount }} 篇文章</p>
+            <small v-if="item.moderationReason">审核说明：{{ item.moderationReason }}</small>
           </div>
         </template>
 
         <div class="studio-record__actions">
+          <button type="button" @click="openPreview(item)">预览</button>
+          <button v-if="canShare(item)" type="button" @click="copyPublicLink(item)">复制链接</button>
           <button type="button" @click="openEdit(item)">编辑</button>
           <button type="button" class="is-danger" @click="remove(item)">删除</button>
         </div>
@@ -75,7 +105,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api/api'
@@ -97,6 +127,8 @@ export default defineComponent({
     const keywords = ref('')
     const page = ref(1)
     const total = ref(0)
+    const selectedIds = ref<number[]>([])
+    const batchStatus = ref(1)
     const pageSize = 12
 
     const kindLabel = computed(() => props.kind === 'article' ? '文章' : props.kind === 'talk' ? '随想' : '系列')
@@ -114,6 +146,8 @@ export default defineComponent({
       if (props.kind === 'article') tabs.push({ value: 4, label: '定时' })
       return tabs
     })
+    const selectedRecords = computed(() => records.value.filter((item) => isSelected(item.id)))
+    const allLoadedSelected = computed(() => records.value.length > 0 && records.value.every((item) => isSelected(item.id)))
 
     const dataOf = (response: any) => response?.data?.data || {}
     const listRequest = (params: any) => props.kind === 'article' ? api.getStudioArticles(params) : props.kind === 'talk' ? api.getStudioTalks(params) : api.getStudioSeries(params)
@@ -122,6 +156,7 @@ export default defineComponent({
       if (reset) {
         page.value = 1
         records.value = []
+        clearSelection()
       }
       loading.value = true
       error.value = ''
@@ -145,21 +180,46 @@ export default defineComponent({
 
     const openNew = () => router.push(`/studio/${kindPath.value}/new`)
     const openEdit = (item: any) => router.push(`/studio/${kindPath.value}/${item.id}/edit`)
+    const openPreview = (item: any) => router.push(`/studio/${kindPath.value}/${item.id}/preview`)
+    const publicPath = (item: any) => props.kind === 'article' ? `/articles/${item.id}` : props.kind === 'talk' ? `/talks/${item.id}` : `/series/${item.id}`
+    const canShare = (item: any) => Number(item.status) === 1 && item.moderationStatus !== 'hidden'
+
+    const copyPublicLink = async (item: any) => {
+      const url = new URL(publicPath(item), window.location.origin).toString()
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url)
+        } else {
+          const input = document.createElement('input')
+          input.value = url
+          document.body.appendChild(input)
+          input.select()
+          document.execCommand('copy')
+          input.remove()
+        }
+        ElMessage.success('公开链接已复制')
+      } catch {
+        ElMessage.error('复制失败，请手动打开公开页')
+      }
+    }
+
     const remove = async (item: any) => {
       try {
         await ElMessageBox.confirm(`确认删除这条${kindLabel.value}吗？`, '删除确认', { type: 'warning' })
-        if (props.kind === 'article') await api.deleteStudioArticles([item.id])
-        else if (props.kind === 'talk') await api.deleteStudioTalks([item.id])
-        else await api.deleteStudioSeries(item.id)
+        const response = await api.batchDeleteStudioContent({ kind: props.kind, ids: [item.id] })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '删除失败')
         ElMessage.success('已删除')
         await loadList(true)
       } catch (reason: any) {
-        if (reason !== 'cancel' && reason !== 'close') ElMessage.error('删除失败')
+        if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || '删除失败')
       }
     }
 
     const changeStatus = (value: number) => {
+      if (status.value === value) return
       status.value = value
+      const query = { ...route.query, status: value ? String(value) : undefined }
+      void router.replace({ path: route.path, query })
       void loadList(true)
     }
     const loadMore = () => {
@@ -168,22 +228,93 @@ export default defineComponent({
     }
     const statusLabel = (value: number) => ({ 1: '公开', 2: '私有', 3: '草稿', 4: '定时' } as Record<number, string>)[value] || '未知'
     const formatDate = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value)) : ''
+    const formatDateTime = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : ''
+    const isSelected = (id: number) => selectedIds.value.includes(Number(id))
+    const toggleSelection = (id: number) => {
+      const value = Number(id)
+      selectedIds.value = isSelected(value) ? selectedIds.value.filter((item) => item !== value) : [...selectedIds.value, value]
+    }
+    const toggleAllLoaded = () => {
+      selectedIds.value = allLoadedSelected.value ? [] : records.value.map((item) => Number(item.id))
+    }
+    const clearSelection = () => { selectedIds.value = [] }
+
+    const titleOf = (item: any) => item.articleTitle || item.content || item.seriesName || `#${item.id}`
+
+    const applyBatchStatus = async () => {
+      const targets = selectedRecords.value.filter((item) => Number(item.status) !== batchStatus.value)
+      if (!targets.length) {
+        ElMessage.warning(`所选内容已经是${statusLabel(batchStatus.value)}状态`)
+        return
+      }
+      const hiddenCount = targets.filter((item) => item.moderationStatus === 'hidden').length
+      if (batchStatus.value === 1) {
+        const preview = targets.slice(0, 5).map((item) => `· ${titleOf(item)}`).join('\n')
+        const more = targets.length > 5 ? `\n…以及另外 ${targets.length - 5} 条` : ''
+        const moderation = hiddenCount ? `\n其中 ${hiddenCount} 条已被审核隐藏，改状态后仍不会公开可见。` : ''
+        try {
+          await ElMessageBox.confirm(`将 ${targets.length} 条内容批量公开：\n${preview}${more}${moderation}`, '确认批量公开', { type: 'warning', confirmButtonText: '确认公开', cancelButtonText: '取消' })
+        } catch {
+          return
+        }
+      } else {
+        try {
+          await ElMessageBox.confirm(`确认将 ${targets.length} 条内容改为“${statusLabel(batchStatus.value)}”？`, '批量修改状态', { type: 'warning' })
+        } catch {
+          return
+        }
+      }
+      try {
+        await api.batchUpdateStudioContentStatus({
+          kind: props.kind,
+          ids: targets.map((item) => Number(item.id)),
+          visibility: ({ 1: 'public', 2: 'private', 3: 'draft' } as Record<number, string>)[batchStatus.value]
+        })
+        ElMessage.success(`已更新 ${targets.length} 条内容`)
+        clearSelection()
+        await loadList(true)
+      } catch (reason: any) {
+        ElMessage.error(reason?.response?.data?.message || '批量修改失败')
+      }
+    }
+
+    const batchDelete = async () => {
+      if (!selectedIds.value.length) return
+      try {
+        await ElMessageBox.confirm(`确认删除已选择的 ${selectedIds.value.length} 条${kindLabel.value}吗？此操作不可撤销。`, '批量删除', { type: 'warning', confirmButtonText: '确认删除' })
+        await api.batchDeleteStudioContent({ kind: props.kind, ids: selectedIds.value })
+        ElMessage.success(`已删除 ${selectedIds.value.length} 条内容`)
+        clearSelection()
+        await loadList(true)
+      } catch (reason: any) {
+        if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || '批量删除失败')
+      }
+    }
 
     watch(() => props.kind, () => {
-      status.value = 0
+      status.value = Number(route.query.status || 0)
       keywords.value = ''
+      void loadList(true)
+    })
+    watch(() => route.query.status, (value) => {
+      const next = Number(value || 0)
+      if (next === status.value) return
+      status.value = next
       void loadList(true)
     })
 
     onMounted(() => {
+      const queryStatus = Number(route.query.status || 0)
+      status.value = statusTabs.value.some((item) => item.value === queryStatus) ? queryStatus : 0
       void loadList(true)
-      if (route.query.new === '1') void router.replace(`/studio/${kindPath.value}/new`)
     })
+    onBeforeUnmount(clearSelection)
 
     return {
-      records, loading, error, status, statusTabs, keywords, page, total,
-      kindLabel, pageTitle, pageHint, pageIndex, kindPath, loadList, loadMore, openNew, openEdit, remove,
-      changeStatus, statusLabel, formatDate
+      records, loading, error, status, statusTabs, keywords, page, total, batchStatus, selectedIds, allLoadedSelected,
+      kindLabel, pageTitle, pageHint, pageIndex, kindPath, loadList, loadMore, openNew, openEdit, openPreview,
+      copyPublicLink, canShare, remove, changeStatus, statusLabel, formatDate, formatDateTime,
+      isSelected, toggleSelection, toggleAllLoaded, clearSelection, applyBatchStatus, batchDelete
     }
   }
 })
@@ -203,27 +334,40 @@ export default defineComponent({
 .studio-toolbar label { display: flex; min-width: min(340px, 100%); }
 .studio-toolbar input { min-width: 0; flex: 1; padding: 9px 12px; border: 1px solid var(--border-hairline); border-right: 0; border-radius: 999px 0 0 999px; outline: none; background: var(--background-primary); color: inherit; }
 .studio-toolbar label button { border-radius: 0 999px 999px 0; }
+.studio-batch-bar { display: flex; align-items: center; gap: 16px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--border-hairline); border-radius: 12px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); font-size: 12px; }
+.studio-batch-bar > label { display: flex; align-items: center; gap: 7px; }
+.studio-batch-bar > span { color: var(--text-ob-dim); }
+.studio-batch-bar > div { display: flex; gap: 7px; margin-left: auto; }
+.studio-batch-bar select, .studio-batch-bar button { padding: 7px 10px; border: 1px solid var(--border-hairline); border-radius: 9px; background: transparent; color: inherit; font: inherit; }
+.studio-batch-bar button { cursor: pointer; }
+.studio-batch-bar button:disabled { opacity: .4; cursor: not-allowed; }
+.studio-batch-bar button.is-danger { color: #df8177; }
+.studio-batch-bar button.is-plain { color: var(--text-ob-dim); }
 .studio-state { margin: 32px 0; color: var(--text-ob-dim); text-align: center; }
 .studio-state.is-error { color: #df8177; }
 .studio-record-list { display: grid; gap: 10px; }
-.studio-record { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 20px; align-items: center; padding: 18px 20px; border: 1px solid var(--border-hairline); border-radius: 15px; background: color-mix(in srgb, var(--background-primary-alt) 90%, transparent); }
+.studio-record { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; gap: 16px; align-items: center; padding: 18px 20px; border: 1px solid var(--border-hairline); border-radius: 15px; background: color-mix(in srgb, var(--background-primary-alt) 90%, transparent); }
+.studio-record.is-selected { border-color: color-mix(in srgb, var(--color-ob) 55%, transparent); background: color-mix(in srgb, var(--color-ob) 6%, var(--background-primary-alt)); }
+.studio-record__select { align-self: start; padding-top: 4px; }
 .studio-record__main { min-width: 0; }
 .studio-record h2 { margin: 8px 0 5px; overflow: hidden; font-size: 1.05rem; text-overflow: ellipsis; white-space: nowrap; }
 .studio-record h2.is-talk { white-space: normal; }
 .studio-record p, .studio-record small { color: var(--text-ob-dim); font-size: 11px; }
-.studio-record small { display: block; margin-top: 6px; color: #df8177; }
+.studio-record small, .studio-schedule { display: block; margin-top: 6px; }
+.studio-record small { color: #df8177; }
+.studio-schedule { color: var(--color-ob) !important; font-weight: 600; }
 .studio-badge { display: inline-block; padding: 3px 8px; border: 1px solid var(--border-hairline); border-radius: 999px; color: var(--text-ob-dim); font-size: 10px; }
 .studio-badge.status-1 { border-color: rgba(98, 201, 177, .55); color: #78d0bb; }
 .studio-badge.status-2 { border-color: rgba(231, 166, 82, .55); color: #e7a652; }
+.studio-badge.status-4 { border-color: rgba(137, 108, 220, .55); color: #bca0ef; }
 .studio-badge.is-danger { margin-left: 6px; border-color: rgba(223, 129, 119, .55); color: #df8177; }
 .studio-record__metrics { display: flex; gap: 10px; color: var(--text-ob-dim); font-size: 10px; }
-.studio-record__actions { display: flex; gap: 6px; }
+.studio-record__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .studio-record__actions button { padding: 7px 10px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
 .studio-record__actions button.is-danger { color: #df8177; }
 .studio-more { display: block; margin: 24px auto 0; padding: 8px 20px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
-@media (max-width: 760px) {
-  .studio-page-head, .studio-toolbar { align-items: stretch; flex-direction: column; }
-  .studio-record { grid-template-columns: 1fr auto; }
-  .studio-record__metrics { grid-column: 1 / -1; grid-row: 2; }
+@media (max-width: 900px) { .studio-record { grid-template-columns: 24px minmax(0, 1fr) auto; } .studio-record__metrics { grid-column: 2 / -1; grid-row: 2; } }
+@media (max-width: 760px) { .studio-page-head, .studio-toolbar, .studio-batch-bar { align-items: stretch; flex-direction: column; } .studio-batch-bar > div { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; } .studio-record { grid-template-columns: 24px minmax(0, 1fr); } .studio-record__metrics, .studio-record__actions { grid-column: 2; }
+  .studio-record__actions { justify-content: flex-start; }
 }
 </style>

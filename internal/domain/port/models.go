@@ -70,6 +70,9 @@ type ArticleAdmin struct {
 	UserId           int        `json:"userId"`
 	ArticleCover     string     `json:"articleCover"`
 	ArticleTitle     string     `json:"articleTitle"`
+	SeriesID         int        `json:"seriesId"`
+	SeriesOrder      int        `json:"seriesOrder"`
+	ScheduledAt      *time.Time `json:"scheduledAt,omitempty"`
 	IsTop            int        `json:"isTop"`
 	IsFeatured       int        `json:"isFeatured"`
 	IsDelete         int        `json:"isDelete"`

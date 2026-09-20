@@ -12,8 +12,17 @@ type StudioFilter struct {
 	Current  int
 	Size     int
 	Status   int
+	SeriesID int
 	Keywords string
 }
+
+type StudioContentType string
+
+const (
+	StudioContentArticle StudioContentType = "article"
+	StudioContentTalk    StudioContentType = "talk"
+	StudioContentSeries  StudioContentType = "series"
+)
 
 type StudioDashboard struct {
 	ArticleCount  int `json:"articleCount"`
@@ -69,6 +78,8 @@ type PlatformRepository interface {
 	GetOwnedSeries(ctx context.Context, userID, seriesID int) (entity.TSeries, error)
 	SaveOwnedSeries(ctx context.Context, series entity.TSeries) (entity.TSeries, error)
 	DeleteOwnedSeries(ctx context.Context, userID, seriesID int) error
+	BatchUpdateOwnedContentStatus(ctx context.Context, userID int, contentType StudioContentType, ids []int, status int) (int, error)
+	BatchDeleteOwnedContent(ctx context.Context, userID int, contentType StudioContentType, ids []int) (int, error)
 
 	ListOwnedCategories(ctx context.Context, userID int) ([]*Category, error)
 	SaveOwnedCategory(ctx context.Context, category entity.TCategory) (entity.TCategory, error)

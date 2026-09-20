@@ -34,6 +34,32 @@ type fakePlatformRepository struct {
 	profileIntro        string
 	profileWebsite      string
 	profileUpdateErr    error
+	batchStatusCalls    int
+	batchStatusKind     port.StudioContentType
+	batchStatusIDs      []int
+	batchStatusValue    int
+	batchStatusResult   int
+	batchStatusErr      error
+	batchDeleteCalls    int
+	batchDeleteKind     port.StudioContentType
+	batchDeleteIDs      []int
+	batchDeleteResult   int
+	batchDeleteErr      error
+}
+
+func (f *fakePlatformRepository) BatchUpdateOwnedContentStatus(_ context.Context, _ int, contentType port.StudioContentType, ids []int, status int) (int, error) {
+	f.batchStatusCalls++
+	f.batchStatusKind = contentType
+	f.batchStatusIDs = append([]int(nil), ids...)
+	f.batchStatusValue = status
+	return f.batchStatusResult, f.batchStatusErr
+}
+
+func (f *fakePlatformRepository) BatchDeleteOwnedContent(_ context.Context, _ int, contentType port.StudioContentType, ids []int) (int, error) {
+	f.batchDeleteCalls++
+	f.batchDeleteKind = contentType
+	f.batchDeleteIDs = append([]int(nil), ids...)
+	return f.batchDeleteResult, f.batchDeleteErr
 }
 
 func (f *fakePlatformRepository) GetStudioProfile(context.Context, int) (port.StudioProfile, error) {
@@ -237,6 +263,72 @@ func profileTestContext(method, target, body string) *gin.Context {
 		Intro: "旧简介", Website: "https://old.example.com",
 	})
 	return ctx
+}
+
+func TestStudioFilterParsesSeriesAndStatus(t *testing.T) {
+	filter, err := studioFilter(platformTestContext(http.MethodGet, "/v1/studio/articles?status=3&seriesId=9&keywords=Go", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filter.Status != 3 || filter.SeriesID != 9 || filter.Keywords != "Go" {
+		t.Fatalf("unexpected filter: %+v", filter)
+	}
+}
+
+func TestPlatformBatchStatusValidatesAndDeduplicates(t *testing.T) {
+	repo := &fakePlatformRepository{batchStatusResult: 2}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	result := service.BatchUpdateContentStatus(platformTestContext(
+		http.MethodPut,
+		"/v1/studio/content/batch-status",
+		`{"kind":"article","ids":[3,3,5],"visibility":"private"}`,
+	))
+	if !result.Flag || repo.batchStatusCalls != 1 || repo.batchStatusKind != port.StudioContentArticle || repo.batchStatusValue != 2 {
+		t.Fatalf("unexpected batch status result: result=%+v repo=%+v", result, repo)
+	}
+	if len(repo.batchStatusIDs) != 2 || repo.batchStatusIDs[0] != 3 || repo.batchStatusIDs[1] != 5 {
+		t.Fatalf("unexpected ids: %v", repo.batchStatusIDs)
+	}
+}
+
+func TestPlatformBatchStatusRejectsScheduledAndInvalidKinds(t *testing.T) {
+	repo := &fakePlatformRepository{}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	scheduled := service.BatchUpdateContentStatus(platformTestContext(
+		http.MethodPut,
+		"/v1/studio/content/batch-status",
+		`{"kind":"article","ids":[3],"visibility":"scheduled"}`,
+	))
+	if scheduled.Flag || repo.batchStatusCalls != 0 {
+		t.Fatalf("scheduled batch status must fail: result=%+v repo=%+v", scheduled, repo)
+	}
+	invalid := service.BatchUpdateContentStatus(platformTestContext(
+		http.MethodPut,
+		"/v1/studio/content/batch-status",
+		`{"kind":"photo","ids":[3],"visibility":"public"}`,
+	))
+	if invalid.Flag || repo.batchStatusCalls != 0 {
+		t.Fatalf("invalid batch kind must fail: result=%+v repo=%+v", invalid, repo)
+	}
+}
+
+func TestPlatformBatchDeleteUsesOwnedContentType(t *testing.T) {
+	repo := &fakePlatformRepository{batchDeleteResult: 2}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	result := service.BatchDeleteContent(platformTestContext(
+		http.MethodDelete,
+		"/v1/studio/content/batch",
+		`{"kind":"series","ids":[7,8]}`,
+	))
+	if !result.Flag || repo.batchDeleteCalls != 1 || repo.batchDeleteKind != port.StudioContentSeries {
+		t.Fatalf("unexpected batch delete result: result=%+v repo=%+v", result, repo)
+	}
+	if len(repo.batchDeleteIDs) != 2 || repo.batchDeleteIDs[0] != 7 || repo.batchDeleteIDs[1] != 8 {
+		t.Fatalf("unexpected delete ids: %v", repo.batchDeleteIDs)
+	}
 }
 
 func TestPlatformGetProfileReturnsCurrentPublicIdentity(t *testing.T) {

@@ -182,6 +182,17 @@ export interface UserRole {
   [key: string]: unknown
 }
 
+export interface StudioContentBatchStatus {
+  kind: 'article' | 'talk' | 'series'
+  ids: number[]
+  visibility: 'public' | 'private' | 'draft'
+}
+
+export interface StudioContentBatchDelete {
+  kind: 'article' | 'talk' | 'series'
+  ids: number[]
+}
+
 export interface StudioProfile {
   handle: string
   nickname: string
