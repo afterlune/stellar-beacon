@@ -17,6 +17,7 @@ import (
 type fakeTalkRepository struct {
 	err         error
 	admin       port.TalkAdmin
+	talk        port.Talk
 	adminErr    error
 	saved       entity.TTalk
 	saveCalls   int
@@ -35,7 +36,7 @@ func (f *fakeTalkRepository) List(context.Context, int, int) ([]*port.Talk, erro
 }
 
 func (f *fakeTalkRepository) Get(_ context.Context, _ int) (port.Talk, error) {
-	return port.Talk{}, f.err
+	return f.talk, f.err
 }
 
 func (f *fakeTalkRepository) ListAdmin(context.Context, int, int, port.TalkFilter) ([]*port.TalkAdmin, error) {

@@ -56,6 +56,7 @@ type CommentServiceDeps struct {
 	Website       StellarBeaconInfoService
 	Users         port.UserInfoRepository
 	Articles      port.ArticleRepository
+	Talks         port.TalkRepository
 	Notifications port.CommentNotifier
 	Limiter       port.RateLimiter
 }
@@ -197,6 +198,9 @@ func (d UserInfoServiceDeps) validate() error {
 }
 
 func (d CommentServiceDeps) validate() error {
+	if d.Talks == nil {
+		return missingServiceDependency("comment", "talk repository")
+	}
 	if d.Repo == nil {
 		return missingServiceDependency("comment", "repository")
 	}

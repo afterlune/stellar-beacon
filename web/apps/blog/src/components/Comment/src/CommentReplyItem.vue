@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div :id="`comment-${reply.id}`">
     <div class="flex space-x-3 xl:space-x-5">
       <Avatar :url="reply.avatar" />
       <div class="reply comment-bubble flex flex-col p-3 rounded-md relative">

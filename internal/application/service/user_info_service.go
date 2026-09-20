@@ -20,6 +20,7 @@ type UserInfoService interface {
 	SaveUserEmail(c *gin.Context) model.ResultVO
 	UpdateUserSubscribe(c *gin.Context) model.ResultVO
 	UpdateUserCommentNotice(c *gin.Context) model.ResultVO
+	UpdateUserNotificationPreferences(c *gin.Context) model.ResultVO
 	UpdateUserRole(c *gin.Context) model.ResultVO
 	UpdateUserDisable(c *gin.Context) model.ResultVO
 	ListOnlineUsers(c *gin.Context) model.ResultVO
@@ -166,6 +167,31 @@ func (u *MyUserInfoService) UpdateUserCommentNotice(c *gin.Context) model.Result
 		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
+}
+
+// UpdateUserNotificationPreferences toggles whether new interaction events are
+// written to the current account's in-app notification inbox.
+func (u *MyUserInfoService) UpdateUserNotificationPreferences(c *gin.Context) model.ResultVO {
+	var vo model.NotificationPreferenceVO
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "user_info.notify_interaction", nil))
+	}
+	dto, ok := value.(model.UserDetailsDTO)
+	if !ok || dto.UserInfoId <= 0 {
+		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "user_info.notify_interaction", nil))
+	}
+	notify := 0
+	if vo.NotifyInteraction == 1 {
+		notify = 1
+	}
+	if err := u.userInfoRepository().UpdateNotifyInteraction(c.Request.Context(), dto.UserInfoId, notify); err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(map[string]int{"notifyInteraction": notify})
 }
 
 func (u *MyUserInfoService) UpdateUserRole(c *gin.Context) model.ResultVO {

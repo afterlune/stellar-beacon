@@ -376,12 +376,34 @@ export interface FollowFeedItem {
   publishedAt: string
 }
 
-export interface FollowNotification extends FollowFeedItem {
+export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction'
+export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite'
+
+export interface NotificationItem {
+  key: string
+  type: NotificationType
+  group: Exclude<NotificationGroup, 'all'>
+  actor: PublicAuthorSummary
+  contentType: FollowContentType
+  contentId: number
+  commentId?: number
+  title: string
+  excerpt: string
+  cover?: string
+  images?: string[]
+  createdAt: string
   read: boolean
 }
 
-export interface FollowNotificationPage extends Page<FollowNotification> {
+export interface NotificationCursor {
+  publishEventId: number
+  interactionId: number
+}
+
+export interface NotificationPage extends Page<NotificationItem> {
   unreadCount: number
+  totalUnreadCount: number
+  readCursor: NotificationCursor
 }
 
 export interface AdminUser {

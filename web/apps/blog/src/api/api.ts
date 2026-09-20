@@ -1,4 +1,4 @@
-import type { FollowContentType, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
+import type { FollowContentType, NotificationCursor, NotificationGroup, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
 import { createApiClient } from '@stellar-beacon/api-client'
 
 // The presentation layer still reads `flag` while the shared client is being
@@ -190,14 +190,17 @@ export default {
   getFollowingFeed: (params: { type?: FollowContentType | 'all'; current?: number; size?: number }) => {
     return http.get('/auth/me/following-feed', { params })
   },
-  getFollowNotifications: (params: { current?: number; size?: number }) => {
+  getFollowNotifications: (params: { group?: NotificationGroup; current?: number; size?: number }) => {
     return http.get('/auth/me/notifications', { params })
   },
   getFollowNotificationUnreadCount: () => {
     return http.get('/auth/me/notifications/unread-count')
   },
-  markFollowNotificationsRead: () => {
-    return http.post('/auth/me/notifications/read')
+  markFollowNotificationsRead: (cursor: NotificationCursor) => {
+    return http.post('/auth/me/notifications/read', cursor)
+  },
+  updateNotificationPreferences: (params: { notifyInteraction: number }) => {
+    return http.put('/auth/me/notification-preferences', params)
   },
   followAuthor: (authorId: number) => {
     return http.put('/auth/me/following/' + encodeURIComponent(authorId))

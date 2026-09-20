@@ -202,7 +202,7 @@ func commentSubject(item port.CommentNotification) string {
 	if item.ReplyAuthor != "" {
 		return item.ReplyAuthor + " 回复了你的评论"
 	}
-	return "你的文章收到了新评论"
+	return "你的内容收到了新评论"
 }
 
 func templatePath(name string) string {

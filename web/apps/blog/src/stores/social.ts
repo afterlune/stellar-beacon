@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import api from '@/api/api'
+import type { NotificationCursor } from '@stellar-beacon/api-contract'
 
 export const useSocialStore = defineStore('socialStore', {
   state: () => ({
@@ -24,8 +25,8 @@ export const useSocialStore = defineStore('socialStore', {
     setUnreadCount(value: number) {
       this.unreadCount = Math.max(0, Number(value || 0))
     },
-    async markRead() {
-      const response = await api.markFollowNotificationsRead()
+    async markRead(cursor: NotificationCursor) {
+      const response = await api.markFollowNotificationsRead(cursor)
       if (!response?.data?.flag) {
         throw new Error(response?.data?.message || '标记已读失败')
       }

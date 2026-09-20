@@ -43,6 +43,9 @@ func (r *MyArticleReactionRepo) Toggle(ctx context.Context, articleID, userInfoI
 			return apperrors.Unavailable("article_reaction.toggle", err)
 		}
 		if inserted > 0 {
+			if err := recordReactionNotification(session, articleID, userInfoID, reaction); err != nil {
+				return err
+			}
 			active = true
 			return nil
 		}

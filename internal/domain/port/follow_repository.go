@@ -31,24 +31,13 @@ type FollowFeedItem struct {
 	PublishedAt time.Time    `json:"publishedAt"`
 }
 
-type FollowNotification struct {
-	FollowFeedItem
-	Read bool `json:"read"`
-}
-
-type FollowNotificationResult struct {
-	Records     []FollowNotification `json:"records"`
-	Count       int                  `json:"count"`
-	UnreadCount int                  `json:"unreadCount"`
-}
-
 type FollowRepository interface {
 	Follow(ctx context.Context, followerID, authorID int) error
 	Unfollow(ctx context.Context, followerID, authorID int) error
 	ListFollowing(ctx context.Context, userID, current, size int) ([]FollowUser, int, error)
 	ListFollowers(ctx context.Context, userID, current, size int) ([]FollowUser, int, error)
 	ListFollowFeed(ctx context.Context, userID int, contentType string, current, size int) ([]FollowFeedItem, int, error)
-	ListNotifications(ctx context.Context, userID, current, size int) (FollowNotificationResult, error)
+	ListNotifications(ctx context.Context, userID int, group string, current, size int) (NotificationPage, error)
 	UnreadNotificationCount(ctx context.Context, userID int) (int, error)
-	MarkNotificationsRead(ctx context.Context, userID int) error
+	MarkNotificationsRead(ctx context.Context, userID int, cursor NotificationCursor) error
 }

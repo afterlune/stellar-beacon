@@ -32,7 +32,14 @@
       </section>
 
       <section class="account-section">
-        <header><h3>互动通知</h3><span>控制是否接收评论相关邮件</span></header>
+        <header><h3>互动通知</h3><span>分别控制站内互动和评论邮件</span></header>
+        <div class="account-row">
+          <div><strong>站内互动提醒</strong><small>评论、回复、点赞和收藏进入通知中心</small></div>
+          <el-switch
+            :model-value="Number(userInfo.notifyInteraction ?? 1) === 1"
+            :disabled="loading"
+            @change="changeInteractionNotice" />
+        </div>
         <div class="account-row">
           <div><strong>评论邮件通知</strong><small>有人回复你时发送邮件提醒</small></div>
           <el-switch
@@ -131,6 +138,20 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
+    const changeInteractionNotice = async (value: boolean) => {
+      reactiveData.loading = true
+      try {
+        const notifyInteraction = value ? 1 : 0
+        const response = await api.updateNotificationPreferences({ notifyInteraction })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
+        userStore.userInfo = { ...(userStore.userInfo || {}), notifyInteraction }
+        proxy.$notify({ title: '成功', message: '站内通知设置已更新', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '通知设置保存失败', type: 'error' })
+      } finally {
+        reactiveData.loading = false
+      }
+    }
     const sendCode = async () => {
       try {
         const response = await api.sendValidationCode(reactiveData.email)
@@ -144,7 +165,7 @@ export default defineComponent({
 
     return {
       userInfo, visible, defaultAvatar, ...toRefs(reactiveData), handleClose, openStudioProfile,
-      bindingEmail, changeSubscribe, changeCommentNotice, sendCode
+      bindingEmail, changeSubscribe, changeInteractionNotice, changeCommentNotice, sendCode
     }
   }
 })

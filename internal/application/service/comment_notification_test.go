@@ -66,11 +66,12 @@ func (f notificationUsers) UpdateAvatar(context.Context, int, string) error { re
 func (f notificationUsers) GetByID(context.Context, int) (entity.TUserInfo, error) {
 	return f.profile, nil
 }
-func (f notificationUsers) UpdateEmail(context.Context, int, string) error       { return nil }
-func (f notificationUsers) UpdateSubscribe(context.Context, int, int) error      { return nil }
-func (f notificationUsers) UpdateNotifyComment(context.Context, int, int) error  { return nil }
-func (f notificationUsers) UpdateRole(context.Context, int, string, []int) error { return nil }
-func (f notificationUsers) UpdateDisable(context.Context, int, int) error        { return nil }
+func (f notificationUsers) UpdateEmail(context.Context, int, string) error          { return nil }
+func (f notificationUsers) UpdateSubscribe(context.Context, int, int) error         { return nil }
+func (f notificationUsers) UpdateNotifyComment(context.Context, int, int) error     { return nil }
+func (f notificationUsers) UpdateNotifyInteraction(context.Context, int, int) error { return nil }
+func (f notificationUsers) UpdateRole(context.Context, int, string, []int) error    { return nil }
+func (f notificationUsers) UpdateDisable(context.Context, int, int) error           { return nil }
 func (f notificationUsers) FindAuthByUserInfoID(context.Context, int) (entity.TUserAuth, error) {
 	return entity.TUserAuth{}, nil
 }
@@ -89,6 +90,7 @@ func newCommentNotificationService(t *testing.T, comments port.CommentRepository
 		Website:       noticeWebsite{config: model.WebsiteConfigDTO{IsCommentReview: 0, IsEmailNotice: notice}},
 		Users:         users,
 		Articles:      articles,
+		Talks:         &fakeTalkRepository{},
 		Notifications: notifier,
 		Limiter:       limiter,
 	})
@@ -181,6 +183,30 @@ func TestCommentNotificationNotifiesArticleAuthor(t *testing.T) {
 	}
 }
 
+func TestCommentNotificationNotifiesTalkAuthor(t *testing.T) {
+	notifier := &fakeCommentNotifier{}
+	talks := &fakeTalkRepository{talk: port.Talk{Id: 9, UserId: 4, Content: "一条新的随想内容"}}
+	service, err := NewCommentService(CommentServiceDeps{
+		Repo:          &notificationComments{},
+		Website:       noticeWebsite{config: model.WebsiteConfigDTO{IsCommentReview: 0, IsEmailNotice: 1}},
+		Users:         notificationUsers{profile: entity.TUserInfo{Id: 4, Email: "talk@example.test", Nickname: "说说作者", NotifyComment: 1}},
+		Articles:      &notificationArticles{},
+		Talks:         talks,
+		Notifications: notifier,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	postComment(t, service, `{"topicId":"9","commentContent":"说说评论","type":5}`, 3)
+	if len(notifier.items) != 1 {
+		t.Fatalf("expected the talk author notification, got %+v", notifier.items)
+	}
+	item := notifier.items[0]
+	if item.Recipient != "talk@example.test" || item.ArticleID != 9 || !strings.Contains(item.ArticleURL, "/talks/9") {
+		t.Fatalf("unexpected talk notification: %+v", item)
+	}
+}
 func TestCommentNotificationIgnoresNonArticleTargets(t *testing.T) {
 	comments := &notificationComments{}
 	notifier := &fakeCommentNotifier{}
@@ -201,6 +227,7 @@ func TestCommentNotificationSkipsPendingModeration(t *testing.T) {
 		Website:       noticeWebsite{config: model.WebsiteConfigDTO{IsCommentReview: 1, IsEmailNotice: 1}},
 		Users:         notificationUsers{profile: entity.TUserInfo{Id: 7, Email: "pending@example.test", NotifyComment: 1}},
 		Articles:      &notificationArticles{},
+		Talks:         &fakeTalkRepository{},
 		Notifications: notifier,
 	})
 	if err != nil {
@@ -213,6 +240,48 @@ func TestCommentNotificationSkipsPendingModeration(t *testing.T) {
 	}
 }
 
+type reviewedCommentRepository struct {
+	fakeCommentRepository
+	comment entity.TComment
+	marked  []int
+}
+
+func (f *reviewedCommentRepository) GetByID(context.Context, int) (entity.TComment, error) {
+	return f.comment, nil
+}
+
+func (f *reviewedCommentRepository) Review(_ context.Context, _ []int, review int) error {
+	f.comment.IsReview = review
+	return nil
+}
+
+func (f *reviewedCommentRepository) MarkNotificationDispatched(_ context.Context, commentID int) error {
+	f.marked = append(f.marked, commentID)
+	return nil
+}
+
+func TestCommentNotificationDispatchesAfterManualApproval(t *testing.T) {
+	repo := &reviewedCommentRepository{comment: entity.TComment{Id: 42, UserId: 3, ReplyUserId: 7, TopicId: 9, Type: 1, IsReview: 0}}
+	notifier := &fakeCommentNotifier{}
+	service, err := NewCommentService(CommentServiceDeps{
+		Repo:          repo,
+		Website:       noticeWebsite{config: model.WebsiteConfigDTO{IsCommentReview: 1, IsEmailNotice: 1}},
+		Users:         notificationUsers{profile: entity.TUserInfo{Id: 7, Email: "reviewed@example.test", Nickname: "被回复者", NotifyComment: 1}},
+		Articles:      &notificationArticles{record: entity.TArticle{Id: 9, UserId: 4, ArticleTitle: "审核文章"}},
+		Talks:         &fakeTalkRepository{},
+		Notifications: notifier,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPut, "/v1/admin/comments/review", strings.NewReader(`{"ids":[42],"isReview":1}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	result := service.UpdateCommentsReview(c)
+	if !result.Flag || len(notifier.items) != 1 || len(repo.marked) != 1 || repo.marked[0] != 42 {
+		t.Fatalf("unexpected approval notification: result=%+v mail=%+v marked=%v", result, notifier.items, repo.marked)
+	}
+}
 func TestCommentNotificationHonoursDailyCap(t *testing.T) {
 	comments := &notificationComments{parent: entity.TComment{Id: 42, UserId: 7}}
 	notifier := &fakeCommentNotifier{}

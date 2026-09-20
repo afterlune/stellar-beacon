@@ -1,5 +1,5 @@
 <template>
-  <div class="mt-5 max-w-full">
+  <div :id="`comment-${comment.id}`" class="mt-5 max-w-full">
     <div class="flex space-x-3 xl:space-x-5">
       <Avatar :url="comment.avatar" />
       <div class="max-w-full-calc space-y-5">

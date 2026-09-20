@@ -121,6 +121,7 @@ func RouterSetup(router *gin.Engine) {
 	auth.PUT("/me/email", api.SaveUserEmail)
 	auth.PUT("/me/subscription", api.UpdateUserSubscribe)
 	auth.PUT("/me/notifications", api.UpdateUserCommentNotice)
+	auth.PUT("/me/notification-preferences", api.UpdateUserNotificationPreferences)
 	auth.PUT("/me/reactions", api.ToggleArticleReaction)
 	auth.GET("/me/reactions", api.ListMyArticleReactions)
 	auth.GET("/me/reactions/state", api.ListArticleReactionStates)

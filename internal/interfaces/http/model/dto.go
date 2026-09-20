@@ -517,27 +517,28 @@ type UserAreaDTO struct {
 }
 
 type UserDetailsDTO struct {
-	Id            int       `json:"id"`
-	UserInfoId    int       `json:"userInfoId"`
-	Email         string    `json:"email"`
-	LoginType     int       `json:"loginType"`
-	Username      string    `json:"username"`
-	Password      string    `json:"password"`
-	Roles         []string  `json:"roles"`
-	Handle        string    `json:"handle"`
-	Nickname      string    `json:"nickname"`
-	Avatar        string    `json:"avatar"`
-	Intro         string    `json:"intro"`
-	Website       string    `json:"website"`
-	IsDisable     int       `json:"isDisable"`
-	IpAddress     string    `json:"ipAddress"`
-	IpSource      string    `json:"ipSource"`
-	IsSubscribe   int       `json:"isSubscribe"`
-	NotifyComment int       `json:"notifyComment"`
-	Browser       string    `json:"browser"`
-	Os            string    `json:"os"`
-	ExpireTime    time.Time `json:"expireTime"`
-	LastLoginTime time.Time `json:"lastLoginTime"`
+	Id                int       `json:"id"`
+	UserInfoId        int       `json:"userInfoId"`
+	Email             string    `json:"email"`
+	LoginType         int       `json:"loginType"`
+	Username          string    `json:"username"`
+	Password          string    `json:"password"`
+	Roles             []string  `json:"roles"`
+	Handle            string    `json:"handle"`
+	Nickname          string    `json:"nickname"`
+	Avatar            string    `json:"avatar"`
+	Intro             string    `json:"intro"`
+	Website           string    `json:"website"`
+	IsDisable         int       `json:"isDisable"`
+	IpAddress         string    `json:"ipAddress"`
+	IpSource          string    `json:"ipSource"`
+	IsSubscribe       int       `json:"isSubscribe"`
+	NotifyComment     int       `json:"notifyComment"`
+	NotifyInteraction int       `json:"notifyInteraction"`
+	Browser           string    `json:"browser"`
+	Os                string    `json:"os"`
+	ExpireTime        time.Time `json:"expireTime"`
+	LastLoginTime     time.Time `json:"lastLoginTime"`
 }
 
 type UserInfoDTO struct {
@@ -645,7 +646,13 @@ type ReactionStateDTO struct {
 	Favorite  bool `json:"favorite"`
 }
 
-// CommentNoticeVO toggles the comment notification preference of the
+// NotificationPreferenceVO toggles the in-app interaction notification
+// preference of the authenticated account.
+type NotificationPreferenceVO struct {
+	NotifyInteraction int `json:"notifyInteraction" form:"notifyInteraction"`
+}
+
+// CommentNoticeVO toggles the comment email notification preference of the
 // authenticated account.
 type CommentNoticeVO struct {
 	NotifyComment int `json:"notifyComment" form:"notifyComment"`

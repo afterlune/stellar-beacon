@@ -15,6 +15,7 @@ type fakeFollowRepository struct {
 	followCalls   int
 	unfollowCalls int
 	readCalls     int
+	readCursor    port.NotificationCursor
 	followerID    int
 	authorID      int
 	unread        int
@@ -38,8 +39,9 @@ func (f *fakeFollowRepository) UnreadNotificationCount(context.Context, int) (in
 	return f.unread, nil
 }
 
-func (f *fakeFollowRepository) MarkNotificationsRead(context.Context, int) error {
+func (f *fakeFollowRepository) MarkNotificationsRead(_ context.Context, _ int, cursor port.NotificationCursor) error {
 	f.readCalls++
+	f.readCursor = cursor
 	f.unread = 0
 	return nil
 }
@@ -74,8 +76,8 @@ func TestFollowServiceUnreadAndMarkRead(t *testing.T) {
 	if !unread.Flag || unread.Data.(map[string]int)["count"] != 3 {
 		t.Fatalf("unexpected unread result: %+v", unread)
 	}
-	read := service.MarkNotificationsRead(platformTestContext(http.MethodPost, "/v1/auth/me/notifications/read", ""))
-	if !read.Flag || repo.readCalls != 1 || repo.unread != 0 {
+	read := service.MarkNotificationsRead(platformTestContext(http.MethodPost, "/v1/auth/me/notifications/read", `{"publishEventId":4,"interactionId":9}`))
+	if !read.Flag || repo.readCalls != 1 || repo.unread != 0 || repo.readCursor.PublishEventId != 4 || repo.readCursor.InteractionId != 9 {
 		t.Fatalf("unexpected mark read result: result=%+v repo=%+v", read, repo)
 	}
 }

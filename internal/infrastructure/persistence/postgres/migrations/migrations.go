@@ -92,6 +92,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyFollowSocialSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyInteractionNotificationSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1241,6 +1244,58 @@ func applyFollowSocialSchema(ctx context.Context, engine *xorm.Engine) error {
 	}
 	return nil
 }
+func applyInteractionNotificationSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 19)").Get(&applied); err != nil {
+		return fmt.Errorf("check interaction notification migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin interaction notification migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`ALTER TABLE t_user_info ADD COLUMN IF NOT EXISTS notify_interaction SMALLINT NOT NULL DEFAULT 1`,
+		`ALTER TABLE t_comment ADD COLUMN IF NOT EXISTS notification_dispatched_at TIMESTAMPTZ NULL`,
+		`CREATE TABLE IF NOT EXISTS t_user_notification (
+			id BIGSERIAL PRIMARY KEY,
+			recipient_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			actor_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			type VARCHAR(16) NOT NULL,
+			content_type VARCHAR(16) NOT NULL,
+			content_id BIGINT NOT NULL,
+			comment_id BIGINT NOT NULL DEFAULT 0,
+			dedupe_key VARCHAR(191) NOT NULL,
+			read_at TIMESTAMPTZ NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (recipient_id, dedupe_key),
+			CHECK (recipient_id <> actor_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_notification_recipient ON t_user_notification(recipient_id, created_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_notification_unread ON t_user_notification(recipient_id, read_at, id DESC)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply interaction notification schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 19, "interaction-notifications"); err != nil {
+		return fmt.Errorf("record interaction notification migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit interaction notification migration: %w", err)
+	}
+	return nil
+}
+
 func handleBase(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var builder strings.Builder

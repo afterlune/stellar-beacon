@@ -712,20 +712,38 @@ export default defineComponent({
         })
       })
     }
+    const focusComment = (commentID: number) => {
+      if (commentID <= 0) return
+      nextTick(() => {
+        const element = document.getElementById(`comment-${commentID}`)
+        if (!element) return
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        element.classList.remove('comment-focus')
+        void element.offsetWidth
+        element.classList.add('comment-focus')
+        window.setTimeout(() => element.classList.remove('comment-focus'), 2500)
+      })
+    }
     const fetchComments = () => {
-      const params = {
+      const commentID = Number(route.query.comment || 0)
+      const params: any = {
         type: 1,
         topicId: reactiveData.articleId,
         current: pageInfo.current,
         size: pageInfo.size
       }
+      if (commentID > 0) params.focusCommentId = commentID
       api.getComments(params).then(({ data }) => {
+        const wasReload = reactiveData.isReload
         const records = pageRecords(data)
-        if (reactiveData.isReload) {
+        if (wasReload) {
           reactiveData.comments = records
           reactiveData.isReload = false
         } else {
           reactiveData.comments.push(...records)
+        }
+        if (commentID > 0 && wasReload) {
+          pageInfo.current = Number(data?.data?.page || pageInfo.current)
         }
         if (pageCount(data) <= reactiveData.comments.length) {
           reactiveData.haveMore = false
@@ -733,6 +751,7 @@ export default defineComponent({
           reactiveData.haveMore = true
         }
         pageInfo.current++
+        focusComment(commentID)
       })
     }
     const fetchReplies = (index: any) => {

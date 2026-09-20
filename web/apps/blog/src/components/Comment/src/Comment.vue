@@ -18,3 +18,13 @@ export default defineComponent({
   }
 })
 </script>
+<style lang="scss">
+.comment-focus {
+  border-radius: 14px;
+  animation: comment-focus-pulse 2.4s ease-out;
+}
+@keyframes comment-focus-pulse {
+  0%, 24% { background: color-mix(in srgb, var(--color-ob) 16%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ob) 45%, transparent); }
+  100% { background: transparent; box-shadow: none; }
+}
+</style>

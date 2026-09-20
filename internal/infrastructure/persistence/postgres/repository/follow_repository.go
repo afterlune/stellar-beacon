@@ -194,108 +194,204 @@ func (r *MyFollowRepo) ListFollowFeed(ctx context.Context, userID int, contentTy
 	return result, count, nil
 }
 
-func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID, current, size int) (port.FollowNotificationResult, error) {
-	session, err := repoSession(r.engine, ctx, "follow.notifications")
+func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group string, current, size int) (port.NotificationPage, error) {
+	if userID <= 0 {
+		return port.NotificationPage{}, apperrors.Invalid("notification.list", "invalid user")
+	}
+	if group == "" {
+		group = port.NotificationGroupAll
+	}
+	if !port.ValidNotificationGroup(group) {
+		return port.NotificationPage{}, apperrors.Invalid("notification.list", "invalid group")
+	}
+	session, err := repoSession(r.engine, ctx, "notification.list")
 	if err != nil {
-		return port.FollowNotificationResult{}, err
+		return port.NotificationPage{}, err
 	}
-	const fromWhere = `
-		FROM t_author_publish_event event
-		JOIN t_user_follow follow ON follow.author_id = event.author_id AND follow.follower_id = ? AND event.id > follow.start_event_id
-		JOIN t_user_info author ON author.id = event.author_id AND author.is_disable = 0
-		LEFT JOIN t_article article ON event.content_type = 'article' AND article.id = event.content_id
-			AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
-		LEFT JOIN t_talk talk ON event.content_type = 'talk' AND talk.id = event.content_id
-			AND talk.status = 1 AND talk.moderation_status = 'visible'
-		WHERE ((event.content_type = 'article' AND article.id IS NOT NULL) OR (event.content_type = 'talk' AND talk.id IS NOT NULL))`
-	var result port.FollowNotificationResult
-	if _, err := session.SQL("SELECT count(1)"+fromWhere, userID).Get(&result.Count); err != nil {
-		return port.FollowNotificationResult{}, apperrors.Unavailable("follow.notifications.count", err)
+	filterGroup := group
+	if group == port.NotificationGroupAll {
+		filterGroup = ""
 	}
-	if _, err := session.SQL("SELECT count(1)"+fromWhere+" AND event.id > follow.last_read_event_id", userID).Get(&result.UnreadCount); err != nil {
-		return port.FollowNotificationResult{}, apperrors.Unavailable("follow.notifications.unread", err)
+	args := notificationFeedArgs(userID, filterGroup)
+	var result port.NotificationPage
+	if _, err := session.SQL("SELECT count(1) FROM ("+notificationFeedSQL+") notification_feed", args...).Get(&result.Count); err != nil {
+		return port.NotificationPage{}, apperrors.Unavailable("notification.count", err)
+	}
+	if _, err := session.SQL("SELECT count(1) FROM ("+notificationFeedSQL+") notification_feed WHERE is_read = false", args...).Get(&result.UnreadCount); err != nil {
+		return port.NotificationPage{}, apperrors.Unavailable("notification.unread", err)
+	}
+	if _, err := session.SQL("SELECT count(1) FROM ("+notificationFeedSQL+") notification_feed WHERE is_read = false", notificationFeedArgs(userID, "")...).Get(&result.TotalUnreadCount); err != nil {
+		return port.NotificationPage{}, apperrors.Unavailable("notification.unread", err)
+	}
+	if _, err := session.SQL(`
+		SELECT
+			COALESCE((
+				SELECT MAX(event.id)
+				FROM t_author_publish_event event
+				JOIN t_user_follow follow ON follow.author_id = event.author_id
+					AND follow.follower_id = ? AND event.id > follow.start_event_id
+			), 0) AS publish_event_id,
+			COALESCE((SELECT MAX(id) FROM t_user_notification WHERE recipient_id = ?), 0) AS interaction_id`,
+		userID, userID).Get(&result.ReadCursor); err != nil {
+		return port.NotificationPage{}, apperrors.Unavailable("notification.cursor", err)
 	}
 	page, offset := pgsql.Page(current, size)
 	var rows []struct {
-		EventId      int64     `xorm:"event_id"`
-		ContentType  string    `xorm:"content_type"`
-		ContentId    int       `xorm:"content_id"`
-		AuthorId     int       `xorm:"author_id"`
-		AuthorHandle string    `xorm:"author_handle"`
-		AuthorName   string    `xorm:"author_name"`
-		AuthorAvatar string    `xorm:"author_avatar"`
-		Title        string    `xorm:"title"`
-		Excerpt      string    `xorm:"excerpt"`
-		Cover        string    `xorm:"cover"`
-		Images       string    `xorm:"images"`
-		PublishedAt  time.Time `xorm:"published_at"`
-		IsRead       bool      `xorm:"is_read"`
+		Key         string    `xorm:"notification_key"`
+		Type        string    `xorm:"notification_type"`
+		Group       string    `xorm:"notification_group"`
+		ActorId     int       `xorm:"actor_id"`
+		ActorHandle string    `xorm:"actor_handle"`
+		ActorName   string    `xorm:"actor_name"`
+		ActorAvatar string    `xorm:"actor_avatar"`
+		ContentType string    `xorm:"content_type"`
+		ContentId   int       `xorm:"content_id"`
+		CommentId   int       `xorm:"comment_id"`
+		Title       string    `xorm:"title"`
+		Excerpt     string    `xorm:"excerpt"`
+		Cover       string    `xorm:"cover"`
+		Images      string    `xorm:"images"`
+		CreatedAt   time.Time `xorm:"created_at"`
+		IsRead      bool      `xorm:"is_read"`
 	}
-	if err := session.SQL(`
-		SELECT event.id AS event_id, event.content_type, event.content_id, event.author_id,
-		       author.handle AS author_handle, author.nickname AS author_name, author.avatar AS author_avatar,
-		       COALESCE(article.article_title, '') AS title,
-		       CASE WHEN event.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '') ELSE COALESCE(SUBSTR(talk.content, 1, 240), '') END AS excerpt,
-		       COALESCE(article.article_cover, '') AS cover,
-		       COALESCE(talk.images, '') AS images,
-		       event.published_at, (event.id <= follow.last_read_event_id) AS is_read`+fromWhere+`
-		ORDER BY event.published_at DESC, event.id DESC LIMIT ? OFFSET ?`, userID, page, offset).Find(&rows); err != nil {
-		return port.FollowNotificationResult{}, apperrors.Unavailable("follow.notifications", err)
+	pageArgs := append(append([]interface{}{}, args...), page, offset)
+	if err := session.SQL(notificationFeedSQL+` ORDER BY created_at DESC, sort_id DESC, notification_key DESC LIMIT ? OFFSET ?`, pageArgs...).Find(&rows); err != nil {
+		return port.NotificationPage{}, apperrors.Unavailable("notification.list", err)
 	}
-	result.Records = make([]port.FollowNotification, 0, len(rows))
+	result.Records = make([]port.NotificationItem, 0, len(rows))
 	for _, row := range rows {
-		result.Records = append(result.Records, port.FollowNotification{
-			FollowFeedItem: port.FollowFeedItem{
-				EventId: row.EventId, ContentType: row.ContentType, ContentId: row.ContentId,
-				Author: port.PublicAuthor{Id: row.AuthorId, Handle: row.AuthorHandle, Nickname: row.AuthorName, Avatar: row.AuthorAvatar},
-				Title:  row.Title, Excerpt: row.Excerpt, Cover: row.Cover, Images: decodeTalkImages(row.Images), PublishedAt: row.PublishedAt,
-			},
-			Read: row.IsRead,
+		result.Records = append(result.Records, port.NotificationItem{
+			Key: row.Key, Type: row.Type, Group: row.Group,
+			Actor:       port.PublicAuthor{Id: row.ActorId, Handle: row.ActorHandle, Nickname: row.ActorName, Avatar: row.ActorAvatar},
+			ContentType: row.ContentType, ContentId: row.ContentId, CommentId: row.CommentId,
+			Title: row.Title, Excerpt: row.Excerpt, Cover: row.Cover, Images: decodeTalkImages(row.Images),
+			CreatedAt: row.CreatedAt, Read: row.IsRead,
 		})
 	}
 	return result, nil
 }
 
 func (r *MyFollowRepo) UnreadNotificationCount(ctx context.Context, userID int) (int, error) {
-	session, err := repoSession(r.engine, ctx, "follow.notifications.unread_count")
+	page, err := r.ListNotifications(ctx, userID, port.NotificationGroupAll, 1, 1)
 	if err != nil {
 		return 0, err
 	}
-	const queryText = `
-		SELECT count(1)
-		FROM t_author_publish_event event
-		JOIN t_user_follow follow ON follow.author_id = event.author_id AND follow.follower_id = ?
-			AND event.id > follow.start_event_id AND event.id > follow.last_read_event_id
-		JOIN t_user_info author ON author.id = event.author_id AND author.is_disable = 0
-		LEFT JOIN t_article article ON event.content_type = 'article' AND article.id = event.content_id
-			AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
-		LEFT JOIN t_talk talk ON event.content_type = 'talk' AND talk.id = event.content_id
-			AND talk.status = 1 AND talk.moderation_status = 'visible'
-		WHERE ((event.content_type = 'article' AND article.id IS NOT NULL) OR (event.content_type = 'talk' AND talk.id IS NOT NULL))`
-	var count int
-	if _, err := session.SQL(queryText, userID).Get(&count); err != nil {
-		return 0, apperrors.Unavailable("follow.notifications.unread_count", err)
-	}
-	return count, nil
+	return page.UnreadCount, nil
 }
 
-func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int) error {
+func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cursor port.NotificationCursor) error {
 	if userID <= 0 {
-		return apperrors.Invalid("follow.notifications.read", "invalid user")
+		return apperrors.Invalid("notification.read", "invalid user")
 	}
-	session, err := repoSession(r.engine, ctx, "follow.notifications.read")
-	if err != nil {
-		return err
-	}
-	if _, err := session.Exec(`
-		UPDATE t_user_follow
-		SET last_read_event_id = (SELECT COALESCE(MAX(id), 0) FROM t_author_publish_event), updated_at = CURRENT_TIMESTAMP
-		WHERE follower_id = ?`, userID); err != nil {
-		return apperrors.Unavailable("follow.notifications.read", err)
-	}
-	return nil
+	return ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
+		var maxPublish, maxInteraction int64
+		if _, err := session.SQL(`
+			SELECT COALESCE(MAX(event.id), 0)
+			FROM t_author_publish_event event
+			JOIN t_user_follow follow ON follow.author_id = event.author_id
+				AND follow.follower_id = ? AND event.id > follow.start_event_id`, userID).Get(&maxPublish); err != nil {
+			return apperrors.Unavailable("notification.read.publish_cursor", err)
+		}
+		if _, err := session.SQL(`SELECT COALESCE(MAX(id), 0) FROM t_user_notification WHERE recipient_id = ?`, userID).Get(&maxInteraction); err != nil {
+			return apperrors.Unavailable("notification.read.interaction_cursor", err)
+		}
+		if cursor.PublishEventId <= 0 || cursor.PublishEventId > maxPublish {
+			cursor.PublishEventId = maxPublish
+		}
+		if cursor.InteractionId <= 0 || cursor.InteractionId > maxInteraction {
+			cursor.InteractionId = maxInteraction
+		}
+		if _, err := session.Exec(`
+			UPDATE t_user_follow
+			SET last_read_event_id = GREATEST(last_read_event_id, ?), updated_at = CURRENT_TIMESTAMP
+			WHERE follower_id = ?`, cursor.PublishEventId, userID); err != nil {
+			return apperrors.Unavailable("notification.read.publish", err)
+		}
+		if _, err := session.Exec(`
+			UPDATE t_user_notification
+			SET read_at = CURRENT_TIMESTAMP
+			WHERE recipient_id = ? AND id <= ? AND read_at IS NULL`, userID, cursor.InteractionId); err != nil {
+			return apperrors.Unavailable("notification.read.interaction", err)
+		}
+		return nil
+	})
 }
 
+const notificationFeedSQL = `
+	SELECT
+		'publish:' || event.id::text AS notification_key,
+		'publish' AS notification_type,
+		'publish' AS notification_group,
+		event.author_id,
+		author.handle AS actor_handle,
+		author.nickname AS actor_name,
+		author.avatar AS actor_avatar,
+		event.content_type,
+		event.content_id,
+		0::bigint AS comment_id,
+		COALESCE(article.article_title, '') AS title,
+		CASE WHEN event.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '') ELSE COALESCE(SUBSTR(talk.content, 1, 240), '') END AS excerpt,
+		COALESCE(article.article_cover, '') AS cover,
+		COALESCE(talk.images, '') AS images,
+		event.published_at AS created_at,
+		(event.id <= follow.last_read_event_id) AS is_read,
+		event.id AS sort_id
+	FROM t_author_publish_event event
+	JOIN t_user_follow follow ON follow.author_id = event.author_id AND follow.follower_id = ? AND event.id > follow.start_event_id
+	JOIN t_user_info author ON author.id = event.author_id AND author.is_disable = 0
+	LEFT JOIN t_article article ON event.content_type = 'article' AND article.id = event.content_id
+		AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+	LEFT JOIN t_talk talk ON event.content_type = 'talk' AND talk.id = event.content_id
+		AND talk.status = 1 AND talk.moderation_status = 'visible'
+	WHERE ((event.content_type = 'article' AND article.id IS NOT NULL) OR (event.content_type = 'talk' AND talk.id IS NOT NULL))
+	  AND (? = '' OR ? = 'publish')
+	UNION ALL
+	SELECT
+		'interaction:' || notification.id::text AS notification_key,
+		notification.type AS notification_type,
+		CASE WHEN notification.type IN ('comment', 'reply') THEN 'comment' ELSE 'reaction' END AS notification_group,
+		notification.actor_id,
+		actor.handle AS actor_handle,
+		actor.nickname AS actor_name,
+		actor.avatar AS actor_avatar,
+		notification.content_type,
+		notification.content_id,
+		notification.comment_id,
+		CASE WHEN notification.content_type = 'article' THEN COALESCE(article.article_title, '') ELSE '' END AS title,
+		CASE
+			WHEN notification.type IN ('comment', 'reply') THEN COALESCE(SUBSTR(comment.comment_content, 1, 240), '')
+			WHEN notification.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '')
+			ELSE COALESCE(SUBSTR(talk.content, 1, 240), '')
+		END AS excerpt,
+		COALESCE(article.article_cover, '') AS cover,
+		COALESCE(talk.images, '') AS images,
+		notification.created_at,
+		(notification.read_at IS NOT NULL) AS is_read,
+		notification.id AS sort_id
+	FROM t_user_notification notification
+	JOIN t_user_info actor ON actor.id = notification.actor_id AND actor.is_disable = 0
+	LEFT JOIN t_comment comment ON notification.comment_id > 0 AND comment.id = notification.comment_id
+	LEFT JOIN t_article article ON notification.content_type = 'article' AND article.id = notification.content_id
+		AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+	LEFT JOIN t_talk talk ON notification.content_type = 'talk' AND talk.id = notification.content_id
+		AND talk.status = 1 AND talk.moderation_status = 'visible'
+	LEFT JOIN t_article_reaction reaction ON notification.type IN ('like', 'favorite')
+		AND reaction.article_id = notification.content_id
+		AND reaction.user_info_id = notification.actor_id
+		AND reaction.reaction = notification.type
+	WHERE notification.recipient_id = ?
+	  AND (
+		(notification.type IN ('comment', 'reply') AND comment.id IS NOT NULL AND comment.is_delete = 0 AND comment.is_review = 1
+			AND ((notification.content_type = 'article' AND article.id IS NOT NULL) OR (notification.content_type = 'talk' AND talk.id IS NOT NULL)))
+		OR
+		(notification.type IN ('like', 'favorite') AND reaction.id IS NOT NULL AND notification.content_type = 'article' AND article.id IS NOT NULL)
+	  )
+	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply')) OR (? = 'reaction' AND notification.type IN ('like', 'favorite')))
+`
+
+func notificationFeedArgs(userID int, group string) []interface{} {
+	return []interface{}{userID, group, group, userID, group, group, group}
+}
 func decodeTalkImages(value string) []string {
 	value = strings.TrimSpace(value)
 	if value == "" {

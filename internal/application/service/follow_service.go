@@ -119,17 +119,26 @@ func (s *MyFollowService) ListNotifications(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	result, err := s.repo.ListNotifications(c.Request.Context(), user.UserInfoId, current, size)
+	group := strings.ToLower(strings.TrimSpace(c.Query("group")))
+	if group == "" {
+		group = port.NotificationGroupAll
+	}
+	if !port.ValidNotificationGroup(group) {
+		return model.ResultFailWithMessage("通知类型不正确")
+	}
+	result, err := s.repo.ListNotifications(c.Request.Context(), user.UserInfoId, group, current, size)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOkWithData(struct {
-		Records     []port.FollowNotification `json:"records"`
-		Count       int                       `json:"count"`
-		Page        int                       `json:"page"`
-		PageSize    int                       `json:"pageSize"`
-		UnreadCount int                       `json:"unreadCount"`
-	}{Records: result.Records, Count: result.Count, Page: current, PageSize: size, UnreadCount: result.UnreadCount})
+		Records          []port.NotificationItem `json:"records"`
+		Count            int                     `json:"count"`
+		Page             int                     `json:"page"`
+		PageSize         int                     `json:"pageSize"`
+		UnreadCount      int                     `json:"unreadCount"`
+		TotalUnreadCount int                     `json:"totalUnreadCount"`
+		ReadCursor       port.NotificationCursor `json:"readCursor"`
+	}{Records: result.Records, Count: result.Count, Page: current, PageSize: size, UnreadCount: result.UnreadCount, TotalUnreadCount: result.TotalUnreadCount, ReadCursor: result.ReadCursor})
 }
 
 func (s *MyFollowService) UnreadNotificationCount(c *gin.Context) model.ResultVO {
@@ -149,7 +158,13 @@ func (s *MyFollowService) MarkNotificationsRead(c *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFailWithStatus(model.NO_LOGIN)
 	}
-	if err := s.repo.MarkNotificationsRead(c.Request.Context(), user.UserInfoId); err != nil {
+	cursor := port.NotificationCursor{}
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&cursor); err != nil {
+			return model.ResultFailWithMessage("参数格式不正确")
+		}
+	}
+	if err := s.repo.MarkNotificationsRead(c.Request.Context(), user.UserInfoId, cursor); err != nil {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOkWithData(map[string]int{"unreadCount": 0})

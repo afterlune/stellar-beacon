@@ -38,7 +38,11 @@ func (f *fakeCommentRepository) ValidateTarget(context.Context, int, int) error 
 func (f *fakeCommentRepository) ValidateReply(context.Context, int, int, int) error {
 	return nil
 }
-func (f *fakeCommentRepository) Create(context.Context, entity.TComment) (int, error) { return 0, nil }
+func (f *fakeCommentRepository) ResolveCommentPage(context.Context, int, int, int, int) (int, error) {
+	return 1, nil
+}
+func (f *fakeCommentRepository) MarkNotificationDispatched(context.Context, int) error { return nil }
+func (f *fakeCommentRepository) Create(context.Context, entity.TComment) (int, error)  { return 0, nil }
 func (f *fakeCommentRepository) GetByID(context.Context, int) (entity.TComment, error) {
 	return entity.TComment{}, nil
 }

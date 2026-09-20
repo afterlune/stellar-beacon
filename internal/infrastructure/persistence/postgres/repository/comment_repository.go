@@ -70,6 +70,46 @@ func (c *MyCommentRepo) ListComments(ctx context.Context, filter port.CommentFil
 	return comments, count, nil
 }
 
+func (c *MyCommentRepo) ResolveCommentPage(ctx context.Context, commentType, topicID, commentID, size int) (int, error) {
+	if commentType <= 0 || topicID <= 0 || commentID <= 0 {
+		return 1, nil
+	}
+	if size <= 0 {
+		size = 7
+	}
+	session, err := c.commentSession(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var focus struct {
+		Id       int `xorm:"id"`
+		ParentId int `xorm:"parent_id"`
+	}
+	found, err := session.SQL(`
+		SELECT id, parent_id
+		FROM t_comment
+		WHERE id = ? AND type = ? AND topic_id = ? AND is_delete = 0 AND is_review = 1`,
+		commentID, commentType, topicID).Get(&focus)
+	if err != nil {
+		return 0, apperrors.Wrap(apperrors.KindUnavailable, "comment.focus", err)
+	}
+	if !found {
+		return 1, nil
+	}
+	rootID := focus.Id
+	if focus.ParentId > 0 {
+		rootID = focus.ParentId
+	}
+	var newer int
+	if _, err := session.SQL(`
+		SELECT count(1)
+		FROM t_comment
+		WHERE type = ? AND topic_id = ? AND parent_id = 0 AND is_delete = 0 AND is_review = 1 AND id > ?`,
+		commentType, topicID, rootID).Get(&newer); err != nil {
+		return 0, apperrors.Wrap(apperrors.KindUnavailable, "comment.focus_rank", err)
+	}
+	return newer/size + 1, nil
+}
 func (c *MyCommentRepo) ListReplies(ctx context.Context, commentIDs []int) ([]*port.Reply, error) {
 	if len(commentIDs) == 0 {
 		return []*port.Reply{}, nil
@@ -252,6 +292,11 @@ func (c *MyCommentRepo) Create(ctx context.Context, comment entity.TComment) (in
 		if _, err := session.Insert(&comment); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "comment.create", err)
 		}
+		if comment.IsReview == 1 {
+			if err := recordCommentNotification(session, comment.Id); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -260,12 +305,30 @@ func (c *MyCommentRepo) Create(ctx context.Context, comment entity.TComment) (in
 	return comment.Id, nil
 }
 
+func (c *MyCommentRepo) MarkNotificationDispatched(ctx context.Context, commentID int) error {
+	if commentID <= 0 {
+		return nil
+	}
+	session, err := c.commentSession(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := session.Exec(`UPDATE t_comment SET notification_dispatched_at = CURRENT_TIMESTAMP WHERE id = ? AND notification_dispatched_at IS NULL`, commentID); err != nil {
+		return apperrors.Wrap(apperrors.KindUnavailable, "comment.notification_dispatched", err)
+	}
+	return nil
+}
 func (c *MyCommentRepo) Review(ctx context.Context, ids []int, review int) error {
 	return ormInit.WithEngineTx(c.engine, ctx, func(session *xorm.Session) error {
 		for _, id := range ids {
 			comment := entity.TComment{Id: id, IsReview: review}
 			if _, err := session.ID(id).MustCols("is_review").Update(&comment); err != nil {
 				return apperrors.Wrap(apperrors.KindUnavailable, "comment.review", err)
+			}
+			if review == 1 {
+				if err := recordCommentNotification(session, id); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

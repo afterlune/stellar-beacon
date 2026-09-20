@@ -11,6 +11,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,7 @@ type MyCommentService struct {
 	website       StellarBeaconInfoService
 	users         port.UserInfoRepository
 	articles      port.ArticleRepository
+	talks         port.TalkRepository
 	notifications port.CommentNotifier
 	limiter       port.RateLimiter
 }
@@ -51,6 +53,7 @@ func NewCommentService(deps CommentServiceDeps) (*MyCommentService, error) {
 		website:       deps.Website,
 		users:         deps.Users,
 		articles:      deps.Articles,
+		talks:         deps.Talks,
 		notifications: deps.Notifications,
 		limiter:       deps.Limiter,
 	}, nil
@@ -93,12 +96,23 @@ func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 		}
 		filter.TopicID = &topicID
 	}
+	if rawFocusCommentID := strings.TrimSpace(ctx.Query("focusCommentId")); rawFocusCommentID != "" {
+		focusCommentID, parseErr := strconv.Atoi(rawFocusCommentID)
+		if parseErr != nil || focusCommentID <= 0 || filter.TopicID == nil {
+			return model.ResultFailWithMessage("参数格式不正确")
+		}
+		current, err = c.commentRepository().ResolveCommentPage(ctx.Request.Context(), filter.Type, *filter.TopicID, focusCommentID, filter.Size)
+		if err != nil {
+			return model.ResultFromError(err)
+		}
+		filter.Current = current
+	}
 	commentData, count, err := c.commentRepository().ListComments(ctx.Request.Context(), filter)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	if count == 0 || len(commentData) == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0, Page: current, PageSize: size})
 	}
 	commentIDs := make([]int, 0, len(commentData))
 	for _, comment := range commentData {
@@ -115,7 +129,7 @@ func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 	for _, comment := range commentData {
 		comment.ReplyDTOs = replyMap[comment.Id]
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: commentData, Count: count})
+	return model.ResultOkWithData(model.PageResultDTO{Records: commentData, Count: count, Page: current, PageSize: size})
 }
 
 func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
@@ -168,37 +182,43 @@ func (c *MyCommentService) SaveComment(ctx *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	comment.Id = commentID
-	c.notifyComment(ctx.Request.Context(), comment, dto)
+	if comment.IsReview == 1 {
+		c.notifyComment(ctx.Request.Context(), comment)
+		if err := c.commentRepository().MarkNotificationDispatched(ctx.Request.Context(), comment.Id); err != nil {
+			slog.WarnContext(ctx.Request.Context(), "mark comment notification dispatched failed", "commentId", comment.Id, "error", err)
+		}
+	}
 	return model.ResultOk()
 }
 
-// notifyComment queues the reply/article notification after a comment is
-// stored. Delivery is best effort: a mail problem must never fail the write,
-// and the queue owns retries.
-func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TComment, author model.UserDetailsDTO) {
+// notifyComment queues the reply or content-owner email after a comment is
+// approved. In-app notifications are written transactionally by the repository;
+// email remains best effort and is retried by the bounded queue.
+func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TComment) {
 	if c.notifications == nil || c.users == nil || c.articles == nil || created.Id == 0 {
 		return
 	}
-	// Comments waiting for moderation must not leak their content by email
-	// before a moderator approves them.
 	if created.IsReview != 1 {
 		return
 	}
-	if !c.commentNoticeEnabled(ctx) {
-		return
+
+	actorNickname := ""
+	if actor, err := c.users.GetByID(ctx, created.UserId); err == nil {
+		actorNickname = actor.Nickname
 	}
 
 	recipientID := 0
 	replyTo := ""
+	contentType := ""
+	contentID := 0
 	switch {
 	case created.ParentId != 0:
-		parent, err := c.commentRepository().GetByID(ctx, created.ParentId)
-		if err != nil {
-			slog.WarnContext(ctx, "load parent comment for notification failed", "error", err)
+		if created.ReplyUserId <= 0 {
 			return
 		}
-		recipientID = parent.UserId
-		replyTo = author.Nickname
+		recipientID = created.ReplyUserId
+		replyTo = actorNickname
+		contentType, contentID = commentTarget(created.Type, created.TopicId)
 	case created.Type == 1 && created.TopicId != 0:
 		article, err := c.articles.GetArticleRecord(ctx, created.TopicId)
 		if err != nil {
@@ -206,12 +226,24 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 			return
 		}
 		recipientID = article.UserId
+		contentType = port.FollowContentArticle
+		contentID = article.Id
+	case created.Type == 5 && created.TopicId != 0:
+		if c.talks == nil {
+			return
+		}
+		talk, err := c.talks.Get(ctx, created.TopicId)
+		if err != nil {
+			slog.WarnContext(ctx, "load talk for notification failed", "error", err)
+			return
+		}
+		recipientID = talk.UserId
+		contentType = port.FollowContentTalk
+		contentID = talk.Id
 	default:
-		// Message-board, about, friend-link and talk comments have no owner to
-		// notify in this iteration.
 		return
 	}
-	if recipientID <= 0 || recipientID == created.UserId {
+	if recipientID <= 0 || recipientID == created.UserId || contentType == "" || contentID <= 0 {
 		return
 	}
 
@@ -220,7 +252,7 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		slog.WarnContext(ctx, "load notification recipient failed", "error", err)
 		return
 	}
-	if recipient.Email == "" || recipient.IsDisable != 0 || recipient.NotifyComment == 0 {
+	if recipient.Email == "" || recipient.IsDisable != 0 || recipient.NotifyComment == 0 || !c.commentNoticeEnabled(ctx) {
 		return
 	}
 	if !c.notificationAllowed(ctx, recipientID, created.Id) {
@@ -235,19 +267,50 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		ReplyAuthor: replyTo,
 		CommentBody: created.CommentContent,
 	}
-	if created.Type == 1 && created.TopicId != 0 {
-		article, err := c.articles.GetArticleRecord(ctx, created.TopicId)
-		if err == nil && article.Id != 0 {
-			notification.ArticleID = article.Id
-			notification.ArticleTitle = article.ArticleTitle
-			notification.ArticleURL = config.PublicSiteURL + "/articles/" + strconv.Itoa(article.Id)
+	if contentType == port.FollowContentArticle {
+		article, err := c.articles.GetArticleRecord(ctx, contentID)
+		if err != nil {
+			slog.WarnContext(ctx, "load article notification payload failed", "error", err)
+			return
 		}
+		notification.ArticleID = article.Id
+		notification.ArticleTitle = article.ArticleTitle
+		notification.ArticleURL = config.PublicSiteURL + "/articles/" + strconv.Itoa(article.Id)
+	} else {
+		talk, err := c.talks.Get(ctx, contentID)
+		if err != nil {
+			slog.WarnContext(ctx, "load talk notification payload failed", "error", err)
+			return
+		}
+		notification.ArticleID = talk.Id
+		notification.ArticleTitle = commentExcerpt(talk.Content, 80)
+		notification.ArticleURL = config.PublicSiteURL + "/talks/" + strconv.Itoa(talk.Id)
 	}
 	if err := c.notifications.EnqueueComment(notification); err != nil {
 		slog.WarnContext(ctx, "enqueue comment notification failed", "error", err)
 	}
 }
 
+func commentTarget(commentType, topicID int) (string, int) {
+	if topicID <= 0 {
+		return "", 0
+	}
+	switch commentType {
+	case 1:
+		return port.FollowContentArticle, topicID
+	case 5:
+		return port.FollowContentTalk, topicID
+	default:
+		return "", 0
+	}
+}
+func commentExcerpt(value string, limit int) string {
+	value = strings.TrimSpace(strings.ReplaceAll(value, "\n", " "))
+	if limit > 0 && len([]rune(value)) > limit {
+		value = string([]rune(value)[:limit]) + "…"
+	}
+	return value
+}
 func (c *MyCommentService) commentNoticeEnabled(ctx context.Context) bool {
 	result := c.websiteService().GetWebsiteConfig(ctx)
 	config, ok := result.Data.(model.WebsiteConfigDTO)
@@ -319,8 +382,27 @@ func (c *MyCommentService) UpdateCommentsReview(ctx *gin.Context) model.ResultVO
 	if err := ctx.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
+	pending := make([]entity.TComment, 0, len(vo.Ids))
+	if vo.IsReview == 1 {
+		for _, id := range vo.Ids {
+			comment, err := c.commentRepository().GetByID(ctx.Request.Context(), id)
+			if err != nil {
+				continue
+			}
+			if comment.IsReview != 1 && comment.NotificationDispatchedAt == nil {
+				pending = append(pending, comment)
+			}
+		}
+	}
 	if err := c.commentRepository().Review(ctx.Request.Context(), vo.Ids, vo.IsReview); err != nil {
 		return model.ResultFromError(err)
+	}
+	for _, comment := range pending {
+		comment.IsReview = 1
+		c.notifyComment(ctx.Request.Context(), comment)
+		if err := c.commentRepository().MarkNotificationDispatched(ctx.Request.Context(), comment.Id); err != nil {
+			slog.WarnContext(ctx.Request.Context(), "mark reviewed comment notification dispatched failed", "commentId", comment.Id, "error", err)
+		}
 	}
 	return model.ResultOk()
 }

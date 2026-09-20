@@ -206,6 +206,7 @@ func mustCommentService(t *testing.T, repo port.CommentRepository) *MyCommentSer
 		Website:       fakeStellarBeaconInfoService{},
 		Users:         notificationUsers{},
 		Articles:      &fakeArticleRepository{},
+		Talks:         &fakeTalkRepository{},
 		Notifications: &fakeCommentNotifier{},
 	})
 	if err != nil {

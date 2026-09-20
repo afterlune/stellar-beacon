@@ -63,7 +63,7 @@ paths:
   /public/tags/top:
     get: { tags: [public], summary: List popular tags, operationId: listPopularTags, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/comments:
-    get: { tags: [public], summary: List comments, operationId: listComments, responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get: { tags: [public], summary: List comments, operationId: listComments, parameters: [{ name: focusCommentId, in: query, required: false, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     post: { tags: [public], summary: Create comment, operationId: createComment, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/comments/top:
     get: { tags: [public], summary: List recent comments, operationId: listRecentComments, responses: { '200': { $ref: '#/components/responses/Result' } } }
@@ -121,11 +121,13 @@ paths:
     put: { tags: [auth], summary: Update subscription, operationId: updateSubscription, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/notifications:
     put: { tags: [auth], summary: Set the comment email notification preference, operationId: updateCommentNotice, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
-    get: { tags: [auth], summary: List follow notifications, operationId: listFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get: { tags: [auth], summary: List unified publish and interaction notifications, operationId: listFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/notifications/unread-count:
-    get: { tags: [auth], summary: Count unread follow notifications, operationId: getUnreadFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get: { tags: [auth], summary: Count unified unread notifications, operationId: getUnreadFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/notifications/read:
-    post: { tags: [auth], summary: Mark follow notifications read, operationId: markFollowNotificationsRead, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [auth], summary: Mark unified notifications read through a cursor, operationId: markFollowNotificationsRead, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notification-preferences:
+    put: { tags: [auth], summary: Set the in-app interaction notification preference, operationId: updateNotificationPreferences, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/following/{authorId}:
     put: { tags: [auth], summary: Follow an author, operationId: followAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     delete: { tags: [auth], summary: Unfollow an author, operationId: unfollowAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }

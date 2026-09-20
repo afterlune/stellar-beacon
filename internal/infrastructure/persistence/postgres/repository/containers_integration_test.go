@@ -75,7 +75,7 @@ CREATE TABLE t_user_info (
     handle VARCHAR(40) NOT NULL UNIQUE,
     email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
     intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
-    notify_comment SMALLINT NOT NULL DEFAULT 1,
+    notify_comment SMALLINT NOT NULL DEFAULT 1, notify_interaction SMALLINT NOT NULL DEFAULT 1,
     is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
 );
 CREATE TABLE t_user_auth (
@@ -91,7 +91,7 @@ CREATE TABLE t_user_role (id INTEGER PRIMARY KEY, user_id INTEGER, role_id INTEG
 CREATE TABLE t_category (id INTEGER PRIMARY KEY, category_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_tag (id INTEGER PRIMARY KEY, tag_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_talk (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, content TEXT NOT NULL, images TEXT, is_top SMALLINT NOT NULL, status SMALLINT NOT NULL, moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible', moderation_reason VARCHAR(255), moderated_by INTEGER DEFAULT 0, moderated_at TIMESTAMP, create_time TIMESTAMP, update_time TIMESTAMP);
-CREATE TABLE t_comment (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_comment (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, notification_dispatched_at TIMESTAMPTZ NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_unique_view (id INTEGER PRIMARY KEY, views_count INTEGER NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_website_config (id INTEGER PRIMARY KEY, config TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_about (id INTEGER PRIMARY KEY, content TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
@@ -168,6 +168,19 @@ CREATE TABLE t_author_publish_event (
     content_type VARCHAR(16) NOT NULL, content_id BIGINT NOT NULL,
     published_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (content_type, content_id)
+);
+CREATE TABLE t_user_notification (
+    id BIGSERIAL PRIMARY KEY, recipient_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    actor_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    type VARCHAR(16) NOT NULL, content_type VARCHAR(16) NOT NULL, content_id BIGINT NOT NULL,
+    comment_id BIGINT NOT NULL DEFAULT 0, dedupe_key VARCHAR(191) NOT NULL,
+    read_at TIMESTAMPTZ NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (recipient_id, dedupe_key), CHECK (recipient_id <> actor_id)
+);
+CREATE TABLE t_article_reaction (
+    id SERIAL PRIMARY KEY, article_id INTEGER NOT NULL, user_info_id INTEGER NOT NULL,
+    reaction VARCHAR(16) NOT NULL, create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (article_id, user_info_id, reaction)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
@@ -336,11 +349,11 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	if err := platformRepo.ModerateContent(ctx, "article", 7, 1, false, ""); err != nil {
 		t.Fatalf("restore followed article: %v", err)
 	}
-	notifications, err := followRepo.ListNotifications(ctx, 2, 1, 10)
+	notifications, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupAll, 1, 10)
 	if err != nil || notifications.Count != 1 || notifications.UnreadCount != 1 || len(notifications.Records) != 1 {
 		t.Fatalf("unexpected follow notifications: notifications=%+v err=%v", notifications, err)
 	}
-	if err := followRepo.MarkNotificationsRead(ctx, 2); err != nil {
+	if err := followRepo.MarkNotificationsRead(ctx, 2, notifications.ReadCursor); err != nil {
 		t.Fatalf("mark follow notifications read: %v", err)
 	}
 	unread, err := followRepo.UnreadNotificationCount(ctx, 2)
@@ -350,7 +363,7 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	if _, err := platformRepo.SaveOwnedTalk(ctx, entity.TTalk{UserId: 1, Content: "followed talk", Status: 1, ModerationStatus: "visible"}); err != nil {
 		t.Fatalf("publish followed talk: %v", err)
 	}
-	notifications, err = followRepo.ListNotifications(ctx, 2, 1, 10)
+	notifications, err = followRepo.ListNotifications(ctx, 2, port.NotificationGroupAll, 1, 10)
 	if err != nil || notifications.Count != 2 || notifications.UnreadCount != 1 {
 		t.Fatalf("unexpected talk follow notification: notifications=%+v err=%v", notifications, err)
 	}
@@ -361,6 +374,78 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	followers, followerCount, err := followRepo.ListFollowers(ctx, 1, 1, 10)
 	if err != nil || followerCount != 1 || len(followers) != 1 || followers[0].Id != 2 {
 		t.Fatalf("unexpected follower list: users=%+v count=%d err=%v", followers, followerCount, err)
+	}
+	commentRepo := NewCommentRepo(xormEngine)
+	commentID, err := commentRepo.Create(ctx, entity.TComment{UserId: 2, TopicId: 1, CommentContent: "new comment", Type: 1, IsReview: 1})
+	if err != nil || commentID <= 0 {
+		t.Fatalf("create approved comment: id=%d err=%v", commentID, err)
+	}
+	commentNotifications, err := followRepo.ListNotifications(ctx, 1, port.NotificationGroupComment, 1, 10)
+	if err != nil || commentNotifications.Count != 1 || commentNotifications.UnreadCount != 1 || len(commentNotifications.Records) != 1 ||
+		commentNotifications.Records[0].Type != port.NotificationTypeComment || commentNotifications.Records[0].CommentId != commentID {
+		t.Fatalf("unexpected comment notifications: notifications=%+v err=%v", commentNotifications, err)
+	}
+	if err := commentRepo.Review(ctx, []int{commentID}, 0); err != nil {
+		t.Fatalf("hide approved comment notification: %v", err)
+	}
+	hiddenComments, err := followRepo.ListNotifications(ctx, 1, port.NotificationGroupComment, 1, 10)
+	if err != nil || hiddenComments.Count != 0 || hiddenComments.UnreadCount != 0 {
+		t.Fatalf("unapproved comment notification must be hidden: notifications=%+v err=%v", hiddenComments, err)
+	}
+	if err := commentRepo.Review(ctx, []int{commentID}, 1); err != nil {
+		t.Fatalf("restore approved comment notification: %v", err)
+	}
+	restoredComments, err := followRepo.ListNotifications(ctx, 1, port.NotificationGroupComment, 1, 10)
+	if err != nil || restoredComments.Count != 1 || restoredComments.UnreadCount != 1 {
+		t.Fatalf("restored comment notification must reappear: notifications=%+v err=%v", restoredComments, err)
+	}
+	secondCommentID, err := commentRepo.Create(ctx, entity.TComment{UserId: 2, TopicId: 1, CommentContent: "second comment", Type: 1, IsReview: 1})
+	if err != nil || secondCommentID <= 0 {
+		t.Fatalf("create second approved comment: id=%d err=%v", secondCommentID, err)
+	}
+	secondPage, err := commentRepo.ResolveCommentPage(ctx, 1, 1, secondCommentID, 1)
+	if err != nil || secondPage != 1 {
+		t.Fatalf("resolve newest comment page: page=%d err=%v", secondPage, err)
+	}
+	firstPage, err := commentRepo.ResolveCommentPage(ctx, 1, 1, commentID, 1)
+	if err != nil || firstPage != 2 {
+		t.Fatalf("resolve older comment page: page=%d err=%v", firstPage, err)
+	}
+	reactionRepo := NewArticleReactionRepo(xormEngine)
+	if active, err := reactionRepo.Toggle(ctx, 1, 2, port.ReactionLike); err != nil || !active {
+		t.Fatalf("activate article reaction: active=%v err=%v", active, err)
+	}
+	reactionNotifications, err := followRepo.ListNotifications(ctx, 1, port.NotificationGroupReaction, 1, 10)
+	if err != nil || reactionNotifications.Count != 1 || reactionNotifications.UnreadCount != 1 || len(reactionNotifications.Records) != 1 ||
+		reactionNotifications.Records[0].Type != port.NotificationTypeLike {
+		t.Fatalf("unexpected reaction notifications: notifications=%+v err=%v", reactionNotifications, err)
+	}
+	if active, err := reactionRepo.Toggle(ctx, 1, 2, port.ReactionLike); err != nil || active {
+		t.Fatalf("remove article reaction: active=%v err=%v", active, err)
+	}
+	reactionNotifications, err = followRepo.ListNotifications(ctx, 1, port.NotificationGroupReaction, 1, 10)
+	if err != nil || reactionNotifications.Count != 0 || reactionNotifications.UnreadCount != 0 {
+		t.Fatalf("removed reaction must be hidden: notifications=%+v err=%v", reactionNotifications, err)
+	}
+	if active, err := reactionRepo.Toggle(ctx, 1, 2, port.ReactionLike); err != nil || !active {
+		t.Fatalf("reactivate article reaction: active=%v err=%v", active, err)
+	}
+	reactionNotifications, err = followRepo.ListNotifications(ctx, 1, port.NotificationGroupReaction, 1, 10)
+	if err != nil || reactionNotifications.Count != 1 || reactionNotifications.UnreadCount != 1 {
+		t.Fatalf("reactivated reaction must restore the original notification: notifications=%+v err=%v", reactionNotifications, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_user_info SET notify_interaction = 0 WHERE id = 1`); err != nil {
+		t.Fatalf("disable interaction notifications: %v", err)
+	}
+	if active, err := reactionRepo.Toggle(ctx, 1, 2, port.ReactionFavorite); err != nil || !active {
+		t.Fatalf("activate opted-out favorite: active=%v err=%v", active, err)
+	}
+	reactionNotifications, err = followRepo.ListNotifications(ctx, 1, port.NotificationGroupReaction, 1, 10)
+	if err != nil || reactionNotifications.Count != 1 || reactionNotifications.UnreadCount != 1 {
+		t.Fatalf("opted-out reactions must not create notifications: notifications=%+v err=%v", reactionNotifications, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_user_info SET notify_interaction = 1 WHERE id = 1`); err != nil {
+		t.Fatalf("restore interaction notifications: %v", err)
 	}
 	preview, err := platformRepo.PreviewOwnedContent(ctx, 1, port.StudioContentArticle, port.StudioFilter{Status: 1})
 	if err != nil || preview.Count < 1 || preview.MaxID < 1 {

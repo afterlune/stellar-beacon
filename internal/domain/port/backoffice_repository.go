@@ -180,6 +180,7 @@ type UserInfoRepository interface {
 	UpdateEmail(ctx context.Context, id int, email string) error
 	UpdateSubscribe(ctx context.Context, id, subscribe int) error
 	UpdateNotifyComment(ctx context.Context, id, notify int) error
+	UpdateNotifyInteraction(ctx context.Context, id, notify int) error
 	UpdateRole(ctx context.Context, userInfoID int, nickname string, roleIDs []int) error
 	UpdateDisable(ctx context.Context, id, disabled int) error
 	FindAuthByUserInfoID(ctx context.Context, id int) (entity.TUserAuth, error)

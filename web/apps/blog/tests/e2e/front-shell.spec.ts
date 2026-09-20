@@ -101,7 +101,7 @@ async function mockArticleReading(page: Page, onContinuationEvent?: (event: { ar
 }
 
 async function mockSocialApi(page: Page) {
-  const saved = { following: false, unread: 1, readCalls: 0 }
+  const saved = { following: false, unread: 2, readCalls: 0, notifyInteraction: 1 }
   const author = {
     id: 1,
     handle: 'integration',
@@ -180,21 +180,43 @@ async function mockSocialApi(page: Page) {
       return
     }
     if (path === '/api/v1/auth/me/notifications' && method === 'GET') {
-      await respond({
-        records: saved.following && saved.unread ? [{
-          eventId: 11,
+      const group = url.searchParams.get('group') || 'all'
+      const all = saved.following ? [
+        {
+          key: 'publish:11',
+          type: 'publish',
+          group: 'publish',
+          actor: author,
           contentType: 'article',
           contentId: 8,
-          author,
           title: '关注后的新文章',
           excerpt: '这是一篇关注后发布的新文章。',
-          publishedAt: '2026-09-20T10:00:00+08:00',
-          read: false
-        }] : [],
-        count: saved.following && saved.unread ? 1 : 0,
+          createdAt: '2026-09-20T10:00:00+08:00',
+          read: saved.unread === 0
+        },
+        {
+          key: 'interaction:1',
+          type: 'comment',
+          group: 'comment',
+          actor: author,
+          contentType: 'article',
+          contentId: 8,
+          commentId: 42,
+          title: '关注后的新文章',
+          excerpt: '这是一条新的评论。',
+          createdAt: '2026-09-20T10:05:00+08:00',
+          read: saved.unread === 0
+        }
+      ] : []
+      const records = all.filter((item) => group === 'all' || item.group === group)
+      await respond({
+        records,
+        count: records.length,
         page: 1,
         pageSize: 20,
-        unreadCount: saved.following ? saved.unread : 0
+        unreadCount: saved.following ? saved.unread : 0,
+        totalUnreadCount: saved.following ? saved.unread : 0,
+        readCursor: { publishEventId: 11, interactionId: 1 }
       })
       return
     }
@@ -202,6 +224,12 @@ async function mockSocialApi(page: Page) {
       saved.readCalls += 1
       saved.unread = 0
       await respond({ unreadCount: 0 })
+      return
+    }
+    if (path === '/api/v1/auth/me/notification-preferences' && method === 'PUT') {
+      const body = route.request().postDataJSON() as { notifyInteraction?: number }
+      saved.notifyInteraction = Number(body.notifyInteraction || 0)
+      await respond({ notifyInteraction: saved.notifyInteraction })
       return
     }
     if (path === '/api/v1/public/reports/visit') {
@@ -212,6 +240,7 @@ async function mockSocialApi(page: Page) {
   })
   return saved
 }
+
 test.beforeEach(async ({ page }) => {
   // The blog shell loads KaTeX from a CDN. Tests must not depend on external
   // network availability or wait for that script during navigation.
@@ -281,9 +310,14 @@ test.describe('author following', () => {
 
     await page.locator('[data-dia="notifications"]').click()
     await expect(page).toHaveURL(/\/notifications$/)
-    await expect(page.getByText('关注后的新文章')).toBeVisible()
+    await expect(page.getByText('关注后的新文章').first()).toBeVisible()
+    await expect(page.getByText('这是一条新的评论。')).toBeVisible()
+    await expect(page.locator('a[href*="comment=42#comment-42"]')).toBeVisible()
     await expect.poll(() => saved.readCalls).toBe(1)
     expect(saved.unread).toBe(0)
+    await page.getByRole('button', { name: '评论与回复' }).click()
+    await expect(page.getByText('这是一条新的评论。')).toBeVisible()
+    await expect(page.getByText('新发布')).toHaveCount(0)
   })
 })
 test.describe('article reading experience', () => {

@@ -155,6 +155,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		Website:       stellarBeacon,
 		Users:         userInfo,
 		Articles:      article,
+		Talks:         talk,
 		Notifications: notification.Notifier(),
 		Limiter:       redisCache,
 	})

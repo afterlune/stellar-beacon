@@ -50,6 +50,15 @@ func UpdateUserCommentNotice(c *gin.Context) {
 	c.JSON(http.StatusOK, userInfoService.UpdateUserCommentNotice(c))
 }
 
+// UpdateUserNotificationPreferences updates the in-app interaction inbox switch.
+// @Summary		 用户信息模块
+// @Description  开启或关闭站内互动通知
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/auth/me/notification-preferences [PUT]
+func UpdateUserNotificationPreferences(c *gin.Context) {
+	c.JSON(http.StatusOK, userInfoService.UpdateUserNotificationPreferences(c))
+}
+
 // UpdateUserRole
 // @Summary		 用户信息模块
 // @Description  修改用户角色
