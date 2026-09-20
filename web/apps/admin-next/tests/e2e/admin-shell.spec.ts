@@ -465,7 +465,7 @@ test.beforeEach(async ({ page }) => {
           flag: true,
           code: 20000,
           message: '操作成功',
-          data: { records: [{ id: 7, articleTitle: '传统后台路线', categoryName: '工程化', status: 1, viewsCount: 3, createTime: '2026-08-29T10:00:00Z' }], count: 1 }
+          data: { records: [{ id: 7, userId: 1, articleTitle: '传统后台路线', categoryName: '工程化', status: 1, viewsCount: 3, createTime: '2026-08-29T10:00:00Z' }], count: 1 }
         })
       })
       return
@@ -475,7 +475,7 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: Number(requestURL.pathname.split('/').pop()), articleTitle: requestURL.pathname.endsWith('/7') ? '传统后台路线' : '已存在文章', articleContent: '正文', categoryName: '工程化', tagNames: ['工程化'], status: 1, type: 1, isTop: 1, isFeatured: 0, seriesId: requestURL.pathname.endsWith('/7') ? 3 : 0 } })
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: Number(requestURL.pathname.split('/').pop()), userId: 1, articleTitle: requestURL.pathname.endsWith('/7') ? '传统后台路线' : '已存在文章', articleContent: '正文', categoryName: '工程化', tagNames: ['工程化'], status: 1, type: 1, isTop: 1, isFeatured: 0, seriesId: requestURL.pathname.endsWith('/7') ? 3 : 0 } })
       })
       return
     }
@@ -558,8 +558,8 @@ test.beforeEach(async ({ page }) => {
       if (route.request().method() === 'GET') {
         const isCategory = requestURL.pathname.endsWith('categories')
         const row = isCategory
-          ? { id: 1, categoryName: '工程化', articleCount: 2, createTime: '2026-08-29T10:00:00Z' }
-          : { id: 2, tagName: '工程化', articleCount: 1, createTime: '2026-08-29T10:00:00Z' }
+          ? { id: 1, userId: 1, categoryName: '工程化', articleCount: 2, createTime: '2026-08-29T10:00:00Z' }
+          : { id: 2, userId: 1, tagName: '工程化', articleCount: 1, createTime: '2026-08-29T10:00:00Z' }
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -766,7 +766,7 @@ test.beforeEach(async ({ page }) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 7, nickname: '测试管理员', content: '一次完整的前后端联调', imgs: [], isTop: 0, status: 1, commentCount: 1, createTime: '2026-08-29T10:00:00Z' }], count: 1 } })
+          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 7, userId: 1, nickname: '测试管理员', content: '一次完整的前后端联调', imgs: [], isTop: 0, status: 1, commentCount: 1, createTime: '2026-08-29T10:00:00Z' }], count: 1 } })
         })
       } else {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
@@ -778,7 +778,7 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 7, content: '一次完整的前后端联调', images: '[]', imgs: [], isTop: 0, status: 1 } })
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 7, userId: 1, content: '一次完整的前后端联调', images: '[]', imgs: [], isTop: 0, status: 1 } })
       })
       return
     }

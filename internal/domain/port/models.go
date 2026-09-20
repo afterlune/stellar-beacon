@@ -66,23 +66,28 @@ type Article struct {
 }
 
 type ArticleAdmin struct {
-	Id               int       `json:"id"`
-	UserId           int       `json:"userId"`
-	ArticleCover     string    `json:"articleCover"`
-	ArticleTitle     string    `json:"articleTitle"`
-	IsTop            int       `json:"isTop"`
-	IsFeatured       int       `json:"isFeatured"`
-	IsDelete         int       `json:"isDelete"`
-	Status           int       `json:"status"`
-	Type             int       `json:"type"`
-	ModerationStatus string    `json:"moderationStatus"`
-	ModerationReason string    `json:"moderationReason,omitempty"`
-	CreateTime       time.Time `json:"createTime"`
-	CategoryName     string    `json:"categoryName"`
-	ViewsCount       int       `json:"viewsCount"`
-	TagDTOs          []Tag     `json:"tagDTOs"`
-	LikeCount        int       `json:"likeCount"`
-	FavoriteCount    int       `json:"favoriteCount"`
+	Id               int        `json:"id"`
+	UserId           int        `json:"userId"`
+	ArticleCover     string     `json:"articleCover"`
+	ArticleTitle     string     `json:"articleTitle"`
+	IsTop            int        `json:"isTop"`
+	IsFeatured       int        `json:"isFeatured"`
+	IsDelete         int        `json:"isDelete"`
+	Status           int        `json:"status"`
+	Type             int        `json:"type"`
+	ModerationStatus string     `json:"moderationStatus"`
+	ModerationReason string     `json:"moderationReason,omitempty"`
+	ModeratedBy      int        `json:"moderatedBy,omitempty"`
+	ModeratedAt      *time.Time `json:"moderatedAt,omitempty"`
+	AuthorHandle     string     `json:"authorHandle"`
+	AuthorNickname   string     `json:"authorNickname"`
+	AuthorAvatar     string     `json:"authorAvatar"`
+	CreateTime       time.Time  `json:"createTime"`
+	CategoryName     string     `json:"categoryName"`
+	ViewsCount       int        `json:"viewsCount"`
+	TagDTOs          []Tag      `json:"tagDTOs"`
+	LikeCount        int        `json:"likeCount"`
+	FavoriteCount    int        `json:"favoriteCount"`
 }
 
 type ArticleAdminView struct {
@@ -276,20 +281,24 @@ type TalkAdmin struct {
 	Id     int `json:"id"`
 	UserId int `json:"userId"`
 
-	Nickname         string    `json:"nickname"`
-	Avatar           string    `json:"avatar"`
-	Content          string    `json:"content"`
-	Images           string    `json:"images"`
-	Imgs             []string  `json:"imgs"`
-	IsTop            int       `json:"isTop"`
-	Status           int       `json:"status"`
-	ModerationStatus string    `json:"moderationStatus"`
-	ModerationReason string    `json:"moderationReason,omitempty"`
-	CreateTime       time.Time `json:"createTime"`
+	Nickname         string     `json:"nickname"`
+	Avatar           string     `json:"avatar"`
+	Content          string     `json:"content"`
+	Images           string     `json:"images"`
+	Imgs             []string   `json:"imgs"`
+	IsTop            int        `json:"isTop"`
+	Status           int        `json:"status"`
+	ModerationStatus string     `json:"moderationStatus"`
+	ModerationReason string     `json:"moderationReason,omitempty"`
+	ModeratedBy      int        `json:"moderatedBy,omitempty"`
+	ModeratedAt      *time.Time `json:"moderatedAt,omitempty"`
+	Handle           string     `json:"authorHandle"`
+	CreateTime       time.Time  `json:"createTime"`
 }
 
 type TalkFilter struct {
 	Status           int
 	ModerationStatus string
 	UserId           int
+	Keywords         string
 }

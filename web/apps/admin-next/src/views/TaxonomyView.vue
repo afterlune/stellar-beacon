@@ -30,7 +30,7 @@
       <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('taxonomy.list.loadFailed')" @retry="load" />
 
       <AdminBatchBar :count="selectedIds.length" :hint="t('taxonomy.list.pageCount', { count: records.length, unit: config.unit })" @clear="clearSelection">
-        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('taxonomy.batch.delete') }}</a-button>
+        <a-button size="small" status="danger" :loading="batchDeleting" :disabled="!allSelectedOwned" @click="batchDelete">{{ t('taxonomy.batch.delete') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -54,8 +54,8 @@
           <template #createTime="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openEdit(record)">{{ t('taxonomy.common.edit') }}</a-button>
-              <a-popconfirm
+              <a-button v-if="isOwner(record)" type="text" size="small" @click="openEdit(record)">{{ t('taxonomy.common.edit') }}</a-button>
+              <a-popconfirm v-if="isOwner(record)"
                 :content="t('taxonomy.list.deleteConfirm', { name: record[config.nameKey] || t('taxonomy.list.deleteTarget'), unit: config.unit })"
                 @ok="remove(record.id)">
                 <a-button type="text" status="danger" size="small">{{ t('taxonomy.common.delete') }}</a-button>
@@ -115,6 +115,7 @@ import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, formatNumber } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
@@ -122,6 +123,7 @@ type Kind = 'categories' | 'tags'
 
 interface Row extends Record<string, unknown> {
   id: number
+  userId?: number
   categoryName?: string
   tagName?: string
   articleCount?: number | string
@@ -129,6 +131,7 @@ interface Row extends Record<string, unknown> {
 }
 
 const props = defineProps<{ kind: Kind }>()
+const auth = useAuthStore()
 
 // 文案字段用 getter：config 是 computed，语言切换后这些 getter 会重新求值。
 const configs = {
@@ -236,6 +239,15 @@ const pagination = computed(() => tablePagination(current.value, pageSize.value,
 const selectedIds = computed(() =>
   [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
 )
+const allSelectedOwned = computed(() => selectedIds.value.length > 0 && selectedIds.value.every((id) => {
+  const record = records.value.find((item) => Number(item.id) === id)
+  return isOwner(record)
+}))
+
+function isOwner(record?: Row): boolean {
+  const currentUserId = Number(auth.user?.userInfoId || auth.user?.id || 0)
+  return Boolean(record && currentUserId > 0 && Number(record.userId) === currentUserId)
+}
 
 function clearKeywords(): void {
   keywords.value = ''
@@ -323,6 +335,7 @@ function clearSelection(): void {
 
 function batchDelete(): void {
   const ids = selectedIds.value
+  if (!allSelectedOwned.value) return
   if (ids.length === 0) return
   Modal.confirm({
     title: t('taxonomy.batch.delete'),

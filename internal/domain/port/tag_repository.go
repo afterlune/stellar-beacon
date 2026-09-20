@@ -13,5 +13,5 @@ type TagRepository interface {
 	ListAdmin(ctx context.Context, current, size int, filter TagFilter) ([]*TagAdmin, error)
 	Search(ctx context.Context, keywords string) ([]*TagAdmin, error)
 	SaveOrUpdate(ctx context.Context, tag entity.TTag) error
-	Delete(ctx context.Context, ids []int) error
+	Delete(ctx context.Context, userID int, ids []int) error
 }

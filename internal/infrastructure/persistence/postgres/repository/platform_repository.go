@@ -889,11 +889,21 @@ func (r *MyPlatformRepo) ModerateContent(ctx context.Context, contentType string
 		return apperrors.Invalid("platform.moderation", "unsupported content type")
 	}
 	status := "visible"
+	reason = strings.TrimSpace(reason)
+	recommendationReset := ""
 	if hidden {
 		status = "hidden"
+		switch table {
+		case "t_article":
+			recommendationReset = ", is_top = 0, is_featured = 0"
+		case "t_talk":
+			recommendationReset = ", is_top = 0"
+		}
+	} else {
+		reason = ""
 	}
 	return ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
-		result, err := session.Exec("UPDATE "+table+" SET moderation_status = ?, moderation_reason = ?, moderated_by = ?, moderated_at = CURRENT_TIMESTAMP WHERE id = ?", status, strings.TrimSpace(reason), adminID, id)
+		result, err := session.Exec("UPDATE "+table+" SET moderation_status = ?, moderation_reason = ?, moderated_by = ?, moderated_at = CURRENT_TIMESTAMP"+recommendationReset+" WHERE id = ?", status, reason, adminID, id)
 		if err != nil {
 			return apperrors.Unavailable("platform.moderation.update", err)
 		}

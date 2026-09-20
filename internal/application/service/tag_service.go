@@ -96,18 +96,7 @@ func (t *MyTagService) SaveOrUpdateTag(ctx *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFailWithMessage("用户信息无效")
 	}
-	ownerID := user.UserInfoId
-	if vo.Id != 0 {
-		if existing, err := t.tagRepository().List(ctx.Request.Context()); err == nil {
-			for _, item := range existing {
-				if item.Id == vo.Id {
-					ownerID = item.UserId
-					break
-				}
-			}
-		}
-	}
-	tag := entity.TTag{Id: vo.Id, UserId: ownerID, TagName: vo.TagName}
+	tag := entity.TTag{Id: vo.Id, UserId: user.UserInfoId, TagName: vo.TagName}
 	if err := t.tagRepository().SaveOrUpdate(ctx.Request.Context(), tag); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
 			return model.ResultFailWithMessage("标签名已存在")
@@ -122,7 +111,11 @@ func (t *MyTagService) DeleteTag(ctx *gin.Context) model.ResultVO {
 	if err := ctx.ShouldBind(&ids); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := t.tagRepository().Delete(ctx.Request.Context(), ids); err != nil {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	if err := t.tagRepository().Delete(ctx.Request.Context(), user.UserInfoId, ids); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
 			return model.ResultFailWithMessage("删除失败，该标签下存在文章")
 		}

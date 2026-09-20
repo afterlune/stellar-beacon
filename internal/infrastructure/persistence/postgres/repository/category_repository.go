@@ -64,7 +64,7 @@ func (c *MyCategoryRepo) ListAdmin(ctx context.Context, current, size int, filte
 		return nil, err
 	}
 	where, args := categoryFilter(filter)
-	query := "SELECT c.id, c.category_name, count(a.id) AS article_count, c.create_time FROM t_category c LEFT JOIN t_article a ON c.id = a.category_id" + where + " GROUP BY c.id LIMIT ? OFFSET ?"
+	query := "SELECT c.id, c.user_id, c.category_name, count(a.id) AS article_count, c.create_time FROM t_category c LEFT JOIN t_article a ON c.id = a.category_id" + where + " GROUP BY c.id LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 	var categories []*port.CategoryAdmin
 	if err := session.SQL(query, args...).Find(&categories); err != nil {
@@ -91,7 +91,7 @@ func (c *MyCategoryRepo) SaveOrUpdate(ctx context.Context, category entity.TCate
 		return err
 	}
 	var existing entity.TCategory
-	found, err := session.Select("id").Where("category_name = ?", category.CategoryName).Get(&existing)
+	found, err := session.Select("id").Where("category_name = ? AND user_id = ?", category.CategoryName, category.UserId).Get(&existing)
 	if err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "category.check_name", err)
 	}
@@ -99,26 +99,37 @@ func (c *MyCategoryRepo) SaveOrUpdate(ctx context.Context, category entity.TCate
 		return apperrors.Conflict("category.save", "category name already exists")
 	}
 	return ormInit.WithEngineTx(c.engine, ctx, func(tx *xorm.Session) error {
-		var err error
 		if category.Id != 0 {
-			_, err = tx.ID(category.Id).Update(&category)
-		} else {
-			_, err = tx.Insert(&category)
+			affected, err := tx.Where("id = ? AND user_id = ?", category.Id, category.UserId).Cols("category_name").Update(&category)
+			if err != nil {
+				return apperrors.Wrap(apperrors.KindUnavailable, "category.save", err)
+			}
+			if affected == 0 {
+				return apperrors.NotFound("category.save")
+			}
+			return nil
 		}
-		if err != nil {
+		if _, err := tx.Insert(&category); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "category.save", err)
 		}
 		return nil
 	})
 }
 
-func (c *MyCategoryRepo) Delete(ctx context.Context, ids []int) error {
+func (c *MyCategoryRepo) Delete(ctx context.Context, userID int, ids []int) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	session, err := c.categorySession(ctx)
 	if err != nil {
 		return err
+	}
+	var owned int64
+	if owned, err = session.In("id", ids).And("user_id = ?", userID).Count(&entity.TCategory{}); err != nil {
+		return apperrors.Wrap(apperrors.KindUnavailable, "category.check_delete", err)
+	}
+	if int(owned) != len(ids) {
+		return apperrors.NotFound("category.delete")
 	}
 	var count int64
 	if count, err = session.In("category_id", ids).Count(&entity.TArticle{}); err != nil {
@@ -127,7 +138,7 @@ func (c *MyCategoryRepo) Delete(ctx context.Context, ids []int) error {
 	if count > 0 {
 		return apperrors.Conflict("category.delete", "category has articles")
 	}
-	if _, err := session.In("id", ids).Delete(&entity.TCategory{}); err != nil {
+	if _, err := session.In("id", ids).And("user_id = ?", userID).Delete(&entity.TCategory{}); err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "category.delete", err)
 	}
 	return nil

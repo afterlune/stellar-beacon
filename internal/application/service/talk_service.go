@@ -151,6 +151,15 @@ func (t *MyTalkService) SaveOrUpdateTalk(c *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "talk.user", nil))
 	}
+	if vo.Id != 0 {
+		existing, err := t.talkRepository().GetAdmin(c.Request.Context(), vo.Id)
+		if err != nil {
+			return model.ResultFromError(err)
+		}
+		if existing.UserId != dto.UserInfoId {
+			return model.ResultFromError(apperrors.New(apperrors.KindForbidden, "talk.save", nil))
+		}
+	}
 	talk := entity.TTalk{Id: vo.Id, Content: vo.Content, Images: vo.Images, IsTop: vo.IsTop, Status: vo.Status, UserId: dto.UserInfoId}
 	if err := t.talkRepository().SaveOrUpdate(c.Request.Context(), talk); err != nil {
 		return model.ResultFromError(err)
@@ -186,9 +195,20 @@ func (t *MyTalkService) DeleteTalks(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&ids); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
 	for _, id := range ids {
 		if id <= 0 {
 			return model.ResultFailWithMessage("参数格式不正确")
+		}
+		existing, err := t.talkRepository().GetAdmin(c.Request.Context(), id)
+		if err != nil {
+			return model.ResultFromError(err)
+		}
+		if existing.UserId != user.UserInfoId {
+			return model.ResultFromError(apperrors.New(apperrors.KindForbidden, "talk.delete", nil))
 		}
 	}
 	if err := t.talkRepository().Delete(c.Request.Context(), ids); err != nil {
@@ -202,7 +222,7 @@ func (t *MyTalkService) ListBackTalks(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	filter := port.TalkFilter{Status: vo.Status}
+	filter := port.TalkFilter{Status: vo.Status, ModerationStatus: vo.ModerationStatus, Keywords: vo.Keywords}
 	count, err := t.talkRepository().Count(c.Request.Context(), filter)
 	if err != nil {
 		return model.ResultFromError(err)

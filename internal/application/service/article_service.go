@@ -535,14 +535,15 @@ func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	filter := port.ArticleFilter{
-		Current:  conditionVO.Current,
-		Size:     conditionVO.Size,
-		Keywords: conditionVO.Keywords,
-		IsDelete: conditionVO.IsDelete,
-		Status:   conditionVO.Status,
-		Category: conditionVO.CategoryId,
-		Type:     conditionVO.Type,
-		Tag:      conditionVO.TagId,
+		Current:          conditionVO.Current,
+		Size:             conditionVO.Size,
+		Keywords:         conditionVO.Keywords,
+		IsDelete:         conditionVO.IsDelete,
+		Status:           conditionVO.Status,
+		ModerationStatus: conditionVO.ModerationStatus,
+		Category:         conditionVO.CategoryId,
+		Type:             conditionVO.Type,
+		Tag:              conditionVO.TagId,
 	}
 	count, err := a.articleRepository().CountArticleAdmins(c.Request.Context(), filter)
 	if err != nil {
@@ -616,11 +617,14 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 	article.UserId = dto.UserInfoId
 	previousStatus := 0
 	if article.Id != 0 {
-		if previous, previousErr := a.articleRepository().GetArticleRecord(c.Request.Context(), article.Id); previousErr == nil {
-			previousStatus = previous.Status
-		} else if !apperrors.IsKind(previousErr, apperrors.KindNotFound) {
+		previous, previousErr := a.articleRepository().GetArticleRecord(c.Request.Context(), article.Id)
+		if previousErr != nil {
 			return model.ResultFromError(previousErr)
 		}
+		if previous.UserId != dto.UserInfoId {
+			return model.ResultFromError(apperrors.New(apperrors.KindForbidden, "article.save", nil))
+		}
+		previousStatus = previous.Status
 	}
 	articlebase, err := a.articleRepository().SaveOrUpdate(c.Request.Context(), article, articleVO.CategoryName, articleVO.TagNames)
 	if err != nil {
@@ -644,6 +648,15 @@ func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.Res
 	if err := c.ShouldBind(&articleTopFeaturedVO); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
+	if articleTopFeaturedVO.IsTop == 1 || articleTopFeaturedVO.IsFeatured == 1 {
+		current, err := a.articleRepository().GetArticleRecord(c.Request.Context(), articleTopFeaturedVO.Id)
+		if err != nil {
+			return model.ResultFromError(err)
+		}
+		if current.IsDelete != 0 || current.Status != 1 || current.ModerationStatus != "visible" {
+			return model.ResultFailWithMessage("只有公开且审核可见的文章可以置顶或推荐")
+		}
+	}
 	articlebase, err := a.articleRepository().UpdateTopAndFeatured(c.Request.Context(), articleTopFeaturedVO.Id, articleTopFeaturedVO.IsTop, articleTopFeaturedVO.IsFeatured)
 	if err != nil {
 		if apperrors.IsKind(err, apperrors.KindNotFound) {
@@ -662,6 +675,13 @@ func (a *MyArticleService) UpdateArticleDelete(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&deleteVO); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	if err := a.requireOwnedArticles(c, user.UserInfoId, deleteVO.Ids); err != nil {
+		return model.ResultFromError(err)
+	}
 	if err := a.articleRepository().UpdateDelete(c.Request.Context(), deleteVO.Ids, deleteVO.IsDelete); err != nil {
 		return model.ResultFromError(err)
 	}
@@ -677,10 +697,36 @@ func (a *MyArticleService) DeleteArticles(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&ids); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	if err := a.requireOwnedArticles(c, user.UserInfoId, ids); err != nil {
+		return model.ResultFromError(err)
+	}
 	if err := a.articleRepository().Delete(c.Request.Context(), ids); err != nil {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
+}
+
+func (a *MyArticleService) requireOwnedArticles(c *gin.Context, userID int, ids []int) error {
+	if len(ids) == 0 {
+		return apperrors.Invalid("article.owner", "article id is required")
+	}
+	for _, id := range ids {
+		if id <= 0 {
+			return apperrors.Invalid("article.owner", "article id is invalid")
+		}
+		article, err := a.articleRepository().GetArticleRecord(c.Request.Context(), id)
+		if err != nil {
+			return err
+		}
+		if article.UserId != userID {
+			return apperrors.New(apperrors.KindForbidden, "article.owner", nil)
+		}
+	}
+	return nil
 }
 
 func (a *MyArticleService) SaveArticleImages(c *gin.Context) model.ResultVO {

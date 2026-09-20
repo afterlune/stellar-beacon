@@ -11,5 +11,5 @@ type CategoryRepository interface {
 	ListAdmin(ctx context.Context, current, size int, filter CategoryFilter) ([]*CategoryAdmin, error)
 	Search(ctx context.Context, keywords string) ([]CategoryOption, error)
 	SaveOrUpdate(ctx context.Context, category entity.TCategory) error
-	Delete(ctx context.Context, ids []int) error
+	Delete(ctx context.Context, userID int, ids []int) error
 }

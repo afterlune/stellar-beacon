@@ -1,7 +1,7 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticle, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
   type ContentContinuationTarget, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
@@ -241,9 +241,18 @@ export async function deleteAdminFriendLinks(ids: number[]): Promise<void> {
 /** 文章系列（合集）：列表、下拉选项与写操作。 */
 export interface AdminSeries {
   id: number
+  userId?: number
+  authorHandle?: string
+  authorNickname?: string
+  authorAvatar?: string
   seriesName: string
   seriesDesc: string
   cover: string
+  status?: number
+  moderationStatus?: 'visible' | 'hidden' | string
+  moderationReason?: string
+  moderatedBy?: number
+  moderatedAt?: string
   articleCount: number
   updateTime?: string
 }
@@ -444,6 +453,15 @@ export async function saveAdminArticle(payload: Record<string, unknown>): Promis
   responseData(response)
 }
 
+export async function moderateAdminContent(payload: { contentType: 'article' | 'talk' | 'series'; id: number; hidden: boolean; reason: string }): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>(`admin/content/${payload.contentType}/${encodeURIComponent(payload.id)}/moderation`, payload)
+  responseData(response)
+}
+
+export async function distributeAdminArticle(articleId: number, payload: { featured: boolean; newsletter: boolean }): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>(`admin/content/articles/${encodeURIComponent(articleId)}/distribution`, payload)
+  responseData(response)
+}
 /** Toggle the 置顶 / 精选 flags of one article. */
 export async function updateAdminArticleFeatured(payload: { id: number; isTop: number; isFeatured: number }): Promise<void> {
   const response = await http.put<ResultVO<unknown>>('admin/articles/featured', payload)

@@ -7,6 +7,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
+	"strings"
 
 	"xorm.io/xorm"
 )
@@ -30,11 +31,27 @@ func (t *MyTalkRepo) Count(ctx context.Context, filter port.TalkFilter) (int, er
 	if err != nil {
 		return 0, err
 	}
-	query := "SELECT count(1) FROM t_talk"
+	query := "SELECT count(1) FROM t_talk t"
+	conditions := make([]string, 0, 4)
 	args := []interface{}{}
 	if filter.Status != 0 {
-		query += " WHERE status = ?"
+		conditions = append(conditions, "t.status = ?")
 		args = append(args, filter.Status)
+	}
+	if filter.ModerationStatus != "" {
+		conditions = append(conditions, "t.moderation_status = ?")
+		args = append(args, filter.ModerationStatus)
+	}
+	if filter.UserId > 0 {
+		conditions = append(conditions, "t.user_id = ?")
+		args = append(args, filter.UserId)
+	}
+	if keywords := strings.TrimSpace(filter.Keywords); keywords != "" {
+		conditions = append(conditions, "t.content LIKE ? ESCAPE '\\'")
+		args = append(args, pgsql.ContainsPattern(keywords))
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 	var count int
 	if _, err := session.SQL(query, args...).Get(&count); err != nil {
@@ -78,11 +95,30 @@ func (t *MyTalkRepo) ListAdmin(ctx context.Context, current, size int, filter po
 	if err != nil {
 		return nil, err
 	}
-	query := "SELECT t.id, nickname, avatar, content, images, t.is_top, t.status, t.create_time FROM t_talk t JOIN t_user_info ui ON t.user_id = ui.id"
+	query := `SELECT t.id, t.user_id, ui.handle AS handle, ui.nickname AS nickname, ui.avatar AS avatar,
+		t.content, t.images, t.is_top, t.status, t.moderation_status, t.moderation_reason,
+		t.moderated_by, t.moderated_at, t.create_time
+		FROM t_talk t JOIN t_user_info ui ON t.user_id = ui.id`
+	conditions := make([]string, 0, 4)
 	args := []interface{}{}
 	if filter.Status != 0 {
-		query += " WHERE t.status = ?"
+		conditions = append(conditions, "t.status = ?")
 		args = append(args, filter.Status)
+	}
+	if filter.ModerationStatus != "" {
+		conditions = append(conditions, "t.moderation_status = ?")
+		args = append(args, filter.ModerationStatus)
+	}
+	if filter.UserId > 0 {
+		conditions = append(conditions, "t.user_id = ?")
+		args = append(args, filter.UserId)
+	}
+	if keywords := strings.TrimSpace(filter.Keywords); keywords != "" {
+		conditions = append(conditions, "t.content LIKE ? ESCAPE '\\'")
+		args = append(args, pgsql.ContainsPattern(keywords))
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 	query += " ORDER BY t.is_top DESC, t.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)

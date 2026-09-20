@@ -113,6 +113,7 @@ export default {
   'articles.editor.wordCount': 'About {count} characters',
   'articles.editor.tagCount': '{count} tags',
   'articles.editor.leaveGuard': 'This page has unsaved changes. Leaving will discard them.',
+  'articles.editor.ownerOnly': 'Only the content owner can edit this article',
   'articles.editor.loadFailed': 'Failed to load the article',
   'articles.editor.saveFailed': 'Failed to save the article',
   'articles.editor.saved': 'Article updated',

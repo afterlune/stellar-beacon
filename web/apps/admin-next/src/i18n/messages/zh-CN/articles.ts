@@ -113,6 +113,7 @@ export default {
   'articles.editor.wordCount': '约 {count} 字',
   'articles.editor.tagCount': '{count} 个标签',
   'articles.editor.leaveGuard': '当前页面还有未保存的修改，离开后这些内容会丢失。',
+  'articles.editor.ownerOnly': '只有内容所有者可以编辑这篇文章',
   'articles.editor.loadFailed': '文章加载失败',
   'articles.editor.saveFailed': '文章保存失败',
   'articles.editor.saved': '文章已更新',

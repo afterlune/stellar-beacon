@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
@@ -592,7 +593,14 @@ func (s *MyPlatformService) Moderate(c *gin.Context) model.ResultVO {
 	if vo.Id <= 0 {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := s.platformRepo().ModerateContent(c.Request.Context(), vo.ContentType, vo.Id, user.UserInfoId, vo.Hidden, vo.Reason); err != nil {
+	reason := strings.TrimSpace(vo.Reason)
+	if vo.Hidden && reason == "" {
+		return model.ResultFailWithMessage("隐藏内容时必须填写审核理由")
+	}
+	if len([]rune(reason)) > 255 {
+		return model.ResultFailWithMessage("审核理由不能超过 255 字")
+	}
+	if err := s.platformRepo().ModerateContent(c.Request.Context(), strings.TrimSpace(vo.ContentType), vo.Id, user.UserInfoId, vo.Hidden, reason); err != nil {
 		return model.ResultFromError(err)
 	}
 	if s.cache != nil {
@@ -610,6 +618,16 @@ func (s *MyPlatformService) DistributeArticle(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
+	current, err := s.articles.GetArticleRecord(c.Request.Context(), id)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if current.IsDelete != 0 || current.Status != 1 || current.ModerationStatus != "visible" {
+		return model.ResultFailWithMessage("只有公开且审核可见的文章可以推荐或分发")
+	}
+	if vo.Newsletter && s.newsletter == nil {
+		return model.ResultFromError(apperrors.Unavailable("article.distribution", nil))
+	}
 	featured := 0
 	if vo.Featured {
 		featured = 1
@@ -621,7 +639,7 @@ func (s *MyPlatformService) DistributeArticle(c *gin.Context) model.ResultVO {
 	if article.Id == 0 {
 		return model.ResultFailWithMessage("文章不存在")
 	}
-	if vo.Newsletter && s.newsletter != nil && article.Status == 1 && article.ModerationStatus == "visible" {
+	if vo.Newsletter {
 		if err := s.newsletter.EnqueueArticle(c.Request.Context(), id); err != nil {
 			return model.ResultFromError(err)
 		}

@@ -53,8 +53,8 @@
           </template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
-              <a-popconfirm :content="t('series.deleteConfirm', { name: String(record.seriesName) })" @ok="removeSeries(record.id)">
+              <a-button v-if="isOwner(record)" type="text" size="small" @click="openEditor(record)">{{ t('common.edit') }}</a-button>
+              <a-popconfirm v-if="isOwner(record)" :content="t('series.deleteConfirm', { name: String(record.seriesName) })" @ok="removeSeries(record.id)">
                 <a-button type="text" size="small" status="danger">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
@@ -92,10 +92,12 @@ import AdminErrorState from '@/components/AdminErrorState.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { getAdminSeries, saveAdminSeries, deleteAdminSeries } from '@/api/http'
 import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, formatNumber } from '@/utils/format'
 
 interface SeriesRow {
   id: number
+  userId?: number
   seriesName: string
   seriesDesc: string
   cover: string
@@ -107,6 +109,7 @@ export default defineComponent({
   name: 'SeriesView',
   components: { AdminErrorState, AdminPageHeader, IconPlus, IconRefresh },
   setup() {
+    const auth = useAuthStore()
     const series = ref<SeriesRow[]>([])
     const loading = ref(false)
     const saving = ref(false)
@@ -196,6 +199,11 @@ export default defineComponent({
         })
     }
 
+    const isOwner = (record?: SeriesRow) => {
+      const currentUserId = Number(auth.user?.userInfoId || auth.user?.id || 0)
+      return Boolean(record && currentUserId > 0 && Number(record.userId) === currentUserId)
+    }
+
     const removeSeries = (id: number) => {
       deleteAdminSeries([id])
         .then(() => {
@@ -209,7 +217,7 @@ export default defineComponent({
 
     onMounted(load)
 
-    return { t, series, loading, saving, errorMessage, keywords, total, pagination, columns, editorVisible, form, load, reload, changePage, changePageSize, openEditor, save, removeSeries, formatDateTime, formatNumber }
+    return { t, series, loading, saving, errorMessage, keywords, total, pagination, columns, editorVisible, form, load, reload, changePage, changePageSize, openEditor, save, removeSeries, isOwner, formatDateTime, formatNumber }
   }
 })
 </script>

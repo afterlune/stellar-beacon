@@ -123,6 +123,7 @@ export default {
   'comments.talks.clearImages': 'Clear images',
   'comments.talks.uploadHint': 'The upload URL comes from the backend; the console never builds object-storage URLs itself.',
   'comments.talks.unsavedHint': 'This page has unsaved changes. Leaving will discard them.',
+  'comments.talks.ownerOnly': 'Only the content owner can edit this talk',
   'comments.talks.editorLoadFailed': 'Could not load the talk',
   'comments.talks.saveFailed': 'Could not save the talk',
   'comments.talks.published': 'Talk published',

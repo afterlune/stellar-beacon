@@ -151,21 +151,22 @@ type CommentVO struct {
 }
 
 type ConditionVO struct {
-	Current    int       `json:"current" form:"current"`
-	Size       int       `json:"size" form:"size"`
-	Keywords   string    `json:"keywords" form:"keywords"`
-	CategoryId int       `json:"categoryId" form:"categoryId"`
-	TagId      int       `json:"tagId" form:"tagId"`
-	AlbumId    int       `json:"albumId" form:"albumId"`
-	LoginType  int       `json:"loginType" form:"loginType"`
-	Type       int       `json:"type" form:"type"`
-	Status     int       `json:"status" form:"status"`
-	StartTime  time.Time `json:"startTime" form:"startTime"`
-	EndTime    time.Time `json:"endTime" form:"endTime"`
-	IsDelete   int       `json:"isDelete" form:"isDelete"`
-	IsReview   int       `json:"isReview" form:"isReview"`
-	IsTop      int       `json:"isTop" form:"isTop"`
-	IsFeatured int       `json:"isFeatured" form:"isFeatured"`
+	Current          int       `json:"current" form:"current"`
+	Size             int       `json:"size" form:"size"`
+	Keywords         string    `json:"keywords" form:"keywords"`
+	CategoryId       int       `json:"categoryId" form:"categoryId"`
+	TagId            int       `json:"tagId" form:"tagId"`
+	AlbumId          int       `json:"albumId" form:"albumId"`
+	LoginType        int       `json:"loginType" form:"loginType"`
+	Type             int       `json:"type" form:"type"`
+	Status           int       `json:"status" form:"status"`
+	ModerationStatus string    `json:"moderationStatus" form:"moderationStatus"`
+	StartTime        time.Time `json:"startTime" form:"startTime"`
+	EndTime          time.Time `json:"endTime" form:"endTime"`
+	IsDelete         int       `json:"isDelete" form:"isDelete"`
+	IsReview         int       `json:"isReview" form:"isReview"`
+	IsTop            int       `json:"isTop" form:"isTop"`
+	IsFeatured       int       `json:"isFeatured" form:"isFeatured"`
 }
 
 type DeleteVO struct {

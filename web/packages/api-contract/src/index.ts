@@ -66,6 +66,8 @@ export interface AdminFriendLink {
 
 export interface AdminTalk {
   id: number
+  userId?: number
+  authorHandle?: string
   nickname?: string
   avatar?: string
   content?: string
@@ -73,7 +75,36 @@ export interface AdminTalk {
   imgs?: string[]
   isTop?: number
   status?: number
+  moderationStatus?: 'visible' | 'hidden' | string
+  moderationReason?: string
+  moderatedBy?: number
+  moderatedAt?: string
   commentCount?: number
+  createTime?: string
+  [key: string]: unknown
+}
+
+export interface AdminArticle {
+  id: number
+  userId?: number
+  authorHandle?: string
+  authorNickname?: string
+  authorAvatar?: string
+  articleCover?: string
+  articleTitle?: string
+  categoryName?: string
+  isTop?: number
+  isFeatured?: number
+  isDelete?: number
+  status?: number
+  type?: number
+  moderationStatus?: 'visible' | 'hidden' | string
+  moderationReason?: string
+  moderatedBy?: number
+  moderatedAt?: string
+  viewsCount?: number
+  likeCount?: number
+  favoriteCount?: number
   createTime?: string
   [key: string]: unknown
 }
@@ -88,6 +119,7 @@ export interface AdminPhoto {
 
 export interface AdminArticleView {
 	id: number
+	userId?: number
 	articleTitle?: string
 	articleContent?: string
 	articleContentHtml?: string

@@ -123,6 +123,7 @@ export default {
   'comments.talks.clearImages': '清空图片',
   'comments.talks.uploadHint': '上传地址由后端返回，不接受前端直接拼接对象存储 URL。',
   'comments.talks.unsavedHint': '当前页面还有未保存的修改，离开后这些内容会丢失。',
+  'comments.talks.ownerOnly': '只有内容所有者可以编辑这条随想',
   'comments.talks.editorLoadFailed': '说说加载失败',
   'comments.talks.saveFailed': '说说保存失败',
   'comments.talks.published': '说说已发布',

@@ -47,6 +47,7 @@ const VIEWS = {
   friendLink: () => import('@/views/FriendLinksView.vue'),
   series: () => import('@/views/SeriesView.vue'),
   contentPerformance: () => import('@/views/ContentPerformanceView.vue'),
+  contentModeration: () => import('@/views/ContentModerationView.vue'),
   website: () => import('@/views/WebsiteView.vue'),
   about: () => import('@/views/AboutView.vue'),
   setting: () => import('@/views/SettingView.vue')
@@ -82,6 +83,7 @@ const componentRegistry: Record<string, MenuViewComponent> = {
   '/friendLink/FriendLink.vue': VIEWS.friendLink,
   '/series/Series.vue': VIEWS.series,
   '/content/ContentPerformance.vue': VIEWS.contentPerformance,
+  '/content/ContentModeration.vue': VIEWS.contentModeration,
   '/website/Website.vue': VIEWS.website,
   '/about/About.vue': VIEWS.about,
   '/setting/Setting.vue': VIEWS.setting

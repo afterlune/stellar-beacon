@@ -37,7 +37,7 @@
       <AdminErrorState v-if="errorMessage" :error="errorMessage" :title="t('comments.talks.loadFailed')" @retry="load" />
 
       <AdminBatchBar :count="selectedIds.length" :hint="t('comments.common.pageCount', { count: visibleTalks.length })" @clear="clearSelection">
-        <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('comments.common.batchDelete') }}</a-button>
+        <a-button size="small" status="danger" :loading="batchDeleting" :disabled="!allSelectedOwned" @click="batchDelete">{{ t('comments.common.batchDelete') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -68,18 +68,21 @@
             <AdminStatusTag :kind="Number(record.status) === 1 ? 'public' : 'private'" />
           </template>
           <template #top="{ record }">
-            <a-tooltip :content="Number(record.isTop) === 1 ? t('comments.talks.unpinHint') : t('comments.talks.pinHint')">
+            <a-tooltip v-if="isOwner(record)" :content="Number(record.isTop) === 1 ? t('comments.talks.unpinHint') : t('comments.talks.pinHint')">
               <a-switch
                 :model-value="Number(record.isTop) === 1"
                 :loading="pendingTopId === Number(record.id)"
                 @change="(value) => toggleTop(record, value)" />
             </a-tooltip>
+            <a-tag v-else :color="Number(record.isTop) === 1 ? 'arcoblue' : 'gray'">
+              {{ Number(record.isTop) === 1 ? t('status.pinned') : '—' }}
+            </a-tag>
           </template>
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
             <a-space class="admin-action-space">
-              <a-button type="text" size="small" @click="router.push(`/talks/${record.id}`)">{{ t('common.edit') }}</a-button>
-              <a-popconfirm :content="t('comments.talks.deleteConfirm')" @ok="deleteTalk(record.id)">
+              <a-button v-if="isOwner(record)" type="text" size="small" @click="router.push(`/talks/${record.id}`)">{{ t('common.edit') }}</a-button>
+              <a-popconfirm v-if="isOwner(record)" :content="t('comments.talks.deleteConfirm')" @ok="deleteTalk(record.id)">
                 <a-button type="text" status="danger" size="small">{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
@@ -116,6 +119,7 @@ import { useAsyncList } from '@/composables/useAsyncList'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
 import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, isHttpUrl, plainText } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 import type { AdminTalk } from '@stellar-beacon/api-contract'
@@ -137,6 +141,7 @@ const columns = computed(() => [
 const VIEW_KEY = 'talks'
 
 const router = useRouter()
+const auth = useAuthStore()
 const keywords = ref('')
 const statusFilter = ref<'all' | '1' | '2'>('all')
 const pendingTopId = ref(0)
@@ -173,6 +178,15 @@ const pagination = computed(() => tablePagination(current.value, pageSize.value,
 const selectedIds = computed(() =>
   [...new Set(selectedKeys.value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
 )
+const allSelectedOwned = computed(() => selectedIds.value.length > 0 && selectedIds.value.every((id) => {
+  const record = talks.value.find((item) => Number(item.id) === id)
+  return isOwner(record)
+}))
+
+function isOwner(record?: AdminTalk): boolean {
+  const currentUserId = Number(auth.user?.userInfoId || auth.user?.id || 0)
+  return Boolean(record && currentUserId > 0 && Number(record.userId) === currentUserId)
+}
 const hasFilters = computed(() => Boolean(keywords.value.trim()) || statusFilter.value !== 'all')
 /**
  * The talk list endpoint filters by status only, so the keyword box narrows the
@@ -209,6 +223,7 @@ function clearSelection(): void {
 
 function batchDelete(): void {
   const ids = selectedIds.value
+  if (!allSelectedOwned.value) return
   if (ids.length === 0) return
   Modal.confirm({
     title: t('comments.common.batchDelete'),

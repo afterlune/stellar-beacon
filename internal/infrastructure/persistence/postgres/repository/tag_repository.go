@@ -88,7 +88,7 @@ func (t *MyTagRepo) ListAdmin(ctx context.Context, current, size int, filter por
 		return nil, err
 	}
 	where, args := tagFilter(filter)
-	query := "SELECT t.id, tag_name, COUNT(at.article_id) AS article_count, t.create_time FROM t_tag t LEFT JOIN t_article_tag at ON t.id = at.tag_id" + where + " GROUP BY t.id LIMIT ? OFFSET ?"
+	query := "SELECT t.id, t.user_id, tag_name, COUNT(at.article_id) AS article_count, t.create_time FROM t_tag t LEFT JOIN t_article_tag at ON t.id = at.tag_id" + where + " GROUP BY t.id LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 	var tags []*port.TagAdmin
 	if err := session.SQL(query, args...).Find(&tags); err != nil {
@@ -115,7 +115,7 @@ func (t *MyTagRepo) SaveOrUpdate(ctx context.Context, tag entity.TTag) error {
 		return err
 	}
 	var existing entity.TTag
-	found, err := session.Select("id").Where("tag_name = ?", tag.TagName).Get(&existing)
+	found, err := session.Select("id").Where("tag_name = ? AND user_id = ?", tag.TagName, tag.UserId).Get(&existing)
 	if err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "tag.check_name", err)
 	}
@@ -123,26 +123,37 @@ func (t *MyTagRepo) SaveOrUpdate(ctx context.Context, tag entity.TTag) error {
 		return apperrors.Conflict("tag.save", "tag name already exists")
 	}
 	return ormInit.WithEngineTx(t.engine, ctx, func(tx *xorm.Session) error {
-		var err error
 		if tag.Id != 0 {
-			_, err = tx.ID(tag.Id).Update(&tag)
-		} else {
-			_, err = tx.Insert(&tag)
+			affected, err := tx.Where("id = ? AND user_id = ?", tag.Id, tag.UserId).Cols("tag_name").Update(&tag)
+			if err != nil {
+				return apperrors.Wrap(apperrors.KindUnavailable, "tag.save", err)
+			}
+			if affected == 0 {
+				return apperrors.NotFound("tag.save")
+			}
+			return nil
 		}
-		if err != nil {
+		if _, err := tx.Insert(&tag); err != nil {
 			return apperrors.Wrap(apperrors.KindUnavailable, "tag.save", err)
 		}
 		return nil
 	})
 }
 
-func (t *MyTagRepo) Delete(ctx context.Context, ids []int) error {
+func (t *MyTagRepo) Delete(ctx context.Context, userID int, ids []int) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	session, err := t.tagSession(ctx)
 	if err != nil {
 		return err
+	}
+	var owned int64
+	if owned, err = session.In("id", ids).And("user_id = ?", userID).Count(&entity.TTag{}); err != nil {
+		return apperrors.Wrap(apperrors.KindUnavailable, "tag.check_delete", err)
+	}
+	if int(owned) != len(ids) {
+		return apperrors.NotFound("tag.delete")
 	}
 	var count int64
 	if count, err = session.In("tag_id", ids).Count(&entity.TArticleTag{}); err != nil {
@@ -151,7 +162,7 @@ func (t *MyTagRepo) Delete(ctx context.Context, ids []int) error {
 	if count > 0 {
 		return apperrors.Conflict("tag.delete", "tag has articles")
 	}
-	if _, err := session.In("id", ids).Delete(&entity.TTag{}); err != nil {
+	if _, err := session.In("id", ids).And("user_id = ?", userID).Delete(&entity.TTag{}); err != nil {
 		return apperrors.Wrap(apperrors.KindUnavailable, "tag.delete", err)
 	}
 	return nil

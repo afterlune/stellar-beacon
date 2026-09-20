@@ -366,6 +366,10 @@ func articleAdminFilters(filter port.ArticleFilter) (string, []interface{}) {
 		query += " AND a.status = ?"
 		args = append(args, filter.Status)
 	}
+	if filter.ModerationStatus != "" {
+		query += " AND a.moderation_status = ?"
+		args = append(args, filter.ModerationStatus)
+	}
 	if filter.Category != 0 {
 		query += " AND a.category_id = ?"
 		args = append(args, filter.Category)
@@ -401,7 +405,17 @@ func (a *MyArticleRepo) ListArticlesAdmin(ctx context.Context, filter port.Artic
 		return nil, err
 	}
 	filters, args := articleAdminFilters(filter)
-	query := "SELECT a.id, a.article_cover, a.article_title, a.is_top, a.is_featured, a.is_delete, a.status, a.type, a.create_time, c.category_name FROM (SELECT id, article_cover, article_title, is_top, is_featured, is_delete, status, type, create_time, category_id FROM t_article a" + filters + " ORDER BY is_top DESC, is_featured DESC, id DESC LIMIT ? OFFSET ?) a LEFT JOIN t_category c ON a.category_id = c.id ORDER BY is_top DESC, is_featured DESC, a.id DESC"
+	query := `SELECT a.id, a.user_id, a.article_cover, a.article_title, a.is_top, a.is_featured, a.is_delete,
+		a.status, a.type, a.moderation_status, a.moderation_reason, a.moderated_by, a.moderated_at, a.create_time,
+		c.category_name, u.handle AS author_handle, u.nickname AS author_nickname, u.avatar AS author_avatar
+		FROM (
+			SELECT id, user_id, article_cover, article_title, is_top, is_featured, is_delete, status, type,
+			       moderation_status, moderation_reason, moderated_by, moderated_at, create_time, category_id
+			FROM t_article a` + filters + ` ORDER BY is_top DESC, is_featured DESC, id DESC LIMIT ? OFFSET ?
+		) a
+		LEFT JOIN t_category c ON a.category_id = c.id
+		LEFT JOIN t_user_info u ON a.user_id = u.id
+		ORDER BY a.is_top DESC, a.is_featured DESC, a.id DESC`
 	args = append(args, limit, offset)
 	var articles []*port.ArticleAdmin
 	if err := session.SQL(query, args...).Find(&articles); err != nil {

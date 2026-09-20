@@ -62,6 +62,7 @@ export default {
   'nav.workplace': '工作台',
   'nav.monitor': '监控',
   'nav.growth': '订阅与增长',
+  'nav.contentModeration': '内容审核',
   'nav.contentPerformance': '内容表现',
   'nav.unknownMenu': '未命名菜单',
 

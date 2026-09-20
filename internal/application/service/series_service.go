@@ -81,7 +81,13 @@ func (s *MySeriesService) ListAdminSeries(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	series, total, err := s.repo.ListAdmin(c.Request.Context(), current, size, c.Query("keywords"))
+	status, err := strconv.Atoi(c.DefaultQuery("status", "0"))
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	series, total, err := s.repo.ListAdmin(c.Request.Context(), port.SeriesFilter{
+		Current: current, Size: size, Keywords: c.Query("keywords"), Status: status, ModerationStatus: c.Query("moderationStatus"),
+	})
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -121,8 +127,12 @@ func (s *MySeriesService) SaveOrUpdateSeries(c *gin.Context) model.ResultVO {
 	}
 	ownerID := user.UserInfoId
 	if vo.Id != 0 {
-		if existing, existingErr := s.repo.Get(c.Request.Context(), vo.Id); existingErr == nil {
-			ownerID = existing.UserId
+		existing, existingErr := s.repo.Get(c.Request.Context(), vo.Id)
+		if existingErr != nil {
+			return model.ResultFromError(existingErr)
+		}
+		if existing.UserId != user.UserInfoId {
+			return model.ResultFromError(apperrors.New(apperrors.KindForbidden, "series.save", nil))
 		}
 	}
 	series, err := s.repo.SaveOrUpdate(c.Request.Context(), entity.TSeries{
@@ -141,6 +151,22 @@ func (s *MySeriesService) DeleteSeries(c *gin.Context) model.ResultVO {
 	}
 	if len(ids) == 0 {
 		return model.ResultFromError(apperrors.Invalid("series.delete", "series id is required"))
+	}
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	for _, id := range ids {
+		existing, err := s.repo.Get(c.Request.Context(), id)
+		if err != nil {
+			if apperrors.IsKind(err, apperrors.KindNotFound) {
+				continue
+			}
+			return model.ResultFromError(err)
+		}
+		if existing.UserId != user.UserInfoId {
+			return model.ResultFromError(apperrors.New(apperrors.KindForbidden, "series.delete", nil))
+		}
 	}
 	for _, id := range ids {
 		if err := s.repo.Delete(c.Request.Context(), id); err != nil {

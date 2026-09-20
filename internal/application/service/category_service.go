@@ -79,7 +79,11 @@ func (c *MyCategoryService) DeleteCategories(ctx *gin.Context) model.ResultVO {
 	if err := ctx.ShouldBind(&ids); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := c.categoryRepository().Delete(ctx.Request.Context(), ids); err != nil {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	if err := c.categoryRepository().Delete(ctx.Request.Context(), user.UserInfoId, ids); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
 			return model.ResultFailWithMessage("删除失败，该分类下存在文章")
 		}
@@ -101,18 +105,7 @@ func (c *MyCategoryService) SaveOrUpdateCategory(ctx *gin.Context) model.ResultV
 	if !ok {
 		return model.ResultFailWithMessage("用户信息无效")
 	}
-	ownerID := user.UserInfoId
-	if vo.Id != 0 {
-		if existing, err := c.categoryRepository().List(ctx.Request.Context()); err == nil {
-			for _, item := range existing {
-				if item.Id == vo.Id {
-					ownerID = item.UserId
-					break
-				}
-			}
-		}
-	}
-	category := entity.TCategory{Id: vo.Id, UserId: ownerID, CategoryName: vo.CategoryName}
+	category := entity.TCategory{Id: vo.Id, UserId: user.UserInfoId, CategoryName: vo.CategoryName}
 	if err := c.categoryRepository().SaveOrUpdate(ctx.Request.Context(), category); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
 			return model.ResultFailWithMessage("分类名已存在")

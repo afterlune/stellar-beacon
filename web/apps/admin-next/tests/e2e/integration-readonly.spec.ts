@@ -16,6 +16,7 @@ const visibleMenuContracts: MenuContract[] = [
   { path: '/growth', marker: '订阅与增长', contentSelector: '.growth-overview-grid' },
   { path: '/articles', marker: '发布文章', contentSelector: '.article-form' },
   { path: '/article-list', marker: '文章列表', table: true },
+  { path: '/content-moderation', marker: '内容审核', table: true },
   { path: '/categories', marker: '分类管理', table: true },
   { path: '/tags', marker: '标签管理', table: true },
   { path: '/comments', marker: '评论管理', table: true },

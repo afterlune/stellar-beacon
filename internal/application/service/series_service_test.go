@@ -25,7 +25,7 @@ type fakeSeriesRepository struct {
 func (f *fakeSeriesRepository) ListPublic(context.Context) ([]*port.Series, error) {
 	return f.items, nil
 }
-func (f *fakeSeriesRepository) ListAdmin(context.Context, int, int, string) ([]*port.Series, int64, error) {
+func (f *fakeSeriesRepository) ListAdmin(context.Context, port.SeriesFilter) ([]*port.Series, int64, error) {
 	return f.items, int64(len(f.items)), nil
 }
 func (f *fakeSeriesRepository) ListOptions(context.Context) ([]*port.Series, error) {
@@ -137,11 +137,15 @@ func TestSeriesDeleteReportsUnknownSeries(t *testing.T) {
 	repo := &fakeSeriesRepository{}
 	service := mustSeriesService(t, repo, &seriesArticles{})
 
-	missing := service.DeleteSeries(seriesContext(t, http.MethodDelete, "/v1/admin/series", `[]`, nil))
+	missingCtx := seriesContext(t, http.MethodDelete, "/v1/admin/series", `[]`, nil)
+	missingCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	missing := service.DeleteSeries(missingCtx)
 	if missing.Flag {
 		t.Fatal("an empty id list must fail")
 	}
-	ok := service.DeleteSeries(seriesContext(t, http.MethodDelete, "/v1/admin/series", `[4]`, nil))
+	okCtx := seriesContext(t, http.MethodDelete, "/v1/admin/series", `[4]`, nil)
+	okCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	ok := service.DeleteSeries(okCtx)
 	if !ok.Flag || len(repo.deleted) != 1 || repo.deleted[0] != 4 {
 		t.Fatalf("unexpected delete result: %+v %v", ok, repo.deleted)
 	}
@@ -150,5 +154,22 @@ func TestSeriesDeleteReportsUnknownSeries(t *testing.T) {
 func TestSeriesServiceRejectsMissingDependencies(t *testing.T) {
 	if _, err := NewSeriesService(SeriesServiceDeps{}); err == nil || !apperrors.IsKind(err, apperrors.KindValidation) {
 		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestSeriesServiceRejectsNonOwnerMutations(t *testing.T) {
+	repo := &fakeSeriesRepository{record: entity.TSeries{Id: 4, UserId: 2, SeriesName: "owned by another user", Status: 1}}
+	service := mustSeriesService(t, repo, &seriesArticles{})
+
+	saveCtx := seriesContext(t, http.MethodPost, "/v1/admin/series", `{"id":4,"seriesName":"forbidden"}`, nil)
+	saveCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	if result := service.SaveOrUpdateSeries(saveCtx); result.Flag || repo.saved.Id != 0 {
+		t.Fatalf("non-owner series save must be forbidden before persistence: result=%+v saved=%+v", result, repo.saved)
+	}
+
+	deleteCtx := seriesContext(t, http.MethodDelete, "/v1/admin/series", `[4]`, nil)
+	deleteCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	if result := service.DeleteSeries(deleteCtx); result.Flag || len(repo.deleted) != 0 {
+		t.Fatalf("non-owner series delete must be forbidden before persistence: result=%+v deleted=%v", result, repo.deleted)
 	}
 }

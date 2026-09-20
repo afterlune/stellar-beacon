@@ -6,6 +6,7 @@
       :eyebrow="t('comments.talks.eyebrow')" />
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <a-alert v-if="!canEdit" type="warning">{{ t('comments.talks.ownerOnly') }}</a-alert>
       <a-spin v-if="!editorReady" class="talk-editor-loading" :tip="t('comments.talks.loading')" />
       <a-form v-else ref="formRef" class="talk-form" :model="editor" layout="vertical">
         <a-form-item field="content" :label="t('comments.common.content')" :rules="[{ required: true, message: t('comments.talks.contentRequired') }]">
@@ -60,7 +61,7 @@
           <AdminFlagCheckbox v-model="editor.isTop">{{ t('status.pinned') }}</AdminFlagCheckbox>
         </a-space>
         <div class="admin-form-actions">
-          <a-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</a-button>
+          <a-button type="primary" :loading="saving" :disabled="!canEdit" @click="submit">{{ t('common.save') }}</a-button>
           <a-button :disabled="saving" @click="router.push('/talk-list')">{{ t('common.cancel') }}</a-button>
         </div>
       </a-form>
@@ -84,12 +85,15 @@ import AdminLeaveGuard from '@/components/AdminLeaveGuard.vue'
 import AdminPageHeader from '@/components/AdminPageHeader.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const MAX_IMAGES = 9
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const saving = ref(false)
+const ownerUserId = ref(0)
 const uploading = ref(false)
 const draggingIndex = ref(-1)
 const errorMessage = ref('')
@@ -101,6 +105,7 @@ const editor = reactive({ id: 0, content: '', images: [] as string[], isTop: 0, 
 // wildcard parameter must stay part of the lookup chain.
 const talkId = computed(() => String(route.params.talkId || route.params.id || route.params.articleId || ''))
 const isEditing = computed(() => /^\d+$/.test(talkId.value))
+const canEdit = computed(() => !isEditing.value || ownerUserId.value === Number(auth.user?.userInfoId || auth.user?.id || 0))
 
 /** 只在内容/图片/可见性真正变化时拦截离开；加载完成即建立基线。 */
 const { visible: leaveVisible, markClean, confirmLeave, cancelLeave } = useUnsavedGuard(() => JSON.stringify([
@@ -123,6 +128,7 @@ async function load(): Promise<void> {
   try {
     const talk = await getAdminTalk(Number(talkId.value))
     editor.id = Number(talk.id || 0)
+    ownerUserId.value = Number(talk.userId || 0)
     editor.content = String(talk.content || '')
     editor.images = normalizeImages(talk.imgs, talk.images)
     editor.isTop = Number(talk.isTop || 0)

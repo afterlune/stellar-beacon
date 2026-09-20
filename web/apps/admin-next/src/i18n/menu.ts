@@ -24,7 +24,8 @@ const SEGMENT_ALIASES: Record<string, string> = {
   delete: 'photoTrash',
   category: 'categories',
   tag: 'tags',
-  'content-performance': 'contentPerformance'
+  'content-performance': 'contentPerformance',
+  'content-moderation': 'contentModeration'
 }
 
 const cache = new Map<string, string>()
@@ -79,7 +80,8 @@ const NAME_KEYS: Record<string, string> = {
   工作台: 'workplace',
   监控: 'monitor',
   订阅与增长: 'growth',
-  内容表现: 'contentPerformance'
+  内容表现: 'contentPerformance',
+  内容审核: 'contentModeration'
 }
 
 /**

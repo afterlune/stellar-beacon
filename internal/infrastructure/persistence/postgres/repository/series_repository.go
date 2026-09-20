@@ -23,6 +23,14 @@ const seriesCountSQL = `SELECT s.id, s.series_name, s.series_desc, s.cover, s.up
 	LEFT JOIN t_article a ON a.series_id = s.id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
 	WHERE s.is_delete = 0 AND s.status = 1 AND s.moderation_status = 'visible'`
 
+const seriesAdminSQL = `SELECT s.id, s.user_id, s.series_name, s.series_desc, s.cover, s.status,
+		s.moderation_status, s.moderation_reason, s.moderated_by, s.moderated_at, s.update_time,
+		u.handle AS author_handle, u.nickname AS author_nickname, u.avatar AS author_avatar,
+		COUNT(a.id) AS article_count
+		FROM t_series s
+		LEFT JOIN t_user_info u ON s.user_id = u.id
+		LEFT JOIN t_article a ON a.series_id = s.id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'`
+
 func (r *MySeriesRepo) ListPublic(ctx context.Context) ([]*port.Series, error) {
 	session, err := repoSession(r.engine, ctx, "series.public")
 	if err != nil {
@@ -51,25 +59,33 @@ func (r *MySeriesRepo) ListOptions(ctx context.Context) ([]*port.Series, error) 
 	return options, nil
 }
 
-func (r *MySeriesRepo) ListAdmin(ctx context.Context, current, size int, keywords string) ([]*port.Series, int64, error) {
+func (r *MySeriesRepo) ListAdmin(ctx context.Context, filter port.SeriesFilter) ([]*port.Series, int64, error) {
 	session, err := repoSession(r.engine, ctx, "series.admin")
 	if err != nil {
 		return nil, 0, err
 	}
-	where := ""
+	where := " WHERE s.is_delete = 0"
 	args := []interface{}{}
-	if strings.TrimSpace(keywords) != "" {
-		where = " AND s.series_name LIKE ? ESCAPE '\\'"
-		args = append(args, pgsql.ContainsPattern(keywords))
+	if strings.TrimSpace(filter.Keywords) != "" {
+		where += " AND s.series_name LIKE ? ESCAPE '\\'"
+		args = append(args, pgsql.ContainsPattern(filter.Keywords))
+	}
+	if filter.Status != 0 {
+		where += " AND s.status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.ModerationStatus != "" {
+		where += " AND s.moderation_status = ?"
+		args = append(args, filter.ModerationStatus)
 	}
 	var total int64
-	if _, err := session.SQL("SELECT count(0) FROM t_series s WHERE s.is_delete = 0 AND s.status = 1 AND s.moderation_status = 'visible'"+where, args...).Get(&total); err != nil {
+	if _, err := session.SQL("SELECT count(0) FROM t_series s"+where, args...).Get(&total); err != nil {
 		return nil, 0, apperrors.Unavailable("series.count", err)
 	}
-	limit, offset := pgsql.Page(current, size)
+	limit, offset := pgsql.Page(filter.Current, filter.Size)
 	pageArgs := append(append([]interface{}{}, args...), limit, offset)
 	var series []*port.Series
-	if err := session.SQL(seriesCountSQL+where+" GROUP BY s.id ORDER BY s.update_time DESC, s.id DESC LIMIT ? OFFSET ?", pageArgs...).Find(&series); err != nil {
+	if err := session.SQL(seriesAdminSQL+where+" GROUP BY s.id, u.id ORDER BY s.update_time DESC, s.id DESC LIMIT ? OFFSET ?", pageArgs...).Find(&series); err != nil {
 		return nil, 0, apperrors.Unavailable("series.admin", err)
 	}
 	return series, total, nil

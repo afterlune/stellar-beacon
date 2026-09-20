@@ -76,8 +76,8 @@
           <template #icon><IconDownload /></template>
           {{ t('articles.actions.exportMarkdown') }}
         </a-button>
-        <a-button size="small" @click="batchTrash">{{ t('articles.actions.trash') }}</a-button>
-        <a-button size="small" status="danger" @click="batchDelete">{{ t('articles.actions.deleteForever') }}</a-button>
+        <a-button size="small" :disabled="!allSelectedOwned" @click="batchTrash">{{ t('articles.actions.trash') }}</a-button>
+        <a-button size="small" status="danger" :disabled="!allSelectedOwned" @click="batchDelete">{{ t('articles.actions.deleteForever') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -134,7 +134,7 @@
           <template #actions="{ record }">
             <a-space class="admin-action-space">
               <a-button type="text" size="small" data-testid="article-performance-link" @click="openPerformance(record.id)">{{ t('articles.performance.open') }}</a-button>
-              <a-button type="text" size="small" @click="editArticle(record.id)">{{ t('common.edit') }}</a-button>
+              <a-button v-if="isOwner(record)" type="text" size="small" @click="editArticle(record.id)">{{ t('common.edit') }}</a-button>
               <a-dropdown trigger="click" position="br">
                 <a-button type="text" size="small" :loading="isPending(record.id)">
                   {{ t('common.more') }}
@@ -147,8 +147,8 @@
                   <a-doption @click="toggleFlag(record, 'isFeatured')">
                     {{ Number(record.isFeatured) === 1 ? t('articles.list.unsetFeatured') : t('articles.list.setFeatured') }}
                   </a-doption>
-                  <a-doption @click="moveToTrash(record)">{{ t('articles.actions.trash') }}</a-doption>
-                  <a-doption class="admin-danger-option" @click="removeArticle(record)">{{ t('articles.actions.deleteForever') }}</a-doption>
+                  <a-doption v-if="isOwner(record)" @click="moveToTrash(record)">{{ t('articles.actions.trash') }}</a-doption>
+                  <a-doption v-if="isOwner(record)" class="admin-danger-option" @click="removeArticle(record)">{{ t('articles.actions.deleteForever') }}</a-doption>
                 </template>
               </a-dropdown>
             </a-space>
@@ -211,6 +211,7 @@ import AdminStatusTag, { type StatusKind } from '@/components/AdminStatusTag.vue
 import { useAsyncList } from '@/composables/useAsyncList'
 import { usePendingIds } from '@/composables/usePendingIds'
 import { useQueryFilters } from '@/composables/useQueryFilters'
+import { useAuthStore } from '@/stores/auth'
 import { readStoredPageSize, useColumnPrefs, useStoredPageSize } from '@/composables/useTablePrefs'
 import { t } from '@/i18n'
 import { copyText } from '@/utils/clipboard'
@@ -229,6 +230,7 @@ interface TableColumn {
 const VIEW_KEY = 'article-list'
 
 const router = useRouter()
+const auth = useAuthStore()
 const keywords = ref('')
 const status = ref<number | undefined>(undefined)
 const type = ref<number | undefined>(undefined)
@@ -300,6 +302,10 @@ const tableColumns = computed(() => columns.value
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const hasFilters = computed(() => Boolean(keywords.value.trim()) || status.value !== undefined || type.value !== undefined)
+const allSelectedOwned = computed(() => selectedKeys.value.length > 0 && selectedIds().every((id) => {
+  const record = records.value.find((item) => Number(item.id) === id)
+  return isOwner(record)
+}))
 
 function resetFilters(): void {
   keywords.value = ''
@@ -316,6 +322,11 @@ function changePage(page: number): void {
 function changePageSize(size: number): void {
   clearSelection()
   applyPageSize(size)
+}
+
+function isOwner(record?: Record<string, unknown>): boolean {
+  const currentUserId = Number(auth.user?.userInfoId || auth.user?.id || 0)
+  return Boolean(record && currentUserId > 0 && Number(record.userId) === currentUserId)
 }
 
 function clearSelection(): void {
@@ -339,6 +350,7 @@ async function runBatch(action: () => Promise<void>, failureMessage: string): Pr
 
 function batchTrash(): void {
   const ids = selectedIds()
+  if (!allSelectedOwned.value) return
   if (ids.length === 0) return
   Modal.confirm({
     title: t('articles.actions.trash'),
@@ -354,6 +366,7 @@ function batchTrash(): void {
 
 function batchDelete(): void {
   const ids = selectedIds()
+  if (!allSelectedOwned.value) return
   if (ids.length === 0) return
   Modal.confirm({
     title: t('articles.actions.deleteForever'),

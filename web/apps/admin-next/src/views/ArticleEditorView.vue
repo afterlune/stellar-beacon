@@ -5,7 +5,7 @@
       :description="isEditing ? t('articles.editor.editDescription') : t('articles.editor.createDescription')">
       <template #actions>
         <a-button v-if="isEditing" @click="openPerformance">{{ t('articles.performance.open') }}</a-button>
-        <a-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</a-button>
+        <a-button type="primary" :loading="saving" :disabled="!canEdit" @click="submit">{{ t('common.save') }}</a-button>
         <a-button @click="router.push('/article-list')">{{ t('articles.editor.backToList') }}</a-button>
       </template>
     </AdminPageHeader>
@@ -19,6 +19,7 @@
 
     <a-card class="admin-form-panel admin-form-card" :bordered="false">
       <a-alert v-if="errorMessage" type="error" closable @close="errorMessage = ''">{{ errorMessage }}</a-alert>
+      <a-alert v-if="!canEdit" type="warning">{{ t('articles.editor.ownerOnly') }}</a-alert>
       <a-spin v-if="!editorReady" class="article-editor-loading" :tip="t('articles.editor.loading')" />
       <a-form v-else ref="formRef" class="article-form" :model="form" layout="vertical">
         <a-form-item
@@ -172,7 +173,7 @@
         </div>
 
         <div class="admin-form-actions">
-          <a-button type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</a-button>
+          <a-button type="primary" :loading="saving" :disabled="!canEdit" @click="submit">{{ t('common.save') }}</a-button>
           <a-button :disabled="saving" @click="router.push('/article-list')">{{ t('common.cancel') }}</a-button>
         </div>
       </a-form>
@@ -200,6 +201,8 @@ import type { IDomEditor, IEditorConfig, IToolbarConfig } from '@wangeditor-next
 import '@wangeditor-next/editor/dist/css/style.css'
 import { useRoute, useRouter } from 'vue-router'
 
+import { useAuthStore } from '@/stores/auth'
+
 import {
   apiErrorMessage,
   getAdminArticle,
@@ -223,8 +226,10 @@ import { markdownToHtml, sanitizePreviewHtml } from '@/utils/markdown'
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const saving = ref(false)
+const ownerUserId = ref(0)
 const coverUploading = ref(false)
 const editorReady = ref(false)
 const errorMessage = ref('')
@@ -260,6 +265,7 @@ const tags = ref<string[]>([])
 const seriesOptions = ref<Array<{ id: number; seriesName: string }>>([])
 const articleId = computed(() => (typeof route.params.articleId === 'string' ? route.params.articleId : ''))
 const isEditing = computed(() => /^\d+$/.test(articleId.value))
+const canEdit = computed(() => !isEditing.value || ownerUserId.value === Number(auth.user?.userInfoId || auth.user?.id || 0))
 const performancePanelAutoExpand = computed(() => route.query.panel === 'performance')
 
 /**
@@ -385,6 +391,7 @@ async function load(): Promise<void> {
   try {
     const article = await getAdminArticle(articleId.value)
     form.id = Number(article.id || article.articleId || 0)
+    ownerUserId.value = Number(article.userId || 0)
     form.articleTitle = String(article.articleTitle || '')
     form.articleContent = String(article.articleContent || '')
     form.articleContentHtml = String(article.articleContentHtml || '')

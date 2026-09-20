@@ -83,6 +83,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyMultiUserSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyContentModerationSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -262,6 +265,7 @@ var defaultMenus = []menuSeed{
 	{name: "标签管理", path: "/tags", component: "/tag/Tag.vue", icon: "tags", order: 5, parentPath: "/article-submenu"},
 	{name: "系列管理", path: "/series", component: "/series/Series.vue", icon: "list", order: 6, parentPath: "/article-submenu"},
 	{name: "内容表现", path: "/content-performance", component: "/content/ContentPerformance.vue", icon: "chart", order: 7, parentPath: "/article-submenu"},
+	{name: "内容审核", path: "/content-moderation", component: "/content/ContentModeration.vue", icon: "audit", order: 8, parentPath: "/article-submenu"},
 	{name: "评论管理", path: "/comments", component: "/comment/Comment.vue", icon: "comments", order: 1, parentPath: "/message-submenu"},
 	{name: "说说列表", path: "/talk-list", component: "/talk/TalkList.vue", icon: "list", order: 1, parentPath: "/talk-submenu"},
 	{name: "发布说说", path: "/talks", component: "/talk/Talk.vue", icon: "pen", order: 2, parentPath: "/talk-submenu"},
@@ -1062,6 +1066,36 @@ func applyMultiUserSchema(ctx context.Context, engine *xorm.Engine) error {
 	return nil
 }
 
+// applyContentModerationSchema adds the unified admin moderation menu. The
+// moderation fields themselves were introduced by migration 15.
+func applyContentModerationSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 16)").Get(&applied); err != nil {
+		return fmt.Errorf("check content moderation migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin content moderation migration: %w", err)
+	}
+	defer session.Rollback()
+	if err := seedMenus(session); err != nil {
+		return err
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 16, "content-moderation"); err != nil {
+		return fmt.Errorf("record content moderation migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit content moderation migration: %w", err)
+	}
+	return nil
+}
 func handleBase(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var builder strings.Builder

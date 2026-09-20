@@ -8,6 +8,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,9 +16,19 @@ import (
 )
 
 type fakeArticleRepository struct {
-	listErr  error
-	archives []port.ArticleCard
-	related  []*port.ArticleCard
+	listErr      error
+	archives     []port.ArticleCard
+	related      []*port.ArticleCard
+	record       entity.TArticle
+	recordErr    error
+	saveErr      error
+	savedArticle entity.TArticle
+	saveCalls    int
+	updateResult entity.TArticle
+	updateErr    error
+	updateCalls  int
+	trashCalls   int
+	deleteCalls  int
 }
 
 type fakeArticleSearcher struct {
@@ -121,16 +132,25 @@ func (f *fakeArticleRepository) ListArticleStatistics(context.Context) ([]port.A
 	return nil, nil
 }
 func (f *fakeArticleRepository) GetArticleRecord(context.Context, int) (entity.TArticle, error) {
-	return entity.TArticle{}, nil
+	return f.record, f.recordErr
 }
 func (f *fakeArticleRepository) SaveOrUpdate(context.Context, entity.TArticle, string, []string) (entity.TArticle, error) {
-	return entity.TArticle{}, nil
+	f.saveCalls++
+	return f.savedArticle, f.saveErr
 }
 func (f *fakeArticleRepository) UpdateTopAndFeatured(context.Context, int, int, int) (entity.TArticle, error) {
-	return entity.TArticle{}, nil
+	f.updateCalls++
+	return f.updateResult, f.updateErr
 }
-func (f *fakeArticleRepository) UpdateDelete(context.Context, []int, int) error { return nil }
-func (f *fakeArticleRepository) Delete(context.Context, []int) error            { return nil }
+func (f *fakeArticleRepository) UpdateDelete(context.Context, []int, int) error {
+	f.trashCalls++
+	return nil
+}
+func (f *fakeArticleRepository) Delete(context.Context, []int) error {
+	f.deleteCalls++
+	return nil
+}
+
 func (f *fakeArticleRepository) GetAdminArticle(context.Context, int) (entity.TArticle, string, []string, error) {
 	return entity.TArticle{}, "", nil, nil
 }
@@ -307,3 +327,44 @@ func TestArticleServiceMapsSearchFailure(t *testing.T) {
 type testServiceError string
 
 func (e testServiceError) Error() string { return string(e) }
+
+func articleJSONContext(method, target, body string) *gin.Context {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(method, target, strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	return c
+}
+
+func TestArticleServiceRejectsNonOwnerMutations(t *testing.T) {
+	repo := &fakeArticleRepository{record: entity.TArticle{Id: 9, UserId: 2, Status: 1}}
+	service := mustArticleService(t, repo, nil)
+
+	saveCtx := articleJSONContext(http.MethodPost, "/v1/admin/articles", `{"id":9,"articleTitle":"forbidden","articleContent":"body","status":1}`)
+	saveCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	if result := service.SaveOrUpdateArticle(saveCtx); result.Flag || repo.saveCalls != 0 {
+		t.Fatalf("non-owner save must be forbidden before persistence: result=%+v calls=%d", result, repo.saveCalls)
+	}
+
+	trashCtx := articleJSONContext(http.MethodPut, "/v1/admin/articles/trash", `{"ids":[9],"isDelete":1}`)
+	trashCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	if result := service.UpdateArticleDelete(trashCtx); result.Flag || repo.trashCalls != 0 {
+		t.Fatalf("non-owner trash must be forbidden before persistence: result=%+v calls=%d", result, repo.trashCalls)
+	}
+
+	deleteCtx := articleJSONContext(http.MethodDelete, "/v1/admin/articles/batch-delete", `[9]`)
+	deleteCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	if result := service.DeleteArticles(deleteCtx); result.Flag || repo.deleteCalls != 0 {
+		t.Fatalf("non-owner delete must be forbidden before persistence: result=%+v calls=%d", result, repo.deleteCalls)
+	}
+}
+
+func TestArticleServiceRejectsRecommendationForHiddenArticle(t *testing.T) {
+	repo := &fakeArticleRepository{record: entity.TArticle{Id: 9, UserId: 2, Status: 1, ModerationStatus: "hidden"}}
+	service := mustArticleService(t, repo, nil)
+	ctx := articleJSONContext(http.MethodPut, "/v1/admin/articles/featured", `{"id":9,"isTop":0,"isFeatured":1}`)
+	result := service.UpdateArticleTopAndFeatured(ctx)
+	if result.Flag || repo.updateCalls != 0 {
+		t.Fatalf("hidden article must not be recommended: result=%+v calls=%d", result, repo.updateCalls)
+	}
+}
