@@ -742,54 +742,176 @@ test.describe('front-end experience regressions', () => {
   })
 })
 
+async function mockStudioApi(page: Page, options: { draft?: unknown } = {}) {
+  const saved = { article: null as any, talk: null as any, series: null as any }
+  await page.addInitScript((draft) => {
+    document.cookie = 'locale=cn; path=/'
+    sessionStorage.setItem('token', 'e2e-studio-token')
+    sessionStorage.setItem('userStore', JSON.stringify({
+      userInfo: { userInfoId: 7, id: 7, nickname: '测试作者', handle: 'test-author' },
+      token: 'e2e-studio-token'
+    }))
+    if (draft) localStorage.setItem('stellar-beacon:studio-draft:v1:7:article:new', JSON.stringify(draft))
+  }, options.draft || null)
+
+  await page.route('**/api/v1/studio/**', async (route) => {
+    const url = new URL(route.request().url())
+    const method = route.request().method()
+    const respond = (data: unknown) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'OK', message: '操作成功', data })
+    })
+    if (url.pathname === '/api/v1/studio/uploads' && method === 'POST') {
+      await respond('https://cdn.example.test/studio-upload.png')
+      return
+    }
+    if (url.pathname === '/api/v1/studio/articles' && method === 'GET') {
+      await respond({ items: [{ id: 9, articleTitle: '我的私有草稿', status: 3, moderationStatus: 'visible', createTime: '2026-09-18T10:00:00+08:00' }], total: 1, page: 1, pageSize: 12 })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/articles/99' && method === 'GET') {
+      await respond({
+        id: 99,
+        articleTitle: saved.article?.articleTitle || '已保存文章',
+        articleContent: saved.article?.articleContent || '',
+        articleContentHtml: saved.article?.articleContentHtml || '',
+        articleCover: '',
+        categoryId: 0,
+        tagNames: [],
+        seriesId: 0,
+        seriesOrder: 0,
+        scheduledAt: '',
+        status: 3,
+        type: 1,
+        password: '',
+        originalUrl: ''
+      })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/articles' && method === 'POST') {
+      saved.article = route.request().postDataJSON()
+      await respond({ id: 99 })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/talks' && method === 'POST') {
+      saved.talk = route.request().postDataJSON()
+      await respond({ id: 88 })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/series' && method === 'GET') {
+      await respond({ items: [], total: 0, page: 1, pageSize: 100 })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/series' && method === 'POST') {
+      saved.series = route.request().postDataJSON()
+      await respond({ id: 77 })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/categories' || url.pathname === '/api/v1/studio/tags') {
+      await respond([])
+      return
+    }
+    await respond(null)
+  })
+  return saved
+}
+
 test.describe('studio workspace', () => {
   test('redirects anonymous visitors through login', async ({ page }) => {
     await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(/login=1/)
   })
 
-  test('lists owned articles and submits a new draft', async ({ page }) => {
-    let saved: any = null
-    await page.addInitScript(() => {
-      document.cookie = 'locale=cn; path=/'
-      sessionStorage.setItem('token', 'e2e-studio-token')
-    })
-    await page.route('**/api/v1/studio/**', async (route) => {
-      const url = new URL(route.request().url())
-      const method = route.request().method()
-      const respond = (data: unknown) => route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 'OK', message: '操作成功', data })
-      })
-      if (url.pathname === '/api/v1/studio/articles' && method === 'GET') {
-        await respond({ items: [{ id: 9, articleTitle: '我的私有草稿', status: 3, moderationStatus: 'visible', createTime: '2026-09-18T10:00:00+08:00' }], total: 1, page: 1, pageSize: 12 })
-        return
-      }
-      if (url.pathname === '/api/v1/studio/articles' && method === 'POST') {
-        saved = route.request().postDataJSON()
-        await respond({ id: 99 })
-        return
-      }
-      if (url.pathname === '/api/v1/studio/categories' || url.pathname === '/api/v1/studio/tags') {
-        await respond([])
-        return
-      }
-      if (url.pathname === '/api/v1/studio/series') {
-        await respond({ items: [], total: 0, page: 1, pageSize: 100 })
-        return
-      }
-      await respond(null)
-    })
-
+  test('creates a draft in the dedicated article editor', async ({ page }) => {
+    const saved = await mockStudioApi(page)
     await page.goto('/studio/articles', { waitUntil: 'domcontentloaded' })
     await expect(page.getByText('我的私有草稿')).toBeVisible()
-    await page.getByRole('button', { name: '新建文章 +' }).click()
-    await page.locator('.studio-editor input').first().fill('新建的私有文章')
-    await page.locator('.studio-editor textarea').first().fill('这是正文。')
-    await page.locator('.studio-editor button[type="submit"]').click()
 
-    await expect.poll(() => saved?.articleTitle).toBe('新建的私有文章')
-    expect(saved?.visibility).toBe('draft')
+    await page.getByRole('button', { name: '新建文章 +' }).click()
+    await expect(page).toHaveURL(/\/studio\/articles\/new$/)
+    await expect(page.locator('.studio-editor-page')).toBeVisible()
+    await page.getByPlaceholder('写下一个清晰的标题').fill('新建的私有文章')
+    await expect(page.locator('.w-e-toolbar')).toBeVisible()
+    await page.getByRole('button', { name: 'Markdown / HTML' }).click()
+    await page.locator('.studio-field--source textarea').fill('# 这是正文。\n<script>alert(1)</script>')
+    await page.getByRole('button', { name: '预览' }).click()
+    await expect(page.locator('.studio-article-preview h1')).toContainText('这是正文')
+    await expect(page.locator('.studio-article-preview script')).toHaveCount(0)
+    await page.getByRole('button', { name: '编辑' }).click()
+    await page.getByRole('button', { name: '保存内容' }).click()
+
+    await expect.poll(() => saved.article?.articleTitle).toBe('新建的私有文章')
+    expect(saved.article?.articleContent).toContain('这是正文')
+    expect(saved.article?.articleContentHtml).toBe('')
+    expect(saved.article?.visibility).toBe('draft')
+    await expect(page).toHaveURL(/\/studio\/articles\/99\/edit$/)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByPlaceholder('写下一个清晰的标题')).toHaveValue('新建的私有文章')
+  })
+
+  test('restores a local article draft before editing', async ({ page }) => {
+    await mockStudioApi(page, {
+      draft: {
+        version: 1,
+        savedAt: '2026-09-20T12:00:00+08:00',
+        data: {
+          id: 0,
+          articleTitle: '本地恢复草稿',
+          articleContent: '恢复后的正文',
+          articleContentHtml: '',
+          articleCover: '',
+          categoryId: 0,
+          tagIds: [],
+          seriesId: 0,
+          seriesOrder: 0,
+          scheduledAt: '',
+          visibility: 'draft',
+          type: 1,
+          password: '',
+          originalUrl: ''
+        }
+      }
+    })
+
+    await page.goto('/studio/articles/new', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('恢复本地草稿')).toBeVisible()
+    await page.getByRole('button', { name: '恢复草稿' }).click()
+    await expect(page.getByPlaceholder('写下一个清晰的标题')).toHaveValue('本地恢复草稿')
+    await expect(page.locator('.studio-field--source textarea')).toHaveValue('恢复后的正文')
+  })
+
+  test('uploads ordered talk images and serializes them as JSON', async ({ page }) => {
+    const saved = await mockStudioApi(page)
+    await page.goto('/studio/talks/new', { waitUntil: 'domcontentloaded' })
+    await page.getByPlaceholder('记录此刻的想法…').fill('带图片的随想')
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'talk.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('image')
+    })
+    await expect(page.locator('.studio-talk-images__grid img')).toHaveCount(1)
+    await page.getByRole('button', { name: '保存内容' }).click()
+
+    await expect.poll(() => saved.talk?.content).toBe('带图片的随想')
+    expect(JSON.parse(saved.talk.images)).toEqual(['https://cdn.example.test/studio-upload.png'])
+  })
+
+  test('uploads a series cover from the dedicated editor', async ({ page }) => {
+    const saved = await mockStudioApi(page)
+    await page.goto('/studio/series/new', { waitUntil: 'domcontentloaded' })
+    await page.getByPlaceholder('给长期主题一个名字').fill('测试系列')
+    await page.getByPlaceholder('说明这个系列关注什么。').fill('系列简介')
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'series.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('image')
+    })
+    await expect(page.locator('.studio-cover-field img')).toBeVisible()
+    await page.getByRole('button', { name: '保存内容' }).click()
+
+    await expect.poll(() => saved.series?.seriesName).toBe('测试系列')
+    expect(saved.series?.cover).toBe('https://cdn.example.test/studio-upload.png')
+    expect(saved.series?.visibility).toBe('draft')
   })
 })

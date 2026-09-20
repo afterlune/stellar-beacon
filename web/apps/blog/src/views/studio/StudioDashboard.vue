@@ -2,7 +2,7 @@
   <div class="studio-dashboard">
     <header class="studio-page-head">
       <div><p>WORKSPACE / 01</p><h1>创作总览</h1><span>管理公开作品，也保留只属于自己的内容。</span></div>
-      <router-link to="/studio/articles?new=1">写一篇文章 →</router-link>
+      <router-link to="/studio/articles/new">写一篇文章 →</router-link>
     </header>
 
     <section class="studio-stats">

@@ -259,8 +259,24 @@ func (s *MyPlatformService) SaveOwnedArticle(c *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFailWithMessage("可见性参数不正确")
 	}
-	if strings.TrimSpace(vo.ArticleTitle) == "" {
+	title := strings.TrimSpace(vo.ArticleTitle)
+	if title == "" {
 		return model.ResultFailWithMessage("文章标题不能为空")
+	}
+	if len([]rune(title)) > 50 {
+		return model.ResultFailWithMessage("文章标题不能超过 50 字")
+	}
+	if len([]rune(vo.ArticleCover)) > 1024 {
+		return model.ResultFailWithMessage("文章封面地址过长")
+	}
+	if len([]rune(vo.OriginalUrl)) > 255 {
+		return model.ResultFailWithMessage("原文链接不能超过 255 字")
+	}
+	if len([]rune(vo.Password)) > 255 {
+		return model.ResultFailWithMessage("访问密码不能超过 255 字")
+	}
+	if vo.Type != 0 && (vo.Type < 1 || vo.Type > 3) {
+		return model.ResultFailWithMessage("文章类型不正确")
 	}
 	if strings.TrimSpace(vo.ArticleContentHTML) != "" {
 		vo.ArticleContentHTML = sanitizeArticleHTML(vo.ArticleContentHTML)
@@ -271,10 +287,13 @@ func (s *MyPlatformService) SaveOwnedArticle(c *gin.Context) model.ResultVO {
 	} else if strings.TrimSpace(vo.ArticleContent) == "" {
 		return model.ResultFailWithMessage("文章内容不能为空")
 	}
+	if len([]rune(vo.ArticleContent)) > 100000 {
+		return model.ResultFailWithMessage("文章内容不能超过 100000 字")
+	}
 	article := entity.TArticle{
-		Id: vo.Id, UserId: user.UserInfoId, ArticleCover: vo.ArticleCover, ArticleTitle: strings.TrimSpace(vo.ArticleTitle),
+		Id: vo.Id, UserId: user.UserInfoId, ArticleCover: strings.TrimSpace(vo.ArticleCover), ArticleTitle: title,
 		ArticleContent: vo.ArticleContent, ArticleContentHTML: vo.ArticleContentHTML, SeriesId: vo.SeriesId,
-		SeriesOrder: vo.SeriesOrder, Status: status, Type: vo.Type, Password: vo.Password, OriginalUrl: vo.OriginalUrl,
+		SeriesOrder: vo.SeriesOrder, Status: status, Type: vo.Type, Password: strings.TrimSpace(vo.Password), OriginalUrl: strings.TrimSpace(vo.OriginalUrl),
 	}
 	if article.Type == 0 {
 		article.Type = 1
@@ -327,10 +346,14 @@ func (s *MyPlatformService) Upload(c *gin.Context) model.ResultVO {
 	kind := strings.TrimSpace(c.Query("kind"))
 	prefix := "studio/articles/"
 	switch kind {
-	case "cover":
-		prefix = "articles/"
-	case "talk":
+	case "article-cover", "cover":
+		prefix = "articles/covers/"
+	case "article-inline":
+		prefix = "articles/inline/"
+	case "talk-image", "talk":
 		prefix = "talks/"
+	case "series-cover":
+		prefix = "series/covers/"
 	case "avatar":
 		prefix = "avatar/"
 	}
@@ -386,15 +409,22 @@ func (s *MyPlatformService) SaveOwnedTalk(c *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFailWithMessage("可见性参数不正确")
 	}
-	if strings.TrimSpace(vo.Content) == "" {
+	content := strings.TrimSpace(vo.Content)
+	if content == "" {
 		return model.ResultFailWithMessage("说说内容不能为空")
+	}
+	if len([]rune(content)) > 2000 {
+		return model.ResultFailWithMessage("说说内容不能超过 2000 字")
 	}
 	images, err := normalizeTalkImages(strings.TrimSpace(vo.Images))
 	if err != nil {
 		return model.ResultFailWithMessage("说说图片格式不正确")
 	}
+	if len([]rune(images)) > 2500 {
+		return model.ResultFailWithMessage("说说图片地址过长")
+	}
 	talk, err := s.platformRepo().SaveOwnedTalk(c.Request.Context(), entity.TTalk{
-		Id: vo.Id, UserId: user.UserInfoId, Content: strings.TrimSpace(vo.Content), Images: images,
+		Id: vo.Id, UserId: user.UserInfoId, Content: content, Images: images,
 		IsTop: vo.IsTop, Status: status,
 	})
 	if err != nil {
@@ -463,12 +493,23 @@ func (s *MyPlatformService) SaveOwnedSeries(c *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFailWithMessage("可见性参数不正确")
 	}
-	if strings.TrimSpace(vo.SeriesName) == "" {
+	name := strings.TrimSpace(vo.SeriesName)
+	if name == "" {
 		return model.ResultFailWithMessage("系列名称不能为空")
 	}
+	if len([]rune(name)) > 50 {
+		return model.ResultFailWithMessage("系列名称不能超过 50 字")
+	}
+	description := strings.TrimSpace(vo.SeriesDesc)
+	if len([]rune(description)) > 255 {
+		return model.ResultFailWithMessage("系列简介不能超过 255 字")
+	}
+	if len([]rune(vo.Cover)) > 1024 {
+		return model.ResultFailWithMessage("系列封面地址过长")
+	}
 	series, err := s.platformRepo().SaveOwnedSeries(c.Request.Context(), entity.TSeries{
-		Id: vo.Id, UserId: user.UserInfoId, SeriesName: strings.TrimSpace(vo.SeriesName),
-		SeriesDesc: strings.TrimSpace(vo.SeriesDesc), Cover: vo.Cover, Status: status,
+		Id: vo.Id, UserId: user.UserInfoId, SeriesName: name,
+		SeriesDesc: description, Cover: strings.TrimSpace(vo.Cover), Status: status,
 	})
 	if err != nil {
 		return model.ResultFromError(err)

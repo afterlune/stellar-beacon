@@ -16,3 +16,22 @@ export default function markdownToHtml(content: string) {
   md.use(markdownKatexExternal).use(markdownEmoji)
   return md.render(content)
 }
+
+export function sanitizePreviewHtml(content: string): string {
+  if (typeof DOMParser === 'undefined') return content
+  const document = new DOMParser().parseFromString(content, 'text/html')
+  document.querySelectorAll('script, iframe, object, embed, style, link').forEach((node) => node.remove())
+  document.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    for (const attribute of [...element.attributes]) {
+      const name = attribute.name.toLowerCase()
+      const value = attribute.value.trim().toLowerCase()
+      if (name.startsWith('on') || ((name === 'href' || name === 'src') && /^(javascript:|data:|vbscript:)/.test(value))) {
+        element.removeAttribute(attribute.name)
+      }
+      if (name === 'style' && /url\s*\(\s*["']?\s*(?:javascript|data):/i.test(value)) {
+        element.removeAttribute(attribute.name)
+      }
+    }
+  })
+  return document.body.innerHTML
+}

@@ -1,7 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -138,5 +141,94 @@ func TestPlatformDistributionUpdatesAndEnqueuesVisibleArticle(t *testing.T) {
 	result := service.DistributeArticle(ctx)
 	if !result.Flag || articles.updateCalls != 1 || len(newsletter.ids) != 1 || newsletter.ids[0] != 12 {
 		t.Fatalf("unexpected distribution result: result=%+v updates=%d enqueues=%v", result, articles.updateCalls, newsletter.ids)
+	}
+}
+
+type recordingObjectStorage struct {
+	key string
+}
+
+func (s *recordingObjectStorage) Put(_ context.Context, key string, _ io.Reader) (port.ObjectRef, error) {
+	s.key = key
+	return port.ObjectRef{Key: key, URL: "https://cdn.example.test/" + key}, nil
+}
+
+func uploadTestContext(t *testing.T, kind, filename string) *gin.Context {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	file, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write([]byte("image")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/studio/uploads?kind="+kind, body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = req
+	return c
+}
+
+func TestPlatformUploadUsesContentSpecificPrefixes(t *testing.T) {
+	cases := []struct {
+		kind   string
+		prefix string
+	}{
+		{kind: "article-cover", prefix: "articles/covers/"},
+		{kind: "article-inline", prefix: "articles/inline/"},
+		{kind: "talk-image", prefix: "talks/"},
+		{kind: "series-cover", prefix: "series/covers/"},
+		{kind: "avatar", prefix: "avatar/"},
+		{kind: "cover", prefix: "articles/covers/"},
+		{kind: "talk", prefix: "talks/"},
+	}
+	for _, testCase := range cases {
+		storage := &recordingObjectStorage{}
+		service, err := NewPlatformService(PlatformServiceDeps{
+			Repo: &fakePlatformRepository{}, Articles: &fakeArticleRepository{}, Storage: storage,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := service.Upload(uploadTestContext(t, testCase.kind, "example.png"))
+		if !result.Flag || !strings.HasPrefix(storage.key, testCase.prefix) {
+			t.Fatalf("kind %q prefix: result=%+v key=%q", testCase.kind, result, storage.key)
+		}
+	}
+}
+
+func TestPlatformStudioSaveRejectsDatabaseIncompatibleFields(t *testing.T) {
+	service := mustPlatformService(t, &fakePlatformRepository{}, &fakeArticleRepository{}, nil)
+
+	article := service.SaveOwnedArticle(platformTestContext(
+		http.MethodPost,
+		"/v1/studio/articles",
+		`{"articleTitle":"`+strings.Repeat("a", 51)+`","articleContent":"body","visibility":"draft","type":1}`,
+	))
+	if article.Flag {
+		t.Fatalf("overlong article title must fail: %+v", article)
+	}
+
+	talk := service.SaveOwnedTalk(platformTestContext(
+		http.MethodPost,
+		"/v1/studio/talks",
+		`{"content":"`+strings.Repeat("a", 2001)+`","images":"[]","visibility":"public"}`,
+	))
+	if talk.Flag {
+		t.Fatalf("overlong talk content must fail: %+v", talk)
+	}
+
+	series := service.SaveOwnedSeries(platformTestContext(
+		http.MethodPost,
+		"/v1/studio/series",
+		`{"seriesName":"`+strings.Repeat("a", 51)+`","seriesDesc":"","cover":"","visibility":"draft"}`,
+	))
+	if series.Flag {
+		t.Fatalf("overlong series name must fail: %+v", series)
 	}
 }
