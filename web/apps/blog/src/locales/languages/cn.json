@@ -3,6 +3,7 @@
     "home": "首页",
     "about": "关于",
     "archives": "归档",
+    "reading": "阅读中心",
     "series": "系列",
     "categories": "分类",
     "tags": "标签",
@@ -62,6 +63,7 @@
     "tips-open-menu": "打开菜单",
     "tips-back-to-home": "返回首页",
     "tips-open-search": "打开搜索",
+    "tips-open-reading": "打开阅读中心",
     "tips-open-toc": "打开文章目录",
     "default-category": "文章",
     "default-tag": "未分类",
@@ -72,7 +74,10 @@
     "logout":"登出",
     "personal-center":"个人中心",
     "running-time":"运行时间",
-    "view-count":"总访问量"
+    "view-count":"总访问量",
+    "talk-image": "说说图片 {index}",
+  "photo-image": "相册图片 {index}",
+  "request-failed":"网络繁忙，请稍后重试"
   },
   "newsletter": {
     "eyebrow": "订阅信号",
@@ -149,7 +154,8 @@
     "description": "按系列、分类与标签浏览，或者直接检索你关心的主题。",
     "seriesCount": "{count} 篇",
     "seriesFallback": "持续更新的系列文章",
-    "search": "搜索全站"
+    "search": "搜索全站",
+    "reading": "阅读中心"
   },
   "categories": {
     "empty": "还没有分类",
@@ -175,6 +181,29 @@
     "openArticle": "阅读",
     "loadFailed": "搜索暂时不可用，请稍后再试。",
     "previewCount": "找到 {total} 条结果",
-    "viewAll": "查看全部"
+    "viewAll": "查看全部",
+    "topicCount": "{count} 篇"
+  },
+  "reading": {
+    "pageTitle": "续读中心",
+    "eyebrow": "READING HUB",
+    "title": "从这里接着读",
+    "description": "阅读历史与系列进度保存在当前浏览器，随时回到没读完的地方。",
+    "continueTitle": "继续阅读",
+    "continueHint": "按系列进度接着读",
+    "progress": "已读 {completed}/{total}",
+    "unknownSeries": "系列",
+    "continueAction": "继续阅读",
+    "recentTitle": "最近阅读",
+    "recentHint": "仅保存在当前浏览器",
+    "progressPercent": "读到 {percent}%",
+    "empty": "还没有阅读记录",
+    "emptyHint": "打开任意文章后会自动记录在这里。",
+    "clear": "清空阅读历史",
+    "clearConfirm": "将清除本机保存的阅读记录，确定继续？",
+    "confirmAction": "确认清空",
+    "cancelAction": "取消",
+    "cleared": "已清空阅读历史",
+    "loadFailed": "系列信息加载失败，已显示本地记录"
   }
 }

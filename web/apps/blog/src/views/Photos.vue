@@ -21,6 +21,7 @@
                   class="photo"
                   :key="index"
                   :src="safePhotoImageUrl(item)"
+                  :alt="t('settings.photo-image', { index: Number(index) + 1 })"
                   @click="handlePreview(index)" />
               </div>
             </div>

@@ -55,8 +55,16 @@ export const useDiscoveryStore = defineStore('discoveryStore', () => {
   const loaded = ref(false)
   let loadPromise: Promise<void> | null = null
 
-  const topCategories = computed(() => categories.value.slice(0, 5))
-  const topTags = computed(() => tags.value.slice(0, 8))
+  // Empty taxonomy entries are noise in discovery surfaces, so they are kept
+  // out of the ranked lists while the raw lists stay available elsewhere.
+  const visibleCategories = computed(() => [...categories.value]
+    .filter((item) => Number(item.articleCount || 0) > 0)
+    .sort((left, right) => Number(right.articleCount || 0) - Number(left.articleCount || 0)))
+  const visibleTags = computed(() => [...tags.value]
+    .filter((item) => Number(item.count || 0) > 0)
+    .sort((left, right) => Number(right.count || 0) - Number(left.count || 0)))
+  const topCategories = computed(() => visibleCategories.value.slice(0, 5))
+  const topTags = computed(() => visibleTags.value.slice(0, 8))
   const featuredSeries = computed(() => [...series.value]
     .sort((left, right) => (
       Number(right.articleCount || 0) - Number(left.articleCount || 0)
@@ -95,8 +103,8 @@ export const useDiscoveryStore = defineStore('discoveryStore', () => {
       .filter((item) => !hasKeyword || includesKeyword(item.name, keyword) || includesKeyword(item.description, keyword))
       .slice(0, 5)
     return {
-      categories: matching(categories.value.map(toCategory)),
-      tags: matching(tags.value.map(toTag)),
+      categories: matching(visibleCategories.value.map(toCategory)),
+      tags: matching(visibleTags.value.map(toTag)),
       series: matching(series.value.map(toSeries))
     }
   }
@@ -133,6 +141,8 @@ export const useDiscoveryStore = defineStore('discoveryStore', () => {
     series,
     loading,
     loaded,
+    visibleCategories,
+    visibleTags,
     topCategories,
     topTags,
     featuredSeries,

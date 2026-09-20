@@ -40,7 +40,17 @@ export interface SeriesProgressSummary {
 
 type SeriesProgressMap = Record<string, SeriesProgressEntry>
 
+export interface ReadingHistoryEntry {
+  articleId: number
+  articleTitle: string
+  seriesId: number | null
+  visitedAt: string
+  progressPercent: number
+}
+
 export const SERIES_PROGRESS_STORAGE_KEY = 'stellar-beacon.reader.series-progress.v1'
+export const READING_HISTORY_STORAGE_KEY = 'stellar-beacon.reader.history.v1'
+export const READING_HISTORY_LIMIT = 50
 
 function readStoredProgress(): SeriesProgressMap {
   if (typeof localStorage === 'undefined') return {}
@@ -72,16 +82,107 @@ function normalizeProgress(value: unknown): SeriesProgressMap {
   return result
 }
 
+function readStoredHistory(): ReadingHistoryEntry[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(READING_HISTORY_STORAGE_KEY)
+    if (!raw) return []
+    return normalizeHistory(JSON.parse(raw))
+  } catch {
+    return []
+  }
+}
+
+function normalizeHistory(value: unknown): ReadingHistoryEntry[] {
+  const list = Array.isArray(value) ? value : []
+  const byArticle = new Map<number, ReadingHistoryEntry>()
+  for (const rawEntry of list) {
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue
+    const entry = rawEntry as Record<string, unknown>
+    const articleId = Number(entry.articleId)
+    if (!Number.isInteger(articleId) || articleId <= 0) continue
+    const seriesId = Number(entry.seriesId)
+    const progress = Number(entry.progressPercent)
+    const normalized: ReadingHistoryEntry = {
+      articleId,
+      articleTitle: typeof entry.articleTitle === 'string' ? entry.articleTitle : '',
+      seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null,
+      visitedAt: typeof entry.visitedAt === 'string' ? entry.visitedAt : '',
+      progressPercent: Number.isFinite(progress) ? Math.min(100, Math.max(0, progress)) : 0
+    }
+    const existing = byArticle.get(articleId)
+    if (!existing || normalized.visitedAt >= existing.visitedAt) {
+      byArticle.set(articleId, {
+        ...normalized,
+        progressPercent: Math.max(normalized.progressPercent, existing?.progressPercent || 0)
+      })
+    }
+  }
+  return Array.from(byArticle.values())
+    .sort((left, right) => right.visitedAt.localeCompare(left.visitedAt))
+    .slice(0, READING_HISTORY_LIMIT)
+}
+
 export const useReaderStore = defineStore('readerStore', () => {
   const tocItems = ref<ReaderTocItem[]>([])
   const activeHeadingId = ref('')
   const seriesContext = ref<ReaderSeriesContext | null>(null)
   const seriesProgress = ref<SeriesProgressMap>(readStoredProgress())
+  const historyEntries = ref<ReadingHistoryEntry[]>(readStoredHistory())
 
   function persistProgress(): void {
     if (typeof localStorage === 'undefined') return
     try {
       localStorage.setItem(SERIES_PROGRESS_STORAGE_KEY, JSON.stringify(seriesProgress.value))
+    } catch {
+      // Private browsing or a full storage quota must not block reading.
+    }
+  }
+
+  function persistHistory(): void {
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.setItem(READING_HISTORY_STORAGE_KEY, JSON.stringify(historyEntries.value))
+    } catch {
+      // Private browsing or a full storage quota must not block reading.
+    }
+  }
+
+  function recordVisit(visit: { articleId: number; articleTitle: string; seriesId?: number | null }): void {
+    const articleId = Number(visit.articleId)
+    if (!Number.isInteger(articleId) || articleId <= 0) return
+    const seriesId = Number(visit.seriesId)
+    const existing = historyEntries.value.find((entry) => entry.articleId === articleId)
+    const entry: ReadingHistoryEntry = {
+      articleId,
+      articleTitle: String(visit.articleTitle || existing?.articleTitle || ''),
+      seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null,
+      visitedAt: new Date().toISOString(),
+      progressPercent: existing?.progressPercent || 0
+    }
+    historyEntries.value = [entry, ...historyEntries.value.filter((item) => item.articleId !== articleId)]
+      .slice(0, READING_HISTORY_LIMIT)
+    persistHistory()
+  }
+
+  function recordProgress(articleId: number, percent: number): void {
+    const id = Number(articleId)
+    const value = Number(percent)
+    if (!Number.isInteger(id) || id <= 0 || !Number.isFinite(value)) return
+    const clamped = Math.min(100, Math.max(0, value))
+    const existing = historyEntries.value.find((entry) => entry.articleId === id)
+    if (!existing || existing.progressPercent >= clamped) return
+    historyEntries.value = historyEntries.value.map((entry) => (
+      entry.articleId === id ? { ...entry, progressPercent: clamped } : entry
+    ))
+    persistHistory()
+  }
+
+  function clearHistory(): void {
+    historyEntries.value = []
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.removeItem(READING_HISTORY_STORAGE_KEY)
     } catch {
       // Private browsing or a full storage quota must not block reading.
     }
@@ -162,6 +263,10 @@ export const useReaderStore = defineStore('readerStore', () => {
     activeHeadingId,
     seriesContext,
     seriesProgress,
+    historyEntries,
+    recordVisit,
+    recordProgress,
+    clearHistory,
     setTocItems,
     setActiveHeading,
     setSeriesContext,

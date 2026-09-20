@@ -13,6 +13,23 @@ const http = createApiClient({
   }
 })
 
+// Transient platform failures (rate limits, restarts, upstream hiccups) are
+// retried once for idempotent GETs before the caller sees an error.
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504])
+http.interceptors.response.use(undefined, async (error: any) => {
+  const config = error?.config
+  const status = Number(error?.response?.status)
+  if (!config || config.__retried || String(config.method || 'get').toLowerCase() !== 'get') {
+    return Promise.reject(error)
+  }
+  if (!RETRYABLE_STATUS.has(status)) return Promise.reject(error)
+  config.__retried = true
+  const retryAfter = Number(error?.response?.headers?.['retry-after'])
+  const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5000) : 700
+  await new Promise((resolve) => setTimeout(resolve, delay))
+  return http.request(config)
+})
+
 export default {
   getTopAndFeaturedArticles: () => {
     return http.get('/public/articles/featured')

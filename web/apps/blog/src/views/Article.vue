@@ -10,8 +10,8 @@
           <b v-else>{{ t('settings.default-category') }}</b>
           <ul>
             <ob-skeleton v-if="loading" :count="2" tag="li" height="16px" width="35px" class="mr-2" />
-            <template v-else-if="!loading && article.tags && article.tags.length > 0">
-              <li v-for="tag in article.tags" :key="tag.id">
+            <template v-else-if="!loading && normalizedTags.length > 0">
+              <li v-for="tag in normalizedTags" :key="tag.id">
                 <em class="opacity-50">#</em>
                 {{ tag.tagName }}
               </li>
@@ -244,8 +244,15 @@ import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
 import { useSeoMeta } from '@/composables/useSeoMeta'
 import { useReaderStore } from '@/stores/reader'
 import { scrollToArticleHeading } from '@/utils/article-reader'
+import { applyArticleImageFallback } from '@/utils/article-image'
+import { normalizeArticleTags } from '@/utils/article-tags'
 import { API_BASE_URL } from '@stellar-beacon/api-client'
 
+function normalizeArticleHeadings(html: string): string {
+  return String(html || '')
+    .replace(/<h1(\s[^>]*)?>/gi, '<h2$1>')
+    .replace(/<\/h1>/gi, '</h2>')
+}
 function createReadingSessionId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return `read-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
@@ -389,6 +396,7 @@ export default defineComponent({
       if (readingSessionSent || !reactiveData.articleId) return
       pauseReadingSession()
       const activeMs = Math.min(7200000, Math.max(0, Math.round(readingActiveMs)))
+      readerStore.recordProgress(Number(reactiveData.articleId), readingMaxScrollPercent)
       if (activeMs < 3000) return
       readingSessionSent = true
       const payload = JSON.stringify({
@@ -621,6 +629,7 @@ export default defineComponent({
       const imgs = articleRef.value.getElementsByTagName('img')
       for (let i = 0; i < imgs.length; i++) {
         reactiveData.images.push(imgs[i].src)
+        imgs[i].addEventListener('error', () => applyArticleImageFallback(imgs[i]))
         imgs[i].addEventListener('click', (event: Event) => {
           const target = event.target as HTMLImageElement
           handlePreview(target.currentSrc)
@@ -645,10 +654,15 @@ export default defineComponent({
         }
         commonStore.setHeaderImage(data.data.articleCover)
         new Promise((resolve) => {
-          data.data.articleContent = data.data.articleContentHtml || markdownToHtml(data.data.articleContent)
+          data.data.articleContent = normalizeArticleHeadings(data.data.articleContentHtml || markdownToHtml(data.data.articleContent))
           resolve(data.data)
         }).then((article: any) => {
           reactiveData.article = article
+          readerStore.recordVisit({
+            articleId: Number(article.id),
+            articleTitle: String(article.articleTitle || ''),
+            seriesId: Number(article.seriesId) > 0 ? Number(article.seriesId) : null
+          })
           syncReactionTotals(article)
           fetchSeriesInfo(article)
           fetchReactionStates()
@@ -867,6 +881,7 @@ export default defineComponent({
     return {
       articleRef,
       ...toRefs(reactiveData),
+      normalizedTags: computed(() => normalizeArticleTags(reactiveData.article?.tags)),
       isMobile: computed(() => commonStore.isMobile),
       handleAuthorClick,
       handleImageError,

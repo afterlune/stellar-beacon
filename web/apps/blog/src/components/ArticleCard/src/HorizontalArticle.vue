@@ -14,8 +14,13 @@
     </span>
     <div class="feature-article">
       <div class="feature-thumbnail">
-        <img v-if="article.articleCover" class="ob-hz-thumbnail" v-lazy="article.articleCover" />
-        <img v-else class="ob-hz-thumbnail" src="@/assets/default-cover.jpg" />
+        <img
+          v-if="article.articleCover"
+          class="ob-hz-thumbnail"
+          v-lazy="article.articleCover"
+          alt=""
+          @error="handleCoverError" />
+        <img v-else class="ob-hz-thumbnail" src="@/assets/default-cover.jpg" alt="" />
 
       </div>
       <div class="feature-content">
@@ -38,13 +43,13 @@
             <ob-skeleton v-else :count="2" tag="li" height="16px" width="35px" />
           </ul>
         </span>
-        <h1 class="article-title" v-if="article.articleTitle" @click="toArticle" data-dia="article-link">
+        <h3 class="article-title" v-if="article.articleTitle" @click="toArticle" data-dia="article-link">
           <a>
             <span>{{ article.articleTitle }}</span>
             <svg-icon v-if="article.status == 2" icon-class="lock" class="lock-svg" />
           </a>
-        </h1>
-        <ob-skeleton v-else tag="h1" height="3rem" />
+        </h3>
+        <ob-skeleton v-else tag="h3" height="3rem" />
         <p v-if="article.articleContent">{{ article.articleContent }}</p>
         <ob-skeleton v-else tag="p" :count="4" height="20px" />
         <div class="article-footer" v-if="article && article.author">
@@ -87,6 +92,7 @@ import { useArticleStore } from '@/stores/article'
 import { useI18n } from 'vue-i18n'
 import emitter from '@/utils/mitt'
 import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
+import defaultCover from '@/assets/default-cover.jpg'
 
 export default defineComponent({
   name: 'HorizontalArticle',
@@ -105,6 +111,12 @@ export default defineComponent({
       if (image.dataset.fallbackApplied === 'true') return
       image.dataset.fallbackApplied = 'true'
       image.src = avatarPlaceholder
+    }
+    const handleCoverError = (event: Event) => {
+      const image = event.target as HTMLImageElement
+      if (image.dataset.fallbackApplied === 'true') return
+      image.dataset.fallbackApplied = 'true'
+      image.src = defaultCover
     }
     const toArticle = () => {
       let isAccess = false
@@ -132,6 +144,7 @@ export default defineComponent({
       article: toRef(articleStore.$state, 'topArticle'),
       handleAuthorClick,
       handleImageError,
+      handleCoverError,
       avatarPlaceholder,
       toArticle,
       t

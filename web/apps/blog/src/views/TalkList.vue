@@ -12,9 +12,7 @@
               </div>
               <div class="time">
                 {{ t('settings.shared-on') }}
-                {{ formatTime(item.createTime) }},
-                {{ t(`settings.months[${new Date(item.createTime).getMonth()}]`) }}
-                {{ new Date(item.createTime).getDate() }}, {{ new Date(item.createTime).getFullYear() }}
+                {{ formatTime(item.createTime) }}
                 <template v-if="item.isTop === 1">
                   <svg-icon icon-class="top" class="top-svg" /><span style="color: #f21835">置顶</span>
                 </template>
@@ -24,12 +22,12 @@
               </div>
               <div class="talk-content" v-html="item.content" />
               <div class="talk-images" v-if="item.imgs">
-                <el-image
+                <img
                   class="talk-image"
                   v-for="(img, index) of item.imgs"
                   :key="index"
                   :src="safeTalkImageUrl(img)"
-                  fit="contain"
+                  :alt="t('settings.talk-image', { index: Number(index) + 1 })"
                   @click.stop="handlePreview(img)" />
               </div>
             </div>
@@ -102,11 +100,12 @@ export default defineComponent({
         pagination.total = Number(page.count) || 0
       })
     }
+    // One stable timestamp format across article, talk and comment surfaces.
     const formatTime = (data: any): string => {
-      let hours = new Date(data).getHours()
-      let minutes = new Date(data).getMinutes()
-      let seconds = new Date(data).getSeconds()
-      return hours + ':' + minutes + ':' + seconds
+      const date = new Date(data)
+      if (Number.isNaN(date.getTime())) return ''
+      const pad = (value: number): string => String(value).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
     }
     const toPageTop = () => {
       window.scrollTo({
@@ -196,10 +195,8 @@ export default defineComponent({
   overflow: hidden;
   border: none;
 }
-.talk-image :deep(.el-image__inner) {
+.talk-image {
   display: block;
-  width: 100%;
-  height: auto;
   object-fit: contain;
   object-position: center;
 }

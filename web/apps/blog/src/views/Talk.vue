@@ -15,9 +15,7 @@
                 </div>
                 <div v-if="talk.createTime" class="time">
                   {{ t('settings.shared-on') }}
-                  {{ formatTime(talk.createTime) }},
-                  {{ t(`settings.months[${new Date(talk.createTime).getMonth()}]`) }}
-                  {{ new Date(talk.createTime).getDate() }}, {{ new Date(talk.createTime).getFullYear() }}
+                  {{ formatTime(talk.createTime) }}
                   <svg-icon icon-class="message" class="message-svg" />{{
                     talk.commentCount == null ? 0 : talk.commentCount
                   }}
@@ -150,11 +148,12 @@ export default defineComponent({
         reactiveData.comments[index].replyDTOs = data.data
       })
     }
+    // One stable timestamp format across article, talk and comment surfaces.
     const formatTime = (data: any): string => {
-      let hours = new Date(data).getHours()
-      let minutes = new Date(data).getMinutes()
-      let seconds = new Date(data).getSeconds()
-      return hours + ':' + minutes + ':' + seconds
+      const date = new Date(data)
+      if (Number.isNaN(date.getTime())) return ''
+      const pad = (value: number): string => String(value).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
     }
     const toPageTop = () => {
       window.scrollTo({

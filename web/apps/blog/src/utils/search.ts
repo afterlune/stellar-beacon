@@ -1,6 +1,18 @@
 import type { ArticleSearchResult, Page } from '@stellar-beacon/api-contract'
 
 export function normalizeSearchPage(value: unknown): Page<ArticleSearchResult> {
+  // Older backends answer with a bare hit array; current ones answer with a page.
+  if (Array.isArray(value)) {
+    const hits = value as ArticleSearchResult[]
+    return {
+      items: hits,
+      total: hits.length,
+      page: 1,
+      pageSize: hits.length,
+      records: hits,
+      count: hits.length
+    }
+  }
   const source = value && typeof value === 'object' ? value as Record<string, unknown> : {}
   const items = Array.isArray(source.items)
     ? source.items as ArticleSearchResult[]

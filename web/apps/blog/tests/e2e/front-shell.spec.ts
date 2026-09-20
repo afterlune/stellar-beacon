@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const routes = ['/archives', '/categories', '/series', '/search', '/tags', '/talks', '/friends', '/message', '/about', '/photos/0']
+const routes = ['/archives', '/categories', '/reading', '/series', '/search', '/tags', '/talks', '/friends', '/message', '/about', '/photos/0']
 
 function articleFixture(id: number, title: string) {
   return {
@@ -15,7 +15,7 @@ function articleFixture(id: number, title: string) {
     updateTime: '2026-09-18T10:00:00+08:00',
     seriesId: 3,
     seriesOrder: id - 6,
-    tags: [{ id: 1, tagName: '测试标签' }],
+    tags: ['测试标签', '系列'],
     author: { nickname: '测试作者', avatar: '', website: '' },
     likeCount: 0,
     favoriteCount: 0,
@@ -49,6 +49,27 @@ async function mockArticleReading(page: Page, onContinuationEvent?: (event: { ar
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ code: 'OK', message: '操作成功', data: articleFixture(id, `系列第${id - 6}篇`) })
+      })
+      return
+    }
+    if (path === '/api/v1/public/series') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'OK',
+          message: '操作成功',
+          data: [
+            {
+              id: 3,
+              seriesName: '阅读系列',
+              seriesDesc: '从零搭建阅读体验',
+              cover: '',
+              articleCount: 3,
+              updateTime: '2026-09-18T10:00:00+08:00'
+            }
+          ]
+        })
       })
       return
     }
@@ -293,6 +314,17 @@ async function mockContentDiscovery(page: Page, options: { searchFails?: boolean
       await fulfill([])
       return
     }
+    if (path === '/api/v1/public/series/3') {
+      await fulfill({
+        series: { id: 3, seriesName: '阅读系列' },
+        articles: [
+          { id: 7, articleTitle: '系列第一篇' },
+          { id: 8, articleTitle: '系列第二篇' },
+          { id: 9, articleTitle: '系列第三篇' }
+        ]
+      })
+      return
+    }
     if (path === '/api/v1/public/articles/featured') {
       await fulfill({ topArticle: null, featuredArticles: [] })
       return
@@ -506,5 +538,151 @@ test.describe('content discovery', () => {
     await drawerNav.getByText('系列', { exact: true }).click()
     await expect(page).toHaveURL(/\/series$/)
     await expect(page.locator('.series-page')).toContainText('阅读系列')
+  })
+})
+
+
+test.describe('reading hub', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      document.cookie = 'locale=cn; path=/'
+    })
+  })
+
+  test('records visited articles and lists them in the reading hub', async ({ page }) => {
+    await mockArticleReading(page)
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
+
+    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    const recent = page.getByTestId('reading-recent')
+    await expect(recent).toBeVisible()
+    await expect(recent).toContainText('系列第2篇')
+    await expect(recent.getByRole('link', { name: /系列第2篇/ })).toHaveAttribute('href', '/articles/8')
+  })
+
+  test('offers a continue card for the series in progress', async ({ page }) => {
+    await mockArticleReading(page)
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
+
+    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    const card = page.getByTestId('reading-continue')
+    await expect(card).toBeVisible()
+    await expect(card).toContainText('阅读系列')
+    await expect(card).toContainText('已读 0/3')
+    await expect(card.getByRole('link')).toHaveAttribute('href', '/articles/8')
+  })
+
+  test('clears the saved reading history', async ({ page }) => {
+    await mockArticleReading(page)
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
+
+    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('reading-recent')).toBeVisible()
+
+    await page.getByTestId('reading-clear').click()
+    await page.getByTestId('reading-clear-confirm').click()
+
+    await expect(page.getByTestId('reading-recent')).toHaveCount(0)
+    await expect(page.getByTestId('reading-cleared')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('stellar-beacon.reader.history.v1'))).toBeNull()
+  })
+
+  test('ignores malformed reading history', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('stellar-beacon.reader.history.v1', '{broken'))
+    await mockArticleReading(page)
+    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('reading-empty')).toBeVisible()
+  })
+
+  test('opens the reading hub from the header and the home discovery block', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const discovery = page.getByTestId('home-discovery')
+    await expect(discovery.getByRole('link', { name: /阅读中心/ })).toHaveAttribute('href', '/reading')
+
+    await page.locator('[data-dia="reading"]').click()
+    await expect(page).toHaveURL(/\/reading$/)
+    await expect(page.locator('.reading-page')).toBeVisible()
+  })
+})
+
+test.describe('front-end experience regressions', () => {
+  test.describe.configure({ timeout: 90_000 })
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      document.cookie = 'locale=cn; path=/'
+    })
+  })
+
+  test('renders string-array article tags with their names', async ({ page }) => {
+    await mockArticleReading(page)
+    await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
+    const labels = page.locator('.post-labels')
+    await expect(labels).toContainText('测试标签')
+    await expect(labels).toContainText('系列')
+    await expect(labels.locator('li', { hasText: '# 测试标签' })).toHaveCount(1)
+  })
+
+  test('keeps a single h1 on the home page', async ({ page }) => {
+    await mockContentDiscovery(page)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('.article-container').first()).toBeVisible()
+    await expect(page.locator('h1')).toHaveCount(1)
+  })
+
+  test('retries a rate-limited content request once', async ({ page }) => {
+    let attempts = 0
+    await page.route('**/api/v1/public/articles?**', async (route) => {
+      attempts += 1
+      if (attempts === 1) {
+        await route.fulfill({
+          status: 429,
+          contentType: 'application/json',
+          headers: { 'Retry-After': '1' },
+          body: JSON.stringify({ code: 'RATE_LIMITED', message: '请求过于频繁', data: null })
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'OK',
+          message: '操作成功',
+          data: {
+            items: [articleFixture(31, '限流重试后的文章')],
+            total: 1,
+            page: 1,
+            pageSize: 12
+          }
+        })
+      })
+    })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: '限流重试后的文章' })).toBeVisible()
+    expect(attempts).toBeGreaterThan(1)
+  })
+
+  test('keeps the mobile drawer visually hidden until opened', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'mobile drawer only')
+    await mockContentDiscovery(page)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const sidebar = page.locator('.App-Mobile-sidebar')
+    await expect(sidebar).toHaveCSS('visibility', 'hidden')
+
+    await page.getByTestId('home-discovery').getByRole('link', { name: /工程实践/ }).click()
+    await expect(page).toHaveURL(/\/categories\/1/)
+    await expect(sidebar).toHaveCSS('visibility', 'hidden')
+
+    await page.locator('[data-dia="menu"]').evaluate((element) => (element as HTMLElement).click())
+    await expect(sidebar).toHaveCSS('visibility', 'visible')
   })
 })

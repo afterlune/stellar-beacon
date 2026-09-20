@@ -81,6 +81,7 @@
       </div>
 
       <div class="home-discovery__quick">
+        <router-link to="/reading">{{ t('discovery.reading') }} →</router-link>
         <router-link to="/search">{{ t('discovery.search') }} →</router-link>
         <router-link to="/archives">{{ t('menu.archives') }} →</router-link>
       </div>

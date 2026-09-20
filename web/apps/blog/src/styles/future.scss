@@ -103,21 +103,21 @@
   --border-strong: rgba(18, 28, 48, 0.22);
   --text-bright: #101727;
   --text-normal: #2f3a4d;
-  --text-dim: #657084;
-  --text-faint: #9aa6b8;
-  --text-accent: #24a8c9;
-  --text-sub-accent: #d8408f;
-  --text-a: #198fae;
-  --text-a-hover: #11778f;
+  --text-dim: #55617a;
+  --text-faint: #7b879b;
+  --text-accent: #0b6f85;
+  --text-sub-accent: #b02a72;
+  --text-a: #0b6f85;
+  --text-a-hover: #0b657c;
   --text-title-h1: #101727;
   --text-title-h2: #101727;
   --text-title-h3: #1b2538;
   --text-title-h4: #1b2538;
   --text-title-h5: #2f3a4d;
   --text-link: #657084;
-  --accent: #24a8c9;
-  --accent-2: #d8408f;
-  --signal: #78b733;
+  --accent: #0b6f85;
+  --accent-2: #b02a72;
+  --signal: #4f7d20;
   --ok: #2b8a60;
   --warn: #a66b12;
   --danger: #b64242;
@@ -467,7 +467,16 @@ textarea {
 #App-Wrapper ~ .App-Mobile-sidebar,
 .App-Mobile-sidebar {
   z-index: 60;
-  background: var(--background-primary-alt);
+  /* The drawer stays mounted while closed. Painting a background here covers
+     the page behind it on mobile, so the panel look lives on the inner
+     wrapper and the container is only revealed while open. */
+  background: transparent;
+  visibility: hidden;
+}
+
+#App-Wrapper ~ .App-Mobile-sidebar.is-open,
+.App-Mobile-sidebar.is-open {
+  visibility: visible;
 }
 
 .App-Mobile-wrapper {
@@ -1822,5 +1831,64 @@ textarea {
     transition-duration: 0.001ms !important;
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Light-theme readable header, mobile tap targets, footer hairline
+   --------------------------------------------------------------------------- */
+
+/* Inner pages in the light theme show the page background behind the header,
+   so the dark-banner treatment (white meta text + dark scrim) must flip. */
+#App-Wrapper.theme-light .post-header::before {
+  background: radial-gradient(
+    130% 120% at 4% 40%,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 255, 255, 0.34) 54%,
+    rgba(255, 255, 255, 0) 80%
+  );
+}
+
+#App-Wrapper.theme-light .post-header .post-labels > b,
+#App-Wrapper.theme-light .post-header .post-labels ul li,
+#App-Wrapper.theme-light .post-header .post-footer,
+#App-Wrapper.theme-light .post-header .post-footer .text-ob-dim,
+#App-Wrapper.theme-light .post-header .post-stats > span {
+  color: var(--text-normal) !important;
+  text-shadow: none !important;
+}
+
+#App-Wrapper.theme-light .post-title {
+  color: var(--text-title-h1) !important;
+  text-shadow: none !important;
+}
+
+/* Code-copy controls and light-theme primary text need readable foregrounds. */
+#App-Wrapper.theme-light .post-html .copy-to-clipboard-button {
+  color: #55617a;
+}
+
+#App-Wrapper.theme-light .home-hero__action,
+#App-Wrapper.theme-light .first-tab {
+  color: #ffffff !important;
+}
+
+#App-Wrapper.theme-light .post-header .post-footer strong,
+#App-Wrapper.theme-light .post-header .post-footer span {
+  color: var(--text-normal) !important;
+  text-shadow: none !important;
+}
+/* Touch comfort: discovery pills and quick links must clear 44px on mobile. */
+@media (max-width: 700px) {
+  .home-discovery__links a,
+  .home-discovery__quick a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 14px;
+  }
+
+  .article-title a {
+    min-height: 44px;
   }
 }

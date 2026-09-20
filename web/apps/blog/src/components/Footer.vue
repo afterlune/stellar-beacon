@@ -1,5 +1,5 @@
 <template>
-  <div id="footer" class="brand-gradient relative w-full pt-1">
+  <div id="footer" class="brand-gradient relative w-full pt-px">
     <span class="bg-ob-deep-900 flex justify-center">
       <div
         class="bg-ob-deep-900 rounded-lg max-w-10/12 lg:max-w-screen-2xl text-sm text-ob-normal w-full py-6 px-6 flex flex-col lg:flex-row items-center justify-between gap-6 h-auto lg:h-36 mx-auto">
@@ -56,6 +56,15 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+/* Keep the brand accent as a hairline instead of a saturated full-bleed bar. */
+#footer {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 55%, transparent),
+    color-mix(in srgb, var(--accent-2) 45%, transparent)
+  );
+}
+
 .footer-name {
   font-family: var(--font-display);
   font-size: 16px;

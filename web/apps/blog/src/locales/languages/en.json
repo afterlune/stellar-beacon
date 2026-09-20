@@ -3,6 +3,7 @@
     "home": "Home",
     "about": "About",
     "archives": "Archives",
+    "reading": "Reading hub",
     "series": "Collections",
     "categories": "Categories",
     "tags": "Tags",
@@ -62,6 +63,7 @@
     "tips-open-menu": "Open menu",
     "tips-back-to-home": "Back to home",
     "tips-open-search": "Open search",
+    "tips-open-reading": "Open reading hub",
     "tips-open-toc": "Open article toc",
     "default-category": "Article",
     "default-tag": "unsorted",
@@ -72,7 +74,10 @@
     "logout":"Logout",
     "personal-center":"Personal Center",
     "running-time":"Running Time",
-    "view-count":"View Count"
+    "view-count":"View Count",
+    "talk-image": "Talk image {index}",
+  "photo-image": "Photo image {index}",
+  "request-failed":"The network is busy, please retry shortly"
   },
   "newsletter": {
     "eyebrow": "SUBSCRIPTION SIGNAL",
@@ -149,7 +154,8 @@
     "description": "Browse by collection, category and tag, or search a topic directly.",
     "seriesCount": "{count} articles",
     "seriesFallback": "A collection that keeps growing",
-    "search": "Search everything"
+    "search": "Search everything",
+    "reading": "Reading hub"
   },
   "categories": {
     "empty": "No categories yet",
@@ -175,6 +181,29 @@
     "openArticle": "Read",
     "loadFailed": "Search is unavailable right now. Please try again.",
     "previewCount": "{total} results",
-    "viewAll": "View all"
+    "viewAll": "View all",
+    "topicCount": "{count} articles"
+  },
+  "reading": {
+    "pageTitle": "Reading hub",
+    "eyebrow": "READING HUB",
+    "title": "Pick up where you left off",
+    "description": "Your reading history and collection progress stay in this browser, ready when you come back.",
+    "continueTitle": "Continue reading",
+    "continueHint": "Resume from your collection progress",
+    "progress": "Read {completed}/{total}",
+    "unknownSeries": "Collection",
+    "continueAction": "Continue reading",
+    "recentTitle": "Recently read",
+    "recentHint": "Stored in this browser only",
+    "progressPercent": "Read {percent}%",
+    "empty": "No reading history yet",
+    "emptyHint": "Open any article and it will show up here.",
+    "clear": "Clear reading history",
+    "clearConfirm": "This removes the reading history saved on this device. Continue?",
+    "confirmAction": "Clear",
+    "cancelAction": "Cancel",
+    "cleared": "Reading history cleared",
+    "loadFailed": "Collection details failed to load; local records are shown"
   }
 }

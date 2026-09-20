@@ -23,12 +23,12 @@
             {{ article.categoryName }}
           </b>
           <ob-skeleton v-else tag="b" height="20px" width="35px" />
-          <ul v-if="article.tags && article.tags.length > 0">
-            <li v-for="tag in article.tags" :key="tag.id">
+          <ul v-if="normalizedTags.length > 0">
+            <li v-for="tag in normalizedTags" :key="tag.id">
               <em># {{ tag.tagName }}</em>
             </li>
           </ul>
-          <ul v-else-if="article.tags && article.tags.length <= 0">
+          <ul v-else-if="article.tags">
             <li>
               <em># {{ t('settings.default-tag') }}</em>
             </li>
@@ -37,13 +37,13 @@
             <ob-skeleton v-if="!article.tags" :count="2" tag="li" height="16px" width="35px" />
           </ul>
         </span>
-        <h1 class="article-title" v-if="article.articleTitle" @click="toArticle" data-dia="article-link">
+        <h3 class="article-title" v-if="article.articleTitle" @click="toArticle" data-dia="article-link">
           <a>
             <span> {{ article.articleTitle }}</span>
             <svg-icon v-if="article.status == 2" icon-class="lock" class="lock-svg" />
           </a>
-        </h1>
-        <ob-skeleton v-else tag="h1" height="3rem" />
+        </h3>
+        <ob-skeleton v-else tag="h3" height="3rem" />
         <p v-if="article.articleContent">{{ article.articleContent }}</p>
         <ob-skeleton v-else tag="p" :count="5" height="16px" />
         <div class="article-footer" v-if="article.author && article.createTime">
@@ -85,6 +85,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import emitter from '@/utils/mitt'
 import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
+import { normalizeArticleTags } from '@/utils/article-tags'
 
 export default defineComponent({
   name: 'ArticleCard',
@@ -127,6 +128,7 @@ export default defineComponent({
     }
     return {
       article: toRefs(props).data,
+      normalizedTags: computed(() => normalizeArticleTags(props.data?.tags)),
       // Use the category or title initial instead of repeating a stock cover.
       fallbackLabel: computed(() => {
         const name = props.data?.categoryName || props.data?.articleTitle || ''
@@ -145,5 +147,10 @@ export default defineComponent({
 <style lang="scss" scoped>
 .article-title:hover {
   cursor: default;
+}
+.article-title a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
 }
 </style>

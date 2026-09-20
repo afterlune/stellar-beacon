@@ -3,7 +3,7 @@
     <PageHeader :title="t('menu.search')" :current="t('menu.search')" />
     <section class="search-page__hero">
       <p class="search-page__eyebrow">{{ t('search.eyebrow') }}</p>
-      <h1>{{ t('search.title') }}</h1>
+      <h2 class="search-page__hero-title">{{ t('search.title') }}</h2>
       <p>{{ t('search.description') }}</p>
       <form class="search-page__form" role="search" @submit.prevent="submitSearch">
         <label class="sr-only" for="search-page-input">{{ t('search.placeholder') }}</label>
@@ -31,7 +31,7 @@
           <small>{{ topicLabel(topic.type) }}</small>
           <strong>{{ topic.name }}</strong>
           <span v-if="topic.description">{{ topic.description }}</span>
-          <em v-if="topic.count">{{ topic.count }}</em>
+          <em v-if="topic.count">{{ t('search.topicCount', { count: topic.count }) }}</em>
         </router-link>
       </div>
     </section>
@@ -202,7 +202,8 @@ export default defineComponent({
   text-transform: uppercase;
 }
 
-.search-page__hero h1 {
+.search-page__hero h1,
+.search-page__hero-title {
   margin: 0 0 8px;
   font-family: var(--font-display);
   font-size: clamp(2rem, 5vw, 3.4rem);

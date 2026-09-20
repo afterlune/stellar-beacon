@@ -731,9 +731,25 @@ const (
 	IpLimiterMaxSize = 10000 // ipLimiter map 的最大容量
 )
 
+type ipRateLimiters struct {
+	read  *rate.Limiter
+	write *rate.Limiter
+}
+
+func newIPRateLimiters() *ipRateLimiters {
+	return &ipRateLimiters{
+		read:  rate.NewLimiter(rate.Every(time.Minute/240), 240),
+		write: rate.NewLimiter(rate.Every(time.Minute/60), 60),
+	}
+}
+
+func isPublicContentRead(method, path string) bool {
+	return method == http.MethodGet && strings.HasPrefix(path, "/v1/public/")
+}
+
 var (
 	globalLimiter   = rate.NewLimiter(rate.Every(time.Second/20), 1200)
-	ipLimiter       = make(map[string]*rate.Limiter)
+	ipLimiter       = make(map[string]*ipRateLimiters)
 	mutex           sync.Mutex
 	roleRepo        port.RoleRepository
 	userAuthService service.UserAuthService = new(service.MyUserAuthService)
@@ -770,7 +786,7 @@ func AccessLimiter() gin.HandlerFunc {
 
 		ip := visitor.ClientIP(c.Request.Context(), c.Request)
 		mutex.Lock()
-		limiter, ok := ipLimiter[ip]
+		limiters, ok := ipLimiter[ip]
 		if !ok {
 			// 检查 ipLimiter map 的大小是否超过了最大容量
 			if len(ipLimiter) >= IpLimiterMaxSize {
@@ -786,11 +802,15 @@ func AccessLimiter() gin.HandlerFunc {
 				}
 				slog.Info("cleaned up old IP limiters", "count", count)
 			}
-			limiter = rate.NewLimiter(rate.Every(time.Minute/60), 60)
-			ipLimiter[ip] = limiter
+			limiters = newIPRateLimiters()
+			ipLimiter[ip] = limiters
 		}
 		mutex.Unlock()
 
+		limiter := limiters.write
+		if isPublicContentRead(c.Request.Method, c.Request.URL.Path) {
+			limiter = limiters.read
+		}
 		if !limiter.Allow() || !globalLimiter.Allow() {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, model.ResultFailWithMessage("请求过于频繁"))
 			return

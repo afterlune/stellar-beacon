@@ -10,7 +10,7 @@
                 <el-col :span="8" :xs="{ span: 20, offset: 2 }" class="mb-3">
                   <el-card shadow="never" class="shadow-md">
                     <div class="block">
-                    <el-avatar :size="60" :src="safeAvatarImageUrl(link.linkAvatar)" />
+                    <img class="friend-avatar" :src="safeAvatarImageUrl(link.linkAvatar)" alt="" width="60" height="60" />
                     </div>
                     <div class="info">
                       <a :href="link.linkAddress" target="_blank">
@@ -224,14 +224,16 @@ export default defineComponent({
   border-radius: 10px;
   border: 0;
 }
-</style>
+.friend-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; }
+.info a { display: inline-flex; align-items: center; min-height: 44px; }
 .friend-apply { margin: 2rem 0; padding: 1.25rem 1.35rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 24%, transparent); border-radius: 14px; }
 .friend-apply__title { margin: 0 0 .35rem; font-family: var(--font-display); font-size: 1.15rem; }
 .friend-apply__hint { margin: 0 0 1rem; font-size: .85rem; opacity: .7; }
 .friend-apply__form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem 1rem; align-items: end; }
 .friend-apply__form label { display: flex; flex-direction: column; gap: .3rem; font-size: .82rem; opacity: .85; }
-.friend-apply__form input { padding: .5rem .65rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 28%, transparent); border-radius: 8px; background: transparent; color: inherit; }
-.friend-apply__form button { padding: .55rem 1.1rem; border: none; border-radius: 999px; background: var(--color-ob); color: #fff; cursor: pointer; }
+.friend-apply__form input { min-height: 44px; padding: .5rem .65rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 28%, transparent); border-radius: 8px; background: transparent; color: inherit; }
+.friend-apply__form button { min-height: 44px; padding: .55rem 1.1rem; border: none; border-radius: 999px; background: var(--color-ob); color: #fff; cursor: pointer; }
 .friend-apply__form button:disabled { opacity: .6; cursor: progress; }
 .friend-apply__trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .friend-apply__message { grid-column: 1 / -1; font-size: .85rem; color: var(--color-ob); }
+</style>

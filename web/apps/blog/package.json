@@ -7,7 +7,8 @@
     "preview": "vite preview",
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
-    "test:e2e": "playwright test --config playwright.config.ts"
+    "test:e2e": "playwright test --config playwright.config.ts",
+    "test:visual": "playwright test --config playwright.visual.config.ts"
   },
   "dependencies": {
     "@stellar-beacon/api-client": "0.1.0",

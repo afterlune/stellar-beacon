@@ -10,6 +10,13 @@
     <span class="ob-drop-shadow" data-dia="search" @click="handleOpenModel">
       <svg-icon icon-class="search" />
     </span>
+    <span
+      class="ob-drop-shadow"
+      data-dia="reading"
+      :aria-label="t('settings.tips-open-reading')"
+      @click="openReading">
+      <svg-icon icon-class="clock-outline" />
+    </span>
     <Dropdown v-if="multiLanguage === 1" @command="handleClick">
       <span class="ob-drop-shadow" data-dia="language">
         <svg-icon icon-class="globe" />
@@ -236,6 +243,9 @@ export default defineComponent({
     const openFavorites = () => {
       router.push({ path: '/favorites' })
     }
+    const openReading = () => {
+      router.push({ path: '/reading' })
+    }
     const openLoginDialog = () => {
       reactiveDate.loginDialogVisible = true
     }
@@ -364,6 +374,7 @@ export default defineComponent({
       handleClick,
       openUserCenter,
       openFavorites,
+      openReading,
       openLoginDialog,
       openRegisterDialog,
       returnLoginDialog,
