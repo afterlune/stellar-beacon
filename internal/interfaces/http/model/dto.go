@@ -544,6 +544,14 @@ type UserInfoDTO struct {
 	Token         string    `json:"token"`
 }
 
+type StudioProfileDTO struct {
+	Handle   string `json:"handle"`
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Intro    string `json:"intro"`
+	Website  string `json:"website"`
+}
+
 type UserLogoutStatusDTO struct {
 	Message string `json:"message"`
 }

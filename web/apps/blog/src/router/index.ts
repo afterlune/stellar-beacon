@@ -71,6 +71,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', redirect: '/studio/dashboard' },
       { path: 'dashboard', name: 'StudioDashboard', component: () => import('../views/studio/StudioDashboard.vue') },
+      { path: 'profile', name: 'StudioProfile', component: () => import('../views/studio/StudioProfileView.vue') },
       { path: 'articles', name: 'StudioArticles', component: () => import('../views/studio/StudioContent.vue'), props: { kind: 'article' } },
       { path: 'articles/new', name: 'StudioArticleNew', component: () => import('../views/studio/StudioEditorView.vue'), props: { kind: 'article' } },
       { path: 'articles/:id/edit', name: 'StudioArticleEdit', component: () => import('../views/studio/StudioEditorView.vue'), props: { kind: 'article' } },

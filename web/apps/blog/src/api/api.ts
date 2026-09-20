@@ -195,8 +195,16 @@ export default {
   getStudioDashboard: () => {
     return http.get('/studio/dashboard')
   },
-  updateStudioProfile: (params: any) => {
+  getStudioProfile: () => {
+    return http.get('/studio/profile')
+  },
+  saveStudioProfile: (params: any) => {
     return http.put('/studio/profile', params)
+  },
+  uploadUserAvatar: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return http.post('/auth/me/avatar', form)
   },
   getStudioArticles: (params: any) => {
     return http.get('/studio/articles', { params })

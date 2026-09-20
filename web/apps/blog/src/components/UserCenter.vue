@@ -1,309 +1,171 @@
 <template>
   <el-drawer v-model="visible" direction="rtl" :with-header="false" :before-close="handleClose">
-    <div class="user-center-header">
-      <span class="user-center-kicker">PROFILE / ACCOUNT</span>
-      <h2>用户中心</h2>
-      <p>集中管理你的公开资料、联系方式和订阅状态。</p>
+    <div class="account-center-header">
+      <span>ACCOUNT / SETTINGS</span>
+      <h2>账号设置</h2>
+      <p>公开身份已移到创作台统一维护，这里只管理邮箱、订阅和通知。</p>
     </div>
+
     <template v-if="userInfo !== ''">
-      <span class="user-center-note">资料仅用于博客账户功能，不会公开展示你的邮箱。</span>
-      <div class="max-w-full mt-10">
-        <button id="pick-avatar" @click="showCropper = true">
-          <el-avatar :size="110" :src="userInfo.avatar" class="user-center-avatar" />
-        </button>
-        <avatar-cropper
-          v-model="showCropper"
-          @uploaded="handleSuccess"
-          trigger="#pick-avatar"
-          :request-options="options"
-          upload-url="/api/v1/auth/me/avatar" />
-        <el-form>
-          <el-form-item model="userInfo" label="昵称:" class="mt-5">
-            <el-input v-model="userInfo.nickname" />
-          </el-form-item>
-          <el-form-item model="userInfo" label="网址:" class="mt-5">
-            <el-input v-model="userInfo.website" placeholder="Please add https:// or http://" />
-          </el-form-item>
-          <el-form-item model="userInfo" label="描述:" class="mt-5">
-            <el-input v-model="userInfo.intro" placeholder="Introduce youself" />
-          </el-form-item>
-          <el-form-item model="userInfo" label="邮箱:" class="mt-5">
-            <el-input disabled :placeholder="userInfo.email">
-              <template #append v-if="userInfo.email === null">
-                <span class="text" @click="changeEmailDialogVisible">绑定</span>
-              </template>
-              <template #append v-else>
-                <span class="text" @click="changeEmailDialogVisible">修改</span>
-              </template>
-            </el-input>
-          </el-form-item>
-          <el-form-item label="订阅:">
-            <el-switch
-              v-model="userInfo.isSubscribe"
-              :loading="loading"
-              :before-change="beforeChange"
-              @change="changeSubscribe"
-              active-color="#0fb6d6"
-              :active-value="1"
-              :inactive-value="0" />
-          </el-form-item>
-          <el-form-item label="评论邮件通知:">
-            <el-switch
-              v-model="userInfo.notifyComment"
-              :loading="loading"
-              @change="changeCommentNotice"
-              active-color="#0fb6d6"
-              :active-value="1"
-              :inactive-value="0" />
-          </el-form-item>
-          <button
-            @click="commit"
-            type="button"
-            id="submit-button"
-            class="mt-5 w-20 text-white p-2 rounded-lg transition transform hover:scale-105 flex float-right">
-            <span class="text-center flex-grow commit">提交</span>
-          </button>
-        </el-form>
-      </div>
+      <section class="account-identity">
+        <img :src="userInfo.avatar || defaultAvatar" :alt="userInfo.nickname || '作者头像'" />
+        <div>
+          <strong>{{ userInfo.nickname || '未设置昵称' }}</strong>
+          <small v-if="userInfo.handle">@{{ userInfo.handle }}</small>
+        </div>
+        <button type="button" @click="openStudioProfile">编辑公开资料</button>
+      </section>
+
+      <section class="account-section">
+        <header><h3>邮箱与订阅</h3><span>用于验证码、订阅和评论邮件</span></header>
+        <div class="account-row">
+          <div><strong>邮箱</strong><small>{{ userInfo.email || '尚未绑定邮箱' }}</small></div>
+          <button type="button" @click="emailDialogVisible = true">{{ userInfo.email ? '修改' : '绑定' }}</button>
+        </div>
+        <div class="account-row">
+          <div><strong>文章订阅邮件</strong><small>{{ userInfo.email ? '新文章发布后的邮件通知' : '绑定邮箱后可用' }}</small></div>
+          <el-switch
+            :model-value="Number(userInfo.isSubscribe) === 1"
+            :disabled="!userInfo.email || loading"
+            @change="changeSubscribe" />
+        </div>
+      </section>
+
+      <section class="account-section">
+        <header><h3>互动通知</h3><span>控制是否接收评论相关邮件</span></header>
+        <div class="account-row">
+          <div><strong>评论邮件通知</strong><small>有人回复你时发送邮件提醒</small></div>
+          <el-switch
+            :model-value="Number(userInfo.notifyComment) === 1"
+            :disabled="loading"
+            @change="changeCommentNotice" />
+        </div>
+      </section>
     </template>
-    <br />
-    <br />
   </el-drawer>
+
   <el-dialog v-model="emailDialogVisible" width="30%">
     <el-form>
-      <el-form-item model="userInfo" class="mt-5">
-        <el-input v-model="email" placeholder="邮箱号" />
+      <el-form-item class="mt-5">
+        <el-input v-model.trim="email" placeholder="邮箱号" />
       </el-form-item>
-      <el-form-item model="userInfo" type="password" class="mt-8">
-        <el-input v-model="VerificationCode" type="password" placeholder="验证码">
+      <el-form-item class="mt-8">
+        <el-input v-model.trim="verificationCode" placeholder="验证码">
           <template #append>
-            <button type="button" style="outline: none">
-              <span class="text" @click="sendCode">{{ message }}</span>
-            </button>
+            <button type="button" class="account-code-button" @click="sendCode">{{ message }}</button>
           </template>
         </el-input>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="bingingEmail" size="large" class="mx-auto mt-3">绑定</el-button>
+        <el-button type="primary" size="large" class="mx-auto mt-3" @click="bindingEmail">保存邮箱</el-button>
       </el-form-item>
     </el-form>
   </el-dialog>
 </template>
 
 <script lang="ts">
-import { defineComponent, toRef, ref, reactive, toRefs, getCurrentInstance, computed, onMounted } from 'vue'
-import { useUserStore } from '@/stores/user'
-import AvatarCropper from 'vue-avatar-cropper'
+import { defineComponent, getCurrentInstance, reactive, toRef, toRefs } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api/api'
+import { useUserStore } from '@/stores/user'
 
 export default defineComponent({
   name: 'UserCenter',
-  components: { AvatarCropper },
   setup() {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
+    const router = useRouter()
     const userStore = useUserStore()
+    const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="72" height="72"%3E%3Crect width="72" height="72" rx="36" fill="%23172554"/%3E%3Ccircle cx="36" cy="27" r="13" fill="%239bb8ff"/%3E%3Cpath d="M12 67c4-17 12-25 24-25s20 8 24 25" fill="%239bb8ff"/%3E%3C/svg%3E'
+    const userInfo = toRef(userStore.$state, 'userInfo')
+    const visible = toRef(userStore.$state, 'userVisible')
     const reactiveData = reactive({
       message: '发送',
       emailDialogVisible: false,
-      email: '' as any,
-      VerificationCode: '' as any,
-      loading: false,
-      switchState: false
+      email: '',
+      verificationCode: '',
+      loading: false
     })
-    let showCropper = ref(false)
+
     const handleClose = () => {
       userStore.userVisible = false
     }
-    const changeEmailDialogVisible = () => {
-      reactiveData.emailDialogVisible = true
+    const openStudioProfile = () => {
+      userStore.userVisible = false
+      void router.push('/studio/profile')
     }
-    const bingingEmail = () => {
-      let params = {
-        email: reactiveData.email,
-        code: reactiveData.VerificationCode
-      }
-      api.bindingEmail(params).then(({ data }) => {
-        if (data.flag) {
-          proxy.$notify({
-            title: '成功',
-            message: '绑定成功',
-            type: 'success'
-          })
-          userStore.userInfo.email = reactiveData.email
-          reactiveData.emailDialogVisible = false
-        } else {
-          proxy.$notify({
-            title: '错误',
-            message: data.message,
-            type: 'error'
-          })
-        }
-      })
-    }
-    const handleSuccess = (data: any) => {
-      data.response.json().then((data: any) => {
-        if (data.flag) {
-          userStore.userInfo.avatar = data.data
-          proxy.$notify({
-            title: '成功',
-            message: '上传成功',
-            type: 'success'
-          })
-        } else {
-          proxy.$notify({
-            title: '错误',
-            message: data.message,
-            type: 'error'
-          })
-        }
-      })
-    }
-    const changeSubscribe = () => {
-      if (reactiveData.switchState) {
-        let params = {
-          userId: userStore.userInfo.userInfoId,
-          isSubscribe: userStore.userInfo.isSubscribe
-        }
-        api.updateUserSubscribe(params).then(({ data }) => {
-          if (data.flag) {
-            proxy.$notify({
-              title: '成功',
-              message: '修改成功',
-              type: 'success'
-            })
-          } else {
-            proxy.$notify({
-              title: '错误',
-              message: data.message,
-              type: 'error'
-            })
-          }
-        })
+    const bindingEmail = async () => {
+      try {
+        const response = await api.bindingEmail({ email: reactiveData.email, code: reactiveData.verificationCode })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '邮箱保存失败')
+        userStore.userInfo = { ...(userStore.userInfo || {}), email: reactiveData.email }
+        reactiveData.emailDialogVisible = false
+        proxy.$notify({ title: '成功', message: '邮箱已保存', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '邮箱保存失败', type: 'error' })
       }
     }
-    // The account-level comment notification preference is stored on its own
-    // endpoint; it does not require the email binding the subscription does.
-    const changeCommentNotice = () => {
-      api
-        .updateCommentNotice({ notifyComment: Number(userStore.userInfo.notifyComment) === 1 ? 1 : 0 })
-        .then(({ data }) => {
-          proxy.$notify({
-            title: data.flag ? '成功' : '错误',
-            message: data.flag ? '修改成功' : data.message,
-            type: data.flag ? 'success' : 'error'
-          })
-        })
-    }
-    const commit = () => {
-      let params = {
-        nickname: userStore.userInfo.nickname,
-        website: userStore.userInfo.website,
-        intro: userStore.userInfo.intro
-      }
-      api.submitUserInfo(params).then(({ data }) => {
-        if (data.flag) {
-          proxy.$notify({
-            title: '成功',
-            message: '修改成功',
-            type: 'success'
-          })
-        } else {
-          proxy.$notify({
-            title: '错误',
-            message: data.message,
-            type: 'error'
-          })
-        }
-      })
-    }
-    const sendCode = () => {
-      api.sendValidationCode(reactiveData.email).then(({ data }) => {
-        if (data.flag) {
-          proxy.$notify({
-            title: '成功',
-            message: '验证码已发送',
-            type: 'success'
-          })
-        } else {
-          proxy.$notify({
-            title: '错误',
-            message: data.message,
-            type: 'error'
-          })
-        }
-      })
-    }
-    const beforeChange = () => {
-      reactiveData.switchState = true
+    const changeSubscribe = async (value: boolean) => {
       reactiveData.loading = true
-      return new Promise((resolve, reject) => {
-        if (userStore.userInfo.email === '' || userStore.userInfo.email === null) {
-          reactiveData.loading = false
-          proxy.$notify({
-            title: '提示',
-            message: '邮箱未绑定,尽快绑定哦',
-            type: 'warning'
-          })
-          return reject(new Error('Error'))
-        } else {
-          reactiveData.loading = false
-          return resolve(true)
-        }
-      })
+      try {
+        const response = await api.updateUserSubscribe({ userId: userStore.userInfo.userInfoId, isSubscribe: value ? 1 : 0 })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '订阅设置保存失败')
+        userStore.userInfo = { ...(userStore.userInfo || {}), isSubscribe: value ? 1 : 0 }
+        proxy.$notify({ title: '成功', message: '订阅设置已更新', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '订阅设置保存失败', type: 'error' })
+      } finally {
+        reactiveData.loading = false
+      }
     }
+    const changeCommentNotice = async (value: boolean) => {
+      reactiveData.loading = true
+      try {
+        const notifyComment = value ? 1 : 0
+        const response = await api.updateCommentNotice({ notifyComment })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
+        userStore.userInfo = { ...(userStore.userInfo || {}), notifyComment }
+        proxy.$notify({ title: '成功', message: '通知设置已更新', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '通知设置保存失败', type: 'error' })
+      } finally {
+        reactiveData.loading = false
+      }
+    }
+    const sendCode = async () => {
+      try {
+        const response = await api.sendValidationCode(reactiveData.email)
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '验证码发送失败')
+        reactiveData.message = '已发送'
+        proxy.$notify({ title: '成功', message: '验证码已发送', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '验证码发送失败', type: 'error' })
+      }
+    }
+
     return {
-      userInfo: toRef(userStore.$state, 'userInfo'),
-      ...toRefs(reactiveData),
-      visible: toRef(userStore.$state, 'userVisible'),
-      showCropper,
-      handleClose,
-      bingingEmail,
-      changeEmailDialogVisible,
-      changeSubscribe,
-      changeCommentNotice,
-      handleSuccess,
-      sendCode,
-      commit,
-      beforeChange,
-      options: computed(() => {
-        return {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer ' + userStore.token
-          }
-        }
-      })
+      userInfo, visible, defaultAvatar, ...toRefs(reactiveData), handleClose, openStudioProfile,
+      bindingEmail, changeSubscribe, changeCommentNotice, sendCode
     }
   }
 })
 </script>
+
 <style lang="scss" scoped>
-#submit-button {
-  outline: none;
-  background: #0fb6d6;
-}
-.text {
-  color: var(--text-normal);
-  cursor: pointer;
-}
-#pick-avatar {
-  outline: none;
-}
-</style>
-<style lang="scss">
-.el-form-item__label {
-  text-align: left;
-  width: 70px;
-  color: var(--text-normal) !important;
-}
-.el-input__inner {
-  color: var(--text-normal) !important;
-  background-color: var(--background-primary-alt) !important;
-}
-.el-input__wrapper {
-  background: var(--background-primary-alt) !important;
-}
-.bangding-button {
-  outline: none !important;
-}
+.account-center-header { padding: 6px 0 20px; border-bottom: 1px solid var(--border-hairline); }
+.account-center-header span { color: var(--color-ob); font-size: 10px; letter-spacing: .18em; }
+.account-center-header h2 { margin: 8px 0; font-size: 1.8rem; }
+.account-center-header p { margin: 0; color: var(--text-ob-dim); font-size: 12px; line-height: 1.7; }
+.account-identity { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-top: 20px; padding: 15px; border: 1px solid var(--border-hairline); border-radius: 15px; background: color-mix(in srgb, var(--background-primary-alt) 90%, transparent); }
+.account-identity img { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; }
+.account-identity strong, .account-identity small { display: block; }
+.account-identity small { margin-top: 3px; color: var(--color-ob); }
+.account-identity button, .account-row button, .account-code-button { border: 0; background: transparent; color: var(--color-ob); cursor: pointer; }
+.account-section { margin-top: 18px; padding: 18px; border: 1px solid var(--border-hairline); border-radius: 15px; }
+.account-section h3 { margin: 0; }
+.account-section header { margin-bottom: 10px; }
+.account-section header span { color: var(--text-ob-dim); font-size: 11px; }
+.account-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 0; border-top: 1px solid var(--border-hairline); }
+.account-row strong, .account-row small { display: block; }
+.account-row small { margin-top: 3px; color: var(--text-ob-dim); font-size: 11px; }
+@media (max-width: 620px) { .account-identity { grid-template-columns: 52px 1fr; } .account-identity button { grid-column: 1 / -1; text-align: left; } }
 </style>

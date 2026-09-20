@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,33 @@ type fakePlatformRepository struct {
 	moderateHidden      bool
 	moderateReason      string
 	moderateErr         error
+	profileGetResult    port.StudioProfile
+	profileGetErr       error
+	profileUpdateCalls  int
+	profileHandle       string
+	profileNickname     string
+	profileIntro        string
+	profileWebsite      string
+	profileUpdateErr    error
+}
+
+func (f *fakePlatformRepository) GetStudioProfile(context.Context, int) (port.StudioProfile, error) {
+	if f.profileGetErr != nil || f.profileGetResult.Handle != "" {
+		return f.profileGetResult, f.profileGetErr
+	}
+	return port.StudioProfile{
+		Handle: f.profileHandle, Nickname: f.profileNickname, Avatar: "https://cdn.example.test/avatar.png",
+		Intro: f.profileIntro, Website: f.profileWebsite,
+	}, nil
+}
+
+func (f *fakePlatformRepository) UpdateAuthorProfile(_ context.Context, _ int, handle, nickname, intro, website string) error {
+	f.profileUpdateCalls++
+	f.profileHandle = handle
+	f.profileNickname = nickname
+	f.profileIntro = intro
+	f.profileWebsite = website
+	return f.profileUpdateErr
 }
 
 func (f *fakePlatformRepository) ModerateContent(_ context.Context, contentType string, id, adminID int, hidden bool, reason string) error {
@@ -199,6 +227,91 @@ func TestPlatformUploadUsesContentSpecificPrefixes(t *testing.T) {
 		if !result.Flag || !strings.HasPrefix(storage.key, testCase.prefix) {
 			t.Fatalf("kind %q prefix: result=%+v key=%q", testCase.kind, result, storage.key)
 		}
+	}
+}
+
+func profileTestContext(method, target, body string) *gin.Context {
+	ctx := platformTestContext(method, target, body)
+	ctx.Set("userInfo", model.UserDetailsDTO{
+		UserInfoId: 7, Handle: "old-handle", Nickname: "旧昵称", Avatar: "https://cdn.example.test/avatar.png",
+		Intro: "旧简介", Website: "https://old.example.com",
+	})
+	return ctx
+}
+
+func TestPlatformGetProfileReturnsCurrentPublicIdentity(t *testing.T) {
+	repo := &fakePlatformRepository{profileGetResult: port.StudioProfile{
+		Handle: "old-handle", Nickname: "旧昵称", Avatar: "https://cdn.example.test/avatar.png",
+		Intro: "旧简介", Website: "https://old.example.com",
+	}}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	result := service.GetProfile(profileTestContext(http.MethodGet, "/v1/studio/profile", ""))
+	if !result.Flag {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	profile, ok := result.Data.(model.StudioProfileDTO)
+	if !ok {
+		t.Fatalf("unexpected profile data: %#v", result.Data)
+	}
+	if profile.Handle != "old-handle" || profile.Nickname != "旧昵称" || profile.Avatar == "" || profile.Intro != "旧简介" || profile.Website != "https://old.example.com" {
+		t.Fatalf("unexpected profile: %+v", profile)
+	}
+}
+
+func TestPlatformUpdateProfileNormalizesAndReturnsIdentity(t *testing.T) {
+	repo := &fakePlatformRepository{}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	result := service.UpdateProfile(profileTestContext(
+		http.MethodPut,
+		"/v1/studio/profile",
+		`{"handle":"  New-Handle  ","nickname":"  新昵称  ","intro":"  新的简介  ","website":"  https://example.com/about  "}`,
+	))
+	if !result.Flag {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if repo.profileUpdateCalls != 1 || repo.profileHandle != "new-handle" || repo.profileNickname != "新昵称" || repo.profileIntro != "新的简介" || repo.profileWebsite != "https://example.com/about" {
+		t.Fatalf("unexpected profile update: %+v", repo)
+	}
+	profile, ok := result.Data.(model.StudioProfileDTO)
+	if !ok || profile.Handle != "new-handle" || profile.Nickname != "新昵称" || profile.Avatar == "" {
+		t.Fatalf("unexpected profile response: %#v", result.Data)
+	}
+}
+
+func TestPlatformUpdateProfileRejectsInvalidFields(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "short handle", body: `{"handle":"ab","nickname":"昵称","intro":"","website":""}`},
+		{name: "handle punctuation", body: `{"handle":"bad_handle","nickname":"昵称","intro":"","website":""}`},
+		{name: "empty nickname", body: `{"handle":"valid-handle","nickname":"   ","intro":"","website":""}`},
+		{name: "long nickname", body: `{"handle":"valid-handle","nickname":"` + strings.Repeat("名", 31) + `","intro":"","website":""}`},
+		{name: "long intro", body: `{"handle":"valid-handle","nickname":"昵称","intro":"` + strings.Repeat("介", 256) + `","website":""}`},
+		{name: "invalid website", body: `{"handle":"valid-handle","nickname":"昵称","intro":"","website":"javascript:alert(1)"}`},
+		{name: "long website", body: `{"handle":"valid-handle","nickname":"昵称","intro":"","website":"https://example.com/` + strings.Repeat("a", 240) + `"}`},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			repo := &fakePlatformRepository{}
+			service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+			result := service.UpdateProfile(profileTestContext(http.MethodPut, "/v1/studio/profile", testCase.body))
+			if result.Flag || repo.profileUpdateCalls != 0 {
+				t.Fatalf("invalid profile must fail before mutation: result=%+v calls=%d", result, repo.profileUpdateCalls)
+			}
+		})
+	}
+}
+
+func TestPlatformUpdateProfileReportsHandleConflict(t *testing.T) {
+	repo := &fakePlatformRepository{profileUpdateErr: apperrors.Conflict("platform.profile.handle", "handle already exists")}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	result := service.UpdateProfile(profileTestContext(http.MethodPut, "/v1/studio/profile", `{"handle":"taken-handle","nickname":"昵称","intro":"","website":""}`))
+	if result.Flag || result.Message != "该 Handle 已被占用" {
+		t.Fatalf("unexpected conflict result: %+v", result)
 	}
 }
 

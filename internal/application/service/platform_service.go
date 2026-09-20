@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ type PlatformService interface {
 	AuthorSeries(c *gin.Context) model.ResultVO
 	TopicArticles(c *gin.Context) model.ResultVO
 	Dashboard(c *gin.Context) model.ResultVO
+	GetProfile(c *gin.Context) model.ResultVO
 	UpdateProfile(c *gin.Context) model.ResultVO
 
 	ListOwnedArticles(c *gin.Context) model.ResultVO
@@ -200,6 +202,18 @@ func (s *MyPlatformService) Dashboard(c *gin.Context) model.ResultVO {
 	return model.ResultOkWithData(dashboard)
 }
 
+func (s *MyPlatformService) GetProfile(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	profile, err := s.platformRepo().GetStudioProfile(c.Request.Context(), user.UserInfoId)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(studioProfileDTO(profile))
+}
+
 func (s *MyPlatformService) UpdateProfile(c *gin.Context) model.ResultVO {
 	user, ok := currentUser(c)
 	if !ok {
@@ -209,10 +223,77 @@ func (s *MyPlatformService) UpdateProfile(c *gin.Context) model.ResultVO {
 	if err := c.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	if err := s.platformRepo().UpdateAuthorProfile(c.Request.Context(), user.UserInfoId, vo.Handle, vo.Nickname, vo.Intro, vo.Website); err != nil {
+	profile, message := normalizeStudioProfile(vo)
+	if message != "" {
+		return model.ResultFailWithMessage(message)
+	}
+	if err := s.platformRepo().UpdateAuthorProfile(c.Request.Context(), user.UserInfoId, profile.Handle, profile.Nickname, profile.Intro, profile.Website); err != nil {
+		if apperrors.KindOf(err) == apperrors.KindConflict {
+			return model.ResultFailWithMessage("该 Handle 已被占用")
+		}
 		return model.ResultFromError(err)
 	}
-	return model.ResultOk()
+	saved, err := s.platformRepo().GetStudioProfile(c.Request.Context(), user.UserInfoId)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(studioProfileDTO(saved))
+}
+
+func normalizeStudioProfile(vo model.StudioProfileVO) (model.StudioProfileVO, string) {
+	vo.Handle = strings.ToLower(strings.TrimSpace(vo.Handle))
+	vo.Nickname = strings.TrimSpace(vo.Nickname)
+	vo.Intro = strings.TrimSpace(vo.Intro)
+	vo.Website = strings.TrimSpace(vo.Website)
+	if !validStudioHandle(vo.Handle) {
+		return vo, "Handle 需为 3-40 位小写字母、数字或连字符，且必须以字母或数字开头"
+	}
+	if vo.Nickname == "" {
+		return vo, "昵称不能为空"
+	}
+	if len([]rune(vo.Nickname)) > 30 {
+		return vo, "昵称不能超过 30 个字"
+	}
+	if len([]rune(vo.Intro)) > 255 {
+		return vo, "个人简介不能超过 255 个字"
+	}
+	if len([]rune(vo.Website)) > 255 {
+		return vo, "个人网站不能超过 255 个字"
+	}
+	if vo.Website != "" && !validStudioWebsite(vo.Website) {
+		return vo, "个人网站必须是有效的 HTTP(S) 地址"
+	}
+	return vo, ""
+}
+
+func validStudioHandle(value string) bool {
+	if len(value) < 3 || len(value) > 40 {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func validStudioWebsite(value string) bool {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	return parsed.Scheme == "http" || parsed.Scheme == "https"
+}
+
+func studioProfileDTO(profile port.StudioProfile) model.StudioProfileDTO {
+	return model.StudioProfileDTO{
+		Handle: profile.Handle, Nickname: profile.Nickname, Avatar: profile.Avatar,
+		Intro: profile.Intro, Website: profile.Website,
+	}
 }
 func (s *MyPlatformService) ListOwnedArticles(c *gin.Context) model.ResultVO {
 	user, ok := currentUser(c)

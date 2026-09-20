@@ -15,6 +15,7 @@ func ListAuthorSeries(c *gin.Context)    { c.JSON(http.StatusOK, platformService
 func ListTopicArticles(c *gin.Context)   { c.JSON(http.StatusOK, platformService.TopicArticles(c)) }
 
 func StudioDashboard(c *gin.Context)     { c.JSON(http.StatusOK, platformService.Dashboard(c)) }
+func GetStudioProfile(c *gin.Context)    { c.JSON(http.StatusOK, platformService.GetProfile(c)) }
 func UpdateStudioProfile(c *gin.Context) { c.JSON(http.StatusOK, platformService.UpdateProfile(c)) }
 func ListStudioArticles(c *gin.Context)  { c.JSON(http.StatusOK, platformService.ListOwnedArticles(c)) }
 func GetStudioArticle(c *gin.Context)    { c.JSON(http.StatusOK, platformService.GetOwnedArticle(c)) }

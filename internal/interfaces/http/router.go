@@ -80,6 +80,7 @@ func RouterSetup(router *gin.Engine) {
 
 	studio := v1.Group("/studio")
 	studio.GET("/dashboard", api.StudioDashboard)
+	studio.GET("/profile", api.GetStudioProfile)
 	studio.PUT("/profile", api.UpdateStudioProfile)
 	studio.GET("/articles", api.ListStudioArticles)
 	studio.GET("/articles/:articleId", api.GetStudioArticle)

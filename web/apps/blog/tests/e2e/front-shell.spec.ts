@@ -742,8 +742,20 @@ test.describe('front-end experience regressions', () => {
   })
 })
 
-async function mockStudioApi(page: Page, options: { draft?: unknown } = {}) {
-  const saved = { article: null as any, talk: null as any, series: null as any }
+async function mockStudioApi(page: Page, options: { draft?: unknown; profile?: any } = {}) {
+  const saved = {
+    article: null as any,
+    talk: null as any,
+    series: null as any,
+    profile: {
+      handle: 'test-author',
+      nickname: '测试作者',
+      avatar: '',
+      intro: '',
+      website: '',
+      ...(options.profile || {})
+    }
+  }
   await page.addInitScript((draft) => {
     document.cookie = 'locale=cn; path=/'
     sessionStorage.setItem('token', 'e2e-studio-token')
@@ -754,6 +766,15 @@ async function mockStudioApi(page: Page, options: { draft?: unknown } = {}) {
     if (draft) localStorage.setItem('stellar-beacon:studio-draft:v1:7:article:new', JSON.stringify(draft))
   }, options.draft || null)
 
+  await page.route('**/api/v1/auth/me/avatar', async (route) => {
+    saved.profile.avatar = 'https://cdn.example.test/avatar.png'
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'OK', message: '操作成功', data: saved.profile.avatar })
+    })
+  })
+
   await page.route('**/api/v1/studio/**', async (route) => {
     const url = new URL(route.request().url())
     const method = route.request().method()
@@ -762,6 +783,19 @@ async function mockStudioApi(page: Page, options: { draft?: unknown } = {}) {
       contentType: 'application/json',
       body: JSON.stringify({ code: 'OK', message: '操作成功', data })
     })
+    if (url.pathname === '/api/v1/studio/dashboard' && method === 'GET') {
+      await respond({ articleCount: 3, draftCount: 1, privateCount: 1, talkCount: 2, seriesCount: 1, favoriteCount: 4 })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/profile' && method === 'GET') {
+      await respond(saved.profile)
+      return
+    }
+    if (url.pathname === '/api/v1/studio/profile' && method === 'PUT') {
+      saved.profile = { ...saved.profile, ...route.request().postDataJSON() }
+      await respond(saved.profile)
+      return
+    }
     if (url.pathname === '/api/v1/studio/uploads' && method === 'POST') {
       await respond('https://cdn.example.test/studio-upload.png')
       return
@@ -822,6 +856,56 @@ test.describe('studio workspace', () => {
     await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(/login=1/)
   })
+
+  test('shows non-blocking public identity guidance on the studio dashboard', async ({ page }) => {
+    await mockStudioApi(page)
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('heading', { name: '公开主页资料' })).toBeVisible()
+    await expect(page.locator('.studio-profile-progress small')).toContainText('还缺：头像、简介')
+    await expect(page.getByRole('link', { name: '完善公开资料 →' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '写一篇文章 →' })).toBeVisible()
+  })
+
+  test('saves public identity and warns before changing the handle', async ({ page }) => {
+    const saved = await mockStudioApi(page)
+    await page.goto('/studio/profile', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByPlaceholder('your-handle')).toHaveValue('test-author')
+    await page.getByPlaceholder('your-handle').fill('new-author')
+    await page.getByPlaceholder('作者昵称').fill('新作者')
+    await page.getByPlaceholder('介绍你的关注领域、写作方向或正在做的事。').fill('关注系统设计与长期写作。')
+    await page.getByPlaceholder('https://example.com').fill('https://example.com')
+    await page.getByRole('button', { name: '保存公开资料' }).click()
+
+    await expect(page.getByText('确认更换公开地址')).toBeVisible()
+    await page.getByRole('button', { name: '确认更换' }).click()
+
+    await expect.poll(() => saved.profile?.handle).toBe('new-author')
+    expect(saved.profile?.nickname).toBe('新作者')
+    expect(saved.profile?.intro).toBe('关注系统设计与长期写作。')
+    expect(saved.profile?.website).toBe('https://example.com')
+    await expect(page.locator('.studio-public-card h2')).toHaveText('新作者')
+    await expect(page.locator('.studio-profile-progress strong')).toHaveText('3/4')
+    await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('userStore') || '{}')?.userInfo?.handle)).toBe('new-author')
+  })
+
+  test('uploads a cropped avatar from the public profile editor', async ({ page }) => {
+    const saved = await mockStudioApi(page)
+    await page.goto('/studio/profile', { waitUntil: 'domcontentloaded' })
+
+    await page.locator('.avatar-cropper-img-input').setInputFiles({
+      name: 'avatar.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+    })
+    await expect(page.locator('.avatar-cropper-overlay')).toBeVisible()
+    await page.getByRole('button', { name: '上传头像' }).click()
+
+    await expect.poll(() => saved.profile?.avatar).toBe('https://cdn.example.test/avatar.png')
+    await expect(page.locator('.studio-public-card img')).toHaveAttribute('src', 'https://cdn.example.test/avatar.png')
+  })
+
 
   test('creates a draft in the dedicated article editor', async ({ page }) => {
     const saved = await mockStudioApi(page)

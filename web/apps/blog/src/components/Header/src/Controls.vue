@@ -43,6 +43,7 @@
         <DropdownMenu>
           <template v-if="!isMobile">
             <DropdownItem @click="openStudio">{{ $i18n.locale === 'cn' ? '创作台' : 'Studio' }}</DropdownItem>
+            <DropdownItem @click="openStudioProfile">{{ $i18n.locale === 'cn' ? '公开资料' : 'Public profile' }}</DropdownItem>
             <DropdownItem @click="openFavorites">{{ t('reactions.favorites') }}</DropdownItem>
             <DropdownItem @click="openUserCenter">{{ t('settings.personal-center') }}</DropdownItem>
           </template>
@@ -253,6 +254,9 @@ export default defineComponent({
     const openStudio = () => {
       router.push({ path: '/studio' })
     }
+    const openStudioProfile = () => {
+      router.push({ path: '/studio/profile' })
+    }
     const openReading = () => {
       router.push({ path: '/studio/library/reading' })
     }
@@ -385,6 +389,7 @@ export default defineComponent({
       openUserCenter,
       openFavorites,
       openStudio,
+      openStudioProfile,
       openReading,
       openLoginDialog,
       openRegisterDialog,

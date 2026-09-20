@@ -136,6 +136,24 @@ func (r *MyPlatformRepo) StudioDashboard(ctx context.Context, userID int) (port.
 	return dashboard, nil
 }
 
+func (r *MyPlatformRepo) GetStudioProfile(ctx context.Context, userID int) (port.StudioProfile, error) {
+	session, err := repoSession(r.engine, ctx, "platform.profile.get")
+	if err != nil {
+		return port.StudioProfile{}, err
+	}
+	var user entity.TUserInfo
+	found, err := session.ID(userID).Get(&user)
+	if err != nil {
+		return port.StudioProfile{}, apperrors.Unavailable("platform.profile.get", err)
+	}
+	if !found {
+		return port.StudioProfile{}, apperrors.NotFound("platform.profile.get")
+	}
+	return port.StudioProfile{
+		Handle: user.Handle, Nickname: user.Nickname, Avatar: user.Avatar,
+		Intro: user.Intro, Website: user.Website,
+	}, nil
+}
 func (r *MyPlatformRepo) UpdateAuthorProfile(ctx context.Context, userID int, handle, nickname, intro, website string) error {
 	handle = strings.ToLower(strings.TrimSpace(handle))
 	nickname = strings.TrimSpace(nickname)

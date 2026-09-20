@@ -24,6 +24,13 @@ type StudioDashboard struct {
 	FavoriteCount int `json:"favoriteCount"`
 }
 
+type StudioProfile struct {
+	Handle   string
+	Nickname string
+	Avatar   string
+	Intro    string
+	Website  string
+}
 type AuthorCard struct {
 	PublicAuthor
 	ArticleCount int `json:"articleCount"`
@@ -38,6 +45,7 @@ type PlatformRepository interface {
 	GetAuthorByHandle(ctx context.Context, handle string) (AuthorCard, error)
 	ListAuthors(ctx context.Context, current, size int) ([]*AuthorCard, int, error)
 	StudioDashboard(ctx context.Context, userID int) (StudioDashboard, error)
+	GetStudioProfile(ctx context.Context, userID int) (StudioProfile, error)
 	UpdateAuthorProfile(ctx context.Context, userID int, handle, nickname, intro, website string) error
 
 	ListFeedArticles(ctx context.Context, current, size int, featuredOnly bool) ([]*ArticleCard, int, error)

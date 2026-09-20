@@ -7,8 +7,10 @@
       </router-link>
       <div class="studio-shell__user">
         <router-link v-if="userInfo?.handle" :to="`/u/${userInfo.handle}`">查看公开主页</router-link>
-        <img :src="userInfo?.avatar || defaultAvatar" :alt="userInfo?.nickname || 'author'" />
-        <span><strong>{{ userInfo?.nickname || userInfo?.username || '创作者' }}</strong><small v-if="userInfo?.handle">@{{ userInfo.handle }}</small></span>
+        <router-link to="/studio/profile" class="studio-shell__identity">
+          <img :src="userInfo?.avatar || defaultAvatar" :alt="userInfo?.nickname || 'author'" />
+          <span><strong>{{ userInfo?.nickname || userInfo?.username || '创作者' }}</strong><small v-if="userInfo?.handle">@{{ userInfo.handle }}</small></span>
+        </router-link>
         <button type="button" @click="logout">退出</button>
       </div>
     </header>
@@ -48,7 +50,8 @@ export default defineComponent({
       { path: '/studio/series', index: '04', label: '系列', hint: '组织长期主题' },
       { path: '/studio/topics', index: '05', label: '分类与标签', hint: '私有词汇表' },
       { path: '/studio/library/reading', index: '06', label: '阅读记录', hint: '最近读过' },
-      { path: '/studio/library/favorites', index: '07', label: '我的收藏', hint: '稍后阅读' }
+      { path: '/studio/library/favorites', index: '07', label: '我的收藏', hint: '稍后阅读' },
+      { path: '/studio/profile', index: '08', label: '公开资料', hint: '主页身份与头像' }
     ]
     const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
     const logout = async () => {
@@ -72,9 +75,11 @@ export default defineComponent({
 .studio-shell__brand strong, .studio-shell__brand small, .studio-shell__user strong, .studio-shell__user small { display: block; }
 .studio-shell__brand small, .studio-shell__user small { margin-top: 2px; color: var(--text-ob-dim); font-size: 10px; letter-spacing: .08em; }
 .studio-shell__user { display: flex; align-items: center; gap: 11px; }
-.studio-shell__user > a, .studio-shell__user button { padding: 7px 11px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: var(--text-ob-dim); font: inherit; font-size: 11px; text-decoration: none; cursor: pointer; }
+.studio-shell__user > a, .studio-shell__user button, .studio-shell__identity { padding: 7px 11px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: var(--text-ob-dim); font: inherit; font-size: 11px; text-decoration: none; cursor: pointer; }
 .studio-shell__user img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
 .studio-shell__user span { font-size: 12px; }
+.studio-shell__identity { display: flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; }
+.studio-shell__identity:hover { border-color: color-mix(in srgb, var(--color-ob) 48%, transparent); }
 .studio-shell__body { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 22px; margin-top: 22px; }
 .studio-nav { position: sticky; top: 18px; align-self: start; display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border-hairline); border-radius: 18px; background: color-mix(in srgb, var(--background-primary-alt) 86%, transparent); }
 .studio-nav a { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 10px; border-radius: 12px; color: var(--text-ob-dim); text-decoration: none; transition: background .2s ease, color .2s ease; }

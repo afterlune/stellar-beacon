@@ -182,6 +182,14 @@ export interface UserRole {
   [key: string]: unknown
 }
 
+export interface StudioProfile {
+  handle: string
+  nickname: string
+  avatar: string
+  intro: string
+  website: string
+}
+
 export interface AdminUser {
   id?: number
   userInfoId?: number
