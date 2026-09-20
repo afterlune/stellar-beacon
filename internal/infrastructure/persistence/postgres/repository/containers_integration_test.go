@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -70,6 +71,7 @@ func TestEphemeralPostgresAndRedis(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `
 CREATE TABLE t_user_info (
     id INTEGER PRIMARY KEY,
+    handle VARCHAR(40) NOT NULL UNIQUE,
     email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
     intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
     notify_comment SMALLINT NOT NULL DEFAULT 1,
@@ -112,6 +114,7 @@ CREATE TABLE t_series (
     series_id INTEGER, series_order INTEGER,
     is_top SMALLINT NOT NULL,
     is_featured SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL,
+    scheduled_at TIMESTAMP, moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible',
     type SMALLINT NOT NULL, password VARCHAR(255), original_url VARCHAR(255),
     create_time TIMESTAMP, update_time TIMESTAMP
 );
@@ -129,11 +132,32 @@ CREATE TABLE t_article_daily_metric (
     effective_sessions BIGINT NOT NULL DEFAULT 0, total_active_ms BIGINT NOT NULL DEFAULT 0,
     completed_sessions BIGINT NOT NULL DEFAULT 0, series_impressions BIGINT NOT NULL DEFAULT 0, series_clicks BIGINT NOT NULL DEFAULT 0, related_impressions BIGINT NOT NULL DEFAULT 0, related_clicks BIGINT NOT NULL DEFAULT 0, create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (article_id, metric_date)
+);
+CREATE TABLE t_article_publish_record (
+    id BIGSERIAL PRIMARY KEY, article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL, scheduled_at TIMESTAMPTZ NOT NULL, published_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notification_state VARCHAR(20) NOT NULL DEFAULT 'pending', notification_attempts INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TIMESTAMPTZ NULL, last_error TEXT NOT NULL DEFAULT '',
+    create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (article_id, scheduled_at)
+);
+CREATE TABLE t_content_operation_audit (
+    id BIGSERIAL PRIMARY KEY, operator_id INTEGER NOT NULL, operator_nickname VARCHAR(64) NOT NULL DEFAULT '',
+    content_type VARCHAR(16) NOT NULL, operation VARCHAR(32) NOT NULL, target_mode VARCHAR(16) NOT NULL,
+    filter_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb, snapshot_max_id INTEGER NOT NULL DEFAULT 0,
+    requested_count INTEGER NOT NULL DEFAULT 0, affected_count INTEGER NOT NULL DEFAULT 0,
+    result VARCHAR(16) NOT NULL, error_message TEXT NOT NULL DEFAULT '', ip_address VARCHAR(255) NOT NULL DEFAULT '',
+    ip_source VARCHAR(255) NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE t_content_operation_audit_item (
+    id BIGSERIAL PRIMARY KEY, audit_id BIGINT NOT NULL REFERENCES t_content_operation_audit(id) ON DELETE CASCADE,
+    content_id INTEGER NOT NULL, title VARCHAR(255) NOT NULL DEFAULT '', previous_status SMALLINT NOT NULL,
+    next_status SMALLINT NOT NULL, result VARCHAR(16) NOT NULL
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
 	if _, err := db.ExecContext(ctx, `
-INSERT INTO t_user_info (id, email, nickname, avatar, is_subscribe, is_disable) VALUES (1, 'integration@example.com', 'integration', '', 0, 0);
+INSERT INTO t_user_info (id, handle, email, nickname, avatar, is_subscribe, is_disable) VALUES (1, 'integration', 'integration@example.com', 'integration', '', 0, 0);
 INSERT INTO t_user_auth (id, user_info_id, username, password, login_type) VALUES (1, 1, 'integration@example.com', 'hashed-password', 1);
 INSERT INTO t_role (id, role_name, is_disable) VALUES (1, 'user', 0);
 INSERT INTO t_user_role (id, user_id, role_id) VALUES (1, 1, 1);
@@ -149,6 +173,7 @@ INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1);
 INSERT INTO t_photo_album (id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 'integration album', 'integration', '', 0, 1);
 INSERT INTO t_photo (id, album_id, photo_name, photo_src, is_delete) VALUES (1, 1, 'integration photo', 'https://example.com/photo.jpg', 0);
 INSERT INTO t_series (id, series_name, is_delete) VALUES (10, 'integration series', 0);INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 1, 'integration article', 'content', 10, 1, 0, 0, 0, 1, 1);
+INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, scheduled_at, is_top, is_featured, is_delete, status, type) VALUES (7, 1, 1, 'scheduled integration article', 'content', NULL, 0, CURRENT_TIMESTAMP - INTERVAL '1 minute', 0, 0, 0, 4, 1);
 INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES
     (2, 1, 1, 'same series article', 'content', 10, 2, 0, 0, 0, 1, 1),
     (3, 1, 2, 'shared tag article', 'content', NULL, 0, 0, 0, 0, 1, 1),
@@ -187,7 +212,7 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	}
 	site := NewSiteInfoRepo(xormEngine)
 	articleCount, err := site.CountArticles(ctx)
-	if err != nil || articleCount != 6 {
+	if err != nil || articleCount != 7 {
 		t.Fatalf("unexpected site article count: count=%d err=%v", articleCount, err)
 	}
 	rankedArticles, err := site.ListArticleRank(ctx, []int{1})
@@ -258,6 +283,38 @@ INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_reade
 	if err != nil || len(articleMetrics) != 1 || articleMetrics[0].ArticleId != 1 || articleMetrics[0].CompletedSessions != 2 ||
 		articleMetrics[0].SeriesClicks != 0 || articleMetrics[0].RelatedClicks != 0 {
 		t.Fatalf("unexpected article content analytics metrics: metrics=%v err=%v", articleMetrics, err)
+	}
+	published, err := NewArticleRepo(xormEngine).PublishDueScheduledArticles(ctx, time.Now(), 10)
+	if err != nil || len(published) != 1 || published[0].ArticleID != 7 || published[0].NotificationState != port.ScheduledNotificationPending {
+		t.Fatalf("unexpected scheduled publication result: published=%+v err=%v", published, err)
+	}
+	if err := NewArticleRepo(xormEngine).MarkScheduledNotificationFailed(ctx, published[0].RecordID, "smtp unavailable", nil); err != nil {
+		t.Fatalf("mark scheduled notification failed: %v", err)
+	}
+	platformRepo := NewPlatformRepo(xormEngine)
+	preview, err := platformRepo.PreviewOwnedContent(ctx, 1, port.StudioContentArticle, port.StudioFilter{Status: 1})
+	if err != nil || preview.Count < 1 || preview.MaxID < 1 {
+		t.Fatalf("unexpected batch preview: preview=%+v err=%v", preview, err)
+	}
+	_, err = platformRepo.BatchUpdateOwnedContentStatus(ctx, 1, port.StudioContentArticle, port.StudioBatchScope{
+		Mode: port.StudioBatchScopeFilter, Status: 1, MaxID: preview.MaxID, ExpectedCount: preview.Count + 1,
+	}, 3, port.StudioAuditActor{UserID: 1, Nickname: "integration"})
+	if !apperrors.IsKind(err, apperrors.KindConflict) {
+		t.Fatalf("expected snapshot conflict, got %v", err)
+	}
+	mutation, err := platformRepo.BatchUpdateOwnedContentStatus(ctx, 1, port.StudioContentArticle, port.StudioBatchScope{
+		Mode: port.StudioBatchScopeIDs, IDs: []int{3},
+	}, 3, port.StudioAuditActor{UserID: 1, Nickname: "integration", IPAddress: "127.0.0.1"})
+	if err != nil || mutation.Affected != 1 || mutation.AuditID <= 0 {
+		t.Fatalf("unexpected batch mutation: mutation=%+v err=%v", mutation, err)
+	}
+	audits, auditCount, err := NewContentAuditRepo(xormEngine).List(ctx, port.ContentAuditFilter{Current: 1, Size: 10})
+	if err != nil || auditCount < 2 || len(audits) < 2 || audits[0].Result != "success" || audits[0].AffectedCount != 1 {
+		t.Fatalf("unexpected content audits: audits=%+v count=%d err=%v", audits, auditCount, err)
+	}
+	items, itemCount, err := NewContentAuditRepo(xormEngine).ListItems(ctx, audits[0].ID, 1, 10)
+	if err != nil || itemCount != 1 || len(items) != 1 || items[0].ContentID != 3 || items[0].NextStatus != 3 {
+		t.Fatalf("unexpected content audit items: items=%+v count=%d err=%v", items, itemCount, err)
 	}
 	if err := contentAnalytics.RecordContinuationEvent(ctx, 2, time.Now(), port.ContinuationEventSeriesClick, &port.ContinuationTarget{
 		Type: port.ContinuationTargetArticle, Id: 3, Placement: port.ContinuationPlacementSeriesNext,

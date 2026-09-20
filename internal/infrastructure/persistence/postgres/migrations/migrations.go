@@ -86,6 +86,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyContentModerationSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyStudioOperationsSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1093,6 +1096,88 @@ func applyContentModerationSchema(ctx context.Context, engine *xorm.Engine) erro
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit content moderation migration: %w", err)
+	}
+	return nil
+}
+
+// applyStudioOperationsSchema adds durable scheduled-publish outcomes and an
+// append-only audit trail for owner-facing batch mutations.
+func applyStudioOperationsSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 17)").Get(&applied); err != nil {
+		return fmt.Errorf("check studio operations migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin studio operations migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS t_article_publish_record (
+			id BIGSERIAL PRIMARY KEY,
+			article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			user_id INTEGER NOT NULL,
+			scheduled_at TIMESTAMPTZ NOT NULL,
+			published_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			notification_state VARCHAR(20) NOT NULL DEFAULT 'pending',
+			notification_attempts INTEGER NOT NULL DEFAULT 0,
+			next_retry_at TIMESTAMPTZ NULL,
+			last_error TEXT NOT NULL DEFAULT '',
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (article_id, scheduled_at)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_article_publish_record_user_published ON t_article_publish_record(user_id, published_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_article_publish_record_retry ON t_article_publish_record(notification_state, next_retry_at)`,
+		`CREATE TABLE IF NOT EXISTS t_content_operation_audit (
+			id BIGSERIAL PRIMARY KEY,
+			operator_id INTEGER NOT NULL,
+			operator_nickname VARCHAR(64) NOT NULL DEFAULT '',
+			content_type VARCHAR(16) NOT NULL,
+			operation VARCHAR(32) NOT NULL,
+			target_mode VARCHAR(16) NOT NULL,
+			filter_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+			snapshot_max_id INTEGER NOT NULL DEFAULT 0,
+			requested_count INTEGER NOT NULL DEFAULT 0,
+			affected_count INTEGER NOT NULL DEFAULT 0,
+			result VARCHAR(16) NOT NULL,
+			error_message TEXT NOT NULL DEFAULT '',
+			ip_address VARCHAR(255) NOT NULL DEFAULT '',
+			ip_source VARCHAR(255) NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_content_operation_audit_created ON t_content_operation_audit(created_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_content_operation_audit_filters ON t_content_operation_audit(content_type, operation, result)`,
+		`CREATE TABLE IF NOT EXISTS t_content_operation_audit_item (
+			id BIGSERIAL PRIMARY KEY,
+			audit_id BIGINT NOT NULL REFERENCES t_content_operation_audit(id) ON DELETE CASCADE,
+			content_id INTEGER NOT NULL,
+			title VARCHAR(255) NOT NULL DEFAULT '',
+			previous_status SMALLINT NOT NULL,
+			next_status SMALLINT NOT NULL,
+			result VARCHAR(16) NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_content_operation_audit_item_audit ON t_content_operation_audit_item(audit_id, id)`,
+		`UPDATE t_job SET remark = '每天清理 30 天前的任务日志', update_time = CURRENT_TIMESTAMP WHERE invoke_target = 'jobLogs.cleanup' AND remark = '每天清理任务日志'`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply studio operations schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 17, "studio-operations"); err != nil {
+		return fmt.Errorf("record studio operations migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit studio operations migration: %w", err)
 	}
 	return nil
 }

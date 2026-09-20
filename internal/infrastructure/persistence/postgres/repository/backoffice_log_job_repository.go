@@ -124,6 +124,13 @@ func (r *MyJobLogRepo) Clean(ctx context.Context) error {
 	})
 }
 
+func (r *MyJobLogRepo) CleanBefore(ctx context.Context, before time.Time) error {
+	return repoTx(r.engine, ctx, "job_log.clean_before", func(session *xorm.Session) error {
+		_, err := session.Where("create_time < ?", before).Delete(&entity.TJobLog{})
+		return err
+	})
+}
+
 func (r *MyJobLogRepo) ListGroups(ctx context.Context) (string, error) {
 	session, err := repoSession(r.engine, ctx, "job_log.groups")
 	if err != nil {

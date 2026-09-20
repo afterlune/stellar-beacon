@@ -148,6 +148,20 @@ type ContentAnalyticsDTO struct {
 	GeneratedAt time.Time                   `json:"generatedAt"`
 }
 
+type StudioAnalyticsDTO struct {
+	Range       string                           `json:"range"`
+	Unit        string                           `json:"unit"`
+	Operations  port.StudioOperationsSummary     `json:"operations"`
+	Performance ContentAnalyticsOverviewDTO      `json:"performance"`
+	Trend       []port.StudioAnalyticsTrendPoint `json:"trend"`
+	TopArticles []port.StudioTopArticle          `json:"topArticles"`
+	GeneratedAt time.Time                        `json:"generatedAt"`
+}
+
+type StudioCalendarDTO struct {
+	Events []port.StudioCalendarEvent `json:"events"`
+}
+
 type ContentArticlePerformanceDTO struct {
 	ArticleID         int                           `json:"articleId"`
 	ArticleTitle      string                        `json:"articleTitle"`

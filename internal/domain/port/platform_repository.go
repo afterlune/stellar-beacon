@@ -24,6 +24,50 @@ const (
 	StudioContentSeries  StudioContentType = "series"
 )
 
+const (
+	StudioBatchScopeIDs    = "ids"
+	StudioBatchScopeFilter = "filter"
+)
+
+type StudioBatchScope struct {
+	Mode          string `json:"mode"`
+	IDs           []int  `json:"ids,omitempty"`
+	Status        int    `json:"status,omitempty"`
+	Keywords      string `json:"keywords,omitempty"`
+	SeriesID      int    `json:"seriesId,omitempty"`
+	MaxID         int    `json:"maxId,omitempty"`
+	ExcludeIDs    []int  `json:"excludeIds,omitempty"`
+	ExpectedCount int    `json:"expectedCount,omitempty"`
+}
+
+type StudioBatchPreviewItem struct {
+	ID               int    `json:"id"`
+	Title            string `json:"title"`
+	Status           int    `json:"status"`
+	ModerationStatus string `json:"moderationStatus"`
+}
+
+type StudioBatchPreview struct {
+	Count        int                      `json:"count"`
+	MaxID        int                      `json:"maxId"`
+	StatusCounts map[string]int           `json:"statusCounts"`
+	HiddenCount  int                      `json:"hiddenCount"`
+	Sample       []StudioBatchPreviewItem `json:"sample"`
+}
+
+type StudioAuditActor struct {
+	UserID    int
+	Nickname  string
+	IPAddress string
+	IPSource  string
+}
+
+type StudioBatchMutation struct {
+	Affected   int   `json:"affected"`
+	AuditID    int   `json:"auditId"`
+	ContentIDs []int `json:"-"`
+}
+
 type StudioDashboard struct {
 	ArticleCount  int `json:"articleCount"`
 	DraftCount    int `json:"draftCount"`
@@ -78,8 +122,10 @@ type PlatformRepository interface {
 	GetOwnedSeries(ctx context.Context, userID, seriesID int) (entity.TSeries, error)
 	SaveOwnedSeries(ctx context.Context, series entity.TSeries) (entity.TSeries, error)
 	DeleteOwnedSeries(ctx context.Context, userID, seriesID int) error
-	BatchUpdateOwnedContentStatus(ctx context.Context, userID int, contentType StudioContentType, ids []int, status int) (int, error)
-	BatchDeleteOwnedContent(ctx context.Context, userID int, contentType StudioContentType, ids []int) (int, error)
+	PreviewOwnedContent(ctx context.Context, userID int, contentType StudioContentType, filter StudioFilter) (StudioBatchPreview, error)
+	BatchUpdateOwnedContentStatus(ctx context.Context, userID int, contentType StudioContentType, scope StudioBatchScope, status int, actor StudioAuditActor) (StudioBatchMutation, error)
+	BatchDeleteOwnedContent(ctx context.Context, userID int, contentType StudioContentType, scope StudioBatchScope, actor StudioAuditActor) (StudioBatchMutation, error)
+	RetryScheduledPublication(ctx context.Context, userID, articleID int, actor StudioAuditActor) (ScheduledPublish, error)
 
 	ListOwnedCategories(ctx context.Context, userID int) ([]*Category, error)
 	SaveOwnedCategory(ctx context.Context, category entity.TCategory) (entity.TCategory, error)

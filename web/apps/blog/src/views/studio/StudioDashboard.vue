@@ -1,7 +1,7 @@
 <template>
   <div class="studio-dashboard">
     <header class="studio-page-head">
-      <div><p>WORKSPACE / 01</p><h1>创作总览</h1><span>管理公开作品，也保留只属于自己的内容。</span></div>
+      <div><p>WORKSPACE / 01</p><h1>创作总览</h1><span>发布计划、运营结果和内容表现都集中在这里。</span></div>
       <router-link to="/studio/articles/new">写一篇文章 →</router-link>
     </header>
 
@@ -13,9 +13,76 @@
       </article>
     </section>
 
+    <section class="studio-panel studio-analytics-panel">
+      <header>
+        <div><p>OPERATIONS</p><h2>内容运营</h2></div>
+        <div class="studio-range-tabs" aria-label="统计区间">
+          <button v-for="item in ranges" :key="item.value" type="button" :class="{ active: range === item.value }" @click="changeRange(item.value)">{{ item.label }}</button>
+        </div>
+      </header>
+      <p v-if="analyticsError" class="studio-inline-error">{{ analyticsError }}</p>
+      <div class="studio-operation-cards">
+        <article><span>区间发布</span><strong>{{ operations.publishedArticles || 0 }}</strong><small>已成功上架</small></article>
+        <article><span>等待发布</span><strong>{{ operations.scheduledArticles || 0 }}</strong><small>当前定时队列</small></article>
+        <article :class="{ 'is-danger': operations.failedNotifications > 0 }"><span>通知异常</span><strong>{{ operations.failedNotifications || 0 }}</strong><small>{{ operations.retryingNotifications || 0 }} 条自动重试中</small></article>
+        <article><span>批量操作</span><strong>{{ operations.batchOperations || 0 }}</strong><small>区间内审计记录</small></article>
+      </div>
+      <div class="studio-analytics-grid">
+        <div class="studio-trend">
+          <div class="studio-trend__head"><strong>阅读趋势</strong><span>{{ rangeLabel }}</span></div>
+          <svg v-if="trend.length" viewBox="0 0 600 180" role="img" aria-label="阅读趋势图" preserveAspectRatio="none">
+            <polyline class="studio-trend__area" :points="trendAreaPoints" />
+            <polyline class="studio-trend__line" :points="trendPolyline" />
+          </svg>
+          <p v-else class="studio-schedule-empty">所选区间还没有阅读数据。</p>
+          <div class="studio-trend__footer"><span>阅读 {{ performance.views || 0 }}</span><span>去重读者 {{ performance.uniqueReaders || 0 }}</span><span>完成率 {{ formatPercent(performance.completionRate) }}</span></div>
+        </div>
+        <div class="studio-ranking">
+          <strong>内容表现 Top 5</strong>
+          <ol v-if="topArticles.length">
+            <li v-for="(item, index) in topArticles" :key="item.articleId">
+              <router-link :to="`/studio/articles/${item.articleId}/preview`"><span>{{ index + 1 }}</span><strong>{{ item.title }}</strong><em>{{ item.views }} 阅读</em></router-link>
+            </li>
+          </ol>
+          <p v-else class="studio-schedule-empty">暂无内容表现数据。</p>
+        </div>
+      </div>
+      <div v-if="operations.lastRun" class="studio-job-status" :class="{ 'is-danger': operations.lastRun.status === 1 }">
+        <span>发布任务最近运行</span>
+        <strong>{{ formatDateTime(operations.lastRun.startedAt) }}</strong>
+        <em>{{ operations.lastRun.status === 1 ? '失败' : '正常' }} · {{ operations.lastRun.message }}</em>
+      </div>
+    </section>
+
+    <section class="studio-panel studio-calendar-panel">
+      <header>
+        <div><p>PUBLISH CALENDAR</p><h2>发布日历</h2></div>
+        <div class="studio-calendar-nav">
+          <button type="button" aria-label="上个月" @click="moveMonth(-1)">←</button>
+          <strong>{{ monthLabel }}</strong>
+          <button type="button" aria-label="下个月" @click="moveMonth(1)">→</button>
+          <button type="button" @click="resetMonth">本月</button>
+        </div>
+      </header>
+      <p v-if="calendarError" class="studio-inline-error">{{ calendarError }}</p>
+      <div class="studio-calendar-week" aria-hidden="true">
+        <span v-for="day in weekdays" :key="day">{{ day }}</span>
+      </div>
+      <div class="studio-calendar-grid">
+        <div v-for="cell in calendarCells" :key="cell.key" class="studio-calendar-day" :class="{ 'is-outside': !cell.day, 'is-today': cell.isToday }">
+          <span v-if="cell.day" class="studio-calendar-day__number">{{ cell.day.getDate() }}</span>
+          <article v-for="event in cell.events" :key="`${event.articleId}-${event.scheduledAt}`" class="studio-calendar-event" :class="`state-${event.state}`" :title="event.lastError || event.title">
+            <router-link :to="`/studio/articles/${event.articleId}/preview`">{{ event.title }}</router-link>
+            <span>{{ eventStateLabel(event.state) }}</span>
+            <button v-if="event.state === 'notification_failed'" type="button" @click="retryPublish(event)">重试</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section class="studio-panel studio-schedule-panel">
       <header>
-        <div><p>PUBLISH QUEUE</p><h2>发布队列</h2></div>
+        <div><p>PUBLISH QUEUE</p><h2>待发布队列</h2></div>
         <router-link v-if="scheduledTotal" to="/studio/articles?status=4">管理全部 {{ scheduledTotal }} 篇 →</router-link>
       </header>
       <div v-if="scheduledArticles.length" class="studio-schedule-list">
@@ -55,7 +122,7 @@
       <section class="studio-panel">
         <header><div><p>QUICK START</p><h2>继续创作</h2></div></header>
         <div class="studio-quick">
-          <router-link to="/studio/articles"><strong>文章工作台</strong><span>公开、私有、草稿与定时发布</span><em>01 →</em></router-link>
+          <router-link to="/studio/articles"><strong>文章工作台</strong><span>管理公开、私有、草稿与定时发布</span><em>01 →</em></router-link>
           <router-link to="/studio/talks"><strong>发布随想</strong><span>记录一条轻量的公开信号</span><em>02 →</em></router-link>
           <router-link to="/studio/series"><strong>组织系列</strong><span>把长期文章串成阅读路径</span><em>03 →</em></router-link>
         </div>
@@ -72,6 +139,8 @@ import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { isValidStudioHandle, normalizeStudioHandle, studioProfileCompletion, type StudioProfile } from '@/utils/studioProfile'
 
+type CalendarEvent = { articleId: number; title: string; scheduledAt: string; publishedAt?: string; state: string; lastError?: string }
+
 export default defineComponent({
   name: 'StudioDashboard',
   setup() {
@@ -80,6 +149,12 @@ export default defineComponent({
     const dashboard = ref<Record<string, number>>({})
     const scheduledArticles = ref<any[]>([])
     const scheduledTotal = ref(0)
+    const range = ref<'7d' | '30d' | '90d'>('30d')
+    const analytics = ref<any>({})
+    const analyticsError = ref('')
+    const calendarEvents = ref<CalendarEvent[]>([])
+    const calendarError = ref('')
+    const monthCursor = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
     const profile = reactive<StudioProfile>({
       handle: normalizeStudioHandle(userStore.userInfo?.handle),
       nickname: userStore.userInfo?.nickname || '',
@@ -95,10 +170,52 @@ export default defineComponent({
       { key: 'seriesCount', label: '系列', index: 'S' },
       { key: 'favoriteCount', label: '收藏', index: 'F' }
     ]
+    const ranges = [
+      { value: '7d' as const, label: '7 天' },
+      { value: '30d' as const, label: '30 天' },
+      { value: '90d' as const, label: '90 天' }
+    ]
+    const weekdays = ['一', '二', '三', '四', '五', '六', '日']
     const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" rx="48" fill="%23172554"/%3E%3Ccircle cx="48" cy="36" r="17" fill="%239bb8ff"/%3E%3Cpath d="M16 89c5-23 16-34 32-34s27 11 32 34" fill="%239bb8ff"/%3E%3C/svg%3E'
-    const completion = computed(() => studioProfileCompletion(profile, appStore.websiteConfig?.userAvatar || ''))
+    const completion = computed(() => studioProfileCompletion(profile))
     const normalizedHandle = computed(() => normalizeStudioHandle(profile.handle))
     const validHandle = computed(() => isValidStudioHandle(normalizedHandle.value))
+    const operations = computed(() => analytics.value.operations || {})
+    const performance = computed(() => analytics.value.performance || {})
+    const trend = computed<any[]>(() => Array.isArray(analytics.value.trend) ? analytics.value.trend : [])
+    const topArticles = computed<any[]>(() => Array.isArray(analytics.value.topArticles) ? analytics.value.topArticles : [])
+    const rangeLabel = computed(() => ranges.find((item) => item.value === range.value)?.label || '30 天')
+    const monthLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(monthCursor.value))
+    const trendMax = computed(() => Math.max(1, ...trend.value.map((item) => Number(item.views || 0))))
+    const trendPolyline = computed(() => trend.value.map((item, index) => `${trendPointX(index)},${165 - Number(item.views || 0) / trendMax.value * 130}`).join(' '))
+    const trendAreaPoints = computed(() => trendPolyline.value ? `0,180 ${trendPolyline.value} 600,180` : '')
+    const calendarCells = computed(() => {
+      const year = monthCursor.value.getFullYear()
+      const month = monthCursor.value.getMonth()
+      const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7
+      const days = new Date(year, month + 1, 0).getDate()
+      const cells: Array<{ key: string; day: Date | null; isToday: boolean; events: CalendarEvent[] }> = []
+      const today = new Date()
+      for (let index = 0; index < firstWeekday; index += 1) cells.push({ key: `blank-${index}`, day: null, isToday: false, events: [] })
+      for (let day = 1; day <= days; day += 1) {
+        const current = new Date(year, month, day)
+        const key = localDateKey(current)
+        cells.push({ key, day: current, isToday: current.toDateString() === today.toDateString(), events: calendarEvents.value.filter((event) => localDateKey(new Date(event.publishedAt || event.scheduledAt)) === key) })
+      }
+      while (cells.length % 7 !== 0 || cells.length < 35) cells.push({ key: `tail-${cells.length}`, day: null, isToday: false, events: [] })
+      return cells
+    })
+
+    function trendPointX(index: number): number {
+      if (trend.value.length <= 1) return 300
+      return index / (trend.value.length - 1) * 600
+    }
+    function localDateKey(value: Date): string {
+      return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+    }
+    const formatDateTime = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '待定'
+    const formatPercent = (value: number) => `${Number(value || 0).toFixed(Number(value || 0) % 1 ? 1 : 0)}%`
+    const eventStateLabel = (state: string) => ({ scheduled: '待发布', published: '已发布', notification_failed: '通知失败', suppressed: '已抑制', overdue: '已逾期' } as Record<string, string>)[state] || state
 
     const loadDashboard = async () => {
       try {
@@ -108,7 +225,28 @@ export default defineComponent({
         ElMessage.error('创作数据加载失败')
       }
     }
-
+    const loadAnalytics = async () => {
+      analyticsError.value = ''
+      try {
+        const response = await api.getStudioAnalytics(range.value)
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '运营数据加载失败')
+        analytics.value = response.data.data || {}
+      } catch (reason: any) {
+        analyticsError.value = reason?.response?.data?.message || reason?.message || '运营数据加载失败'
+      }
+    }
+    const loadCalendar = async () => {
+      calendarError.value = ''
+      const start = new Date(monthCursor.value.getFullYear(), monthCursor.value.getMonth(), 1)
+      const end = new Date(monthCursor.value.getFullYear(), monthCursor.value.getMonth() + 1, 1)
+      try {
+        const response = await api.getStudioCalendar(start.toISOString(), end.toISOString())
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '发布日历加载失败')
+        calendarEvents.value = response.data.data?.events || []
+      } catch (reason: any) {
+        calendarError.value = reason?.response?.data?.message || reason?.message || '发布日历加载失败'
+      }
+    }
     const loadSchedule = async () => {
       try {
         const response = await api.getStudioArticles({ current: 1, size: 3, status: 4 })
@@ -120,9 +258,6 @@ export default defineComponent({
         scheduledTotal.value = 0
       }
     }
-
-    const formatDateTime = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '待定'
-
     const loadProfile = async () => {
       try {
         const response = await api.getStudioProfile()
@@ -133,15 +268,33 @@ export default defineComponent({
         // Keep the cached identity visible when the profile request is unavailable.
       }
     }
+    const changeRange = (value: '7d' | '30d' | '90d') => { range.value = value; void loadAnalytics() }
+    const moveMonth = (offset: number) => { monthCursor.value = new Date(monthCursor.value.getFullYear(), monthCursor.value.getMonth() + offset, 1); void loadCalendar() }
+    const resetMonth = () => { const now = new Date(); monthCursor.value = new Date(now.getFullYear(), now.getMonth(), 1); void loadCalendar() }
+    const retryPublish = async (event: CalendarEvent) => {
+      try {
+        const response = await api.retryStudioArticlePublication(event.articleId)
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '重试失败')
+        ElMessage.success('已重新加入通知重试队列')
+        await Promise.all([loadCalendar(), loadAnalytics()])
+      } catch (reason: any) {
+        ElMessage.error(reason?.response?.data?.message || reason?.message || '重试失败')
+      }
+    }
 
     onMounted(() => {
       void loadDashboard()
+      void loadAnalytics()
+      void loadCalendar()
       void loadSchedule()
       void loadProfile()
     })
 
     return {
-      dashboard, scheduledArticles, scheduledTotal, formatDateTime,
+      dashboard, scheduledArticles, scheduledTotal, range, ranges, rangeLabel, analytics, analyticsError,
+      operations, performance, trend, topArticles, trendPolyline, trendAreaPoints,
+      calendarEvents, calendarError, monthCursor, monthLabel, calendarCells, weekdays, moveMonth, resetMonth, retryPublish,
+      formatDateTime, formatPercent, eventStateLabel, changeRange,
       profile, stats, defaultAvatar, completion, normalizedHandle, validHandle
     }
   }
@@ -149,6 +302,7 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+.studio-dashboard { min-width: 0; }
 .studio-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 32px; border: 1px solid var(--border-hairline); border-radius: 20px; background: radial-gradient(circle at 85% 0, rgba(98, 76, 190, .22), transparent 38%), color-mix(in srgb, var(--background-primary-alt) 94%, transparent); }
 .studio-page-head p, .studio-panel header p { margin: 0 0 8px; color: var(--color-ob); font-size: 10px; letter-spacing: .18em; }
 .studio-page-head h1 { margin: 0 0 8px; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -.05em; }
@@ -158,18 +312,56 @@ export default defineComponent({
 .studio-stats article { padding: 16px; border: 1px solid var(--border-hairline); border-radius: 14px; background: color-mix(in srgb, var(--background-primary-alt) 90%, transparent); }
 .studio-stats span, .studio-stats small { display: block; color: var(--text-ob-dim); font-size: 10px; }
 .studio-stats strong { display: block; margin: 8px 0 4px; font-size: 1.45rem; }
-.studio-dashboard__grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 16px; }
-.studio-schedule-panel { margin-bottom: 16px; }
+.studio-panel { padding: 24px; margin-bottom: 16px; border: 1px solid var(--border-hairline); border-radius: 18px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
+.studio-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.studio-panel h2 { margin: 0; }
+.studio-range-tabs, .studio-calendar-nav { display: flex; gap: 7px; align-items: center; }
+.studio-range-tabs button, .studio-calendar-nav button { padding: 7px 11px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.studio-range-tabs button.active { border-color: var(--color-ob); color: var(--color-ob); }
+.studio-operation-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.studio-operation-cards article { padding: 15px; border: 1px solid var(--border-hairline); border-radius: 13px; }
+.studio-operation-cards span, .studio-operation-cards small { display: block; color: var(--text-ob-dim); font-size: 10px; }
+.studio-operation-cards strong { display: block; margin: 7px 0 4px; font-size: 1.5rem; }
+.studio-operation-cards article.is-danger strong { color: #df8177; }
+.studio-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 16px; margin-top: 16px; }
+.studio-trend, .studio-ranking { min-width: 0; padding: 16px; border: 1px solid var(--border-hairline); border-radius: 14px; }
+.studio-trend__head, .studio-trend__footer { display: flex; justify-content: space-between; gap: 10px; color: var(--text-ob-dim); font-size: 11px; }
+.studio-trend svg { width: 100%; height: 180px; margin-top: 8px; overflow: visible; }
+.studio-trend__line { fill: none; stroke: #8ca9ff; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.studio-trend__area { fill: rgba(140, 169, 255, .13); stroke: none; }
+.studio-trend__footer { flex-wrap: wrap; }
+.studio-ranking > strong { display: block; margin-bottom: 10px; }
+.studio-ranking ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.studio-ranking a { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border-hairline); color: inherit; text-decoration: none; }
+.studio-ranking a span, .studio-ranking a em { color: var(--text-ob-dim); font-size: 10px; font-style: normal; }
+.studio-ranking a strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-job-status { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; padding: 11px 13px; border: 1px solid var(--border-hairline); border-radius: 11px; color: var(--text-ob-dim); font-size: 11px; }
+.studio-job-status strong { color: #78d0bb; }
+.studio-job-status.is-danger strong { color: #df8177; }
+.studio-job-status em { margin-left: auto; font-style: normal; }
+.studio-calendar-week, .studio-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.studio-calendar-week { color: var(--text-ob-dim); font-size: 10px; text-align: center; }
+.studio-calendar-week span { padding: 7px 0; }
+.studio-calendar-grid { border-top: 1px solid var(--border-hairline); border-left: 1px solid var(--border-hairline); }
+.studio-calendar-day { min-height: 116px; padding: 8px; border-right: 1px solid var(--border-hairline); border-bottom: 1px solid var(--border-hairline); }
+.studio-calendar-day.is-outside { background: color-mix(in srgb, var(--background-primary) 60%, transparent); }
+.studio-calendar-day.is-today { background: color-mix(in srgb, var(--color-ob) 7%, transparent); }
+.studio-calendar-day__number { display: block; margin-bottom: 5px; color: var(--text-ob-dim); font-size: 10px; text-align: right; }
+.studio-calendar-event { display: grid; gap: 2px; margin-bottom: 5px; padding: 5px 6px; border-left: 2px solid #78d0bb; border-radius: 6px; background: color-mix(in srgb, #78d0bb 8%, transparent); font-size: 9px; }
+.studio-calendar-event a { overflow: hidden; color: inherit; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.studio-calendar-event span { color: var(--text-ob-dim); }
+.studio-calendar-event button { justify-self: start; padding: 2px 5px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; font-size: 9px; cursor: pointer; }
+.studio-calendar-event.state-notification_failed, .studio-calendar-event.state-overdue { border-color: #df8177; background: color-mix(in srgb, #df8177 8%, transparent); color: #df8177; }
+.studio-calendar-event.state-suppressed { border-color: #bca0ef; background: color-mix(in srgb, #bca0ef 8%, transparent); }
+.studio-calendar-event.state-scheduled { border-color: #e7a652; background: color-mix(in srgb, #e7a652 8%, transparent); }
+.studio-inline-error { margin: 0 0 12px; color: #df8177; font-size: 12px; }
 .studio-schedule-panel header a { color: var(--color-ob); font-size: 12px; text-decoration: none; }
 .studio-schedule-list { display: grid; gap: 8px; }
 .studio-schedule-list a { display: grid; grid-template-columns: 165px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid var(--border-hairline); border-radius: 12px; color: inherit; text-decoration: none; }
 .studio-schedule-list time { color: var(--color-ob); font-size: 11px; }
 .studio-schedule-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.studio-schedule-list span { color: var(--text-ob-dim); font-size: 11px; }
-.studio-schedule-empty { margin: 0; color: var(--text-ob-dim); font-size: 12px; }
-.studio-panel { padding: 24px; border: 1px solid var(--border-hairline); border-radius: 18px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
-.studio-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.studio-panel h2 { margin: 0; }
+.studio-schedule-list span, .studio-schedule-empty { color: var(--text-ob-dim); font-size: 11px; }
+.studio-dashboard__grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 16px; }
 .studio-profile-summary { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 16px; align-items: center; }
 .studio-profile-summary > img { width: 84px; height: 84px; border: 1px solid color-mix(in srgb, var(--color-ob) 45%, transparent); border-radius: 50%; object-fit: cover; }
 .studio-profile-summary__copy strong, .studio-profile-summary__copy span { display: block; }
@@ -187,6 +379,6 @@ export default defineComponent({
 .studio-quick strong, .studio-quick span { display: block; }
 .studio-quick span { grid-column: 1; color: var(--text-ob-dim); font-size: 11px; }
 .studio-quick em { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--color-ob); font-style: normal; }
-@media (max-width: 980px) { .studio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .studio-dashboard__grid { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .studio-page-head { align-items: stretch; flex-direction: column; } .studio-schedule-list a { grid-template-columns: 1fr; } .studio-schedule-list span { display: none; } .studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-profile-summary { grid-template-columns: 1fr; } .studio-profile-summary > img { width: 72px; height: 72px; } .studio-profile-progress, .studio-profile-actions { grid-column: auto; } }
+@media (max-width: 980px) { .studio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .studio-operation-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-analytics-grid, .studio-dashboard__grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .studio-page-head { align-items: stretch; flex-direction: column; } .studio-calendar-day { min-height: 86px; padding: 5px; } .studio-calendar-event { padding: 4px; } .studio-calendar-event span { display: none; } .studio-operation-cards { grid-template-columns: 1fr 1fr; } .studio-schedule-list a { grid-template-columns: 1fr; } .studio-schedule-list span { display: none; } .studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-profile-summary { grid-template-columns: 1fr; } .studio-profile-summary > img { width: 72px; height: 72px; } .studio-profile-progress, .studio-profile-actions { grid-column: auto; } }
 </style>

@@ -29,6 +29,7 @@ var (
 	newsletterService       service.NewsletterService        = new(service.MyNewsletterService)
 	growthService           service.GrowthService            = new(service.MyGrowthService)
 	contentAnalyticsService service.ContentAnalyticsService  = new(service.MyContentAnalyticsService)
+	contentAuditService     service.ContentAuditService      = new(service.MyContentAuditService)
 )
 
 type Services struct {
@@ -58,6 +59,7 @@ type Services struct {
 	Newsletter       service.NewsletterService
 	Growth           service.GrowthService
 	ContentAnalytics service.ContentAnalyticsService
+	ContentAudit     service.ContentAuditService
 }
 
 func ConfigureServices(s Services) {
@@ -87,4 +89,5 @@ func ConfigureServices(s Services) {
 	newsletterService = s.Newsletter
 	growthService = s.Growth
 	contentAnalyticsService = s.ContentAnalytics
+	contentAuditService = s.ContentAudit
 }

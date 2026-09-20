@@ -36,6 +36,7 @@ type StellarBeaconInfoServiceDeps struct {
 type ContentAnalyticsServiceDeps struct {
 	Repo     port.ContentAnalyticsRepository
 	Articles port.ArticleRepository
+	Studio   port.StudioOperationsRepository
 	Cache    port.Cache
 	Visitor  port.VisitorResolver
 	Limiter  port.RateLimiter

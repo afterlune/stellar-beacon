@@ -751,6 +751,8 @@ async function mockStudioApi(page: Page, options: {
   articleDetail?: any
   talkDetail?: any
   seriesDetail?: any
+  analytics?: any
+  calendarEvents?: any[]
 } = {}) {
   const saved = {
     article: null as any,
@@ -758,12 +760,15 @@ async function mockStudioApi(page: Page, options: {
     series: null as any,
     batchStatus: null as any,
     batchDelete: null as any,
+    retry: null as any,
     articleItems: options.articleItems || [{ id: 9, articleTitle: '我的私有草稿', status: 3, moderationStatus: 'visible', createTime: '2026-09-18T10:00:00+08:00' }],
     talkItems: options.talkItems || [],
     seriesItems: options.seriesItems || [],
     articleDetail: options.articleDetail || null,
     talkDetail: options.talkDetail || null,
     seriesDetail: options.seriesDetail || null,
+    analytics: options.analytics || null,
+    calendarEvents: options.calendarEvents || [],
     profile: {
       handle: 'test-author',
       nickname: '测试作者',
@@ -798,10 +803,24 @@ async function mockStudioApi(page: Page, options: {
     const respond = (data: unknown) => route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ code: 'OK', message: '操作成功', data })
+      body: JSON.stringify({ code: 'OK', message: '操作成功', flag: true, data })
     })
     if (url.pathname === '/api/v1/studio/dashboard' && method === 'GET') {
       await respond({ articleCount: 3, draftCount: 1, privateCount: 1, talkCount: 2, seriesCount: 1, favoriteCount: 4 })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/analytics' && method === 'GET') {
+      await respond(saved.analytics || {
+        range: url.searchParams.get('range') || '30d', unit: 'day',
+        operations: { publishedArticles: 2, scheduledArticles: 1, failedNotifications: 0, retryingNotifications: 0, batchOperations: 1 },
+        performance: { views: 128, uniqueReaders: 90, effectiveSessions: 42, avgActiveMs: 95000, completionRate: 71.5, continuation: { seriesImpressions: 10, seriesClicks: 3, seriesClickRate: 30, relatedImpressions: 20, relatedClicks: 5, relatedClickRate: 25, continuationRate: 26.67 } },
+        trend: [{ date: '2026-09-20', publishedArticles: 1, views: 128, uniqueReaders: 90, effectiveSessions: 42, totalActiveMs: 3990000, completedSessions: 30, seriesImpressions: 10, seriesClicks: 3, relatedImpressions: 20, relatedClicks: 5 }],
+        topArticles: [{ articleId: 41, title: '下周发布的文章', cover: '', views: 128, uniqueReaders: 90, completionRate: 71.5 }], generatedAt: '2026-09-20T12:00:00+08:00'
+      })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/calendar' && method === 'GET') {
+      await respond({ events: saved.calendarEvents })
       return
     }
     if (url.pathname === '/api/v1/studio/profile' && method === 'GET') {
@@ -817,31 +836,60 @@ async function mockStudioApi(page: Page, options: {
       await respond('https://cdn.example.test/studio-upload.png')
       return
     }
+    if (url.pathname === '/api/v1/studio/content/batch-preview' && method === 'POST') {
+      const payload = route.request().postDataJSON()
+      const collections: any = { article: saved.articleItems, talk: saved.talkItems, series: saved.seriesItems }
+      const source = collections[payload.kind] || []
+      const status = Number(payload.status || 0)
+      const keywords = String(payload.keywords || '').trim()
+      const titleOf = (item: any) => item.articleTitle || item.content || item.seriesName || ''
+      const matches = source.filter((item: any) => (!status || Number(item.status) === status) && (!keywords || titleOf(item).includes(keywords)))
+      const statusCounts: Record<string, number> = {}
+      for (const item of matches) statusCounts[String(item.status)] = (statusCounts[String(item.status)] || 0) + 1
+      await respond({ count: matches.length, maxId: Math.max(0, ...matches.map((item: any) => Number(item.id))), statusCounts, hiddenCount: matches.filter((item: any) => item.moderationStatus === 'hidden').length, sample: matches.slice(0, 10) })
+      return
+    }
     if (url.pathname === '/api/v1/studio/content/batch-status' && method === 'PUT') {
       saved.batchStatus = route.request().postDataJSON()
-      const ids = new Set(saved.batchStatus.ids || [])
-      for (const collection of [saved.articleItems, saved.talkItems, saved.seriesItems]) {
-        for (const item of collection) {
-          if (ids.has(Number(item.id))) item.status = ({ public: 1, private: 2, draft: 3 } as any)[saved.batchStatus.visibility]
-        }
-      }
-      await respond({ updated: ids.size })
+      const scope = saved.batchStatus.scope || {}
+      const collections: any = { article: saved.articleItems, talk: saved.talkItems, series: saved.seriesItems }
+      const source = collections[saved.batchStatus.kind] || []
+      const excluded = new Set(scope.excludeIds || [])
+      const matches = scope.mode === 'ids'
+        ? source.filter((item: any) => (scope.ids || []).includes(Number(item.id)))
+        : source.filter((item: any) => Number(item.id) <= Number(scope.maxId) && !excluded.has(Number(item.id)))
+      for (const item of matches) item.status = ({ public: 1, private: 2, draft: 3 } as any)[saved.batchStatus.visibility]
+      await respond({ affected: matches.length, auditId: 1 })
       return
     }
     if (url.pathname === '/api/v1/studio/content/batch' && method === 'DELETE') {
       saved.batchDelete = route.request().postDataJSON()
-      const ids = new Set(saved.batchDelete.ids || [])
+      const scope = saved.batchDelete.scope || {}
+      const ids = new Set(scope.ids || [])
+      if (scope.mode === 'filter') {
+        const collections: any = { article: saved.articleItems, talk: saved.talkItems, series: saved.seriesItems }
+        for (const item of collections[saved.batchDelete.kind] || []) {
+          if (Number(item.id) <= Number(scope.maxId) && !(scope.excludeIds || []).includes(Number(item.id))) ids.add(Number(item.id))
+        }
+      }
       if (saved.batchDelete.kind === 'article') saved.articleItems = saved.articleItems.filter((item: any) => !ids.has(Number(item.id)))
       if (saved.batchDelete.kind === 'talk') saved.talkItems = saved.talkItems.filter((item: any) => !ids.has(Number(item.id)))
       if (saved.batchDelete.kind === 'series') saved.seriesItems = saved.seriesItems.filter((item: any) => !ids.has(Number(item.id)))
-      await respond({ deleted: ids.size })
+      await respond({ affected: ids.size, auditId: 2 })
+      return
+    }
+    if (/^\/api\/v1\/studio\/articles\/\d+\/publish-retry$/.test(url.pathname) && method === 'POST') {
+      saved.retry = Number(url.pathname.split('/')[5])
+      await respond({ articleId: saved.retry, notificationState: 'pending' })
       return
     }
     if (url.pathname === '/api/v1/studio/articles' && method === 'GET') {
       const status = Number(url.searchParams.get('status') || 0)
       const seriesId = Number(url.searchParams.get('seriesId') || 0)
       const items = saved.articleItems.filter((item: any) => (!status || Number(item.status) === status) && (!seriesId || Number(item.seriesId) === seriesId))
-      await respond({ items, total: items.length, page: 1, pageSize: 12 })
+      const current = Number(url.searchParams.get('current') || 1)
+      const size = Number(url.searchParams.get('size') || 12)
+      await respond({ records: items.slice((current - 1) * size, current * size), count: items.length, page: current, pageSize: size })
       return
     }
     if (/^\/api\/v1\/studio\/articles\/\d+$/.test(url.pathname) && method === 'GET') {
@@ -971,7 +1019,7 @@ test.describe('studio workspace', () => {
     await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: '发布队列' })).toBeVisible()
-    await expect(page.getByRole('link', { name: /下周发布的文章/ })).toBeVisible()
+    await expect(page.locator('.studio-schedule-list').getByRole('link', { name: /下周发布的文章/ })).toBeVisible()
     await page.getByRole('link', { name: /管理全部 1 篇/ }).click()
 
     await expect(page).toHaveURL(/\/studio\/articles\?status=4$/)
@@ -1045,16 +1093,64 @@ test.describe('studio workspace', () => {
     await expect(page.getByText('确认批量公开')).toBeVisible()
     await page.getByRole('button', { name: '确认公开' }).click()
 
-    await expect.poll(() => saved.batchStatus?.ids?.length).toBe(2)
+    await expect.poll(() => saved.batchStatus?.scope?.ids?.length).toBe(2)
     expect(saved.batchStatus?.visibility).toBe('public')
     await expect(page.locator('.studio-badge.status-1')).toHaveCount(2)
 
     await page.locator('.studio-record__select input').first().check()
     await page.getByRole('button', { name: '批量删除' }).click()
-    await page.getByRole('button', { name: '确认删除' }).click()
+    await page.locator('.el-message-box:visible').getByRole('button', { name: '确认删除', exact: true }).click()
 
-    await expect.poll(() => saved.batchDelete?.ids?.length).toBe(1)
+    await expect.poll(() => saved.batchDelete?.scope?.ids?.length).toBe(1)
     await expect(page.locator('.studio-record')).toHaveCount(1)
+
+    await page.getByRole('button', { name: '删除', exact: true }).click()
+    await page.locator('.el-message-box:visible').getByRole('button', { name: 'OK', exact: true }).click()
+    await expect.poll(() => saved.batchDelete?.scope).toEqual({ mode: 'ids', ids: [52] })
+    await expect(page.locator('.studio-record')).toHaveCount(0)
+  })
+
+  test('selects all matching content across pages and keeps exclusions', async ({ page }) => {
+    const articleItems = Array.from({ length: 13 }, (_, index) => ({
+      id: 70 + index,
+      articleTitle: `跨页文章 ${index + 1}`,
+      status: 3,
+      moderationStatus: 'visible',
+      createTime: '2026-09-20T09:00:00+08:00'
+    }))
+    const saved = await mockStudioApi(page, { articleItems })
+    await page.goto('/studio/articles', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.locator('.studio-record')).toHaveCount(12)
+    await page.getByRole('button', { name: '加载更多' }).click()
+    await expect(page.locator('.studio-record')).toHaveCount(13)
+    await page.getByRole('button', { name: '选择全部 13 条' }).click()
+    await expect(page.getByText('已选 13 项')).toBeVisible()
+    await page.locator('.studio-record__select input').first().uncheck()
+    await expect(page.getByText('已选 12 项')).toBeVisible()
+
+    await page.getByLabel('批量状态').selectOption('1')
+    await page.getByRole('button', { name: '应用状态' }).click()
+    await page.getByRole('button', { name: '确认公开' }).click()
+
+    await expect.poll(() => saved.batchStatus?.scope?.mode).toBe('filter')
+    expect(saved.batchStatus?.scope?.expectedCount).toBe(12)
+    expect(saved.batchStatus?.scope?.excludeIds).toEqual([70])
+  })
+
+  test('shows the publishing calendar and retries a failed notification', async ({ page }) => {
+    const saved = await mockStudioApi(page, {
+      calendarEvents: [
+        { articleId: 81, title: '通知失败文章', scheduledAt: '2026-09-20T09:00:00+08:00', publishedAt: '2026-09-20T09:00:00+08:00', state: 'notification_failed', lastError: 'smtp unavailable' }
+      ]
+    })
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('heading', { name: '发布日历' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '通知失败文章' }).first()).toBeVisible()
+    await expect(page.getByText('阅读趋势')).toBeVisible()
+    await page.getByRole('button', { name: '重试' }).click()
+    await expect.poll(() => saved.retry).toBe(81)
   })
 
   test('copies a public content link from the studio list', async ({ page, context }) => {

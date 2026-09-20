@@ -632,6 +632,22 @@ test.beforeEach(async ({ page }) => {
       return
     }
 
+    if (requestURL.pathname === '/api/v1/admin/content/audits') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 77, operatorId: 1, operatorNickname: '测试管理员', contentType: 'article', operation: 'batch_status', targetMode: 'filter', filterSnapshot: '{"status":3}', snapshotMaxId: 9, requestedCount: 2, affectedCount: 2, result: 'success', ipAddress: '127.0.0.1', createTime: '2026-08-29T10:00:00Z' }], count: 1 } })
+      })
+      return
+    }
+    if (requestURL.pathname === '/api/v1/admin/content/audits/77/items') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 1, contentId: 8, title: '批量文章一', previousStatus: 3, nextStatus: 1, result: 'success' }], count: 1 } })
+      })
+      return
+    }
     if (requestURL.pathname === '/api/v1/admin/logs/exceptions') {
       if (route.request().method() === 'GET') {
         await route.fulfill({
@@ -922,6 +938,11 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await expect(page.locator('.arco-modal:visible')).toContainText('新增或修改')
   await page.keyboard.press('Escape')
   await expect(page.locator('.arco-modal:visible')).toHaveCount(0)
+  await page.getByText('内容操作', { exact: true }).click()
+  await expect(page.getByText('测试管理员').first()).toBeVisible()
+  await page.getByRole('row', { name: /批量状态/ }).getByRole('button', { name: '详情' }).click()
+  await expect(page.locator('.arco-drawer:visible')).toContainText('批量文章一')
+  await page.keyboard.press('Escape')
   await page.getByText('异常日志').click()
   await expect(page).toHaveURL(/\/exception\/log$/)
   await expect(page.getByText('模拟异常')).toBeVisible()

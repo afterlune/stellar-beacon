@@ -46,9 +46,10 @@ func (f *fakeJobLogs) Create(_ context.Context, entry entity.TJobLog) error {
 	f.mu.Unlock()
 	return nil
 }
-func (f *fakeJobLogs) Delete(context.Context, []int) error        { return nil }
-func (f *fakeJobLogs) Clean(context.Context) error                { return nil }
-func (f *fakeJobLogs) ListGroups(context.Context) (string, error) { return "", nil }
+func (f *fakeJobLogs) Delete(context.Context, []int) error          { return nil }
+func (f *fakeJobLogs) Clean(context.Context) error                  { return nil }
+func (f *fakeJobLogs) CleanBefore(context.Context, time.Time) error { return nil }
+func (f *fakeJobLogs) ListGroups(context.Context) (string, error)   { return "", nil }
 
 func TestSchedulerValidatesStandardCronOnly(t *testing.T) {
 	scheduler := NewScheduler(&fakeJobRepository{}, &fakeJobLogs{}, nil)

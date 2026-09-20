@@ -2,6 +2,8 @@ package port
 
 import (
 	"context"
+	"time"
+
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 )
 
@@ -29,10 +31,35 @@ type ArticleRepository interface {
 	SaveOrUpdate(ctx context.Context, article entity.TArticle, categoryName string, tagNames []string) (entity.TArticle, error)
 	UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (entity.TArticle, error)
 	UpdateDelete(ctx context.Context, ids []int, isDelete int) error
-	// PublishDueArticles releases every scheduled article whose time has come
-	// and returns the affected ids so the caller can notify subscribers.
-	PublishDueArticles(ctx context.Context) ([]int, error)
 	Delete(ctx context.Context, ids []int) error
 	GetAdminArticle(ctx context.Context, articleID int) (entity.TArticle, string, []string, error)
 	Export(ctx context.Context, ids []int) ([]entity.TArticle, error)
+}
+
+const (
+	ScheduledNotificationPending    = "pending"
+	ScheduledNotificationQueued     = "queued"
+	ScheduledNotificationFailed     = "failed"
+	ScheduledNotificationSuppressed = "suppressed"
+)
+
+type ScheduledPublish struct {
+	RecordID             int
+	ArticleID            int
+	UserID               int
+	ScheduledAt          time.Time
+	PublishedAt          time.Time
+	ModerationStatus     string
+	NotificationState    string
+	NotificationAttempts int
+	NextRetryAt          *time.Time
+	LastError            string
+}
+
+type ScheduledPublishRepository interface {
+	PublishDueScheduledArticles(ctx context.Context, now time.Time, limit int) ([]ScheduledPublish, error)
+	ListRetryableScheduledPublishes(ctx context.Context, now time.Time, limit int) ([]ScheduledPublish, error)
+	MarkScheduledNotificationQueued(ctx context.Context, recordID int, at time.Time) error
+	MarkScheduledNotificationFailed(ctx context.Context, recordID int, message string, retryAt *time.Time) error
+	MarkScheduledNotificationSuppressed(ctx context.Context, recordID int, message string) error
 }

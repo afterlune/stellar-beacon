@@ -1,3 +1,4 @@
+import type { StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
 import { createApiClient } from '@stellar-beacon/api-client'
 
 // The presentation layer still reads `flag` while the shared client is being
@@ -195,6 +196,12 @@ export default {
   getStudioDashboard: () => {
     return http.get('/studio/dashboard')
   },
+  getStudioAnalytics: (range: string) => {
+    return http.get('/studio/analytics', { params: { range } })
+  },
+  getStudioCalendar: (start: string, end: string) => {
+    return http.get('/studio/calendar', { params: { start, end } })
+  },
   getStudioProfile: () => {
     return http.get('/studio/profile')
   },
@@ -242,11 +249,17 @@ export default {
   deleteStudioSeries: (seriesId: number) => {
     return http.delete('/studio/series/' + encodeURIComponent(seriesId))
   },
-  batchUpdateStudioContentStatus: (params: any) => {
+  previewStudioContent: (params: StudioContentBatchPreview) => {
+    return http.post('/studio/content/batch-preview', params)
+  },
+  batchUpdateStudioContentStatus: (params: StudioContentBatchStatus) => {
     return http.put('/studio/content/batch-status', params)
   },
-  batchDeleteStudioContent: (params: any) => {
+  batchDeleteStudioContent: (params: StudioContentBatchDelete) => {
     return http.delete('/studio/content/batch', { data: params })
+  },
+  retryStudioArticlePublication: (articleId: number) => {
+    return http.post('/studio/articles/' + encodeURIComponent(articleId) + '/publish-retry')
   },
   getStudioCategories: () => {
     return http.get('/studio/categories')

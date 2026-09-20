@@ -182,15 +182,151 @@ export interface UserRole {
   [key: string]: unknown
 }
 
-export interface StudioContentBatchStatus {
-  kind: 'article' | 'talk' | 'series'
+export type StudioContentKind = 'article' | 'talk' | 'series'
+
+export interface StudioBatchScopeIDs {
+  mode: 'ids'
   ids: number[]
+}
+
+export interface StudioBatchScopeFilter {
+  mode: 'filter'
+  status: number
+  keywords?: string
+  seriesId?: number
+  maxId: number
+  excludeIds?: number[]
+  expectedCount: number
+}
+
+export type StudioBatchScope = StudioBatchScopeIDs | StudioBatchScopeFilter
+
+export interface StudioContentBatchPreview {
+  kind: StudioContentKind
+  status?: number
+  keywords?: string
+  seriesId?: number
+}
+
+export interface StudioBatchPreviewItem {
+  id: number
+  title: string
+  status: number
+  moderationStatus: string
+}
+
+export interface StudioBatchPreview {
+  count: number
+  maxId: number
+  statusCounts: Record<string, number>
+  hiddenCount: number
+  sample: StudioBatchPreviewItem[]
+}
+
+export interface StudioBatchMutation {
+  affected: number
+  auditId: number
+}
+
+export interface StudioContentBatchStatus {
+  kind: StudioContentKind
+  scope: StudioBatchScope
   visibility: 'public' | 'private' | 'draft'
 }
 
 export interface StudioContentBatchDelete {
-  kind: 'article' | 'talk' | 'series'
-  ids: number[]
+  kind: StudioContentKind
+  scope: StudioBatchScope
+}
+
+export interface StudioJobRun {
+  startedAt: string
+  finishedAt: string
+  status: number
+  message: string
+}
+
+export interface StudioOperationsSummary {
+  publishedArticles: number
+  scheduledArticles: number
+  failedNotifications: number
+  retryingNotifications: number
+  batchOperations: number
+  lastRun?: StudioJobRun
+}
+
+export interface StudioAnalyticsTrendPoint {
+  date: string
+  publishedArticles: number
+  views: number
+  uniqueReaders: number
+  effectiveSessions: number
+  totalActiveMs: number
+  completedSessions: number
+  seriesImpressions: number
+  seriesClicks: number
+  relatedImpressions: number
+  relatedClicks: number
+}
+
+export interface StudioTopArticle {
+  articleId: number
+  title: string
+  cover: string
+  views: number
+  uniqueReaders: number
+  completionRate: number
+}
+
+export interface StudioAnalytics {
+  range: '7d' | '30d' | '90d'
+  unit: 'day' | 'month'
+  operations: StudioOperationsSummary
+  performance: ContentAnalyticsOverview
+  trend: StudioAnalyticsTrendPoint[]
+  topArticles: StudioTopArticle[]
+  generatedAt: string
+}
+
+export interface StudioCalendarEvent {
+  articleId: number
+  title: string
+  scheduledAt: string
+  publishedAt?: string
+  state: 'scheduled' | 'published' | 'notification_failed' | 'suppressed' | 'overdue'
+  notificationState?: string
+  lastError?: string
+}
+
+export interface StudioCalendar {
+  events: StudioCalendarEvent[]
+}
+
+export interface ContentAuditRecord {
+  id: number
+  operatorId: number
+  operatorNickname: string
+  contentType: StudioContentKind
+  operation: 'batch_status' | 'batch_delete' | 'publish_retry'
+  targetMode: 'ids' | 'filter'
+  filterSnapshot: string
+  snapshotMaxId: number
+  requestedCount: number
+  affectedCount: number
+  result: 'success' | 'failed'
+  errorMessage?: string
+  ipAddress: string
+  ipSource: string
+  createTime: string
+}
+
+export interface ContentAuditItem {
+  id: number
+  contentId: number
+  title: string
+  previousStatus: number
+  nextStatus: number
+  result: 'success' | 'failed'
 }
 
 export interface StudioProfile {

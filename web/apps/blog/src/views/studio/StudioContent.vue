@@ -31,16 +31,17 @@
         <input type="checkbox" :checked="allLoadedSelected" :aria-label="`全选当前已加载的${kindLabel}`" @change="toggleAllLoaded" />
         全选当前已加载
       </label>
-      <span>已选 {{ selectedIds.length }} 项</span>
+      <span>已选 {{ selectionCount }} 项</span>
+      <button v-if="canSelectAllMatching" type="button" class="is-plain" @click="selectAllMatchingItems">选择全部 {{ total }} 条</button>
       <div>
         <select v-model.number="batchStatus" aria-label="批量状态">
           <option :value="1">公开</option>
           <option :value="2">私有</option>
           <option :value="3">草稿</option>
         </select>
-        <button type="button" :disabled="!selectedIds.length" @click="applyBatchStatus">应用状态</button>
-        <button type="button" class="is-danger" :disabled="!selectedIds.length" @click="batchDelete">批量删除</button>
-        <button v-if="selectedIds.length" type="button" class="is-plain" @click="clearSelection">取消选择</button>
+        <button type="button" :disabled="!selectionCount" @click="applyBatchStatus">应用状态</button>
+        <button type="button" class="is-danger" :disabled="!selectionCount" @click="batchDelete">批量删除</button>
+        <button v-if="selectionCount" type="button" class="is-plain" @click="clearSelection">取消选择</button>
       </div>
     </section>
 
@@ -107,6 +108,7 @@
 <script lang="ts">
 import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { StudioBatchScope } from '@stellar-beacon/api-contract'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api/api'
 
@@ -128,6 +130,7 @@ export default defineComponent({
     const page = ref(1)
     const total = ref(0)
     const selectedIds = ref<number[]>([])
+    const matchingSelection = ref<{ maxId: number; count: number; status: number; keywords: string; seriesId: number; excludeIds: number[]; hiddenCount: number } | null>(null)
     const batchStatus = ref(1)
     const pageSize = 12
 
@@ -148,6 +151,8 @@ export default defineComponent({
     })
     const selectedRecords = computed(() => records.value.filter((item) => isSelected(item.id)))
     const allLoadedSelected = computed(() => records.value.length > 0 && records.value.every((item) => isSelected(item.id)))
+    const selectionCount = computed(() => matchingSelection.value ? matchingSelection.value.count - matchingSelection.value.excludeIds.length : selectedIds.value.length)
+    const canSelectAllMatching = computed(() => total.value > 0 && matchingSelection.value === null)
 
     const dataOf = (response: any) => response?.data?.data || {}
     const listRequest = (params: any) => props.kind === 'article' ? api.getStudioArticles(params) : props.kind === 'talk' ? api.getStudioTalks(params) : api.getStudioSeries(params)
@@ -206,7 +211,7 @@ export default defineComponent({
     const remove = async (item: any) => {
       try {
         await ElMessageBox.confirm(`确认删除这条${kindLabel.value}吗？`, '删除确认', { type: 'warning' })
-        const response = await api.batchDeleteStudioContent({ kind: props.kind, ids: [item.id] })
+        const response = await api.batchDeleteStudioContent({ kind: props.kind, scope: { mode: 'ids', ids: [item.id] } })
         if (!response?.data?.flag) throw new Error(response?.data?.message || '删除失败')
         ElMessage.success('已删除')
         await loadList(true)
@@ -229,68 +234,118 @@ export default defineComponent({
     const statusLabel = (value: number) => ({ 1: '公开', 2: '私有', 3: '草稿', 4: '定时' } as Record<number, string>)[value] || '未知'
     const formatDate = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value)) : ''
     const formatDateTime = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : ''
-    const isSelected = (id: number) => selectedIds.value.includes(Number(id))
+    const isSelected = (id: number) => {
+      const value = Number(id)
+      return matchingSelection.value ? !matchingSelection.value.excludeIds.includes(value) : selectedIds.value.includes(value)
+    }
     const toggleSelection = (id: number) => {
       const value = Number(id)
+      if (matchingSelection.value) {
+        const excluded = matchingSelection.value.excludeIds
+        matchingSelection.value.excludeIds = excluded.includes(value) ? excluded.filter((item) => item !== value) : [...excluded, value]
+        return
+      }
       selectedIds.value = isSelected(value) ? selectedIds.value.filter((item) => item !== value) : [...selectedIds.value, value]
     }
     const toggleAllLoaded = () => {
-      selectedIds.value = allLoadedSelected.value ? [] : records.value.map((item) => Number(item.id))
+      if (matchingSelection.value || !allLoadedSelected.value) {
+        matchingSelection.value = null
+        selectedIds.value = records.value.map((item) => Number(item.id))
+        return
+      }
+      clearSelection()
     }
-    const clearSelection = () => { selectedIds.value = [] }
-
+    const clearSelection = () => {
+      selectedIds.value = []
+      matchingSelection.value = null
+    }
+    const currentFilter = () => ({ status: status.value, keywords: keywords.value, seriesId: 0 })
+    const selectAllMatchingItems = async () => {
+      try {
+        const response = await api.previewStudioContent({ kind: props.kind, ...currentFilter() })
+        const preview = dataOf(response)
+        if (!response?.data?.flag || Number(preview.count || 0) <= 0) {
+          ElMessage.warning('当前筛选条件下没有可操作内容')
+          return
+        }
+        selectedIds.value = []
+        matchingSelection.value = {
+          maxId: Number(preview.maxId),
+          count: Number(preview.count),
+          ...currentFilter(),
+          excludeIds: [],
+          hiddenCount: Number(preview.hiddenCount || 0)
+        }
+      } catch (reason: any) {
+        ElMessage.error(reason?.response?.data?.message || '无法读取全部匹配内容')
+      }
+    }
+    const batchVisibility = (value: number): 'public' | 'private' | 'draft' => value === 2 ? 'private' : value === 3 ? 'draft' : 'public'
+    const selectionScope = (): StudioBatchScope => matchingSelection.value
+      ? {
+          mode: 'filter',
+          status: matchingSelection.value.status || 0,
+          keywords: matchingSelection.value.keywords || undefined,
+          seriesId: matchingSelection.value.seriesId || undefined,
+          maxId: matchingSelection.value.maxId,
+          excludeIds: matchingSelection.value.excludeIds,
+          expectedCount: matchingSelection.value.count - matchingSelection.value.excludeIds.length
+        }
+      : { mode: 'ids', ids: selectedIds.value }
     const titleOf = (item: any) => item.articleTitle || item.content || item.seriesName || `#${item.id}`
 
     const applyBatchStatus = async () => {
-      const targets = selectedRecords.value.filter((item) => Number(item.status) !== batchStatus.value)
-      if (!targets.length) {
-        ElMessage.warning(`所选内容已经是${statusLabel(batchStatus.value)}状态`)
-        return
-      }
-      const hiddenCount = targets.filter((item) => item.moderationStatus === 'hidden').length
+      if (!selectionCount.value) return
+      const targetCount = selectionCount.value
+      const hiddenCount = matchingSelection.value
+        ? matchingSelection.value.hiddenCount
+        : selectedRecords.value.filter((item) => item.moderationStatus === 'hidden').length
       if (batchStatus.value === 1) {
-        const preview = targets.slice(0, 5).map((item) => `· ${titleOf(item)}`).join('\n')
-        const more = targets.length > 5 ? `\n…以及另外 ${targets.length - 5} 条` : ''
+        const preview = matchingSelection.value
+          ? `将按当前筛选条件处理 ${targetCount} 条内容。`
+          : selectedRecords.value.slice(0, 5).map((item) => `· ${titleOf(item)}`).join('\n')
         const moderation = hiddenCount ? `\n其中 ${hiddenCount} 条已被审核隐藏，改状态后仍不会公开可见。` : ''
         try {
-          await ElMessageBox.confirm(`将 ${targets.length} 条内容批量公开：\n${preview}${more}${moderation}`, '确认批量公开', { type: 'warning', confirmButtonText: '确认公开', cancelButtonText: '取消' })
+          await ElMessageBox.confirm(`将 ${targetCount} 条内容批量公开：\n${preview}${moderation}`, '确认批量公开', { type: 'warning', confirmButtonText: '确认公开', cancelButtonText: '取消' })
         } catch {
           return
         }
       } else {
         try {
-          await ElMessageBox.confirm(`确认将 ${targets.length} 条内容改为“${statusLabel(batchStatus.value)}”？`, '批量修改状态', { type: 'warning' })
+          await ElMessageBox.confirm(`确认将 ${targetCount} 条内容改为“${statusLabel(batchStatus.value)}”？`, '批量修改状态', { type: 'warning' })
         } catch {
           return
         }
       }
       try {
-        await api.batchUpdateStudioContentStatus({
+        const response = await api.batchUpdateStudioContentStatus({
           kind: props.kind,
-          ids: targets.map((item) => Number(item.id)),
-          visibility: ({ 1: 'public', 2: 'private', 3: 'draft' } as Record<number, string>)[batchStatus.value]
+          scope: selectionScope(),
+          visibility: batchVisibility(batchStatus.value)
         })
-        ElMessage.success(`已更新 ${targets.length} 条内容`)
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '批量修改失败')
+        ElMessage.success(`已更新 ${Number(response.data.data?.affected ?? targetCount)} 条内容`)
         clearSelection()
         await loadList(true)
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || '批量修改失败')
+        ElMessage.error(reason?.response?.data?.message || reason?.message || '批量修改失败')
       }
     }
 
     const batchDelete = async () => {
-      if (!selectedIds.value.length) return
+      if (!selectionCount.value) return
+      const targetCount = selectionCount.value
       try {
-        await ElMessageBox.confirm(`确认删除已选择的 ${selectedIds.value.length} 条${kindLabel.value}吗？此操作不可撤销。`, '批量删除', { type: 'warning', confirmButtonText: '确认删除' })
-        await api.batchDeleteStudioContent({ kind: props.kind, ids: selectedIds.value })
-        ElMessage.success(`已删除 ${selectedIds.value.length} 条内容`)
+        await ElMessageBox.confirm(`确认删除已选择的 ${targetCount} 条${kindLabel.value}吗？此操作不可撤销。`, '批量删除', { type: 'warning', confirmButtonText: '确认删除' })
+        const response = await api.batchDeleteStudioContent({ kind: props.kind, scope: selectionScope() })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '批量删除失败')
+        ElMessage.success(`已删除 ${Number(response.data.data?.affected ?? targetCount)} 条内容`)
         clearSelection()
         await loadList(true)
       } catch (reason: any) {
-        if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || '批量删除失败')
+        if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || reason?.message || '批量删除失败')
       }
     }
-
     watch(() => props.kind, () => {
       status.value = Number(route.query.status || 0)
       keywords.value = ''
@@ -311,10 +366,10 @@ export default defineComponent({
     onBeforeUnmount(clearSelection)
 
     return {
-      records, loading, error, status, statusTabs, keywords, page, total, batchStatus, selectedIds, allLoadedSelected,
+      records, loading, error, status, statusTabs, keywords, page, total, batchStatus, selectedIds, selectionCount, canSelectAllMatching, allLoadedSelected,
       kindLabel, pageTitle, pageHint, pageIndex, kindPath, loadList, loadMore, openNew, openEdit, openPreview,
       copyPublicLink, canShare, remove, changeStatus, statusLabel, formatDate, formatDateTime,
-      isSelected, toggleSelection, toggleAllLoaded, clearSelection, applyBatchStatus, batchDelete
+      isSelected, toggleSelection, toggleAllLoaded, selectAllMatchingItems, clearSelection, applyBatchStatus, batchDelete
     }
   }
 })

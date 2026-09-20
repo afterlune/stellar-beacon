@@ -36,30 +36,50 @@ type fakePlatformRepository struct {
 	profileUpdateErr    error
 	batchStatusCalls    int
 	batchStatusKind     port.StudioContentType
-	batchStatusIDs      []int
+	batchStatusScope    port.StudioBatchScope
+	batchStatusActor    port.StudioAuditActor
 	batchStatusValue    int
-	batchStatusResult   int
+	batchStatusResult   port.StudioBatchMutation
 	batchStatusErr      error
 	batchDeleteCalls    int
 	batchDeleteKind     port.StudioContentType
-	batchDeleteIDs      []int
-	batchDeleteResult   int
+	batchDeleteScope    port.StudioBatchScope
+	batchDeleteActor    port.StudioAuditActor
+	batchDeleteResult   port.StudioBatchMutation
 	batchDeleteErr      error
+	previewResult       port.StudioBatchPreview
+	previewErr          error
+	retryCalls          int
+	retryArticleID      int
+	retryResult         port.ScheduledPublish
+	retryErr            error
 }
 
-func (f *fakePlatformRepository) BatchUpdateOwnedContentStatus(_ context.Context, _ int, contentType port.StudioContentType, ids []int, status int) (int, error) {
+func (f *fakePlatformRepository) PreviewOwnedContent(context.Context, int, port.StudioContentType, port.StudioFilter) (port.StudioBatchPreview, error) {
+	return f.previewResult, f.previewErr
+}
+
+func (f *fakePlatformRepository) BatchUpdateOwnedContentStatus(_ context.Context, _ int, contentType port.StudioContentType, scope port.StudioBatchScope, status int, actor port.StudioAuditActor) (port.StudioBatchMutation, error) {
 	f.batchStatusCalls++
 	f.batchStatusKind = contentType
-	f.batchStatusIDs = append([]int(nil), ids...)
+	f.batchStatusScope = scope
+	f.batchStatusActor = actor
 	f.batchStatusValue = status
 	return f.batchStatusResult, f.batchStatusErr
 }
 
-func (f *fakePlatformRepository) BatchDeleteOwnedContent(_ context.Context, _ int, contentType port.StudioContentType, ids []int) (int, error) {
+func (f *fakePlatformRepository) BatchDeleteOwnedContent(_ context.Context, _ int, contentType port.StudioContentType, scope port.StudioBatchScope, actor port.StudioAuditActor) (port.StudioBatchMutation, error) {
 	f.batchDeleteCalls++
 	f.batchDeleteKind = contentType
-	f.batchDeleteIDs = append([]int(nil), ids...)
+	f.batchDeleteScope = scope
+	f.batchDeleteActor = actor
 	return f.batchDeleteResult, f.batchDeleteErr
+}
+
+func (f *fakePlatformRepository) RetryScheduledPublication(_ context.Context, _ int, articleID int, _ port.StudioAuditActor) (port.ScheduledPublish, error) {
+	f.retryCalls++
+	f.retryArticleID = articleID
+	return f.retryResult, f.retryErr
 }
 
 func (f *fakePlatformRepository) GetStudioProfile(context.Context, int) (port.StudioProfile, error) {
@@ -89,6 +109,16 @@ func (f *fakePlatformRepository) ModerateContent(_ context.Context, contentType 
 	f.moderateHidden = hidden
 	f.moderateReason = reason
 	return f.moderateErr
+}
+
+type recordingPlatformCache struct {
+	fakeServiceCache
+	deleted []string
+}
+
+func (c *recordingPlatformCache) Delete(_ context.Context, key string) error {
+	c.deleted = append(c.deleted, key)
+	return nil
 }
 
 type fakeArticleDistributor struct {
@@ -276,22 +306,66 @@ func TestStudioFilterParsesSeriesAndStatus(t *testing.T) {
 }
 
 func TestPlatformBatchStatusValidatesAndDeduplicates(t *testing.T) {
-	repo := &fakePlatformRepository{batchStatusResult: 2}
+	repo := &fakePlatformRepository{batchStatusResult: port.StudioBatchMutation{Affected: 2, AuditID: 9}}
 	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
 
 	result := service.BatchUpdateContentStatus(platformTestContext(
 		http.MethodPut,
 		"/v1/studio/content/batch-status",
-		`{"kind":"article","ids":[3,3,5],"visibility":"private"}`,
+		`{"kind":"article","scope":{"mode":"ids","ids":[3,3,5]},"visibility":"private"}`,
 	))
 	if !result.Flag || repo.batchStatusCalls != 1 || repo.batchStatusKind != port.StudioContentArticle || repo.batchStatusValue != 2 {
 		t.Fatalf("unexpected batch status result: result=%+v repo=%+v", result, repo)
 	}
-	if len(repo.batchStatusIDs) != 2 || repo.batchStatusIDs[0] != 3 || repo.batchStatusIDs[1] != 5 {
-		t.Fatalf("unexpected ids: %v", repo.batchStatusIDs)
+	if len(repo.batchStatusScope.IDs) != 2 || repo.batchStatusScope.IDs[0] != 3 || repo.batchStatusScope.IDs[1] != 5 {
+		t.Fatalf("unexpected ids: %v", repo.batchStatusScope.IDs)
 	}
 }
 
+func TestPlatformBatchPreviewAndFilterScope(t *testing.T) {
+	repo := &fakePlatformRepository{previewResult: port.StudioBatchPreview{Count: 23, MaxID: 99, HiddenCount: 2}}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	preview := service.BatchPreviewContent(platformTestContext(
+		http.MethodPost,
+		"/v1/studio/content/batch-preview",
+		`{"kind":"article","status":3,"keywords":"Go"}`,
+	))
+	if !preview.Flag {
+		t.Fatalf("preview failed: %+v", preview)
+	}
+
+	result := service.BatchUpdateContentStatus(platformTestContext(
+		http.MethodPut,
+		"/v1/studio/content/batch-status",
+		`{"kind":"article","scope":{"mode":"filter","status":3,"keywords":"Go","maxId":99,"excludeIds":[8],"expectedCount":22},"visibility":"public"}`,
+	))
+	if !result.Flag || repo.batchStatusScope.Mode != port.StudioBatchScopeFilter || repo.batchStatusScope.MaxID != 99 || repo.batchStatusScope.ExpectedCount != 22 || len(repo.batchStatusScope.ExcludeIDs) != 1 {
+		t.Fatalf("unexpected filter scope: result=%+v scope=%+v", result, repo.batchStatusScope)
+	}
+}
+
+func TestPlatformBatchFilterInvalidatesReturnedArticleIDs(t *testing.T) {
+	repo := &fakePlatformRepository{batchStatusResult: port.StudioBatchMutation{Affected: 2, AuditID: 9, ContentIDs: []int{11, 12}}}
+	cache := &recordingPlatformCache{}
+	service, err := NewPlatformService(PlatformServiceDeps{
+		Repo: repo, Articles: &fakeArticleRepository{}, Storage: fakeServiceStorage{}, Cache: cache,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := service.BatchUpdateContentStatus(platformTestContext(
+		http.MethodPut,
+		"/v1/studio/content/batch-status",
+		`{"kind":"article","scope":{"mode":"filter","status":3,"maxId":99,"expectedCount":2},"visibility":"private"}`,
+	))
+	if !result.Flag {
+		t.Fatalf("batch status failed: %+v", result)
+	}
+	if strings.Join(cache.deleted, ",") != "11,12" {
+		t.Fatalf("unexpected cache invalidations: %v", cache.deleted)
+	}
+}
 func TestPlatformBatchStatusRejectsScheduledAndInvalidKinds(t *testing.T) {
 	repo := &fakePlatformRepository{}
 	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
@@ -299,7 +373,7 @@ func TestPlatformBatchStatusRejectsScheduledAndInvalidKinds(t *testing.T) {
 	scheduled := service.BatchUpdateContentStatus(platformTestContext(
 		http.MethodPut,
 		"/v1/studio/content/batch-status",
-		`{"kind":"article","ids":[3],"visibility":"scheduled"}`,
+		`{"kind":"article","scope":{"mode":"ids","ids":[3]},"visibility":"scheduled"}`,
 	))
 	if scheduled.Flag || repo.batchStatusCalls != 0 {
 		t.Fatalf("scheduled batch status must fail: result=%+v repo=%+v", scheduled, repo)
@@ -307,7 +381,7 @@ func TestPlatformBatchStatusRejectsScheduledAndInvalidKinds(t *testing.T) {
 	invalid := service.BatchUpdateContentStatus(platformTestContext(
 		http.MethodPut,
 		"/v1/studio/content/batch-status",
-		`{"kind":"photo","ids":[3],"visibility":"public"}`,
+		`{"kind":"photo","scope":{"mode":"ids","ids":[3]},"visibility":"public"}`,
 	))
 	if invalid.Flag || repo.batchStatusCalls != 0 {
 		t.Fatalf("invalid batch kind must fail: result=%+v repo=%+v", invalid, repo)
@@ -315,19 +389,19 @@ func TestPlatformBatchStatusRejectsScheduledAndInvalidKinds(t *testing.T) {
 }
 
 func TestPlatformBatchDeleteUsesOwnedContentType(t *testing.T) {
-	repo := &fakePlatformRepository{batchDeleteResult: 2}
+	repo := &fakePlatformRepository{batchDeleteResult: port.StudioBatchMutation{Affected: 2, AuditID: 10}}
 	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
 
 	result := service.BatchDeleteContent(platformTestContext(
 		http.MethodDelete,
 		"/v1/studio/content/batch",
-		`{"kind":"series","ids":[7,8]}`,
+		`{"kind":"series","scope":{"mode":"ids","ids":[7,8]}}`,
 	))
 	if !result.Flag || repo.batchDeleteCalls != 1 || repo.batchDeleteKind != port.StudioContentSeries {
 		t.Fatalf("unexpected batch delete result: result=%+v repo=%+v", result, repo)
 	}
-	if len(repo.batchDeleteIDs) != 2 || repo.batchDeleteIDs[0] != 7 || repo.batchDeleteIDs[1] != 8 {
-		t.Fatalf("unexpected delete ids: %v", repo.batchDeleteIDs)
+	if len(repo.batchDeleteScope.IDs) != 2 || repo.batchDeleteScope.IDs[0] != 7 || repo.batchDeleteScope.IDs[1] != 8 {
+		t.Fatalf("unexpected delete ids: %v", repo.batchDeleteScope.IDs)
 	}
 }
 

@@ -2,7 +2,7 @@ import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
 import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticle, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
-  type ContentContinuationTarget, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
+  type ContentAuditItem, type ContentAuditRecord, type ContentContinuationTarget, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
 export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
@@ -616,6 +616,14 @@ export async function listAdminOperationLogs(params: Record<string, string | num
 
 export async function listAdminExceptionLogs(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<Record<string, unknown>>> {
   return listAdminPage<Record<string, unknown>>('admin/logs/exceptions', params, config)
+}
+
+export async function listAdminContentAudits(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<ContentAuditRecord>> {
+  return listAdminPage<ContentAuditRecord>('admin/content/audits', params, config)
+}
+
+export async function listAdminContentAuditItems(auditId: number, params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<ContentAuditItem>> {
+  return listAdminPage<ContentAuditItem>(`admin/content/audits/${encodeURIComponent(auditId)}/items`, params, config)
 }
 
 export async function listAdminMedia(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminMediaAsset>> {

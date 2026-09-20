@@ -96,15 +96,44 @@ type StudioSeriesVO struct {
 	Visibility string `json:"visibility"`
 }
 
+type StudioBatchScopeVO struct {
+	Mode          string `json:"mode"`
+	Ids           []int  `json:"ids"`
+	Status        int    `json:"status"`
+	Keywords      string `json:"keywords"`
+	SeriesId      int    `json:"seriesId"`
+	MaxId         int    `json:"maxId"`
+	ExcludeIds    []int  `json:"excludeIds"`
+	ExpectedCount int    `json:"expectedCount"`
+}
+
+type StudioBatchPreviewVO struct {
+	Kind     string `json:"kind"`
+	Status   int    `json:"status"`
+	Keywords string `json:"keywords"`
+	SeriesId int    `json:"seriesId"`
+}
+
 type StudioBatchStatusVO struct {
-	Kind       string `json:"kind"`
-	Ids        []int  `json:"ids"`
-	Visibility string `json:"visibility"`
+	Kind       string             `json:"kind"`
+	Scope      StudioBatchScopeVO `json:"scope"`
+	Visibility string             `json:"visibility"`
 }
 
 type StudioBatchDeleteVO struct {
-	Kind string `json:"kind"`
-	Ids  []int  `json:"ids"`
+	Kind  string             `json:"kind"`
+	Scope StudioBatchScopeVO `json:"scope"`
+}
+
+type ContentAuditFilterVO struct {
+	Current     int    `form:"current"`
+	Size        int    `form:"size"`
+	ContentType string `form:"contentType"`
+	Operation   string `form:"operation"`
+	Result      string `form:"result"`
+	Keywords    string `form:"keywords"`
+	StartDate   string `form:"startDate"`
+	EndDate     string `form:"endDate"`
 }
 
 type StudioTaxonomyVO struct {

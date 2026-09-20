@@ -11,7 +11,7 @@ import (
 )
 
 type DefaultTargetsDeps struct {
-	Articles   port.ArticleRepository
+	Publishes  port.ScheduledPublishRepository
 	Newsletter port.NewsletterEnqueuer
 	Growth     port.GrowthRepository
 	JobLogs    port.JobLogRepository
@@ -22,7 +22,7 @@ func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error
 	if scheduler == nil {
 		return errors.New("scheduler is nil")
 	}
-	if deps.Articles == nil || deps.Growth == nil || deps.JobLogs == nil || deps.UserAreas == nil {
+	if deps.Publishes == nil || deps.Growth == nil || deps.JobLogs == nil || deps.UserAreas == nil {
 		return errors.New("default job dependencies are incomplete")
 	}
 	targets := []struct {
@@ -30,21 +30,9 @@ func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error
 		handler Handler
 	}{
 		{
-			meta: port.JobTarget{Target: "article.publishScheduled", Name: "Publish scheduled articles", Description: "Publish due scheduled articles and enqueue subscriber notifications.", CronExample: "* * * * *"},
+			meta: port.JobTarget{Target: "article.publishScheduled", Name: "Publish scheduled articles", Description: "Publish due scheduled articles, enqueue subscriber notifications, and retry failed hand-offs.", CronExample: "* * * * *"},
 			handler: func(ctx context.Context) (port.JobRunResult, error) {
-				ids, err := deps.Articles.PublishDueArticles(ctx)
-				if err != nil {
-					return port.JobRunResult{}, err
-				}
-				for _, id := range ids {
-					if deps.Newsletter == nil {
-						continue
-					}
-					if err := deps.Newsletter.EnqueueArticle(ctx, id); err != nil {
-						slog.Warn("enqueue scheduled article notification failed", "articleId", id, "error", err)
-					}
-				}
-				return port.JobRunResult{Processed: len(ids) > 0, Message: fmt.Sprintf("published %d articles", len(ids))}, nil
+				return runScheduledPublish(ctx, deps.Publishes, deps.Newsletter)
 			},
 		},
 		{
@@ -57,9 +45,9 @@ func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error
 			},
 		},
 		{
-			meta: port.JobTarget{Target: "jobLogs.cleanup", Name: "Clean job logs", Description: "Purge the job execution log.", CronExample: "0 4 * * *"},
+			meta: port.JobTarget{Target: "jobLogs.cleanup", Name: "Clean job logs", Description: "Delete job execution logs older than 30 days.", CronExample: "0 4 * * *"},
 			handler: func(ctx context.Context) (port.JobRunResult, error) {
-				if err := deps.JobLogs.Clean(ctx); err != nil {
+				if err := deps.JobLogs.CleanBefore(ctx, time.Now().Add(-30*24*time.Hour)); err != nil {
 					return port.JobRunResult{}, err
 				}
 				return port.JobRunResult{Processed: true, Message: "job logs cleaned"}, nil
@@ -79,4 +67,70 @@ func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error
 		}
 	}
 	return nil
+}
+
+var scheduledPublishRetryDelays = [...]time.Duration{
+	time.Minute,
+	5 * time.Minute,
+	15 * time.Minute,
+	time.Hour,
+	6 * time.Hour,
+}
+
+func runScheduledPublish(ctx context.Context, publishes port.ScheduledPublishRepository, newsletter port.NewsletterEnqueuer) (port.JobRunResult, error) {
+	now := time.Now()
+	retries, err := publishes.ListRetryableScheduledPublishes(ctx, now, 100)
+	if err != nil {
+		return port.JobRunResult{}, err
+	}
+	due, err := publishes.PublishDueScheduledArticles(ctx, now, 100)
+	if err != nil {
+		return port.JobRunResult{}, err
+	}
+	records := make([]port.ScheduledPublish, 0, len(retries)+len(due))
+	records = append(records, retries...)
+	records = append(records, due...)
+
+	queued, suppressed, failed := 0, 0, 0
+	var runErr error
+	for _, record := range records {
+		if record.ModerationStatus == "hidden" {
+			if err := publishes.MarkScheduledNotificationSuppressed(ctx, record.RecordID, "content hidden by moderation"); err != nil {
+				runErr = errors.Join(runErr, err)
+				continue
+			}
+			suppressed++
+			continue
+		}
+		if newsletter == nil {
+			if err := publishes.MarkScheduledNotificationSuppressed(ctx, record.RecordID, "newsletter service is not configured"); err != nil {
+				runErr = errors.Join(runErr, err)
+			}
+			suppressed++
+			continue
+		}
+		if err := newsletter.EnqueueArticle(ctx, record.ArticleID); err != nil {
+			failed++
+			slog.Warn("enqueue scheduled article notification failed", "articleId", record.ArticleID, "attempt", record.NotificationAttempts+1, "error", err)
+			var retryAt *time.Time
+			if record.NotificationAttempts < len(scheduledPublishRetryDelays) {
+				next := now.Add(scheduledPublishRetryDelays[record.NotificationAttempts])
+				retryAt = &next
+			}
+			if markErr := publishes.MarkScheduledNotificationFailed(ctx, record.RecordID, err.Error(), retryAt); markErr != nil {
+				runErr = errors.Join(runErr, markErr)
+			}
+			continue
+		}
+		if err := publishes.MarkScheduledNotificationQueued(ctx, record.RecordID, time.Now()); err != nil {
+			runErr = errors.Join(runErr, err)
+			continue
+		}
+		queued++
+	}
+	message := fmt.Sprintf("published=%d queued=%d retried=%d failed=%d suppressed=%d", len(due), queued, len(retries), failed, suppressed)
+	if runErr != nil {
+		return port.JobRunResult{Processed: len(due)+len(retries) > 0, Message: message}, runErr
+	}
+	return port.JobRunResult{Processed: len(due)+len(retries) > 0, Message: message}, nil
 }

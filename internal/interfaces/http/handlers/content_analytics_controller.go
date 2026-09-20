@@ -75,3 +75,15 @@ func GetContentAnalyticsArticle(c *gin.Context) {
 	articleID, _ := strconv.Atoi(c.Param("articleId"))
 	c.JSON(http.StatusOK, contentAnalyticsService.GetContentAnalyticsArticle(c.Request.Context(), articleID, c.DefaultQuery("range", "7d")))
 }
+
+// GetStudioAnalytics returns owner-scoped publishing and reading metrics.
+// @Router /v1/studio/analytics [GET]
+func GetStudioAnalytics(c *gin.Context) {
+	c.JSON(http.StatusOK, contentAnalyticsService.GetStudioAnalytics(c))
+}
+
+// GetStudioCalendar returns the current author article publishing calendar.
+// @Router /v1/studio/calendar [GET]
+func GetStudioCalendar(c *gin.Context) {
+	c.JSON(http.StatusOK, contentAnalyticsService.GetStudioCalendar(c))
+}

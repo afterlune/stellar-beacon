@@ -85,6 +85,8 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	newsletterRepo := repository.NewNewsletterRepo(engine)
 	growthRepo := repository.NewGrowthRepo(engine)
 	contentAnalyticsRepo := repository.NewContentAnalyticsRepo(engine)
+	studioOperations := repository.NewStudioOperationsRepo(engine)
+	contentAudit := repository.NewContentAuditRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -116,7 +118,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		return nil, errors.Unavailable("bootstrap.service.growth", err)
 	}
 	contentAnalyticsService, err := service.NewContentAnalyticsService(service.ContentAnalyticsServiceDeps{
-		Repo: contentAnalyticsRepo, Articles: article, Cache: redisCache, Visitor: visitorResolver, Limiter: redisCache,
+		Repo: contentAnalyticsRepo, Articles: article, Studio: studioOperations, Cache: redisCache, Visitor: visitorResolver, Limiter: redisCache,
 	})
 	if err != nil {
 		cancel()
@@ -227,7 +229,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 
 	scheduler := task.NewScheduler(job, jobLog, redisCache)
 	if err := task.RegisterDefaultTargets(scheduler, task.DefaultTargetsDeps{
-		Articles: article, Newsletter: newsletterService, Growth: growthRepo,
+		Publishes: article, Newsletter: newsletterService, Growth: growthRepo,
 		JobLogs: jobLog, UserAreas: userAuthService,
 	}); err != nil {
 		cancel()
@@ -262,6 +264,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		Newsletter:       newsletterService,
 		Growth:           growthService,
 		ContentAnalytics: contentAnalyticsService,
+		ContentAudit:     service.NewContentAuditService(contentAudit),
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

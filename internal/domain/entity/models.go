@@ -39,6 +39,51 @@ type TArticle struct {
 	UpdateTime         time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
+// TArticlePublishRecord is the durable hand-off between the scheduled
+// publisher and subscriber notification enqueueing. The article status flip
+// and this row are committed in the same transaction.
+type TArticlePublishRecord struct {
+	Id                   int       `xorm:"autoincr not null pk unique BIGINT" json:"id"`
+	ArticleId            int       `xorm:"article_id not null unique(article_schedule) index INTEGER" json:"articleId"`
+	UserId               int       `xorm:"user_id not null index INTEGER" json:"userId"`
+	ScheduledAt          time.Time `xorm:"scheduled_at not null unique(article_schedule) DATETIME" json:"scheduledAt"`
+	PublishedAt          time.Time `xorm:"published_at not null DATETIME" json:"publishedAt"`
+	NotificationState    string    `xorm:"notification_state not null default 'pending' VARCHAR(20)" json:"notificationState"`
+	NotificationAttempts int       `xorm:"notification_attempts not null default 0 INTEGER" json:"notificationAttempts"`
+	NextRetryAt          time.Time `xorm:"next_retry_at DATETIME" json:"nextRetryAt,omitempty"`
+	LastError            string    `xorm:"last_error not null default '' TEXT" json:"lastError,omitempty"`
+	CreateTime           time.Time `xorm:"created not null DATETIME" json:"createTime"`
+	UpdateTime           time.Time `xorm:"updated not null DATETIME" json:"updateTime"`
+}
+
+type TContentOperationAudit struct {
+	Id               int       `xorm:"autoincr not null pk unique BIGINT" json:"id"`
+	OperatorId       int       `xorm:"operator_id not null index INTEGER" json:"operatorId"`
+	OperatorNickname string    `xorm:"operator_nickname not null VARCHAR(64)" json:"operatorNickname"`
+	ContentType      string    `xorm:"content_type not null VARCHAR(16)" json:"contentType"`
+	Operation        string    `xorm:"operation not null VARCHAR(32)" json:"operation"`
+	TargetMode       string    `xorm:"target_mode not null VARCHAR(16)" json:"targetMode"`
+	FilterSnapshot   string    `xorm:"filter_snapshot not null default '{}' JSONB" json:"filterSnapshot"`
+	SnapshotMaxId    int       `xorm:"snapshot_max_id not null default 0 INTEGER" json:"snapshotMaxId"`
+	RequestedCount   int       `xorm:"requested_count not null default 0 INTEGER" json:"requestedCount"`
+	AffectedCount    int       `xorm:"affected_count not null default 0 INTEGER" json:"affectedCount"`
+	Result           string    `xorm:"result not null VARCHAR(16)" json:"result"`
+	ErrorMessage     string    `xorm:"error_message not null default '' TEXT" json:"errorMessage,omitempty"`
+	IpAddress        string    `xorm:"ip_address not null default '' VARCHAR(255)" json:"ipAddress"`
+	IpSource         string    `xorm:"ip_source not null default '' VARCHAR(255)" json:"ipSource"`
+	CreateTime       time.Time `xorm:"created not null created_at DATETIME" json:"createTime"`
+}
+
+type TContentOperationAuditItem struct {
+	Id             int    `xorm:"autoincr not null pk unique BIGINT" json:"id"`
+	AuditId        int    `xorm:"audit_id not null index BIGINT" json:"auditId"`
+	ContentId      int    `xorm:"content_id not null INTEGER" json:"contentId"`
+	Title          string `xorm:"title not null default '' VARCHAR(255)" json:"title"`
+	PreviousStatus int    `xorm:"previous_status not null SMALLINT" json:"previousStatus"`
+	NextStatus     int    `xorm:"next_status not null SMALLINT" json:"nextStatus"`
+	Result         string `xorm:"result not null VARCHAR(16)" json:"result"`
+}
+
 // TSeries groups articles into an ordered collection. The relation lives on
 // t_article.series_id so an article belongs to at most one series.
 type TSeries struct {

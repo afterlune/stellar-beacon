@@ -87,6 +87,7 @@ type JobLogRepository interface {
 	Create(ctx context.Context, log entity.TJobLog) error
 	Delete(ctx context.Context, ids []int) error
 	Clean(ctx context.Context) error
+	CleanBefore(ctx context.Context, before time.Time) error
 	ListGroups(ctx context.Context) (string, error)
 }
 

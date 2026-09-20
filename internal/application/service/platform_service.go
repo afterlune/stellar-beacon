@@ -42,8 +42,10 @@ type PlatformService interface {
 	GetOwnedSeries(c *gin.Context) model.ResultVO
 	SaveOwnedSeries(c *gin.Context) model.ResultVO
 	DeleteOwnedSeries(c *gin.Context) model.ResultVO
+	BatchPreviewContent(c *gin.Context) model.ResultVO
 	BatchUpdateContentStatus(c *gin.Context) model.ResultVO
 	BatchDeleteContent(c *gin.Context) model.ResultVO
+	RetryScheduledPublication(c *gin.Context) model.ResultVO
 
 	ListOwnedCategories(c *gin.Context) model.ResultVO
 	SaveOwnedCategory(c *gin.Context) model.ResultVO
@@ -615,6 +617,31 @@ func (s *MyPlatformService) DeleteOwnedSeries(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
+func (s *MyPlatformService) BatchPreviewContent(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	var vo model.StudioBatchPreviewVO
+	if err := c.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	contentType, ok := studioBatchContentType(vo.Kind)
+	if !ok {
+		return model.ResultFailWithMessage("内容类型不正确")
+	}
+	if !validStudioStatus(contentType, vo.Status) {
+		return model.ResultFailWithMessage("状态筛选不正确")
+	}
+	preview, err := s.platformRepo().PreviewOwnedContent(c.Request.Context(), user.UserInfoId, contentType, port.StudioFilter{
+		Status: vo.Status, Keywords: strings.TrimSpace(vo.Keywords), SeriesID: vo.SeriesId,
+	})
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(preview)
+}
+
 func (s *MyPlatformService) BatchUpdateContentStatus(c *gin.Context) model.ResultVO {
 	user, ok := currentUser(c)
 	if !ok {
@@ -628,24 +655,24 @@ func (s *MyPlatformService) BatchUpdateContentStatus(c *gin.Context) model.Resul
 	if !ok {
 		return model.ResultFailWithMessage("内容类型不正确")
 	}
-	ids, message := studioBatchIDs(vo.Ids)
-	if message != "" {
-		return model.ResultFailWithMessage(message)
+	scope, ok := studioBatchScope(vo.Scope, contentType)
+	if !ok {
+		return model.ResultFailWithMessage("批量选择范围不正确")
 	}
 	status, ok := visibilityStatus(vo.Visibility, false)
 	if !ok {
 		return model.ResultFailWithMessage("批量状态仅支持公开、私有或草稿")
 	}
-	updated, err := s.platformRepo().BatchUpdateOwnedContentStatus(c.Request.Context(), user.UserInfoId, contentType, ids, status)
+	mutation, err := s.platformRepo().BatchUpdateOwnedContentStatus(c.Request.Context(), user.UserInfoId, contentType, scope, status, studioAuditActor(c, user))
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	if contentType == port.StudioContentArticle && s.cache != nil {
-		for _, id := range ids {
+		for _, id := range mutation.ContentIDs {
 			_ = s.cache.Delete(c.Request.Context(), strconv.Itoa(id))
 		}
 	}
-	return model.ResultOkWithData(map[string]int{"updated": updated})
+	return model.ResultOkWithData(mutation)
 }
 
 func (s *MyPlatformService) BatchDeleteContent(c *gin.Context) model.ResultVO {
@@ -661,20 +688,44 @@ func (s *MyPlatformService) BatchDeleteContent(c *gin.Context) model.ResultVO {
 	if !ok {
 		return model.ResultFailWithMessage("内容类型不正确")
 	}
-	ids, message := studioBatchIDs(vo.Ids)
-	if message != "" {
-		return model.ResultFailWithMessage(message)
+	scope, ok := studioBatchScope(vo.Scope, contentType)
+	if !ok {
+		return model.ResultFailWithMessage("批量选择范围不正确")
 	}
-	deleted, err := s.platformRepo().BatchDeleteOwnedContent(c.Request.Context(), user.UserInfoId, contentType, ids)
+	mutation, err := s.platformRepo().BatchDeleteOwnedContent(c.Request.Context(), user.UserInfoId, contentType, scope, studioAuditActor(c, user))
 	if err != nil {
 		return model.ResultFromError(err)
 	}
 	if contentType == port.StudioContentArticle && s.cache != nil {
-		for _, id := range ids {
+		for _, id := range mutation.ContentIDs {
 			_ = s.cache.Delete(c.Request.Context(), strconv.Itoa(id))
 		}
 	}
-	return model.ResultOkWithData(map[string]int{"deleted": deleted})
+	return model.ResultOkWithData(mutation)
+}
+
+func (s *MyPlatformService) RetryScheduledPublication(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	articleID, err := pathID(c, "articleId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	record, err := s.platformRepo().RetryScheduledPublication(c.Request.Context(), user.UserInfoId, articleID, studioAuditActor(c, user))
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(record)
+}
+
+func studioAuditActor(c *gin.Context, user model.UserDetailsDTO) port.StudioAuditActor {
+	ip := strings.TrimSpace(c.ClientIP())
+	if ip == "" {
+		ip = user.IpAddress
+	}
+	return port.StudioAuditActor{UserID: user.UserInfoId, Nickname: user.Nickname, IPAddress: ip, IPSource: user.IpSource}
 }
 
 func studioBatchContentType(value string) (port.StudioContentType, bool) {
@@ -690,15 +741,60 @@ func studioBatchContentType(value string) (port.StudioContentType, bool) {
 	}
 }
 
-func studioBatchIDs(values []int) ([]int, string) {
+func studioBatchScope(vo model.StudioBatchScopeVO, contentType port.StudioContentType) (port.StudioBatchScope, bool) {
+	mode := strings.ToLower(strings.TrimSpace(vo.Mode))
+	scope := port.StudioBatchScope{
+		Mode: mode, Status: vo.Status, Keywords: strings.TrimSpace(vo.Keywords), SeriesID: vo.SeriesId,
+		MaxID: vo.MaxId, ExcludeIDs: vo.ExcludeIds, ExpectedCount: vo.ExpectedCount,
+	}
+	switch mode {
+	case port.StudioBatchScopeIDs:
+		ids, ok := studioBatchIDs(vo.Ids, 500)
+		if !ok {
+			return port.StudioBatchScope{}, false
+		}
+		scope.IDs = ids
+		return scope, true
+	case port.StudioBatchScopeFilter:
+		if scope.ExpectedCount <= 0 || scope.MaxID <= 0 || !validStudioStatus(contentType, scope.Status) {
+			return port.StudioBatchScope{}, false
+		}
+		excludes, ok := studioBatchIDs(vo.ExcludeIds, 500)
+		if len(vo.ExcludeIds) > 0 && !ok {
+			return port.StudioBatchScope{}, false
+		}
+		scope.ExcludeIDs = excludes
+		if contentType != port.StudioContentArticle && scope.SeriesID != 0 {
+			return port.StudioBatchScope{}, false
+		}
+		return scope, true
+	default:
+		return port.StudioBatchScope{}, false
+	}
+}
+
+func validStudioStatus(contentType port.StudioContentType, status int) bool {
+	if status < 0 {
+		return false
+	}
+	if contentType == port.StudioContentArticle {
+		return status <= 4
+	}
+	return status <= 3
+}
+
+func studioBatchIDs(values []int, limit int) ([]int, bool) {
 	if len(values) == 0 {
-		return nil, "请选择要操作的内容"
+		return []int{}, true
+	}
+	if limit <= 0 || len(values) > limit {
+		return nil, false
 	}
 	seen := make(map[int]struct{}, len(values))
 	ids := make([]int, 0, len(values))
 	for _, value := range values {
 		if value <= 0 {
-			return nil, "内容 ID 不正确"
+			return nil, false
 		}
 		if _, exists := seen[value]; exists {
 			continue
@@ -706,12 +802,18 @@ func studioBatchIDs(values []int) ([]int, string) {
 		seen[value] = struct{}{}
 		ids = append(ids, value)
 	}
-	if len(ids) > 100 {
-		return nil, "单次最多操作 100 条内容"
+	if len(ids) == 0 {
+		return nil, false
 	}
-	return ids, ""
+	return ids, true
 }
 
+func studioScopeIDs(scope port.StudioBatchScope) []int {
+	if scope.Mode == port.StudioBatchScopeIDs {
+		return scope.IDs
+	}
+	return nil
+}
 func (s *MyPlatformService) ListOwnedCategories(c *gin.Context) model.ResultVO {
 	user, ok := currentUser(c)
 	if !ok {

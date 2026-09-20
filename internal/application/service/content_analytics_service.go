@@ -23,6 +23,7 @@ import (
 const (
 	contentUniqueReadersAllPrefix       = "content:unique_readers:all:"
 	contentUniqueReadersArticlePrefix   = "content:unique_readers:article:"
+	contentUniqueReadersAuthorPrefix    = "content:unique_readers:author:"
 	contentReadSessionIdempotencyPrefix = "content:read-session:"
 	contentReadSessionTTL               = 400 * 24 * time.Hour
 	contentReadSessionIdempotencyTTL    = 48 * time.Hour
@@ -37,11 +38,14 @@ type ContentAnalyticsService interface {
 	ListContentAnalyticsArticles(ctx context.Context, rangeValue, sortBy string, current, size int) model.ResultVO
 	ListContinuationTargets(ctx context.Context, rangeValue, sortBy string, sourceArticleID, current, size int) model.ResultVO
 	GetContentAnalyticsArticle(ctx context.Context, articleID int, rangeValue string) model.ResultVO
+	GetStudioAnalytics(c *gin.Context) model.ResultVO
+	GetStudioCalendar(c *gin.Context) model.ResultVO
 }
 
 type MyContentAnalyticsService struct {
 	repo     port.ContentAnalyticsRepository
 	articles port.ArticleRepository
+	studio   port.StudioOperationsRepository
 	cache    port.Cache
 	visitor  port.VisitorResolver
 	limiter  port.RateLimiter
@@ -54,6 +58,7 @@ func NewContentAnalyticsService(deps ContentAnalyticsServiceDeps) (*MyContentAna
 	return &MyContentAnalyticsService{
 		repo:     deps.Repo,
 		articles: deps.Articles,
+		studio:   deps.Studio,
 		cache:    deps.Cache,
 		visitor:  deps.Visitor,
 		limiter:  deps.Limiter,
@@ -130,6 +135,16 @@ func (s *MyContentAnalyticsService) TrackReadSession(c *gin.Context) model.Resul
 	if _, err := s.cache.PFAdd(c.Request.Context(), allKey, fingerprintHash); err != nil {
 		s.removeSessionKey(c.Request.Context(), sessionKey)
 		return model.ResultFromError(err)
+	}
+	if article.UserId > 0 {
+		authorKey := contentUniqueReadersAuthorPrefix + strconv.Itoa(article.UserId) + ":" + now.Format("2006-01-02")
+		if _, err := s.cache.PFAdd(c.Request.Context(), authorKey, fingerprintHash); err != nil {
+			s.removeSessionKey(c.Request.Context(), sessionKey)
+			return model.ResultFromError(err)
+		}
+		if _, err := s.cache.Expire(c.Request.Context(), authorKey, contentReadSessionTTL); err != nil {
+			slog.WarnContext(c.Request.Context(), "expire author reader hyperloglog failed", "authorId", article.UserId, "error", err)
+		}
 	}
 	if _, err := s.cache.Expire(c.Request.Context(), articleKey, contentReadSessionTTL); err != nil {
 		slog.WarnContext(c.Request.Context(), "expire article reader hyperloglog failed", "error", err)
@@ -313,6 +328,82 @@ func (s *MyContentAnalyticsService) ListContinuationTargets(ctx context.Context,
 	return model.ResultOkWithData(model.PageResultDTO{Records: items[start:end], Count: len(items)})
 }
 
+func (s *MyContentAnalyticsService) GetStudioAnalytics(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	if s.studio == nil {
+		return model.ResultFailWithMessage("运营统计暂不可用")
+	}
+	rangeValue := strings.TrimSpace(c.Query("range"))
+	if rangeValue != "7d" && rangeValue != "90d" {
+		rangeValue = "30d"
+	}
+	window := resolveContentAnalyticsRange(rangeValue, timeNow())
+	endExclusive := window.End.AddDate(0, 0, 1)
+	summary, err := s.studio.StudioOperationsSummary(c.Request.Context(), user.UserInfoId, window.Start, endExclusive)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	trend, err := s.studio.StudioAnalyticsTrend(c.Request.Context(), user.UserInfoId, window.Start, window.End)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	topArticles, err := s.studio.StudioTopArticles(c.Request.Context(), user.UserInfoId, window.Start, window.End, 5)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	totals := port.ContentDailyMetric{}
+	for index := range trend {
+		totals.Views += trend[index].Views
+		totals.EffectiveSessions += trend[index].EffectiveSessions
+		totals.TotalActiveMs += trend[index].TotalActiveMs
+		totals.CompletedSessions += trend[index].CompletedSessions
+		totals.SeriesImpressions += trend[index].SeriesImpressions
+		totals.SeriesClicks += trend[index].SeriesClicks
+		totals.RelatedImpressions += trend[index].RelatedImpressions
+		totals.RelatedClicks += trend[index].RelatedClicks
+	}
+	for index := range trend {
+		totals.UniqueReaders += trend[index].UniqueReaders
+		if s.cache != nil {
+			key := contentUniqueReadersAuthorPrefix + strconv.Itoa(user.UserInfoId) + ":" + trend[index].Date
+			if count, countErr := s.cache.PFCount(c.Request.Context(), key); countErr == nil && count > 0 {
+				trend[index].UniqueReaders = count
+			}
+		}
+	}
+	totals.UniqueReaders = s.uniqueReadersForAuthorDays(c.Request.Context(), user.UserInfoId, window.Days, totals.UniqueReaders)
+	return model.ResultOkWithData(model.StudioAnalyticsDTO{
+		Range: rangeValue, Unit: window.Unit, Operations: summary, Performance: overviewFromContentMetrics(totals), Trend: trend,
+		TopArticles: topArticles, GeneratedAt: timeNow(),
+	})
+}
+
+func (s *MyContentAnalyticsService) GetStudioCalendar(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	if s.studio == nil {
+		return model.ResultFailWithMessage("运营日历暂不可用")
+	}
+	start, err := time.Parse(time.RFC3339, strings.TrimSpace(c.Query("start")))
+	if err != nil {
+		return model.ResultFailWithMessage("开始时间格式不正确")
+	}
+	end, err := time.Parse(time.RFC3339, strings.TrimSpace(c.Query("end")))
+	if err != nil || !end.After(start) || end.Sub(start) > 62*24*time.Hour {
+		return model.ResultFailWithMessage("日历时间范围不正确")
+	}
+	events, err := s.studio.StudioCalendar(c.Request.Context(), user.UserInfoId, start, end)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(model.StudioCalendarDTO{Events: events})
+}
+
 func (s *MyContentAnalyticsService) GetContentAnalytics(ctx context.Context, rangeValue string) model.ResultVO {
 	window := resolveContentAnalyticsRange(rangeValue, timeNow())
 	rows, err := s.repo.ListDailyMetrics(ctx, window.Start.Format("2006-01-02"), window.End.Format("2006-01-02"))
@@ -440,6 +531,25 @@ func (s *MyContentAnalyticsService) uniqueReadersForArticleDays(ctx context.Cont
 	value, err := s.cache.PFCount(ctx, keys...)
 	if err != nil {
 		slog.WarnContext(ctx, "count article unique readers failed", "articleId", articleID, "error", err)
+		return fallback
+	}
+	return value
+}
+
+func (s *MyContentAnalyticsService) uniqueReadersForAuthorDays(ctx context.Context, userID int, days []time.Time, fallback int64) int64 {
+	if userID <= 0 || len(days) == 0 || s.cache == nil {
+		return fallback
+	}
+	keys := make([]string, 0, len(days))
+	for _, day := range days {
+		keys = append(keys, contentUniqueReadersAuthorPrefix+strconv.Itoa(userID)+":"+day.Format("2006-01-02"))
+	}
+	value, err := s.cache.PFCount(ctx, keys...)
+	if err != nil {
+		slog.WarnContext(ctx, "count author unique readers failed", "authorId", userID, "error", err)
+		return fallback
+	}
+	if value == 0 && fallback > 0 {
 		return fallback
 	}
 	return value

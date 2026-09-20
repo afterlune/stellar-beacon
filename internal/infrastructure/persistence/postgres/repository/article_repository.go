@@ -3,6 +3,8 @@ package repository
 import (
 	"container/list"
 	"context"
+	"time"
+
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
@@ -13,7 +15,10 @@ import (
 	"xorm.io/xorm"
 )
 
-var _ port.ArticleRepository = (*MyArticleRepo)(nil)
+var (
+	_ port.ArticleRepository          = (*MyArticleRepo)(nil)
+	_ port.ScheduledPublishRepository = (*MyArticleRepo)(nil)
+)
 
 type MyArticleRepo struct {
 	engine *xorm.Engine
@@ -216,31 +221,137 @@ func (a *MyArticleRepo) ListRelatedArticles(ctx context.Context, articleID, cate
 	return related, nil
 }
 
-// PublishDueArticles flips every due scheduled article (status 4) to public and
-// returns their ids. The conditional update is atomic, so two instances cannot
-// publish the same article twice.
-func (a *MyArticleRepo) PublishDueArticles(ctx context.Context) ([]int, error) {
-	ids := make([]int, 0)
+// PublishDueScheduledArticles atomically releases due scheduled articles and
+// creates the durable notification hand-off record in the same transaction.
+func (a *MyArticleRepo) PublishDueScheduledArticles(ctx context.Context, now time.Time, limit int) ([]port.ScheduledPublish, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	result := make([]port.ScheduledPublish, 0)
 	err := repoTx(a.engine, ctx, "article.publish_scheduled", func(session *xorm.Session) error {
 		var rows []struct {
-			Id int `xorm:"id"`
+			Id               int       `xorm:"id"`
+			UserId           int       `xorm:"user_id"`
+			ScheduledAt      time.Time `xorm:"scheduled_at"`
+			ModerationStatus string    `xorm:"moderation_status"`
 		}
-		if err := session.SQL(
-			`UPDATE t_article SET status = 1, update_time = CURRENT_TIMESTAMP
-			 WHERE status = 4 AND is_delete = 0 AND scheduled_at IS NOT NULL AND scheduled_at <= CURRENT_TIMESTAMP
-			 RETURNING id`,
-		).Find(&rows); err != nil {
-			return apperrors.Wrap(apperrors.KindUnavailable, "article.publish_scheduled", err)
+		if err := session.SQL(`
+			SELECT id, user_id, scheduled_at, moderation_status
+			FROM t_article
+			WHERE status = 4 AND is_delete = 0 AND scheduled_at IS NOT NULL AND scheduled_at <= ?
+			ORDER BY scheduled_at ASC, id ASC
+			LIMIT ? FOR UPDATE SKIP LOCKED`, now, limit).Find(&rows); err != nil {
+			return apperrors.Unavailable("article.publish_scheduled.select", err)
 		}
 		for _, row := range rows {
-			ids = append(ids, row.Id)
+			if _, err := session.Exec(`UPDATE t_article SET status = 1, update_time = ? WHERE id = ? AND status = 4 AND is_delete = 0`, now, row.Id); err != nil {
+				return apperrors.Unavailable("article.publish_scheduled.update", err)
+			}
+			var recordID int
+			if _, err := session.SQL(`
+				INSERT INTO t_article_publish_record
+					(article_id, user_id, scheduled_at, published_at, notification_state, notification_attempts, next_retry_at, last_error, create_time, update_time)
+				VALUES (?, ?, ?, ?, ?, 0, NULL, '', ?, ?)
+				ON CONFLICT (article_id, scheduled_at) DO UPDATE
+				SET published_at = EXCLUDED.published_at, update_time = EXCLUDED.update_time
+				RETURNING id`, row.Id, row.UserId, row.ScheduledAt, now, port.ScheduledNotificationPending, now, now).Get(&recordID); err != nil {
+				return apperrors.Unavailable("article.publish_scheduled.record", err)
+			}
+			result = append(result, port.ScheduledPublish{
+				RecordID: recordID, ArticleID: row.Id, UserID: row.UserId, ScheduledAt: row.ScheduledAt, PublishedAt: now,
+				ModerationStatus: row.ModerationStatus, NotificationState: port.ScheduledNotificationPending,
+			})
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return ids, nil
+	return result, nil
+}
+
+func (a *MyArticleRepo) ListRetryableScheduledPublishes(ctx context.Context, now time.Time, limit int) ([]port.ScheduledPublish, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		RecordID             int        `xorm:"record_id"`
+		ArticleID            int        `xorm:"article_id"`
+		UserID               int        `xorm:"user_id"`
+		ScheduledAt          time.Time  `xorm:"scheduled_at"`
+		PublishedAt          time.Time  `xorm:"published_at"`
+		ModerationStatus     string     `xorm:"moderation_status"`
+		NotificationState    string     `xorm:"notification_state"`
+		NotificationAttempts int        `xorm:"notification_attempts"`
+		NextRetryAt          *time.Time `xorm:"next_retry_at"`
+		LastError            string     `xorm:"last_error"`
+	}
+	if err := session.SQL(`
+		SELECT r.id AS record_id, r.article_id, r.user_id, r.scheduled_at, r.published_at, a.moderation_status,
+		       r.notification_state, r.notification_attempts, r.next_retry_at, r.last_error
+		FROM t_article_publish_record r
+		JOIN t_article a ON a.id = r.article_id
+		WHERE r.notification_state IN ('pending', 'failed')
+		  AND r.notification_attempts < 6
+		  AND (r.next_retry_at IS NULL OR r.next_retry_at <= ?)
+		  AND a.is_delete = 0 AND a.status = 1
+		ORDER BY r.id ASC
+		LIMIT ?`, now, limit).Find(&rows); err != nil {
+		return nil, apperrors.Unavailable("article.publish_retry.list", err)
+	}
+	out := make([]port.ScheduledPublish, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, port.ScheduledPublish{
+			RecordID: row.RecordID, ArticleID: row.ArticleID, UserID: row.UserID, ScheduledAt: row.ScheduledAt,
+			PublishedAt: row.PublishedAt, ModerationStatus: row.ModerationStatus, NotificationState: row.NotificationState,
+			NotificationAttempts: row.NotificationAttempts, NextRetryAt: row.NextRetryAt, LastError: row.LastError,
+		})
+	}
+	return out, nil
+}
+
+func (a *MyArticleRepo) MarkScheduledNotificationQueued(ctx context.Context, recordID int, at time.Time) error {
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := session.Exec(`UPDATE t_article_publish_record SET notification_state = ?, next_retry_at = NULL, last_error = '', update_time = ? WHERE id = ?`, port.ScheduledNotificationQueued, at, recordID); err != nil {
+		return apperrors.Unavailable("article.publish_retry.queued", err)
+	}
+	return nil
+}
+
+func (a *MyArticleRepo) MarkScheduledNotificationFailed(ctx context.Context, recordID int, message string, retryAt *time.Time) error {
+	if len(message) > 2000 {
+		message = message[:2000]
+	}
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := session.Exec(`
+		UPDATE t_article_publish_record
+		SET notification_state = ?, notification_attempts = notification_attempts + 1,
+		    next_retry_at = ?, last_error = ?, update_time = CURRENT_TIMESTAMP
+		WHERE id = ?`, port.ScheduledNotificationFailed, retryAt, message, recordID); err != nil {
+		return apperrors.Unavailable("article.publish_retry.failed", err)
+	}
+	return nil
+}
+
+func (a *MyArticleRepo) MarkScheduledNotificationSuppressed(ctx context.Context, recordID int, message string) error {
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := session.Exec(`UPDATE t_article_publish_record SET notification_state = ?, next_retry_at = NULL, last_error = ?, update_time = CURRENT_TIMESTAMP WHERE id = ?`, port.ScheduledNotificationSuppressed, message, recordID); err != nil {
+		return apperrors.Unavailable("article.publish_retry.suppressed", err)
+	}
+	return nil
 }
 
 func (a *MyArticleRepo) GetArticleByID(ctx context.Context, articleID int) (port.Article, error) {
