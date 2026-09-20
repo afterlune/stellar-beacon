@@ -10,6 +10,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,7 +82,7 @@ func seriesContext(t *testing.T, method, target, body string, params gin.Params)
 }
 
 func TestSeriesPublicDetailReturnsOrderedArticles(t *testing.T) {
-	repo := &fakeSeriesRepository{record: entity.TSeries{Id: 3, SeriesName: "渲染管线"}}
+	repo := &fakeSeriesRepository{record: entity.TSeries{Id: 3, SeriesName: "渲染管线", Status: 1, ModerationStatus: "visible"}}
 	articles := &seriesArticles{cards: []*port.ArticleCard{{Id: 1, ArticleTitle: "第一篇"}, {Id: 2, ArticleTitle: "第二篇"}}}
 	service := mustSeriesService(t, repo, articles)
 
@@ -114,12 +115,16 @@ func TestSeriesSaveValidatesName(t *testing.T) {
 	repo := &fakeSeriesRepository{}
 	service := mustSeriesService(t, repo, &seriesArticles{})
 
-	empty := service.SaveOrUpdateSeries(seriesContext(t, http.MethodPost, "/v1/admin/series", `{"seriesName":"  "}`, nil))
+	emptyCtx := seriesContext(t, http.MethodPost, "/v1/admin/series", `{"seriesName":"  "}`, nil)
+	emptyCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	empty := service.SaveOrUpdateSeries(emptyCtx)
 	if empty.Flag {
 		t.Fatal("an empty series name must fail")
 	}
 
-	created := service.SaveOrUpdateSeries(seriesContext(t, http.MethodPost, "/v1/admin/series", `{"seriesName":" 渲染管线 ","seriesDesc":"desc"}`, nil))
+	createdCtx := seriesContext(t, http.MethodPost, "/v1/admin/series", `{"seriesName":" 渲染管线 ","seriesDesc":"desc"}`, nil)
+	createdCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	created := service.SaveOrUpdateSeries(createdCtx)
 	if !created.Flag {
 		t.Fatalf("unexpected result: %+v", created)
 	}

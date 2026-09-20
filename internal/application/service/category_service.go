@@ -93,7 +93,26 @@ func (c *MyCategoryService) SaveOrUpdateCategory(ctx *gin.Context) model.ResultV
 	if err := ctx.ShouldBind(&vo); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	category := entity.TCategory{Id: vo.Id, CategoryName: vo.CategoryName}
+	value, ok := ctx.Get("userInfo")
+	if !ok {
+		return model.ResultFailWithMessage("用户未登录")
+	}
+	user, ok := value.(model.UserDetailsDTO)
+	if !ok {
+		return model.ResultFailWithMessage("用户信息无效")
+	}
+	ownerID := user.UserInfoId
+	if vo.Id != 0 {
+		if existing, err := c.categoryRepository().List(ctx.Request.Context()); err == nil {
+			for _, item := range existing {
+				if item.Id == vo.Id {
+					ownerID = item.UserId
+					break
+				}
+			}
+		}
+	}
+	category := entity.TCategory{Id: vo.Id, UserId: ownerID, CategoryName: vo.CategoryName}
 	if err := c.categoryRepository().SaveOrUpdate(ctx.Request.Context(), category); err != nil {
 		if apperrors.IsKind(err, apperrors.KindConflict) {
 			return model.ResultFailWithMessage("分类名已存在")

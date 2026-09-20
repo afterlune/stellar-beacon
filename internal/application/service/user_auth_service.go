@@ -264,6 +264,7 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 		return websiteConfigResult
 	}
 	userInfo := entity.TUserInfo{
+		Handle:   registrationHandle(username),
 		Email:    username,
 		Nickname: DefaultNickname,
 		Avatar:   websiteConfig.UserAvatar,
@@ -285,6 +286,41 @@ func (u *MyUserAuthService) Register(c *gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
 
+func registrationHandle(email string) string {
+	local := email
+	if index := strings.IndexByte(local, '@'); index > 0 {
+		local = local[:index]
+	}
+	base := authHandleBase(local)
+	if base == "" {
+		base = "user"
+	}
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
+	return base + "-" + hex.EncodeToString(sum[:4])
+}
+
+func authHandleBase(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			builder.WriteRune(r)
+			lastDash = false
+		case r == '-' || r == '_' || r == '.' || r == ' ':
+			if builder.Len() > 0 && !lastDash {
+				builder.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	result := strings.Trim(builder.String(), "-")
+	if len(result) > 28 {
+		result = strings.Trim(result[:28], "-")
+	}
+	return result
+}
 func (u *MyUserAuthService) UpdatePassword(c *gin.Context) model.ResultVO {
 	var userVO model.UserVO
 	if err := c.ShouldBind(&userVO); err != nil {
@@ -412,6 +448,7 @@ func (u *MyUserAuthService) Authenticate(ctx context.Context, vo model.UserVO) (
 		LoginType:     user.Auth.LoginType,
 		Username:      user.Auth.Username,
 		Password:      user.Auth.Password,
+		Handle:        user.Info.Handle,
 		Roles:         user.Roles,
 		Nickname:      user.Info.Nickname,
 		Avatar:        user.Info.Avatar,

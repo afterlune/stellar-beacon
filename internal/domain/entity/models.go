@@ -27,7 +27,11 @@ type TArticle struct {
 	IsTop              int       `xorm:"not null comment('是否置顶 0否 1是') SMALLINT" json:"isTop"`
 	IsFeatured         int       `xorm:"not null comment('是否推荐 0否 1是') SMALLINT" json:"isFeatured"`
 	IsDelete           int       `xorm:"not null comment('是否删除  0否 1是') SMALLINT" json:"isDelete"`
-	Status             int       `xorm:"not null comment('状态值 1公开 2私密 3草稿') SMALLINT" json:"status"`
+	Status             int       `xorm:"not null comment('状态值 1公开 2私密 3草稿 4定时') SMALLINT" json:"status"`
+	ModerationStatus   string    `xorm:"moderation_status not null default 'visible' comment('审核状态 visible/hidden') VARCHAR(16)" json:"moderationStatus"`
+	ModerationReason   string    `xorm:"moderation_reason comment('审核下架原因') VARCHAR(255)" json:"moderationReason,omitempty"`
+	ModeratedBy        int       `xorm:"moderated_by default 0 comment('审核人 user_info id') INTEGER" json:"moderatedBy,omitempty"`
+	ModeratedAt        time.Time `xorm:"moderated_at comment('审核时间') DATETIME" json:"moderatedAt,omitempty"`
 	Type               int       `xorm:"not null comment('文章类型 1原创 2转载 3翻译') SMALLINT" json:"type"`
 	Password           string    `xorm:"comment('访问密码') VARCHAR(255)" json:"password"`
 	OriginalUrl        string    `xorm:"comment('原文链接') VARCHAR(255)" json:"originalUrl"`
@@ -38,13 +42,19 @@ type TArticle struct {
 // TSeries groups articles into an ordered collection. The relation lives on
 // t_article.series_id so an article belongs to at most one series.
 type TSeries struct {
-	Id         int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
-	SeriesName string    `xorm:"series_name not null unique comment('系列名') VARCHAR(50)" json:"seriesName"`
-	SeriesDesc string    `xorm:"series_desc comment('系列描述') VARCHAR(255)" json:"seriesDesc"`
-	Cover      string    `xorm:"comment('系列封面') VARCHAR(1024)" json:"cover"`
-	IsDelete   int       `xorm:"not null default 0 comment('是否删除 0否 1是') SMALLINT" json:"isDelete"`
-	CreateTime time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
-	UpdateTime time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
+	Id               int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	UserId           int       `xorm:"user_id not null index comment('作者') INTEGER" json:"userId"`
+	SeriesName       string    `xorm:"series_name not null comment('系列名') VARCHAR(50)" json:"seriesName"`
+	SeriesDesc       string    `xorm:"series_desc comment('系列描述') VARCHAR(255)" json:"seriesDesc"`
+	Cover            string    `xorm:"comment('系列封面') VARCHAR(1024)" json:"cover"`
+	Status           int       `xorm:"not null default 1 comment('状态值 1公开 2私密 3草稿') SMALLINT" json:"status"`
+	ModerationStatus string    `xorm:"moderation_status not null default 'visible' comment('审核状态 visible/hidden') VARCHAR(16)" json:"moderationStatus"`
+	ModerationReason string    `xorm:"moderation_reason comment('审核下架原因') VARCHAR(255)" json:"moderationReason,omitempty"`
+	ModeratedBy      int       `xorm:"moderated_by default 0 comment('审核人 user_info id') INTEGER" json:"moderatedBy,omitempty"`
+	ModeratedAt      time.Time `xorm:"moderated_at comment('审核时间') DATETIME" json:"moderatedAt,omitempty"`
+	IsDelete         int       `xorm:"not null default 0 comment('是否删除 0否 1是') SMALLINT" json:"isDelete"`
+	CreateTime       time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
+	UpdateTime       time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
 type TArticleTag struct {
@@ -55,6 +65,7 @@ type TArticleTag struct {
 
 type TCategory struct {
 	Id           int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	UserId       int       `xorm:"user_id not null index comment('所属用户') INTEGER" json:"userId"`
 	CategoryName string    `xorm:"not null comment('分类名') VARCHAR(20)" json:"categoryName"`
 	CreateTime   time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
 	UpdateTime   time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
@@ -214,20 +225,25 @@ type TRoleResource struct {
 
 type TTag struct {
 	Id         int       `xorm:"autoincr not null pk unique INTEGER" json:"id"`
+	UserId     int       `xorm:"user_id not null index comment('所属用户') INTEGER" json:"userId"`
 	TagName    string    `xorm:"not null comment('标签名') VARCHAR(20)" json:"tagName"`
 	CreateTime time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
 	UpdateTime time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
 type TTalk struct {
-	Id         int       `xorm:"autoincr not null pk comment('说说id') unique INTEGER" json:"id"`
-	UserId     int       `xorm:"not null comment('用户id') INTEGER" json:"userId"`
-	Content    string    `xorm:"not null comment('说说内容') VARCHAR(2000)" json:"content"`
-	Images     string    `xorm:"comment('图片') VARCHAR(2500)" json:"images"`
-	IsTop      int       `xorm:"not null comment('是否置顶') SMALLINT" json:"isTop"`
-	Status     int       `xorm:"not null comment('状态 1.公开 2.私密') SMALLINT" json:"status"`
-	CreateTime time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
-	UpdateTime time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
+	Id               int       `xorm:"autoincr not null pk comment('说说id') unique INTEGER" json:"id"`
+	UserId           int       `xorm:"not null comment('用户id') INTEGER" json:"userId"`
+	Content          string    `xorm:"not null comment('说说内容') VARCHAR(2000)" json:"content"`
+	Images           string    `xorm:"comment('图片') VARCHAR(2500)" json:"images"`
+	IsTop            int       `xorm:"not null comment('是否置顶') SMALLINT" json:"isTop"`
+	Status           int       `xorm:"not null comment('状态 1.公开 2.私密 3.草稿') SMALLINT" json:"status"`
+	ModerationStatus string    `xorm:"moderation_status not null default 'visible' comment('审核状态 visible/hidden') VARCHAR(16)" json:"moderationStatus"`
+	ModerationReason string    `xorm:"moderation_reason comment('审核下架原因') VARCHAR(255)" json:"moderationReason,omitempty"`
+	ModeratedBy      int       `xorm:"moderated_by default 0 comment('审核人 user_info id') INTEGER" json:"moderatedBy,omitempty"`
+	ModeratedAt      time.Time `xorm:"moderated_at comment('审核时间') DATETIME" json:"moderatedAt,omitempty"`
+	CreateTime       time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
+	UpdateTime       time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
 type TUniqueView struct {
@@ -286,6 +302,7 @@ type TUserAuth struct {
 
 type TUserInfo struct {
 	Id            int       `xorm:"autoincr not null pk comment('用户ID') unique INTEGER" json:"id"`
+	Handle        string    `xorm:"handle not null unique comment('公开唯一标识') VARCHAR(40)" json:"handle"`
 	Email         string    `xorm:"comment('邮箱号') VARCHAR(50)" json:"email"`
 	Nickname      string    `xorm:"not null comment('用户昵称') VARCHAR(50)" json:"nickname"`
 	Avatar        string    `xorm:"not null comment('用户头像') VARCHAR(1024)" json:"avatar"`

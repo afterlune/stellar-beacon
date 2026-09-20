@@ -9,12 +9,16 @@ import (
 
 // Series is the application-facing read model for one ordered collection.
 type Series struct {
-	Id           int       `json:"id"`
-	SeriesName   string    `json:"seriesName"`
-	SeriesDesc   string    `json:"seriesDesc"`
-	Cover        string    `json:"cover"`
-	ArticleCount int       `json:"articleCount"`
-	UpdateTime   time.Time `json:"updateTime"`
+	Id               int       `json:"id"`
+	UserId           int       `json:"userId"`
+	SeriesName       string    `json:"seriesName"`
+	SeriesDesc       string    `json:"seriesDesc"`
+	Cover            string    `json:"cover"`
+	Status           int       `json:"status"`
+	ModerationStatus string    `json:"moderationStatus"`
+	ModerationReason string    `json:"moderationReason,omitempty"`
+	ArticleCount     int       `json:"articleCount"`
+	UpdateTime       time.Time `json:"updateTime"`
 }
 
 // SeriesRepository stores article collections. Soft-deleted series keep their

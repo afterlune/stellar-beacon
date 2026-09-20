@@ -170,5 +170,90 @@ export default {
       placement: params.placement,
       position: params.position
     })
-  }
-}
+  },
+  getPlatformFeed: (params: any) => {
+    return http.get('/public/feed', { params })
+  },
+  getPlatformAuthors: (params: any) => {
+    return http.get('/public/authors', { params })
+  },
+  getAuthorByHandle: (handle: string) => {
+    return http.get('/public/authors/' + encodeURIComponent(handle))
+  },
+  getAuthorArticles: (handle: string, params: any) => {
+    return http.get('/public/authors/' + encodeURIComponent(handle) + '/articles', { params })
+  },
+  getAuthorTalks: (handle: string, params: any) => {
+    return http.get('/public/authors/' + encodeURIComponent(handle) + '/talks', { params })
+  },
+  getAuthorSeries: (handle: string, params: any) => {
+    return http.get('/public/authors/' + encodeURIComponent(handle) + '/series', { params })
+  },
+  getTopicArticles: (topic: string, slug: string, params: any) => {
+    return http.get('/public/topics/' + encodeURIComponent(topic) + '/' + encodeURIComponent(slug) + '/articles', { params })
+  },
+  getStudioDashboard: () => {
+    return http.get('/studio/dashboard')
+  },
+  updateStudioProfile: (params: any) => {
+    return http.put('/studio/profile', params)
+  },
+  getStudioArticles: (params: any) => {
+    return http.get('/studio/articles', { params })
+  },
+  getStudioArticle: (articleId: number) => {
+    return http.get('/studio/articles/' + encodeURIComponent(articleId))
+  },
+  saveStudioArticle: (params: any, articleId?: number) => {
+    return articleId ? http.put('/studio/articles/' + encodeURIComponent(articleId), params) : http.post('/studio/articles', params)
+  },
+  deleteStudioArticles: (ids: number[]) => {
+    return http.delete('/studio/articles', { data: ids })
+  },
+  getStudioTalks: (params: any) => {
+    return http.get('/studio/talks', { params })
+  },
+  getStudioTalk: (talkId: number) => {
+    return http.get('/studio/talks/' + encodeURIComponent(talkId))
+  },
+  saveStudioTalk: (params: any, talkId?: number) => {
+    return talkId ? http.put('/studio/talks/' + encodeURIComponent(talkId), params) : http.post('/studio/talks', params)
+  },
+  deleteStudioTalks: (ids: number[]) => {
+    return http.delete('/studio/talks', { data: ids })
+  },
+  getStudioSeries: (params: any) => {
+    return http.get('/studio/series', { params })
+  },
+  getStudioSeriesItem: (seriesId: number) => {
+    return http.get('/studio/series/' + encodeURIComponent(seriesId))
+  },
+  saveStudioSeries: (params: any, seriesId?: number) => {
+    return seriesId ? http.put('/studio/series/' + encodeURIComponent(seriesId), params) : http.post('/studio/series', params)
+  },
+  deleteStudioSeries: (seriesId: number) => {
+    return http.delete('/studio/series/' + encodeURIComponent(seriesId))
+  },
+  getStudioCategories: () => {
+    return http.get('/studio/categories')
+  },
+  saveStudioCategory: (params: any, categoryId?: number) => {
+    return categoryId ? http.put('/studio/categories/' + encodeURIComponent(categoryId), params) : http.post('/studio/categories', params)
+  },
+  deleteStudioCategory: (categoryId: number) => {
+    return http.delete('/studio/categories/' + encodeURIComponent(categoryId))
+  },
+  getStudioTags: () => {
+    return http.get('/studio/tags')
+  },
+  saveStudioTag: (params: any, tagId?: number) => {
+    return tagId ? http.put('/studio/tags/' + encodeURIComponent(tagId), params) : http.post('/studio/tags', params)
+  },
+  deleteStudioTag: (tagId: number) => {
+    return http.delete('/studio/tags/' + encodeURIComponent(tagId))
+  },
+  uploadStudioAsset: (file: File, kind: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    return http.post('/studio/uploads?kind=' + encodeURIComponent(kind), form)
+  }}

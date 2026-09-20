@@ -20,8 +20,8 @@ func NewSeriesRepo(engine *xorm.Engine) *MySeriesRepo { return &MySeriesRepo{eng
 const seriesCountSQL = `SELECT s.id, s.series_name, s.series_desc, s.cover, s.update_time,
 	COUNT(a.id) AS article_count
 	FROM t_series s
-	LEFT JOIN t_article a ON a.series_id = s.id AND a.is_delete = 0 AND a.status IN (1, 2)
-	WHERE s.is_delete = 0`
+	LEFT JOIN t_article a ON a.series_id = s.id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+	WHERE s.is_delete = 0 AND s.status = 1 AND s.moderation_status = 'visible'`
 
 func (r *MySeriesRepo) ListPublic(ctx context.Context) ([]*port.Series, error) {
 	session, err := repoSession(r.engine, ctx, "series.public")
@@ -63,7 +63,7 @@ func (r *MySeriesRepo) ListAdmin(ctx context.Context, current, size int, keyword
 		args = append(args, pgsql.ContainsPattern(keywords))
 	}
 	var total int64
-	if _, err := session.SQL("SELECT count(0) FROM t_series s WHERE s.is_delete = 0"+where, args...).Get(&total); err != nil {
+	if _, err := session.SQL("SELECT count(0) FROM t_series s WHERE s.is_delete = 0 AND s.status = 1 AND s.moderation_status = 'visible'"+where, args...).Get(&total); err != nil {
 		return nil, 0, apperrors.Unavailable("series.count", err)
 	}
 	limit, offset := pgsql.Page(current, size)

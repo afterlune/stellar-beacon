@@ -5,6 +5,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,6 +62,7 @@ func categoryTagTestContext(method, path string) *gin.Context {
 
 func TestCategoryServicePreservesConflictMessage(t *testing.T) {
 	c := categoryTagTestContext(http.MethodGet, "/admin/categories?id=0&categoryName=test")
+	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
 	result := NewCategoryService(&fakeCategoryRepository{err: apperrors.Conflict("category.save", "duplicate")}).SaveOrUpdateCategory(c)
 	if result.Flag || result.Message != "分类名已存在" {
 		t.Fatalf("unexpected result: %+v", result)

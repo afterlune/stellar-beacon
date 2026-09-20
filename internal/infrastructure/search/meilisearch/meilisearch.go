@@ -19,7 +19,7 @@ import (
 const (
 	preTag       = "<mark>"
 	postTag      = "</mark>"
-	publicFilter = "isDelete = 0 AND status = 1"
+	publicFilter = "isDelete = 0 AND status = 1 AND moderationStatus != 'hidden'"
 )
 
 type MeiliSearcher struct {

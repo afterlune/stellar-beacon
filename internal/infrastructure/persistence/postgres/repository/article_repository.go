@@ -34,10 +34,28 @@ func setArticleTags(tags []string) interface{} {
 	return tags
 }
 
-func (a *MyArticleRepo) attachTags(ctx context.Context, session *xorm.Session, articleID int) (interface{}, error) {
+func (a *MyArticleRepo) attachTags(ctx context.Context, session *xorm.Session, article *port.ArticleCard) (interface{}, error) {
+	if article == nil || article.Id <= 0 {
+		return list.New(), nil
+	}
 	var tags []string
-	if err := session.SQL(pgsql.ArticleTags, articleID).Find(&tags); err != nil {
+	if err := session.SQL(pgsql.ArticleTags, article.Id).Find(&tags); err != nil {
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.tags", err)
+	}
+	var owner struct {
+		UserId int `xorm:"user_id"`
+	}
+	if _, err := session.SQL(`SELECT user_id FROM t_article WHERE id = ?`, article.Id).Get(&owner); err != nil {
+		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.author_id", err)
+	}
+	if owner.UserId > 0 {
+		article.UserId = owner.UserId
+		var author entity.TUserInfo
+		if found, err := session.ID(owner.UserId).Get(&author); err != nil {
+			return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.author", err)
+		} else if found {
+			article.Author = toPublicAuthor(author)
+		}
 	}
 	return setArticleTags(tags), nil
 }
@@ -52,7 +70,7 @@ func (a *MyArticleRepo) ListTopAndFeaturedArticles(ctx context.Context) ([]*port
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.list_top_featured", err)
 	}
 	for _, article := range articles {
-		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		article.Tags, err = a.attachTags(ctx, session, article)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +85,7 @@ func (a *MyArticleRepo) ListArticles(ctx context.Context, current, size int) ([]
 		return nil, 0, err
 	}
 	var count int
-	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE is_delete = 0 AND status IN (1, 2)").Get(&count); err != nil {
+	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE is_delete = 0 AND status = 1 AND moderation_status = 'visible'").Get(&count); err != nil {
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count", err)
 	}
 	var articles []*port.ArticleCard
@@ -75,7 +93,7 @@ func (a *MyArticleRepo) ListArticles(ctx context.Context, current, size int) ([]
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.list", err)
 	}
 	for _, article := range articles {
-		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		article.Tags, err = a.attachTags(ctx, session, article)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -90,7 +108,7 @@ func (a *MyArticleRepo) GetArticlesByCategoryID(ctx context.Context, current, si
 		return nil, 0, err
 	}
 	var count int
-	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE category_id = ? AND is_delete = 0 AND status IN (1, 2)", categoryID).Get(&count); err != nil {
+	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE category_id = ? AND is_delete = 0 AND status = 1 AND moderation_status = 'visible'", categoryID).Get(&count); err != nil {
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count_by_category", err)
 	}
 	var articles []*port.ArticleCard
@@ -98,7 +116,7 @@ func (a *MyArticleRepo) GetArticlesByCategoryID(ctx context.Context, current, si
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_category", err)
 	}
 	for _, article := range articles {
-		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		article.Tags, err = a.attachTags(ctx, session, article)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -122,7 +140,7 @@ func (a *MyArticleRepo) ListArticleCardsByIDs(ctx context.Context, articleIDs []
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_ids", err)
 	}
 	for _, article := range articles {
-		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		article.Tags, err = a.attachTags(ctx, session, article)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +159,7 @@ func (a *MyArticleRepo) ListArticleCardsBySeries(ctx context.Context, seriesID i
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_series", err)
 	}
 	for _, article := range articles {
-		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		article.Tags, err = a.attachTags(ctx, session, article)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +208,7 @@ func (a *MyArticleRepo) ListRelatedArticles(ctx context.Context, articleID, cate
 		}
 	}
 	for _, article := range related {
-		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		article.Tags, err = a.attachTags(ctx, session, article)
 		if err != nil {
 			return nil, err
 		}
@@ -238,10 +256,14 @@ func (a *MyArticleRepo) GetArticleByID(ctx context.Context, articleID int) (port
 	if !found {
 		return port.Article{}, apperrors.NotFound("article.get")
 	}
-	article.Tags, err = a.attachTags(ctx, session, article.Id)
+	card := port.ArticleCard{Id: article.Id}
+	card.Tags, err = a.attachTags(ctx, session, &card)
 	if err != nil {
 		return port.Article{}, err
 	}
+	article.Tags = card.Tags
+	article.UserId = card.UserId
+	article.Author = card.Author
 	return article, nil
 }
 
@@ -254,7 +276,7 @@ func (a *MyArticleRepo) card(ctx context.Context, session *xorm.Session, query s
 	if !found {
 		return port.ArticleCard{}, nil
 	}
-	article.Tags, err = a.attachTags(ctx, session, article.Id)
+	article.Tags, err = a.attachTags(ctx, session, &article)
 	if err != nil {
 		return port.ArticleCard{}, err
 	}
@@ -300,7 +322,7 @@ func (a *MyArticleRepo) ListArticlesByTagID(ctx context.Context, current, size, 
 		return nil, 0, err
 	}
 	var count int
-	if _, err := session.SQL("SELECT count(DISTINCT a.id) FROM t_article a JOIN t_article_tag at ON a.id = at.article_id WHERE at.tag_id = ? AND a.is_delete = 0 AND a.status IN (1, 2)", tagID).Get(&count); err != nil {
+	if _, err := session.SQL("SELECT count(DISTINCT a.id) FROM t_article a JOIN t_article_tag at ON a.id = at.article_id WHERE at.tag_id = ? AND a.is_delete = 0 AND a.status = 1 AND moderation_status = 'visible'", tagID).Get(&count); err != nil {
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count_by_tag", err)
 	}
 	var articles []*port.ArticleCard
@@ -308,7 +330,7 @@ func (a *MyArticleRepo) ListArticlesByTagID(ctx context.Context, current, size, 
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_tag", err)
 	}
 	for _, article := range articles {
-		article.Tags, err = a.attachTags(ctx, session, article.Id)
+		article.Tags, err = a.attachTags(ctx, session, article)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -323,7 +345,7 @@ func (a *MyArticleRepo) ListArchives(ctx context.Context, current, size int) ([]
 		return nil, 0, err
 	}
 	var count int
-	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE is_delete = 0 AND status = 1").Get(&count); err != nil {
+	if _, err := session.SQL("SELECT count(0) FROM t_article WHERE is_delete = 0 AND status = 1 AND moderation_status = 'visible'").Get(&count); err != nil {
 		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count_archives", err)
 	}
 	var articles []port.ArticleCard

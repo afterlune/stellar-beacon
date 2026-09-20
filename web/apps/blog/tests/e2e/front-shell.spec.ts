@@ -100,12 +100,17 @@ async function mockArticleReading(page: Page, onContinuationEvent?: (event: { ar
   })
 }
 
+test.beforeEach(async ({ page }) => {
+  // The blog shell loads KaTeX from a CDN. Tests must not depend on external
+  // network availability or wait for that script during navigation.
+  await page.route('https://cdnjs.cloudflare.com/**', (route) => route.abort())
+})
 test.describe('blog front shell', () => {
   test('renders the new editorial shell and navigates between pages', async ({ page }, testInfo) => {
     await page.goto('/')
 
     await expect(page.locator('.site-header')).toBeVisible()
-    await expect(page.locator('.home-hero')).toBeVisible()
+    await expect(page.locator('.plaza-hero')).toBeVisible()
     await expect(page.locator('.ambient-grid')).toBeVisible()
     await expect(page.locator('#footer')).toBeVisible()
 
@@ -279,7 +284,52 @@ async function mockContentDiscovery(page: Page, options: { searchFails?: boolean
       })
       return
     }
-    if (path === '/api/v1/public/categories') {
+    if (path === '/api/v1/public/authors') {
+      await fulfill({
+        items: [{ id: 1, handle: 'test-author', nickname: '测试作者', avatar: '', intro: '公共空间作者', articleCount: 1, talkCount: 0, seriesCount: 0 }],
+        total: 1,
+        page: 1,
+        pageSize: 12
+      })
+      return
+    }
+    if (path === '/api/v1/public/authors/test-author') {
+      await fulfill({ id: 1, handle: 'test-author', nickname: '测试作者', avatar: '', intro: '公共空间作者', website: 'https://example.com', articleCount: 1, talkCount: 1, seriesCount: 1 })
+      return
+    }
+    if (path === '/api/v1/public/authors/test-author/articles') {
+      await fulfill({ items: [{ id: 101, articleTitle: '公共空间的第一篇文章', articleContent: '由社区作者共同发布的公开内容。', categoryName: '工程实践', createTime: '2026-09-18T10:00:00+08:00' }], total: 1, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/public/authors/test-author/talks') {
+      await fulfill({ items: [{ id: 51, content: '作者的一条公开随想', createTime: '2026-09-18T10:00:00+08:00', commentCount: 0 }], total: 1, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/public/authors/test-author/series') {
+      await fulfill({ items: [{ id: 3, seriesName: '阅读系列', seriesDesc: '从零搭建阅读体验', articleCount: 3 }], total: 1, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/public/feed') {
+      await fulfill({
+        items: [{
+          id: 101,
+          articleTitle: '公共空间的第一篇文章',
+          articleContent: '由社区作者共同发布的公开内容。',
+          articleCover: '',
+          categoryName: '工程实践',
+          status: 1,
+          moderationStatus: 'visible',
+          createTime: '2026-09-18T10:00:00+08:00',
+          author: { id: 1, handle: 'test-author', nickname: '测试作者', avatar: '' },
+          likeCount: 0,
+          favoriteCount: 0
+        }],
+        total: 1,
+        page: 1,
+        pageSize: 12
+      })
+      return
+    }    if (path === '/api/v1/public/categories') {
       await fulfill([
         { id: 1, categoryName: '工程实践', articleCount: 9 },
         { id: 2, categoryName: '系统设计', articleCount: 4 }
@@ -397,30 +447,36 @@ test.describe('content discovery', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       document.cookie = 'locale=cn; path=/'
+      sessionStorage.setItem('token', 'e2e-reading-token')
     })
   })
 
-  test('home surfaces series, categories, tags and search entry', async ({ page }) => {
+  test('home presents the public plaza and links to an author channel', async ({ page }) => {
     await mockContentDiscovery(page)
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-    const discovery = page.getByTestId('home-discovery')
-    await expect(discovery).toBeVisible()
-    await expect(discovery).toContainText('阅读系列')
+    await expect(page.locator('.plaza-hero')).toBeVisible()
+    await expect(page.getByText('测试作者').first()).toBeVisible()
+    await expect(page.getByTestId('public-feed')).toContainText('公共空间的第一篇文章')
 
-    const categoryLink = discovery.getByRole('link', { name: /工程实践/ })
-    await expect(categoryLink).toBeVisible()
-    await expect(categoryLink).toHaveAttribute('href', /\/categories\/1\?name=/)
-
-    const tagLink = discovery.getByRole('link', { name: /Go/ })
-    await expect(tagLink).toHaveAttribute('href', /\/tags\/1\?tagName=/)
-
-    await expect(discovery.getByRole('link', { name: /搜索全站/ })).toHaveAttribute('href', '/search')
-    await expect(discovery.getByRole('link', { name: /归档/ })).toHaveAttribute('href', '/archives')
+    const authorLink = page.getByRole('link', { name: /测试作者/ }).first()
+    await expect(authorLink).toHaveAttribute('href', '/u/test-author')
+    await expect(page.getByRole('link', { name: '公共空间的第一篇文章' })).toHaveAttribute('href', '/articles/101')
   })
 
-  test('category overview links into a category article list', async ({ page }) => {
+  test('author page presents identity and switches content channels', async ({ page }) => {
     await mockContentDiscovery(page)
+    await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('heading', { name: '测试作者' })).toBeVisible()
+    await expect(page.getByText('@test-author')).toBeVisible()
+    await expect(page.getByRole('link', { name: '公共空间的第一篇文章' })).toHaveAttribute('href', '/articles/101')
+
+    await page.getByRole('button', { name: '随想' }).click()
+    await expect(page.getByText('作者的一条公开随想')).toBeVisible()
+  })
+
+  test('category overview links into a category article list', async ({ page }) => {    await mockContentDiscovery(page)
     await page.goto('/categories', { waitUntil: 'domcontentloaded' })
 
     const grid = page.getByTestId('categories-grid')
@@ -548,6 +604,7 @@ test.describe('reading hub', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       document.cookie = 'locale=cn; path=/'
+      sessionStorage.setItem('token', 'e2e-reading-token')
     })
   })
 
@@ -556,7 +613,7 @@ test.describe('reading hub', () => {
     await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
 
-    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    await page.goto('/studio/library/reading', { waitUntil: 'domcontentloaded' })
     const recent = page.getByTestId('reading-recent')
     await expect(recent).toBeVisible()
     await expect(recent).toContainText('系列第2篇')
@@ -568,7 +625,7 @@ test.describe('reading hub', () => {
     await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
 
-    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    await page.goto('/studio/library/reading', { waitUntil: 'domcontentloaded' })
     const card = page.getByTestId('reading-continue')
     await expect(card).toBeVisible()
     await expect(card).toContainText('阅读系列')
@@ -581,7 +638,7 @@ test.describe('reading hub', () => {
     await page.goto('/articles/8', { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: '第一节' })).toBeVisible()
 
-    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    await page.goto('/studio/library/reading', { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('reading-recent')).toBeVisible()
 
     await page.getByTestId('reading-clear').click()
@@ -595,19 +652,16 @@ test.describe('reading hub', () => {
   test('ignores malformed reading history', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('stellar-beacon.reader.history.v1', '{broken'))
     await mockArticleReading(page)
-    await page.goto('/reading', { waitUntil: 'domcontentloaded' })
+    await page.goto('/studio/library/reading', { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('reading-empty')).toBeVisible()
   })
 
-  test('opens the reading hub from the header and the home discovery block', async ({ page }) => {
+  test('opens the private reading hub from the header', async ({ page }) => {
     await mockContentDiscovery(page)
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-    const discovery = page.getByTestId('home-discovery')
-    await expect(discovery.getByRole('link', { name: /阅读中心/ })).toHaveAttribute('href', '/reading')
-
     await page.locator('[data-dia="reading"]').click()
-    await expect(page).toHaveURL(/\/reading$/)
+    await expect(page).toHaveURL(/\/studio\/library\/reading$/)
     await expect(page.locator('.reading-page')).toBeVisible()
   })
 })
@@ -618,6 +672,7 @@ test.describe('front-end experience regressions', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       document.cookie = 'locale=cn; path=/'
+      sessionStorage.setItem('token', 'e2e-reading-token')
     })
   })
 
@@ -633,13 +688,13 @@ test.describe('front-end experience regressions', () => {
   test('keeps a single h1 on the home page', async ({ page }) => {
     await mockContentDiscovery(page)
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.locator('.article-container').first()).toBeVisible()
+    await expect(page.locator('.plaza-hero')).toBeVisible()
     await expect(page.locator('h1')).toHaveCount(1)
   })
 
   test('retries a rate-limited content request once', async ({ page }) => {
     let attempts = 0
-    await page.route('**/api/v1/public/articles?**', async (route) => {
+    await page.route('**/api/v1/public/feed?**', async (route) => {
       attempts += 1
       if (attempts === 1) {
         await route.fulfill({
@@ -666,7 +721,7 @@ test.describe('front-end experience regressions', () => {
       })
     })
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading', { name: '限流重试后的文章' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '限流重试后的文章' })).toBeVisible()
     expect(attempts).toBeGreaterThan(1)
   })
 
@@ -678,11 +733,63 @@ test.describe('front-end experience regressions', () => {
     const sidebar = page.locator('.App-Mobile-sidebar')
     await expect(sidebar).toHaveCSS('visibility', 'hidden')
 
-    await page.getByTestId('home-discovery').getByRole('link', { name: /工程实践/ }).click()
-    await expect(page).toHaveURL(/\/categories\/1/)
+    await page.getByTestId('public-feed').getByRole('link', { name: '公共空间的第一篇文章' }).click()
+    await expect(page).toHaveURL(/\/articles\/101$/)
     await expect(sidebar).toHaveCSS('visibility', 'hidden')
 
     await page.locator('[data-dia="menu"]').evaluate((element) => (element as HTMLElement).click())
     await expect(sidebar).toHaveCSS('visibility', 'visible')
+  })
+})
+
+test.describe('studio workspace', () => {
+  test('redirects anonymous visitors through login', async ({ page }) => {
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    await expect(page).toHaveURL(/login=1/)
+  })
+
+  test('lists owned articles and submits a new draft', async ({ page }) => {
+    let saved: any = null
+    await page.addInitScript(() => {
+      document.cookie = 'locale=cn; path=/'
+      sessionStorage.setItem('token', 'e2e-studio-token')
+    })
+    await page.route('**/api/v1/studio/**', async (route) => {
+      const url = new URL(route.request().url())
+      const method = route.request().method()
+      const respond = (data: unknown) => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', message: '操作成功', data })
+      })
+      if (url.pathname === '/api/v1/studio/articles' && method === 'GET') {
+        await respond({ items: [{ id: 9, articleTitle: '我的私有草稿', status: 3, moderationStatus: 'visible', createTime: '2026-09-18T10:00:00+08:00' }], total: 1, page: 1, pageSize: 12 })
+        return
+      }
+      if (url.pathname === '/api/v1/studio/articles' && method === 'POST') {
+        saved = route.request().postDataJSON()
+        await respond({ id: 99 })
+        return
+      }
+      if (url.pathname === '/api/v1/studio/categories' || url.pathname === '/api/v1/studio/tags') {
+        await respond([])
+        return
+      }
+      if (url.pathname === '/api/v1/studio/series') {
+        await respond({ items: [], total: 0, page: 1, pageSize: 100 })
+        return
+      }
+      await respond(null)
+    })
+
+    await page.goto('/studio/articles', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('我的私有草稿')).toBeVisible()
+    await page.getByRole('button', { name: '新建文章 +' }).click()
+    await page.locator('.studio-editor input').first().fill('新建的私有文章')
+    await page.locator('.studio-editor textarea').first().fill('这是正文。')
+    await page.locator('.studio-editor button[type="submit"]').click()
+
+    await expect.poll(() => saved?.articleTitle).toBe('新建的私有文章')
+    expect(saved?.visibility).toBe('draft')
   })
 })

@@ -4,6 +4,7 @@ import path from 'node:path'
 
 const routes = [
   { name: 'home', path: '/' },
+  { name: 'author', path: '/u/admin' },
   { name: 'article', path: '/articles/158' },
   { name: 'archives', path: '/archives' },
   { name: 'tags', path: '/tags' },
@@ -12,7 +13,7 @@ const routes = [
   { name: 'talks', path: '/talks' },
   { name: 'photos', path: '/photos/11' },
   { name: 'search', path: '/search?q=java' },
-  { name: 'reading', path: '/reading' },
+  { name: 'reading', path: '/studio/library/reading' },
   { name: 'friends', path: '/friends' },
   { name: 'about', path: '/about' },
   { name: 'not-found', path: '/nope' }
@@ -25,6 +26,7 @@ async function browse(page: Page, route: string, theme: string): Promise<void> {
   await page.context().addInitScript((themeName) => {
     document.cookie = 'locale=cn; path=/'
     document.cookie = `theme=${themeName}; path=/`
+    sessionStorage.setItem('token', 'visual-reading-token')
   }, theme)
   await page.goto(route, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1200)

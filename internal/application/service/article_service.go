@@ -75,7 +75,7 @@ func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
 // scheduled releases and password-protected posts must always be resolved
 // through the authenticated path.
 func isPubliclyCacheable(article port.Article) bool {
-	return article.IsDelete == 0 && article.Status == 1
+	return article.IsDelete == 0 && article.Status == 1 && article.ModerationStatus != "hidden"
 }
 
 // cacheArticle stores a published body and evicts every other state so a stale
@@ -292,7 +292,10 @@ func (a *MyArticleService) GetArticleById(c *gin.Context) model.ResultVO {
 	if article.Id == 0 {
 		return model.ResultOk()
 	}
-	if article.Status == 2 {
+	if article.Status != 1 || article.ModerationStatus == "hidden" {
+		return model.ResultOk()
+	}
+	if article.Password != "" {
 		value, ok := c.Get("userInfo")
 		if !ok {
 			return model.ResultFailWithMessage("无权访问")

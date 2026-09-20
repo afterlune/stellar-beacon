@@ -59,6 +59,9 @@ func (s *MySeriesService) GetPublicSeries(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFromError(err)
 	}
+	if series.Status != 1 || series.ModerationStatus == "hidden" {
+		return model.ResultFailWithMessage("系列不存在")
+	}
 	articles, err := s.articles.ListArticleCardsBySeries(c.Request.Context(), seriesID)
 	if err != nil {
 		return model.ResultFromError(err)
@@ -108,8 +111,22 @@ func (s *MySeriesService) SaveOrUpdateSeries(c *gin.Context) model.ResultVO {
 	if len([]rune(vo.SeriesDesc)) > 255 {
 		return model.ResultFromError(apperrors.Invalid("series.save", "series description is too long"))
 	}
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return model.ResultFailWithMessage("用户未登录")
+	}
+	user, ok := value.(model.UserDetailsDTO)
+	if !ok {
+		return model.ResultFailWithMessage("用户信息无效")
+	}
+	ownerID := user.UserInfoId
+	if vo.Id != 0 {
+		if existing, existingErr := s.repo.Get(c.Request.Context(), vo.Id); existingErr == nil {
+			ownerID = existing.UserId
+		}
+	}
 	series, err := s.repo.SaveOrUpdate(c.Request.Context(), entity.TSeries{
-		Id: vo.Id, SeriesName: name, SeriesDesc: strings.TrimSpace(vo.SeriesDesc), Cover: strings.TrimSpace(vo.Cover),
+		Id: vo.Id, UserId: ownerID, SeriesName: name, SeriesDesc: strings.TrimSpace(vo.SeriesDesc), Cover: strings.TrimSpace(vo.Cover), Status: 1,
 	})
 	if err != nil {
 		return model.ResultFromError(err)

@@ -42,6 +42,7 @@
         </span>
         <DropdownMenu>
           <template v-if="!isMobile">
+            <DropdownItem @click="openStudio">{{ $i18n.locale === 'cn' ? '创作台' : 'Studio' }}</DropdownItem>
             <DropdownItem @click="openFavorites">{{ t('reactions.favorites') }}</DropdownItem>
             <DropdownItem @click="openUserCenter">{{ t('settings.personal-center') }}</DropdownItem>
           </template>
@@ -128,12 +129,12 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, toRef, toRefs, reactive, getCurrentInstance, nextTick } from 'vue'
+import { computed, defineComponent, toRef, toRefs, reactive, getCurrentInstance, nextTick, watch } from 'vue'
 import { Dropdown, DropdownMenu, DropdownItem } from '@/components/Dropdown'
 import { useAppStore } from '@/stores/app'
 import { useCommonStore } from '@/stores/common'
 import { useUserStore } from '@/stores/user'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ThemeToggle from '@/components/ToggleSwitch/ThemeToggle.vue'
 import api from '@/api/api'
 import SearchModel from '@/components/SearchModel.vue'
@@ -160,6 +161,7 @@ export default defineComponent({
     const searchStore = useSearchStore()
     const navigatorStore = useNavigatorStore()
     const router = useRouter()
+    const route = useRoute()
     const loginInfo = reactive({
       username: '' as any,
       password: '' as any,
@@ -181,6 +183,9 @@ export default defineComponent({
         document.getElementById('article-password-input')?.focus()
       })
     })
+    watch(() => route.query.login, () => {
+      if (route.query.login === '1') reactiveDate.loginDialogVisible = true
+    }, { immediate: true })
     const handleClick = (name: string): void => {
       appStore.changeLocale(name)
     }
@@ -207,6 +212,8 @@ export default defineComponent({
             type: 'success'
           })
           reactiveDate.loginDialogVisible = false
+          const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+          if (redirect) router.replace(redirect)
         } else {
           proxy.$notify({
             title: '错误',
@@ -241,10 +248,13 @@ export default defineComponent({
       userStore.userVisible = true
     }
     const openFavorites = () => {
-      router.push({ path: '/favorites' })
+      router.push({ path: '/studio/library/favorites' })
+    }
+    const openStudio = () => {
+      router.push({ path: '/studio' })
     }
     const openReading = () => {
-      router.push({ path: '/reading' })
+      router.push({ path: '/studio/library/reading' })
     }
     const openLoginDialog = () => {
       reactiveDate.loginDialogVisible = true
@@ -374,6 +384,7 @@ export default defineComponent({
       handleClick,
       openUserCenter,
       openFavorites,
+      openStudio,
       openReading,
       openLoginDialog,
       openRegisterDialog,

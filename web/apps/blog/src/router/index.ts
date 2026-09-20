@@ -28,10 +28,9 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/reading',
-    name: 'Reading',
-    component: () => import('../views/Reading.vue')
-  },
-  {
+    redirect: '/studio/library/reading',
+    meta: { requiresAuth: true }
+  },  {
     path: '/archives',
     name: 'Archives',
     component: () => import('../views/Archives.vue')
@@ -61,6 +60,26 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/ArticleList.vue')
   },
   {
+    path: '/u/:handle',
+    name: 'Author',
+    component: () => import('../views/Author.vue')
+  },
+  {
+    path: '/studio',
+    component: () => import('../views/studio/StudioShell.vue'),
+    meta: { requiresAuth: true, hideBanner: true },
+    children: [
+      { path: '', redirect: '/studio/dashboard' },
+      { path: 'dashboard', name: 'StudioDashboard', component: () => import('../views/studio/StudioDashboard.vue') },
+      { path: 'articles', name: 'StudioArticles', component: () => import('../views/studio/StudioContent.vue'), props: { kind: 'article' } },
+      { path: 'talks', name: 'StudioTalks', component: () => import('../views/studio/StudioContent.vue'), props: { kind: 'talk' } },
+      { path: 'series', name: 'StudioSeries', component: () => import('../views/studio/StudioContent.vue'), props: { kind: 'series' } },
+      { path: 'topics', name: 'StudioTopics', component: () => import('../views/studio/StudioTopics.vue') },
+      { path: 'library', redirect: '/studio/library/reading' },
+      { path: 'library/reading', name: 'StudioReading', component: () => import('../views/Reading.vue') },
+      { path: 'library/favorites', name: 'StudioFavorites', component: () => import('../views/Favorites.vue') }
+    ]
+  },  {
     path: '/about',
     name: 'About',
     component: () => import('../views/About.vue')
@@ -92,10 +111,9 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/favorites',
-    name: 'Favorites',
-    component: () => import('../views/Favorites.vue')
-  },
-  {
+    redirect: '/studio/library/favorites',
+    meta: { requiresAuth: true }
+  },  {
     path: '/subscribe/confirm',
     name: 'SubscriptionConfirm',
     component: () => import('../views/SubscriptionConfirm.vue'),

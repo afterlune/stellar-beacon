@@ -63,6 +63,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 
 	site := repository.NewSiteInfoRepo(engine)
 	article := repository.NewArticleRepo(engine)
+	platform := repository.NewPlatformRepo(engine)
 	articleReaction := repository.NewArticleReactionRepo(engine)
 	series := repository.NewSeriesRepo(engine)
 	category := repository.NewCategoryRepo(engine)
@@ -125,6 +126,13 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	if err != nil {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.service.seo", err)
+	}
+	platformService, err := service.NewPlatformService(service.PlatformServiceDeps{
+		Repo: platform, Articles: article, Newsletter: newsletterService, Storage: ossStorage, Cache: redisCache,
+	})
+	if err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.platform", err)
 	}
 	articleService, err := service.NewArticleService(service.ArticleServiceDeps{
 		Repo:             article,
@@ -229,6 +237,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 
 	api.ConfigureServices(api.Services{
 		Article:          articleService,
+		Platform:         platformService,
 		ArticleReaction:  articleReactionService,
 		Series:           seriesService,
 		StellarBeacon:    stellarBeacon,

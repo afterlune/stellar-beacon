@@ -57,6 +57,61 @@ type ArticleVO struct {
 	OriginalUrl        string   `json:"originalUrl" from:"originalUrl"`
 }
 
+type StudioProfileVO struct {
+	Handle   string `json:"handle"`
+	Nickname string `json:"nickname"`
+	Intro    string `json:"intro"`
+	Website  string `json:"website"`
+}
+type StudioArticleVO struct {
+	Id                 int    `json:"id"`
+	CategoryId         int    `json:"categoryId"`
+	TagIds             []int  `json:"tagIds"`
+	ArticleCover       string `json:"articleCover"`
+	ArticleTitle       string `json:"articleTitle"`
+	ArticleContent     string `json:"articleContent"`
+	ArticleContentHTML string `json:"articleContentHtml"`
+	SeriesId           int    `json:"seriesId"`
+	SeriesOrder        int    `json:"seriesOrder"`
+	ScheduledAt        string `json:"scheduledAt"`
+	Visibility         string `json:"visibility"`
+	Type               int    `json:"type"`
+	Password           string `json:"password"`
+	OriginalUrl        string `json:"originalUrl"`
+}
+
+type StudioTalkVO struct {
+	Id         int    `json:"id"`
+	Content    string `json:"content"`
+	Images     string `json:"images"`
+	IsTop      int    `json:"isTop"`
+	Visibility string `json:"visibility"`
+}
+
+type StudioSeriesVO struct {
+	Id         int    `json:"id"`
+	SeriesName string `json:"seriesName"`
+	SeriesDesc string `json:"seriesDesc"`
+	Cover      string `json:"cover"`
+	Visibility string `json:"visibility"`
+}
+
+type StudioTaxonomyVO struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type ModerationVO struct {
+	ContentType string `json:"contentType"`
+	Id          int    `json:"id"`
+	Hidden      bool   `json:"hidden"`
+	Reason      string `json:"reason"`
+}
+
+type DistributionVO struct {
+	Featured   bool `json:"featured"`
+	Newsletter bool `json:"newsletter"`
+}
 type CategoryVO struct {
 	Id           int    `json:"id"`
 	CategoryName string `json:"categoryName"`

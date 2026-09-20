@@ -1,498 +1,266 @@
 <template>
-  <div class="block home-page">
-    <section class="home-hero" aria-labelledby="home-hero-title">
-      <div class="home-hero__copy">
-        <p class="home-hero__eyebrow">STELLAR BEACON <span>/</span> PERSONAL LOG</p>
-        <h1 id="home-hero-title">在复杂系统里，<br /><em>寻找清晰的答案。</em></h1>
-        <p
-          class="home-hero__intro"
-          v-html="websiteConfig.authorIntro || '记录后端工程、系统实践与仍在发生的思考。这里不追逐热词，只记录值得反复推敲的技术细节。'" />
-        <div class="home-hero__actions">
-          <button type="button" class="home-hero__action" @click="scrollToArticles">
-            <span>浏览文章</span>
-            <span aria-hidden="true">↘</span>
-          </button>
-          <span class="home-hero__readout">{{ articleCount }} POSTS · {{ viewCount }} VIEWS</span>
+  <div class="plaza-page">
+    <section class="plaza-hero">
+      <div class="plaza-hero__copy">
+        <p class="plaza-hero__eyebrow">STELLAR BEACON <span>/</span> PUBLIC PLAZA</p>
+        <h1>每个账号，<br /><em>都是一座独立电台。</em></h1>
+        <p class="plaza-hero__intro">
+          公开文章、随想与系列在这里汇流。发现不同作者的长期思考，也建立自己的私有创作空间。
+        </p>
+        <div class="plaza-hero__actions">
+          <button type="button" @click="scrollToFeed">浏览公共内容 <span aria-hidden="true">↓</span></button>
+          <router-link to="/studio">进入我的创作台</router-link>
         </div>
       </div>
-      <div class="home-hero__console" aria-label="站点状态">
-        <div class="home-hero__console-head">
-          <span>LIVE CHANNEL</span>
-          <span class="home-hero__status-dot">ONLINE</span>
-        </div>
-        <div class="home-hero__signal-mark" aria-hidden="true">
-          <span v-for="n in 7" :key="n" :style="{ '--i': n }" />
-        </div>
-        <div class="home-hero__console-title">
-          <span>最新置顶</span>
-          <strong>{{ topArticle.articleTitle || '等待下一条信号' }}</strong>
-        </div>
-        <div class="home-hero__console-meta">
-          <span>CHANNEL 01</span>
-          <span>{{ categoryCount }} CATEGORIES</span>
-          <span>{{ tagCount }} TAGS</span>
-        </div>
+      <div class="plaza-hero__signal" aria-hidden="true">
+        <span v-for="n in 9" :key="n" :style="{ '--i': n }" />
+        <strong>{{ total || 'LIVE' }}</strong>
+        <small>PUBLIC SIGNALS</small>
       </div>
     </section>
-    <section class="home-discovery" data-testid="home-discovery" aria-labelledby="home-discovery-title">
-      <header class="home-discovery__head">
-        <div>
-          <p>{{ t('discovery.eyebrow') }}</p>
-          <h2 id="home-discovery-title">{{ t('discovery.title') }}</h2>
-        </div>
-        <p>{{ t('discovery.description') }}</p>
-      </header>
 
-      <div v-if="featuredSeries.length" class="home-discovery__series">
-        <router-link
-          v-for="item in featuredSeries"
-          :key="item.id"
-          class="home-discovery__series-card"
-          :to="`/series/${item.id}`">
-          <span>{{ t('discovery.seriesCount', { count: item.articleCount }) }}</span>
-          <strong>{{ item.seriesName }}</strong>
-          <p>{{ item.seriesDesc || t('discovery.seriesFallback') }}</p>
+    <section v-if="authors.length" class="plaza-authors" aria-labelledby="plaza-authors-title">
+      <header>
+        <div>
+          <p>AUTHORS ONLINE</p>
+          <h2 id="plaza-authors-title">来自不同频道</h2>
+        </div>
+        <span>{{ authors.length }} 位作者正在公开写作</span>
+      </header>
+      <div class="plaza-authors__rail">
+        <router-link v-for="author in authors" :key="author.id" :to="`/u/${author.handle}`" class="plaza-author">
+          <img :src="author.avatar || defaultAvatar" :alt="author.nickname || author.handle" />
+          <span>
+            <strong>{{ author.nickname || author.handle }}</strong>
+            <small>@{{ author.handle }}</small>
+          </span>
+          <em>{{ author.articleCount }} 文章 · {{ author.talkCount }} 随想</em>
         </router-link>
       </div>
-
-      <div class="home-discovery__topics">
-        <section>
-          <h3>{{ t('menu.categories') }}</h3>
-          <div class="home-discovery__links">
-            <router-link
-              v-for="category in topCategories"
-              :key="category.id"
-              :to="`/categories/${category.id}?name=${encodeURIComponent(category.categoryName)}`">
-              {{ category.categoryName }} <span>{{ category.articleCount }}</span>
-            </router-link>
-          </div>
-        </section>
-        <section>
-          <h3>{{ t('menu.tags') }}</h3>
-          <div class="home-discovery__links">
-            <router-link
-              v-for="tag in topTags"
-              :key="tag.id"
-              :to="`/tags/${tag.id}?tagName=${encodeURIComponent(tag.tagName)}`">
-              #{{ tag.tagName }} <span>{{ tag.count }}</span>
-            </router-link>
-          </div>
-        </section>
-      </div>
-
-      <div class="home-discovery__quick">
-        <router-link to="/reading">{{ t('discovery.reading') }} →</router-link>
-        <router-link to="/search">{{ t('discovery.search') }} →</router-link>
-        <router-link to="/archives">{{ t('menu.archives') }} →</router-link>
-      </div>
     </section>
-    <Feature v-if="themeConfig.feature">
-      <FeatureList />
-    </Feature>
-    <NewsletterSubscribe />
-    <span v-if="themeConfig.feature">
-      <Title id="article-list" :title="'titles.articles'" icon="article" />
-    </span>
-    <div class="main-grid">
-      <div class="flex flex-col relative">
-        <ul :class="tabClass">
-          <li :class="{ active: activeTab === 0 }" @click="handleTabChange(0)">
-            <span class="first-tab" :class="{ 'brand-gradient': activeTab === 0 }">
-              {{ t('settings.button-all') }}
-            </span>
-          </li>
-          <template v-if="categories && categories.length > 0">
-            <li
-              v-for="category in categories"
-              :key="category.id"
-              :class="{ active: activeTab === category.id }"
-              @click="handleTabChange(category.id)">
-              <span :class="{ 'brand-gradient': activeTab === category.id }">
-                {{ category.categoryName }}
-              </span>
-              <b>
-                {{ category.articleCount }}
-              </b>
-            </li>
-          </template>
-          <template v-else-if="(categories.length = 0)">
-            <li v-for="i in 6" :key="i" style="position: relative; top: -4px">
-              <ob-skeleton tag="span" width="60px" height="33px" />
-            </li>
-          </template>
-        </ul>
-        <span :class="expanderClass" @click="expandHandler">
-          <svg-icon icon-class="chevron" />
-        </span>
-        <ul class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
-          <template v-if="haveArticles === true">
-            <li v-for="article in articles" :key="article.id">
-              <ArticleCard class="home-article" :data="article" />
-            </li>
-          </template>
-          <template v-else>
-            <li v-for="n in 12" :key="n">
-              <ArticleCard :data="{}" />
-            </li>
-          </template>
-        </ul>
-        <Paginator
-          :pageSize="pagination.size"
-          :pageTotal="pagination.total"
-          :page="pagination.current"
-          @pageChange="pageChangeHanlder" />
+
+    <section id="public-feed" class="plaza-feed" data-testid="public-feed" aria-labelledby="plaza-feed-title">
+      <header class="plaza-feed__head">
+        <div>
+          <p>COMMUNITY CHANNEL</p>
+          <h2 id="plaza-feed-title">公共信息流</h2>
+        </div>
+        <div class="plaza-feed__filters">
+          <button type="button" :class="{ active: activeType === 'article' }" @click="activeType = 'article'">文章</button>
+          <button type="button" :class="{ active: activeType === 'talk' }" @click="activeType = 'talk'">随想</button>
+          <label v-if="activeType === 'article'">
+            <input v-model="featuredOnly" type="checkbox" />
+            精选
+          </label>
+        </div>
+      </header>
+
+      <p v-if="loading && !records.length" class="plaza-feed__state">正在接收公开信号…</p>
+      <p v-else-if="error" class="plaza-feed__state is-error">{{ error }}</p>
+      <div v-else-if="records.length" class="plaza-feed__grid">
+        <article v-for="item in records" :key="`${activeType}-${item.id}`" class="plaza-card">
+          <router-link v-if="activeType === 'article'" class="plaza-card__cover" :to="`/articles/${item.id}`">
+            <img v-if="item.articleCover" :src="item.articleCover" :alt="item.articleTitle" loading="lazy" />
+            <span v-else class="plaza-card__placeholder">{{ String(item.articleTitle || 'SIGNAL').slice(0, 1) }}</span>
+            <em v-if="item.isFeatured === 1">精选</em>
+          </router-link>
+          <div class="plaza-card__body">
+            <div class="plaza-card__author">
+              <img :src="authorOf(item).avatar || defaultAvatar" :alt="authorOf(item).nickname" />
+              <router-link :to="`/u/${authorOf(item).handle}`">
+                {{ authorOf(item).nickname || authorOf(item).handle }}
+              </router-link>
+              <time>{{ formatDate(item.createTime) }}</time>
+            </div>
+            <template v-if="activeType === 'article'">
+              <router-link class="plaza-card__title" :to="`/articles/${item.id}`">{{ item.articleTitle }}</router-link>
+              <p>{{ excerpt(item.articleContent) }}</p>
+              <div class="plaza-card__meta">
+                <span>{{ item.categoryName || '未分类' }}</span>
+                <span v-if="item.likeCount">{{ item.likeCount }} 赞</span>
+                <span v-if="item.favoriteCount">{{ item.favoriteCount }} 收藏</span>
+              </div>
+            </template>
+            <template v-else>
+              <router-link class="plaza-card__title" :to="`/talks/${item.id}`">{{ excerpt(item.content, 120) }}</router-link>
+              <div class="plaza-card__meta">
+                <span>{{ item.commentCount || 0 }} 条回应</span>
+                <span v-if="item.isTop === 1">置顶</span>
+              </div>
+            </template>
+          </div>
+        </article>
       </div>
-      <div>
-        <Sidebar>
-          <Profile />
-          <RecentComment v-if="true" />
-          <TagBox />
-          <Notice />
-          <WebsiteInfo />
-        </Sidebar>
-      </div>
-    </div>
+      <p v-else class="plaza-feed__state">公共空间还没有内容。登录后发布第一篇公开文章吧。</p>
+
+      <button v-if="records.length < total" type="button" class="plaza-feed__more" :disabled="loading" @click="loadMore">
+        {{ loading ? '加载中…' : '加载更多' }}
+      </button>
+    </section>
   </div>
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, ref, toRefs, toRef, reactive } from 'vue'
-import { storeToRefs } from 'pinia'
-import { Feature, FeatureList } from '@/components/Feature'
-import { ArticleCard, HorizontalArticle } from '@/components/ArticleCard'
-import { Title } from '@/components/Title'
-import { Sidebar, Profile, RecentComment, TagBox, Notice, WebsiteInfo } from '@/components/Sidebar'
-import { useAppStore } from '@/stores/app'
-import { useUserStore } from '@/stores/user'
-import { useArticleStore } from '@/stores/article'
-import { useCategoryStore } from '@/stores/Category'
-import { useI18n } from 'vue-i18n'
-import Paginator from '@/components/Paginator.vue'
-import MarkdownIt from 'markdown-it'
+import { defineComponent, onMounted, ref, watch } from 'vue'
 import api from '@/api/api'
-import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
-import { useSeoMeta } from '@/composables/useSeoMeta'
-import { useDiscoveryStore } from '@/stores/discovery'
+import { useAppStore } from '@/stores/app'
+
+const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3Crect width="80" height="80" rx="40" fill="%23172554"/%3E%3Ccircle cx="40" cy="30" r="14" fill="%239bb8ff"/%3E%3Cpath d="M15 72c3-18 14-27 25-27s22 9 25 27" fill="%239bb8ff"/%3E%3C/svg%3E'
 
 export default defineComponent({
   name: 'Home',
-  components: {
-    Feature,
-    FeatureList,
-    ArticleCard,
-    HorizontalArticle,
-    Title,
-    Paginator,
-    Sidebar,
-    Profile,
-    RecentComment,
-    TagBox,
-    Notice,
-    WebsiteInfo,
-    NewsletterSubscribe
-  },
   setup() {
     const appStore = useAppStore()
-    const userStore = useUserStore()
-    const articleStore = useArticleStore()
-    const categoryStore = useCategoryStore()
-    const discoveryStore = useDiscoveryStore()
-    const { featuredSeries, topCategories, topTags } = storeToRefs(discoveryStore)
-    const { t } = useI18n()
-    const { setSeo } = useSeoMeta()
-    const expanderClass = ref({
-      'tab-expander': true,
-      expanded: false
-    })
-    const tabClass = ref({
-      tab: true,
-      'expanded-tab': false
-    })
-    const activeTab = ref(0)
-    const articleOffset = ref(0)
-    const reactiveData = reactive({
-      haveArticles: false
-    })
-    const pagination = reactive({
-      size: 12,
-      total: 0,
-      current: 1
-    })
-    let nowCategoryId = 0
-    const md = new MarkdownIt({ html: true })
+    const records = ref<any[]>([])
+    const authors = ref<any[]>([])
+    const activeType = ref<'article' | 'talk'>('article')
+    const featuredOnly = ref(false)
+    const loading = ref(false)
+    const error = ref('')
+    const page = ref(1)
+    const total = ref(0)
+    const pageSize = 12
+
+    const payload = (response: any) => response?.data?.data || {}
+
+    const loadAuthors = async () => {
+      try {
+        const response = await api.getPlatformAuthors({ current: 1, size: 12 })
+        authors.value = Array.isArray(payload(response).records) ? payload(response).records : []
+      } catch {
+        authors.value = []
+      }
+    }
+
+    const loadFeed = async (reset = false) => {
+      if (reset) {
+        page.value = 1
+        records.value = []
+      }
+      loading.value = true
+      error.value = ''
+      try {
+        const response = await api.getPlatformFeed({
+          type: activeType.value,
+          featured: featuredOnly.value ? 1 : 0,
+          current: page.value,
+          size: pageSize
+        })
+        const data = payload(response)
+        const next = Array.isArray(data.records) ? data.records : []
+        records.value = reset ? next : records.value.concat(next)
+        total.value = Number(data.count || 0)
+      } catch {
+        error.value = '公共内容暂时无法加载，请稍后重试。'
+      } finally {
+        loading.value = false
+      }
+    }
+
+    const loadMore = () => {
+      page.value += 1
+      void loadFeed(false)
+    }
+
+    const authorOf = (item: any) => item.author || {
+      handle: item.handle || '',
+      nickname: item.nickName || item.nickname || item.handle || '匿名作者',
+      avatar: item.avatar || ''
+    }
+
+    const excerpt = (value: string, limit = 92) => {
+      const text = String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      return text.length > limit ? text.slice(0, limit) + '…' : text
+    }
+
+    const formatDate = (value: string) => {
+      if (!value) return ''
+      return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(new Date(value))
+    }
+
+    const scrollToFeed = () => document.getElementById('public-feed')?.scrollIntoView({ behavior: 'smooth' })
+
+    watch([activeType, featuredOnly], () => void loadFeed(true))
     onMounted(() => {
-      setSeo({
-        title: 'Stellar Beacon · 技术与思考',
-        description: '记录后端工程、系统实践与仍在发生的思考。',
-        canonical: window.location.href
-      })
-      fetchTopAndFeatured()
-      fetchCategories()
-      fetchArticles()
-      void discoveryStore.load()
-      const articleListEl = document.getElementById('article-list')
-      articleOffset.value = articleListEl && articleListEl instanceof HTMLElement ? articleListEl.offsetTop + 120 : 0
+      void loadAuthors()
+      void loadFeed(true)
     })
-    const fetchTopAndFeatured = () => {
-      api.getTopAndFeaturedArticles().then(({ data }) => {
-        data.data.topArticle.articleContent = md
-          .render(data.data.topArticle.articleContent)
-          .replace(/<\/?[^>]*>/g, '')
-          .replace(/[|]*\n/, '')
-          .replace(/&npsp;/gi, '')
-        data.data.featuredArticles.forEach((item: any) => {
-          item.articleContent = md
-            .render(item.articleContent)
-            .replace(/<\/?[^>]*>/g, '')
-            .replace(/[|]*\n/, '')
-            .replace(/&npsp;/gi, '')
-        })
-        articleStore.topArticle = data.data.topArticle
-        articleStore.featuredArticles = data.data.featuredArticles
-      })
-    }
-    const fetchArticles = () => {
-      activeTab.value = userStore.tab
-      nowCategoryId = userStore.tab
-      pagination.current = userStore.page
-      if (userStore.tab === 0) {
-        reactiveData.haveArticles = false
-        api
-          .getArticles({
-            current: pagination.current,
-            size: pagination.size
-          })
-          .then(({ data }) => {
-            if (data.flag) {
-              data.data.records.forEach((item: any) => {
-                item.articleContent = md
-                  .render(item.articleContent)
-                  .replace(/<\/?[^>]*>/g, '')
-                  .replace(/[|]*\n/, '')
-                  .replace(/&npsp;/gi, '')
-              })
-              articleStore.articles = data.data.records
-              pagination.total = data.data.count
-              reactiveData.haveArticles = true
-            }
-          })
-      } else {
-        fetchArticlesByCategoryId(userStore.tab)
-      }
-    }
-    const fetchArticlesByCategoryId = (categoryId: any) => {
-      reactiveData.haveArticles = false
-      api
-        .getArticlesByCategoryId({
-          current: pagination.current,
-          size: pagination.size,
-          categoryId: categoryId
-        })
-        .then(({ data }) => {
-          data.data.records.forEach((item: any) => {
-            item.articleContent = md
-              .render(item.articleContent)
-              .replace(/<\/?[^>]*>/g, '')
-              .replace(/[|]*\n/, '')
-              .replace(/&npsp;/gi, '')
-          })
-          articleStore.articles = data.data.records
-          pagination.total = data.data.count
-          reactiveData.haveArticles = true
-        })
-    }
-    const fetchCategories = () => {
-      categoryStore.categories = []
-      api.getAllCategories().then(({ data }) => {
-        categoryStore.categories.push(...data.data)
-      })
-    }
-    const expandHandler = () => {
-      expanderClass.value.expanded = !expanderClass.value.expanded
-      tabClass.value['expanded-tab'] = !tabClass.value['expanded-tab']
-    }
-    const scrollToArticles = () => {
-      document.getElementById('article-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-    const handleTabChange = (categoryId: any) => {
-      userStore.tab = categoryId
-      userStore.page = 1
-      pagination.current = 1
-      activeTab.value = categoryId
-      nowCategoryId = categoryId
-      toArticleOffset()
-      if (categoryId === 0) {
-        fetchArticles()
-      } else {
-        fetchArticlesByCategoryId(categoryId)
-      }
-    }
-    const toArticleOffset = () => {
-      window.scrollTo({
-        top: articleOffset.value
-      })
-    }
 
-    const pageChangeHanlder = (current: number) => {
-      userStore.page = current
-      pagination.current = current
-      toArticleOffset()
-      if (nowCategoryId === 0) {
-        fetchArticles()
-      } else {
-        fetchArticlesByCategoryId(nowCategoryId)
-      }
-    }
     return {
-      ...toRefs(reactiveData),
-      ...toRefs(articleStore.$state),
-      categories: toRef(categoryStore.$state, 'categories'),
-      featuredSeries,
-      topCategories,
-      topTags,
-
-      themeConfig: computed(() => appStore.themeConfig),
-      websiteConfig: computed(() => appStore.websiteConfig),
-      articleCount: computed(() => appStore.articleCount),
-      categoryCount: computed(() => appStore.categoryCount),
-      tagCount: computed(() => appStore.tagCount),
-      viewCount: computed(() => appStore.viewCount),
-      scrollToArticles,
-      expanderClass,
-      tabClass,
-      expandHandler,
-      handleTabChange,
-      activeTab,
-      pagination,
-      pageChangeHanlder,
-      t
+      appStore,
+      records,
+      authors,
+      activeType,
+      featuredOnly,
+      loading,
+      error,
+      total,
+      defaultAvatar,
+      loadMore,
+      authorOf,
+      excerpt,
+      formatDate,
+      scrollToFeed
     }
   }
 })
 </script>
-<style lang="scss">
-.home-article {
-  .article-content {
-    p {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-    }
-    .article-footer {
-      margin-top: 13px;
-    }
-  }
-}
-.home-discovery {
-  margin: 28px 0 36px;
-  padding: clamp(20px, 4vw, 36px);
-  border: 1px solid var(--border-hairline);
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--surface-solid) 84%, transparent);
-  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
-}
-.home-discovery__head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
-}
-.home-discovery__head p {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 0.82rem;
-}
-.home-discovery__head > div > p {
-  margin-bottom: 6px;
-  color: var(--color-ob);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.home-discovery__head h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(1.6rem, 3vw, 2.3rem);
-}
-.home-discovery__series {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
-}
-.home-discovery__series-card {
-  display: grid;
-  gap: 8px;
-  min-height: 150px;
-  padding: 17px;
-  border: 1px solid var(--border-hairline);
-  border-radius: 13px;
-  color: inherit;
-  text-decoration: none;
-}
-.home-discovery__series-card:hover {
-  border-color: var(--color-ob);
-}
-.home-discovery__series-card span,
-.home-discovery__series-card p,
-.home-discovery__links span {
-  color: var(--text-ob-dim);
-  font-size: 0.75rem;
-}
-.home-discovery__series-card strong {
-  align-self: center;
-  font-size: 1.1rem;
-}
-.home-discovery__series-card p {
-  margin: 0;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.home-discovery__topics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  margin-top: 18px;
-}
-.home-discovery__topics h3 {
-  margin: 0 0 10px;
-  font-size: 0.9rem;
-}
-.home-discovery__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-.home-discovery__links a,
-.home-discovery__quick a {
-  padding: 6px 10px;
-  border: 1px solid var(--border-hairline);
-  border-radius: 999px;
-  color: inherit;
-  text-decoration: none;
-}
-.home-discovery__links a:hover,
-.home-discovery__quick a:hover {
-  border-color: var(--color-ob);
-  color: var(--color-ob);
-}
-.home-discovery__quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-}
-@media (max-width: 700px) {
-  .home-discovery__head,
-  .home-discovery__topics {
-    grid-template-columns: 1fr;
-  }
-  .home-discovery__head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
+
+<style lang="scss" scoped>
+.plaza-page { max-width: 1180px; margin: 0 auto; padding: 22px 0 96px; }
+.plaza-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(260px, .55fr); gap: 32px; overflow: hidden; min-height: 390px; padding: clamp(34px, 6vw, 72px); border: 1px solid var(--border-hairline); border-radius: 28px; background: linear-gradient(135deg, color-mix(in srgb, var(--background-primary-alt) 92%, #4167d8 8%), color-mix(in srgb, var(--background-primary) 88%, #9d59e8 12%)); box-shadow: 0 28px 90px rgba(7, 13, 38, .28); }
+.plaza-hero::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(110deg, transparent 40%, rgba(112, 143, 255, .12) 60%, transparent 78%); }
+.plaza-hero__copy { position: relative; z-index: 1; align-self: center; }
+.plaza-hero__eyebrow, .plaza-feed__head p, .plaza-authors header p { margin: 0 0 14px; color: var(--color-ob); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; }
+.plaza-hero__eyebrow span { opacity: .45; }
+.plaza-hero h1 { margin: 0; font-size: clamp(2.5rem, 6vw, 5.3rem); line-height: .98; letter-spacing: -.055em; }
+.plaza-hero h1 em { color: var(--color-ob); font-style: normal; }
+.plaza-hero__intro { max-width: 640px; margin: 26px 0 0; color: var(--text-ob-dim); font-size: 16px; line-height: 1.85; }
+.plaza-hero__actions { display: flex; align-items: center; gap: 12px; margin-top: 32px; flex-wrap: wrap; }
+.plaza-hero__actions button, .plaza-hero__actions a { display: inline-flex; align-items: center; gap: 10px; padding: 11px 18px; border: 1px solid var(--border-hairline); border-radius: 999px; background: rgba(7, 14, 36, .32); color: inherit; font: inherit; font-size: 13px; text-decoration: none; cursor: pointer; }
+.plaza-hero__actions button { border-color: transparent; background: var(--color-ob); color: #081127; font-weight: 700; }
+.plaza-hero__signal { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 230px; border: 1px solid color-mix(in srgb, var(--color-ob) 30%, transparent); border-radius: 50%; background: radial-gradient(circle, rgba(67, 102, 220, .18), transparent 66%); }
+.plaza-hero__signal > span { position: absolute; width: calc(24px + var(--i) * 16px); height: calc(24px + var(--i) * 16px); border: 1px solid color-mix(in srgb, var(--color-ob) calc(34% - var(--i) * 2%), transparent); border-radius: 50%; animation: plazaPulse 3.2s ease-in-out infinite; animation-delay: calc(var(--i) * -160ms); }
+.plaza-hero__signal strong { position: relative; font-size: 2.25rem; letter-spacing: -.05em; }
+.plaza-hero__signal small { position: relative; margin-top: 4px; color: var(--text-ob-dim); font-size: 10px; letter-spacing: .18em; }
+@keyframes plazaPulse { 50% { transform: scale(.92); opacity: .45; } }
+.plaza-authors, .plaza-feed { margin-top: 38px; padding: clamp(22px, 4vw, 38px); border: 1px solid var(--border-hairline); border-radius: 24px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
+.plaza-authors header, .plaza-feed__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.plaza-authors h2, .plaza-feed h2 { margin: 0; font-size: clamp(1.5rem, 3vw, 2.15rem); }
+.plaza-authors header > span { color: var(--text-ob-dim); font-size: 12px; }
+.plaza-authors__rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.plaza-author { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--border-hairline); border-radius: 16px; color: inherit; text-decoration: none; transition: border-color .2s ease, transform .2s ease; }
+.plaza-author:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--color-ob) 55%, transparent); }
+.plaza-author img, .plaza-card__author img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--background-primary); }
+.plaza-author span { min-width: 0; }
+.plaza-author strong, .plaza-author small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plaza-author small, .plaza-author em { color: var(--text-ob-dim); font-size: 11px; font-style: normal; }
+.plaza-author em { grid-column: 2; margin-top: -8px; }
+.plaza-feed__filters { display: flex; align-items: center; gap: 8px; }
+.plaza-feed__filters button { padding: 7px 14px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: var(--text-ob-dim); cursor: pointer; }
+.plaza-feed__filters button.active { border-color: var(--color-ob); background: color-mix(in srgb, var(--color-ob) 14%, transparent); color: var(--color-ob); }
+.plaza-feed__filters label { display: flex; align-items: center; gap: 6px; color: var(--text-ob-dim); font-size: 12px; }
+.plaza-feed__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.plaza-card { display: flex; min-width: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--border-hairline); border-radius: 18px; background: color-mix(in srgb, var(--background-primary) 94%, transparent); }
+.plaza-card__cover { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: linear-gradient(135deg, #152250, #3c2c70); }
+.plaza-card__cover img { width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; }
+.plaza-card:hover .plaza-card__cover img { transform: scale(1.035); }
+.plaza-card__cover em { position: absolute; top: 12px; left: 12px; padding: 4px 9px; border-radius: 999px; background: rgba(7, 14, 36, .72); color: #dbe6ff; font-size: 10px; font-style: normal; backdrop-filter: blur(8px); }
+.plaza-card__placeholder { display: grid; place-items: center; height: 100%; color: rgba(218, 228, 255, .85); font-size: 3.5rem; font-weight: 800; }
+.plaza-card__body { display: flex; flex: 1; flex-direction: column; padding: 16px; }
+.plaza-card__author { display: flex; align-items: center; gap: 8px; margin-bottom: 15px; color: var(--text-ob-dim); font-size: 12px; }
+.plaza-card__author img { width: 28px; height: 28px; }
+.plaza-card__author a { display: inline-flex; align-items: center; min-height: 24px; color: inherit; text-decoration: none; }
+.plaza-card__author a:hover { color: var(--color-ob); }
+.plaza-card__author time { margin-left: auto; }
+.plaza-card__title { color: inherit; font-size: 17px; font-weight: 700; line-height: 1.45; text-decoration: none; }
+.plaza-card__title:hover { color: var(--color-ob); }
+.plaza-card__body p { display: -webkit-box; margin: 12px 0; overflow: hidden; color: var(--text-ob-dim); font-size: 13px; line-height: 1.7; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.plaza-card__meta { display: flex; gap: 12px; margin-top: auto; padding-top: 14px; color: var(--text-ob-dim); font-size: 11px; }
+.plaza-feed__state { margin: 32px 0; color: var(--text-ob-dim); text-align: center; }
+.plaza-feed__state.is-error { color: #e2776c; }
+.plaza-feed__more { display: block; margin: 28px auto 0; padding: 9px 22px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.plaza-feed__more:hover { border-color: var(--color-ob); color: var(--color-ob); }
+@media (max-width: 900px) { .plaza-hero { grid-template-columns: 1fr; } .plaza-hero__signal { min-height: 210px; } .plaza-authors__rail { grid-template-columns: repeat(2, minmax(0, 1fr)); } .plaza-feed__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .plaza-page { padding-top: 4px; } .plaza-hero { border-radius: 20px; } .plaza-authors header, .plaza-feed__head { align-items: flex-start; flex-direction: column; } .plaza-authors__rail, .plaza-feed__grid { grid-template-columns: 1fr; } }
 </style>

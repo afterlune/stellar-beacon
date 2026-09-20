@@ -612,6 +612,7 @@ func isAdminPath(path string) bool {
 
 func requiresAuthentication(path string) bool {
 	return isAdminPath(path) ||
+		strings.HasPrefix(path, "/v1/studio") ||
 		path == "/v1/auth/logout" ||
 		path == "/v1/auth/me" ||
 		strings.HasPrefix(path, "/v1/auth/me/")

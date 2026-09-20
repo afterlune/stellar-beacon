@@ -510,6 +510,7 @@ type UserDetailsDTO struct {
 	Username      string    `json:"username"`
 	Password      string    `json:"password"`
 	Roles         []string  `json:"roles"`
+	Handle        string    `json:"handle"`
 	Nickname      string    `json:"nickname"`
 	Avatar        string    `json:"avatar"`
 	Intro         string    `json:"intro"`
@@ -531,6 +532,7 @@ type UserInfoDTO struct {
 	Email         string    `json:"email"`
 	LoginType     int       `json:"loginType"`
 	Username      string    `json:"username"`
+	Handle        string    `json:"handle"`
 	Nickname      string    `json:"nickname"`
 	Avatar        string    `json:"avatar"`
 	Intro         string    `json:"intro"`
@@ -548,6 +550,7 @@ type UserLogoutStatusDTO struct {
 
 type UserOnlineDTO struct {
 	UserInfoId    int       `json:"userInfoId"`
+	Handle        string    `json:"handle"`
 	Nickname      string    `json:"nickname"`
 	Avatar        string    `json:"avatar"`
 	IpAddress     string    `json:"ipAddress"`
