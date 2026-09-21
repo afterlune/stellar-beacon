@@ -68,6 +68,7 @@ func RouterSetup(router *gin.Engine) {
 	public.GET("/authors/:handle/articles", api.ListAuthorArticles)
 	public.GET("/authors/:handle/talks", api.ListAuthorTalks)
 	public.GET("/authors/:handle/series", api.ListAuthorSeries)
+	public.GET("/topics", api.ListTopicOverview)
 	public.GET("/topics/:topic/:slug/articles", api.ListTopicArticles)
 	public.GET("/media/proxy", api.ProxyMedia)
 	public.GET("/diagnostics/business-error", api.HandleBizException)

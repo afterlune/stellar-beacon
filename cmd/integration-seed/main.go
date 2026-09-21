@@ -237,6 +237,17 @@ func ensureIntegrationFixture(ctx context.Context, db *sql.DB, authorID, readerI
 		}
 	}
 
+	// A deterministic read signal keeps the public "hot" ranking non-empty and
+	// comparable across runs, even before the E2E flow adds reactions.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO t_article_daily_metric
+			(article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions)
+		VALUES ($1, CURRENT_DATE, 3, 2, 2, 40000, 1)
+		ON CONFLICT (article_id, metric_date)
+		DO UPDATE SET unique_readers = 2, effective_sessions = 2`, articleID); err != nil {
+		return fmt.Errorf("seed fixture discovery metric: %w", err)
+	}
+
 	if _, err := tx.ExecContext(ctx, `DELETE FROM t_user_notification WHERE content_type = 'article' AND content_id = $1`, articleID); err != nil {
 		return fmt.Errorf("reset fixture notifications: %w", err)
 	}

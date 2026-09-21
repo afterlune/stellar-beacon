@@ -23,6 +23,31 @@
         </dl>
       </section>
 
+      <section v-if="highlights.length || highlightSeries.length" class="author-highlights" aria-labelledby="author-highlights-title">
+        <header>
+          <div>
+            <p>SPOTLIGHT</p>
+            <h2 id="author-highlights-title">作者概览</h2>
+          </div>
+          <span>近期被收藏、评论与阅读最多的内容</span>
+        </header>
+        <div class="author-highlights__grid">
+          <ol v-if="highlights.length" class="author-highlights__list">
+            <li v-for="(item, index) in highlights" :key="item.id">
+              <span>{{ String(index + 1).padStart(2, '0') }}</span>
+              <router-link :to="`/articles/${item.id}`">{{ item.articleTitle }}</router-link>
+            </li>
+          </ol>
+          <div v-if="highlightSeries.length" class="author-highlights__series">
+            <router-link v-for="item in highlightSeries" :key="item.id" :to="`/series/${item.id}`">
+              <small>{{ item.articleCount }} 篇文章</small>
+              <strong>{{ item.seriesName }}</strong>
+              <em>{{ item.seriesDesc || '暂无系列说明' }}</em>
+            </router-link>
+          </div>
+        </div>
+      </section>
+
       <section class="author-content">
         <nav class="author-tabs">
           <button type="button" :class="{ active: tab === 'articles' }" @click="switchTab('articles')">文章</button>
@@ -83,6 +108,8 @@ export default defineComponent({
     const author = ref<any>(null)
     const records = ref<any[]>([])
     const tab = ref<'articles' | 'talks' | 'series'>('articles')
+    const highlights = ref<any[]>([])
+    const highlightSeries = ref<any[]>([])
     const loading = ref(false)
     const loadingAuthor = ref(true)
     const error = ref('')
@@ -115,6 +142,20 @@ export default defineComponent({
       }
     }
 
+    // The overview is a best-effort glance: either half may be missing, and a
+    // failure must never block the author's own tabs.
+    const loadHighlights = async () => {
+      const [hot, series] = await Promise.allSettled([
+        api.getAuthorArticles(handle, { sort: 'hot', current: 1, size: 3 }),
+        api.getAuthorSeries(handle, { current: 1, size: 3 })
+      ])
+      highlights.value = hot.status === 'fulfilled'
+        ? (Array.isArray(responseData(hot.value).records) ? responseData(hot.value).records : [])
+        : []
+      highlightSeries.value = series.status === 'fulfilled'
+        ? (Array.isArray(responseData(series.value).records) ? responseData(series.value).records : [])
+        : []
+    }
     const loadContent = async (reset = false) => {
       if (!author.value) return
       if (reset) {
@@ -156,17 +197,37 @@ export default defineComponent({
 
     onMounted(async () => {
       await loadAuthor()
-      await loadContent(true)
+      await Promise.allSettled([loadHighlights(), loadContent(true)])
     })
 
-    return { author, records, tab, loading, loadingAuthor, error, total, defaultAvatar, switchTab, loadMore, excerpt, formatDate, isSelf, followChanged }
+    return {
+      author, records, highlights, highlightSeries, tab, loading, loadingAuthor, error, total,
+      defaultAvatar, switchTab, loadMore, excerpt, formatDate, isSelf, followChanged
+    }
   }
 })
 </script>
 
 <style lang="scss" scoped>
 .author-page { max-width: 1120px; margin: 0 auto; padding: 28px 0 96px; }
+.author-highlights { margin-top: 26px; padding: clamp(22px, 4vw, 34px); border: 1px solid var(--border-hairline); border-radius: 24px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
+.author-highlights header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+.author-highlights header p { margin: 0 0 8px; color: var(--color-ob); font-size: 10px; letter-spacing: .2em; }
+.author-highlights header h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.9rem); }
+.author-highlights header span { color: var(--text-ob-dim); font-size: 11px; }
+.author-highlights__grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; }
+.author-highlights__list { margin: 0; padding: 0; list-style: none; }
+.author-highlights__list li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-hairline); }
+.author-highlights__list li:last-child { border-bottom: none; }
+.author-highlights__list span { color: var(--color-ob); font-size: 12px; letter-spacing: .12em; }
+.author-highlights__list a { display: flex; align-items: center; overflow: hidden; min-height: 24px; padding: 2px 0; color: inherit; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.author-highlights__list a:hover { color: var(--color-ob); }
+.author-highlights__series { display: grid; gap: 12px; }
+.author-highlights__series a { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border-hairline); border-radius: 15px; color: inherit; text-decoration: none; }
+.author-highlights__series small, .author-highlights__series em { color: var(--text-ob-dim); font-size: 11px; font-style: normal; }
+.author-highlights__series em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .author-state { padding: 60px 0; color: var(--text-ob-dim); text-align: center; }
+@media (max-width: 760px) { .author-highlights__grid { grid-template-columns: 1fr; } }
 .author-state.is-error { color: #e2776c; }
 .author-hero { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; gap: 28px; align-items: center; padding: clamp(28px, 5vw, 54px); border: 1px solid var(--border-hairline); border-radius: 26px; background: radial-gradient(circle at 88% 12%, rgba(103, 72, 188, .2), transparent 34%), linear-gradient(135deg, color-mix(in srgb, var(--background-primary-alt) 94%, #3159c7 6%), var(--background-primary)); }
 .author-hero > img { width: 132px; height: 132px; border: 1px solid color-mix(in srgb, var(--color-ob) 45%, transparent); border-radius: 50%; object-fit: cover; box-shadow: 0 18px 55px rgba(7, 13, 38, .34); }

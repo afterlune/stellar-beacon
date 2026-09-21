@@ -28,6 +28,17 @@ Invoke-IntegrationCompose -Arguments @(
     '-n', '1', 'DEL', 'website_config'
 ) | Out-Null
 
+# Comment notification emails carry a 24h per-recipient budget in Redis. A
+# repeated verification run must start from an empty budget, otherwise the
+# notification assertions silently starve and fail for the wrong reason.
+$redisCli = @('exec', '-T', 'redis', 'redis-cli', '--no-auth-warning', '-a', $env:REDIS_PASSWORD, '-n', '1')
+$notificationKeys = @(& docker @((Get-IntegrationComposeArgs) + $redisCli + @('--scan', '--pattern', 'comment-notify*')) 2>$null)
+$notificationKeys = @($notificationKeys | Where-Object { $_ -and $_.Trim() -ne '' })
+if ($notificationKeys.Count -gt 0) {
+    Write-Host "Clearing $($notificationKeys.Count) stale comment notification limiters..." -ForegroundColor Cyan
+    Invoke-IntegrationCompose -Arguments ($redisCli + @('DEL') + $notificationKeys) | Out-Null
+}
+
 $meiliBase = 'http://127.0.0.1:17700'
 $meiliHeaders = @{ Authorization = "Bearer $env:MEILI_MASTER_KEY" }
 $indexBody = '{"uid":"articles","primaryKey":"id"}'

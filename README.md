@@ -27,6 +27,12 @@
 
 响应统一为 `{ "code": "OK", "message": "...", "data": ... }`；分页数据统一为 `{ items, total, page, pageSize }`。旧 HTTP 路由不再注册。
 
+博客前台的公共发现面都是只读公开接口，且只返回 `status=1` 且审核可见的内容：
+
+- `GET /api/v1/public/feed?sort=latest|hot|featured`：公共信息流；`hot` 按近 7 天的收藏、审核通过评论、点赞与独立读者加权排序。
+- `GET /api/v1/public/authors?sort=articles|followers|active`：作者榜；`active` 按最近一次公开发布排序。
+- `GET /api/v1/public/topics`：话题广场，分类、标签与系列复用同一热度口径聚合。
+
 ## 开发检查
 
 ```shell

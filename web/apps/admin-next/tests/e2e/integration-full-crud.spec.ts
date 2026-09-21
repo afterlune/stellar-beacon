@@ -713,7 +713,9 @@ async function runCommentNotificationRoundTrip(page: Page, token: string, suffix
     expect(commentPayload.code === 'OK', 'reader comment success').toBe(true)
 
     const adminEmail = process.env.E2E_ADMIN_EMAIL || ''
-    const delivered = await waitForMailpitMessage(mailpitURL, adminEmail, '你的文章收到了新评论', mailBefore)
+    // The notification subject is shared by article and talk comments, so the
+    // assertion follows the product copy instead of a per-content-type title.
+    const delivered = await waitForMailpitMessage(mailpitURL, adminEmail, '你的内容收到了新评论', mailBefore)
     expect(delivered, `notification email for ${adminEmail}`).toBe(true)
 
     const comments = await page.request.get(`/api/v1/admin/comments?current=1&size=10&type=1&keywords=${encodeURIComponent(`notify ${suffix}`)}`, {

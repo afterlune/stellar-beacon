@@ -24,6 +24,13 @@ const (
 	commentNotifyDailyLimit   = 20
 )
 
+// Comment types carried by t_comment.type. Public count surfaces reuse these
+// so a counter can never disagree with the target a comment was accepted for.
+const (
+	commentTypeArticle = 1
+	commentTypeTalk    = 5
+)
+
 type CommentService interface {
 	ListTopSixComments() model.ResultVO
 	ListComments(c *gin.Context) model.ResultVO
@@ -296,9 +303,9 @@ func commentTarget(commentType, topicID int) (string, int) {
 		return "", 0
 	}
 	switch commentType {
-	case 1:
+	case commentTypeArticle:
 		return port.FollowContentArticle, topicID
-	case 5:
+	case commentTypeTalk:
 		return port.FollowContentTalk, topicID
 	default:
 		return "", 0

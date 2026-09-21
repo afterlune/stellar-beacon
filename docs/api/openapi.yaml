@@ -87,12 +87,53 @@ paths:
     get: { tags: [public], summary: Get talk detail, operationId: getTalk, parameters: [{ $ref: '#/components/parameters/TalkId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/users/{userInfoId}:
     get: { tags: [public], summary: Get public user information, operationId: getPublicUser, parameters: [{ $ref: '#/components/parameters/UserInfoId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/feed:
+    get:
+      tags: [public]
+      summary: List the public community feed
+      description: |
+        Returns public articles or talks. `sort=latest` (the default) keeps the
+        historical recency ordering, `sort=hot` ranks articles by the reader
+        signals of the last seven days (favourites, approved comments, likes and
+        unique readers) and `sort=featured` returns featured articles only.
+        Talks always use the recency ordering. Private, draft, scheduled, deleted
+        and moderated content is never returned.
+      operationId: listPublicFeed
+      parameters:
+        - { name: type, in: query, required: false, schema: { type: string, enum: [article, talk] } }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [latest, hot, featured] } }
+        - { name: featured, in: query, required: false, description: 'Legacy featured-only filter; still honoured for sort=latest.', schema: { type: integer, enum: [0, 1] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/topics:
+    get:
+      tags: [public]
+      summary: List the public topic plaza
+      description: Groups public categories, tags and series, each ranked by the same seven-day reader signal the hot feed uses. Empty groups are dropped; `size` defaults to 12 and is capped at 30.
+      operationId: listPublicTopics
+      parameters:
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 30, default: 12 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /public/authors:
-    get: { tags: [public], summary: List public authors, operationId: listPlatformAuthors, responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get:
+      tags: [public]
+      summary: List public authors
+      description: Ranks authors that still have public content. `sort=articles` (the default) orders by public article count, `sort=followers` by follower count and `sort=active` by the most recent public publish.
+      operationId: listPlatformAuthors
+      parameters:
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [articles, followers, active] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /public/authors/{handle}:
     get: { tags: [public], summary: Get a public author profile, operationId: getAuthorByHandle, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/authors/{handle}/articles:
-    get: { tags: [public], summary: List an author's public articles, operationId: listAuthorArticles, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get:
+      tags: [public]
+      summary: List an author's public articles
+      description: '`sort=latest` (the default) is recency ordered; `sort=hot` ranks the author''s articles by the seven-day reader signal.'
+      operationId: listAuthorArticles
+      parameters:
+        - { name: handle, in: path, required: true, schema: { type: string } }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [latest, hot] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /public/authors/{handle}/talks:
     get: { tags: [public], summary: List an author's public talks, operationId: listAuthorTalks, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/authors/{handle}/series:

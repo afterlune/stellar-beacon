@@ -95,6 +95,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyInteractionNotificationSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyDiscoveryRankingSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1296,6 +1299,47 @@ func applyInteractionNotificationSchema(ctx context.Context, engine *xorm.Engine
 	return nil
 }
 
+// applyDiscoveryRankingSchema adds the covering indexes the public discovery
+// surfaces rely on. Trending feeds aggregate reactions, approved comments and
+// daily read metrics over a short window, so each table needs an index that
+// keeps the window scan off a full table scan. It only adds indexes and never
+// rewrites or deletes existing data.
+func applyDiscoveryRankingSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 20)").Get(&applied); err != nil {
+		return fmt.Errorf("check discovery ranking migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin discovery ranking migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`CREATE INDEX IF NOT EXISTS idx_comment_type_topic_created ON t_comment(type, topic_id, create_time DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_article_daily_metric_window ON t_article_daily_metric(metric_date, article_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_article_reaction_article_created ON t_article_reaction(article_id, reaction, create_time DESC)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply discovery ranking schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 20, "discovery-ranking"); err != nil {
+		return fmt.Errorf("record discovery ranking migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit discovery ranking migration: %w", err)
+	}
+	return nil
+}
 func handleBase(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var builder strings.Builder

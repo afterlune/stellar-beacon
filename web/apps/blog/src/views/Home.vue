@@ -9,6 +9,8 @@
         </p>
         <div class="plaza-hero__actions">
           <button type="button" @click="scrollToFeed">浏览公共内容 <span aria-hidden="true">↓</span></button>
+          <router-link to="/topics">话题广场</router-link>
+          <router-link to="/authors">作者榜</router-link>
           <router-link to="/studio">进入我的创作台</router-link>
         </div>
       </div>
@@ -25,7 +27,10 @@
           <p>AUTHORS ONLINE</p>
           <h2 id="plaza-authors-title">来自不同频道</h2>
         </div>
-        <span>{{ authors.length }} 位作者正在公开写作</span>
+        <div class="plaza-authors__links">
+          <span>{{ authors.length }} 位作者正在公开写作</span>
+          <router-link class="plaza-authors__more" to="/authors">查看作者榜 →</router-link>
+        </div>
       </header>
       <div class="plaza-authors__rail">
         <router-link v-for="author in authors" :key="author.id" :to="`/u/${author.handle}`" class="plaza-author">
@@ -45,13 +50,16 @@
           <p>COMMUNITY CHANNEL</p>
           <h2 id="plaza-feed-title">公共信息流</h2>
         </div>
-        <div class="plaza-feed__filters">
-          <button type="button" :class="{ active: activeType === 'article' }" @click="activeType = 'article'">文章</button>
-          <button type="button" :class="{ active: activeType === 'talk' }" @click="activeType = 'talk'">随想</button>
-          <label v-if="activeType === 'article'">
-            <input v-model="featuredOnly" type="checkbox" />
-            精选
-          </label>
+        <div class="plaza-feed__controls">
+          <div class="plaza-feed__filters">
+            <button type="button" :class="{ active: activeType === 'article' }" @click="activeType = 'article'">文章</button>
+            <button type="button" :class="{ active: activeType === 'talk' }" @click="activeType = 'talk'">随想</button>
+          </div>
+          <div v-if="activeType === 'article'" class="plaza-feed__filters" aria-label="信息流排序">
+            <button type="button" :class="{ active: activeSort === 'latest' }" @click="activeSort = 'latest'">最新</button>
+            <button type="button" :class="{ active: activeSort === 'hot' }" @click="activeSort = 'hot'">热门</button>
+            <button type="button" :class="{ active: activeSort === 'featured' }" @click="activeSort = 'featured'">精选</button>
+          </div>
         </div>
       </header>
 
@@ -101,7 +109,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineComponent, onMounted, ref, watch } from 'vue'
 import api from '@/api/api'
 import { useAppStore } from '@/stores/app'
 
@@ -114,7 +122,9 @@ export default defineComponent({
     const records = ref<any[]>([])
     const authors = ref<any[]>([])
     const activeType = ref<'article' | 'talk'>('article')
-    const featuredOnly = ref(false)
+    const activeSort = ref<'latest' | 'hot' | 'featured'>('latest')
+    // Talks have no ranking signal yet, so they always read the recency feed.
+    const requestSort = computed(() => activeType.value === 'talk' ? 'latest' : activeSort.value)
     const loading = ref(false)
     const error = ref('')
     const page = ref(1)
@@ -142,7 +152,7 @@ export default defineComponent({
       try {
         const response = await api.getPlatformFeed({
           type: activeType.value,
-          featured: featuredOnly.value ? 1 : 0,
+          sort: requestSort.value,
           current: page.value,
           size: pageSize
         })
@@ -180,7 +190,7 @@ export default defineComponent({
 
     const scrollToFeed = () => document.getElementById('public-feed')?.scrollIntoView({ behavior: 'smooth' })
 
-    watch([activeType, featuredOnly], () => void loadFeed(true))
+    watch([activeType, activeSort], () => void loadFeed(true))
     onMounted(() => {
       void loadAuthors()
       void loadFeed(true)
@@ -191,7 +201,7 @@ export default defineComponent({
       records,
       authors,
       activeType,
-      featuredOnly,
+      activeSort,
       loading,
       error,
       total,
@@ -227,7 +237,7 @@ export default defineComponent({
 .plaza-authors, .plaza-feed { margin-top: 38px; padding: clamp(22px, 4vw, 38px); border: 1px solid var(--border-hairline); border-radius: 24px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
 .plaza-authors header, .plaza-feed__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
 .plaza-authors h2, .plaza-feed h2 { margin: 0; font-size: clamp(1.5rem, 3vw, 2.15rem); }
-.plaza-authors header > span { color: var(--text-ob-dim); font-size: 12px; }
+.plaza-authors__links { display: flex; align-items: center; gap: 10px; color: var(--text-ob-dim); font-size: 12px; } .plaza-authors__more { display: inline-flex; align-items: center; min-height: 24px; padding: 0 4px; color: var(--color-ob); text-decoration: none; }
 .plaza-authors__rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .plaza-author { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--border-hairline); border-radius: 16px; color: inherit; text-decoration: none; transition: border-color .2s ease, transform .2s ease; }
 .plaza-author:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--color-ob) 55%, transparent); }
@@ -236,7 +246,7 @@ export default defineComponent({
 .plaza-author strong, .plaza-author small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plaza-author small, .plaza-author em { color: var(--text-ob-dim); font-size: 11px; font-style: normal; }
 .plaza-author em { grid-column: 2; margin-top: -8px; }
-.plaza-feed__filters { display: flex; align-items: center; gap: 8px; }
+.plaza-feed__controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; } .plaza-feed__filters { display: flex; align-items: center; gap: 8px; }
 .plaza-feed__filters button { padding: 7px 14px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: var(--text-ob-dim); cursor: pointer; }
 .plaza-feed__filters button.active { border-color: var(--color-ob); background: color-mix(in srgb, var(--color-ob) 14%, transparent); color: var(--color-ob); }
 .plaza-feed__filters label { display: flex; align-items: center; gap: 6px; color: var(--text-ob-dim); font-size: 12px; }

@@ -70,7 +70,7 @@ func (t *MyTalkService) ListTalks(c *gin.Context) model.ResultVO {
 	for _, talk := range talks {
 		talkIDs = append(talkIDs, talk.Id)
 	}
-	comments, err := t.commentRepository().ListCommentCountsByTypeAndTopicIDs(ctx, 5, talkIDs)
+	comments, err := t.commentRepository().ListCommentCountsByTypeAndTopicIDs(ctx, commentTypeTalk, talkIDs)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -111,7 +111,7 @@ func (t *MyTalkService) GetTalkById(c *gin.Context) model.ResultVO {
 		}
 		talk.Imgs = images
 	}
-	commentCount, err := t.commentRepository().ListCommentCountByTypeAndTopicID(c.Request.Context(), 5, id)
+	commentCount, err := t.commentRepository().ListCommentCountByTypeAndTopicID(c.Request.Context(), commentTypeTalk, id)
 	if err != nil {
 		return model.ResultFromError(err)
 	}

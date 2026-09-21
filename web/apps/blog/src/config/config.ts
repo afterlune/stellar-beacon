@@ -10,6 +10,15 @@ export default {
       children: []
     },
     {
+      name: 'Topics',
+      path: '/topics',
+      i18n: {
+        cn: '话题',
+        en: 'Topics'
+      },
+      children: []
+    },
+    {
       name: 'Categories',
       path: '/categories',
       i18n: {

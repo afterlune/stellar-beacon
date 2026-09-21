@@ -53,6 +53,50 @@ type fakePlatformRepository struct {
 	retryArticleID      int
 	retryResult         port.ScheduledPublish
 	retryErr            error
+	feedSortCalls       []string
+	authorSortCalls     []string
+	authorArticleCalls  []string
+	topicOverviewSizes  []int
+	topicOverviewResult port.TopicOverview
+	topicOverviewErr    error
+}
+
+func (f *fakePlatformRepository) ListFeedArticles(_ context.Context, _, _ int, featuredOnly bool) ([]*port.ArticleCard, int, error) {
+	if featuredOnly {
+		f.feedSortCalls = append(f.feedSortCalls, port.FeedSortFeatured)
+	} else {
+		f.feedSortCalls = append(f.feedSortCalls, port.FeedSortLatest)
+	}
+	return []*port.ArticleCard{}, 0, nil
+}
+
+func (f *fakePlatformRepository) ListFeedArticlesHot(_ context.Context, _, _ int) ([]*port.ArticleCard, int, error) {
+	f.feedSortCalls = append(f.feedSortCalls, port.FeedSortHot)
+	return []*port.ArticleCard{}, 0, nil
+}
+
+func (f *fakePlatformRepository) GetAuthorByHandle(_ context.Context, _ string, _ int) (port.AuthorCard, error) {
+	return port.AuthorCard{PublicAuthor: port.PublicAuthor{Id: 11, Handle: "e2e-user", Nickname: "E2E User"}}, nil
+}
+
+func (f *fakePlatformRepository) ListAuthors(_ context.Context, _, _, _ int, sort string) ([]*port.AuthorCard, int, error) {
+	f.authorSortCalls = append(f.authorSortCalls, sort)
+	return []*port.AuthorCard{}, 0, nil
+}
+
+func (f *fakePlatformRepository) ListAuthorArticles(_ context.Context, _, _, _ int) ([]*port.ArticleCard, int, error) {
+	f.authorArticleCalls = append(f.authorArticleCalls, port.FeedSortLatest)
+	return []*port.ArticleCard{}, 0, nil
+}
+
+func (f *fakePlatformRepository) ListAuthorArticlesHot(_ context.Context, _, _, _ int) ([]*port.ArticleCard, int, error) {
+	f.authorArticleCalls = append(f.authorArticleCalls, port.FeedSortHot)
+	return []*port.ArticleCard{}, 0, nil
+}
+
+func (f *fakePlatformRepository) ListTopicOverview(_ context.Context, size int) (port.TopicOverview, error) {
+	f.topicOverviewSizes = append(f.topicOverviewSizes, size)
+	return f.topicOverviewResult, f.topicOverviewErr
 }
 
 func (f *fakePlatformRepository) PreviewOwnedContent(context.Context, int, port.StudioContentType, port.StudioFilter) (port.StudioBatchPreview, error) {
@@ -510,4 +554,163 @@ func TestPlatformStudioSaveRejectsDatabaseIncompatibleFields(t *testing.T) {
 	if series.Flag {
 		t.Fatalf("overlong series name must fail: %+v", series)
 	}
+}
+
+func TestDiscoveryFeedSortDefaultsToLatestAndRejectsUnknownValues(t *testing.T) {
+	for _, value := range []string{"", "latest", "Latest", " hot "} {
+		if _, ok := discoveryFeedSort(value); !ok {
+			t.Fatalf("feed sort %q must be accepted", value)
+		}
+	}
+	if got, _ := discoveryFeedSort(""); got != port.FeedSortLatest {
+		t.Fatalf("empty feed sort must default to latest, got %q", got)
+	}
+	if got, _ := discoveryFeedSort(" HOT "); got != port.FeedSortHot {
+		t.Fatalf("feed sort must be normalized, got %q", got)
+	}
+	if _, ok := discoveryFeedSort("trending"); ok {
+		t.Fatal("unknown feed sort must be rejected")
+	}
+}
+
+func TestDiscoveryAuthorSortDefaultsToArticlesAndRejectsUnknownValues(t *testing.T) {
+	if got, _ := discoveryAuthorSort(""); got != port.AuthorSortArticles {
+		t.Fatalf("empty author sort must default to articles, got %q", got)
+	}
+	for _, value := range []string{"followers", "active"} {
+		if got, ok := discoveryAuthorSort(value); !ok || got != value {
+			t.Fatalf("author sort %q must be accepted, got %q ok=%v", value, got, ok)
+		}
+	}
+	if _, ok := discoveryAuthorSort("popular"); ok {
+		t.Fatal("unknown author sort must be rejected")
+	}
+}
+
+func TestPlatformFeedDispatchesSortWithoutBreakingFeaturedFilter(t *testing.T) {
+	repo := &fakePlatformRepository{}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	if result := service.Feed(platformTestContext(http.MethodGet, "/v1/public/feed", "")); !result.Flag {
+		t.Fatalf("default feed must succeed: %+v", result)
+	}
+	if result := service.Feed(platformTestContext(http.MethodGet, "/v1/public/feed?sort=hot", "")); !result.Flag {
+		t.Fatalf("hot feed must succeed: %+v", result)
+	}
+	if result := service.Feed(platformTestContext(http.MethodGet, "/v1/public/feed?featured=1", "")); !result.Flag {
+		t.Fatalf("featured feed must succeed: %+v", result)
+	}
+	if result := service.Feed(platformTestContext(http.MethodGet, "/v1/public/feed?sort=trending", "")); result.Flag {
+		t.Fatal("unknown feed sort must fail the request")
+	}
+	want := []string{port.FeedSortLatest, port.FeedSortHot, port.FeedSortFeatured}
+	if strings.Join(repo.feedSortCalls, ",") != strings.Join(want, ",") {
+		t.Fatalf("unexpected feed dispatch: %v", repo.feedSortCalls)
+	}
+}
+
+func TestPlatformAuthorBoardDispatchesSort(t *testing.T) {
+	repo := &fakePlatformRepository{}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	for _, target := range []string{"/v1/public/authors", "/v1/public/authors?sort=followers", "/v1/public/authors?sort=active"} {
+		if result := service.Authors(platformTestContext(http.MethodGet, target, "")); !result.Flag {
+			t.Fatalf("author board %s must succeed: %+v", target, result)
+		}
+	}
+	if result := service.Authors(platformTestContext(http.MethodGet, "/v1/public/authors?sort=popular", "")); result.Flag {
+		t.Fatal("unknown author sort must fail the request")
+	}
+	want := []string{port.AuthorSortArticles, port.AuthorSortFollowers, port.AuthorSortActive}
+	if strings.Join(repo.authorSortCalls, ",") != strings.Join(want, ",") {
+		t.Fatalf("unexpected author dispatch: %v", repo.authorSortCalls)
+	}
+}
+
+func TestPlatformAuthorArticlesSupportHotButNotFeatured(t *testing.T) {
+	repo := &fakePlatformRepository{}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	if result := service.AuthorArticles(platformTestContext(http.MethodGet, "/v1/public/authors/e2e-user/articles", "")); !result.Flag {
+		t.Fatalf("author articles must succeed: %+v", result)
+	}
+	if result := service.AuthorArticles(platformTestContext(http.MethodGet, "/v1/public/authors/e2e-user/articles?sort=hot", "")); !result.Flag {
+		t.Fatalf("hot author articles must succeed: %+v", result)
+	}
+	if result := service.AuthorArticles(platformTestContext(http.MethodGet, "/v1/public/authors/e2e-user/articles?sort=featured", "")); result.Flag {
+		t.Fatal("featured is not a valid author article sort")
+	}
+	if strings.Join(repo.authorArticleCalls, ",") != port.FeedSortLatest+","+port.FeedSortHot {
+		t.Fatalf("unexpected author article dispatch: %v", repo.authorArticleCalls)
+	}
+}
+
+func TestPlatformTopicsClampRequestedSize(t *testing.T) {
+	repo := &fakePlatformRepository{}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+
+	for _, target := range []string{
+		"/v1/public/topics",
+		"/v1/public/topics?size=3",
+		"/v1/public/topics?size=999",
+		"/v1/public/topics?size=abc",
+		"/v1/public/topics?size=0",
+	} {
+		if result := service.Topics(platformTestContext(http.MethodGet, target, "")); !result.Flag {
+			t.Fatalf("topics %s must succeed: %+v", target, result)
+		}
+	}
+	want := []int{topicOverviewSizeDefault, 3, topicOverviewSizeMax, topicOverviewSizeDefault, topicOverviewSizeDefault}
+	if len(repo.topicOverviewSizes) != len(want) {
+		t.Fatalf("unexpected topics calls: %v", repo.topicOverviewSizes)
+	}
+	for index, size := range want {
+		if repo.topicOverviewSizes[index] != size {
+			t.Fatalf("topics call %d requested %d, want %d", index, repo.topicOverviewSizes[index], size)
+		}
+	}
+}
+
+func TestPlatformDiscoveryAttachesCountsWhenDependenciesAreWired(t *testing.T) {
+	repo := &discoveryPlatformRepository{}
+	service, err := NewPlatformService(PlatformServiceDeps{
+		Repo: repo, Articles: &fakeArticleRepository{}, Storage: fakeServiceStorage{},
+		Reactions: fakeReactionCounter{counts: map[int]port.ReactionCounts{5: {LikeCount: 3, FavoriteCount: 2}}},
+		Comments:  fakeCommentCounter{counts: []*port.CommentCount{{Id: 9, CommentCount: 4}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result := service.Feed(platformTestContext(http.MethodGet, "/v1/public/feed?type=talk", "")); !result.Flag {
+		t.Fatalf("talk feed must succeed: %+v", result)
+	}
+	if repo.talkCount == 0 {
+		t.Fatal("talk feed must expose comment counts")
+	}
+}
+
+type discoveryPlatformRepository struct {
+	fakePlatformRepository
+	talkCount int
+}
+
+func (d *discoveryPlatformRepository) ListFeedTalks(context.Context, int, int) ([]*port.Talk, int, error) {
+	d.talkCount++
+	return []*port.Talk{{Id: 9, Content: "hello"}}, 1, nil
+}
+
+type fakeReactionCounter struct {
+	counts map[int]port.ReactionCounts
+}
+
+func (f fakeReactionCounter) Counts(context.Context, []int) (map[int]port.ReactionCounts, error) {
+	return f.counts, nil
+}
+
+type fakeCommentCounter struct {
+	counts []*port.CommentCount
+}
+
+func (f fakeCommentCounter) ListCommentCountsByTypeAndTopicIDs(context.Context, int, []int) ([]*port.CommentCount, error) {
+	return f.counts, nil
 }

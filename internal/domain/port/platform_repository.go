@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"time"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 )
@@ -86,6 +87,40 @@ type StudioProfile struct {
 	Intro    string
 	Website  string
 }
+
+// Public discovery sort keys. The service layer validates query parameters
+// against these constants so an unexpected value can never reach a SQL
+// builder; unknown values fall back to the documented default.
+const (
+	FeedSortLatest   = "latest"
+	FeedSortHot      = "hot"
+	FeedSortFeatured = "featured"
+)
+
+const (
+	AuthorSortArticles  = "articles"
+	AuthorSortFollowers = "followers"
+	AuthorSortActive    = "active"
+)
+
+// TopicOverviewItem is one public taxonomy entry (category, tag or series)
+// ranked by its recent reader activity.
+type TopicOverviewItem struct {
+	Id           int    `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	Cover        string `json:"cover,omitempty"`
+	ArticleCount int    `json:"articleCount"`
+	HotScore     int    `json:"hotScore"`
+}
+
+// TopicOverview groups the public taxonomy surfaces rendered by the topic
+// plaza. Each group is already ranked and truncated by the repository.
+type TopicOverview struct {
+	Categories []TopicOverviewItem `json:"categories"`
+	Tags       []TopicOverviewItem `json:"tags"`
+	Series     []TopicOverviewItem `json:"series"`
+}
 type AuthorCard struct {
 	PublicAuthor
 	ArticleCount  int  `json:"articleCount"`
@@ -93,6 +128,9 @@ type AuthorCard struct {
 	SeriesCount   int  `json:"seriesCount"`
 	FollowerCount int  `json:"followerCount"`
 	IsFollowing   bool `json:"isFollowing,omitempty"`
+	// LastPublishedAt is only filled for the active-author ranking, where the
+	// reader needs to see why an author is listed as recently active.
+	LastPublishedAt *time.Time `json:"lastPublishedAt,omitempty"`
 }
 
 // PlatformRepository owns cross-owner discovery and owner-scoped editing. It
@@ -100,17 +138,20 @@ type AuthorCard struct {
 // cannot forget a user_id filter.
 type PlatformRepository interface {
 	GetAuthorByHandle(ctx context.Context, handle string, viewerID int) (AuthorCard, error)
-	ListAuthors(ctx context.Context, current, size, viewerID int) ([]*AuthorCard, int, error)
+	ListAuthors(ctx context.Context, current, size, viewerID int, sort string) ([]*AuthorCard, int, error)
 	StudioDashboard(ctx context.Context, userID int) (StudioDashboard, error)
 	GetStudioProfile(ctx context.Context, userID int) (StudioProfile, error)
 	UpdateAuthorProfile(ctx context.Context, userID int, handle, nickname, intro, website string) error
 
 	ListFeedArticles(ctx context.Context, current, size int, featuredOnly bool) ([]*ArticleCard, int, error)
+	ListFeedArticlesHot(ctx context.Context, current, size int) ([]*ArticleCard, int, error)
 	ListFeedTalks(ctx context.Context, current, size int) ([]*Talk, int, error)
 	ListAuthorArticles(ctx context.Context, userID, current, size int) ([]*ArticleCard, int, error)
+	ListAuthorArticlesHot(ctx context.Context, userID, current, size int) ([]*ArticleCard, int, error)
 	ListAuthorTalks(ctx context.Context, userID, current, size int) ([]*Talk, int, error)
 	ListAuthorSeries(ctx context.Context, userID, current, size int) ([]*Series, int, error)
 	ListTopicArticles(ctx context.Context, topic string, slug string, current, size int) ([]*ArticleCard, int, error)
+	ListTopicOverview(ctx context.Context, size int) (TopicOverview, error)
 
 	ListOwnedArticles(ctx context.Context, userID int, filter StudioFilter) ([]*ArticleAdmin, int, error)
 	GetOwnedArticle(ctx context.Context, userID, articleID int) (ArticleAdminView, error)

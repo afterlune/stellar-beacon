@@ -178,6 +178,9 @@ export default {
   getPlatformAuthors: (params: any) => {
     return http.get('/public/authors', { params })
   },
+  getTopicOverview: (params?: { size?: number }) => {
+    return http.get('/public/topics', { params })
+  },
   getAuthorByHandle: (handle: string) => {
     return http.get('/public/authors/' + encodeURIComponent(handle))
   },

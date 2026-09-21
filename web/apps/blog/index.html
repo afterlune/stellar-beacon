@@ -9,8 +9,22 @@
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon-light.svg" media="(prefers-color-scheme: light)" />
     <link rel="alternate icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.js"></script>
+    <!--
+      KaTeX only styles math inside article bodies, so it must not sit on the
+      render-blocking path: a slow CDN must never delay the first paint. The
+      stylesheet is applied as soon as it arrives and the deferred script still
+      executes before the app module boots because it is declared first.
+    -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.css"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.css" />
+    </noscript>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.8.3/katex.min.js"></script>
     <title>星际信标 · Stellar Beacon</title>
   </head>
   <body>

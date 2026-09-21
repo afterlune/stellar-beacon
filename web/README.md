@@ -35,4 +35,4 @@ npm run serve --workspace=@stellar-beacon/admin-next
 pwsh ./scripts/integration/verify.ps1
 ```
 
-该脚本会重建并迁移隔离栈、准备确定性测试数据，然后运行博客真实后端 E2E、管理端真实集成套件和博客视觉门禁。联调数据库可写，但脚本只使用 `stellar-beacon-integration-v17` 项目。
+该脚本会重建并迁移隔离栈、准备确定性测试数据（含供「热门」信息流使用的阅读指标），然后运行博客真实后端 E2E、管理端真实集成套件和博客视觉门禁（视觉路由含 `/topics` 话题广场）。联调数据库可写，但脚本只使用 `stellar-beacon-integration-v17` 项目。

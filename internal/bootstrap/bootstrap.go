@@ -132,6 +132,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	}
 	platformService, err := service.NewPlatformService(service.PlatformServiceDeps{
 		Repo: platform, Articles: article, Newsletter: newsletterService, Storage: ossStorage, Cache: redisCache,
+		Reactions: articleReaction, Comments: comment,
 	})
 	if err != nil {
 		cancel()

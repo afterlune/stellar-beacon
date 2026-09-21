@@ -13,6 +13,7 @@ func ListAuthorArticles(c *gin.Context)  { c.JSON(http.StatusOK, platformService
 func ListAuthorTalks(c *gin.Context)     { c.JSON(http.StatusOK, platformService.AuthorTalks(c)) }
 func ListAuthorSeries(c *gin.Context)    { c.JSON(http.StatusOK, platformService.AuthorSeries(c)) }
 func ListTopicArticles(c *gin.Context)   { c.JSON(http.StatusOK, platformService.TopicArticles(c)) }
+func ListTopicOverview(c *gin.Context)   { c.JSON(http.StatusOK, platformService.Topics(c)) }
 
 func StudioDashboard(c *gin.Context)     { c.JSON(http.StatusOK, platformService.Dashboard(c)) }
 func GetStudioProfile(c *gin.Context)    { c.JSON(http.StatusOK, platformService.GetProfile(c)) }

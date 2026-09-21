@@ -512,6 +512,86 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 		t.Fatalf("unexpected album repository result: albums=%v err=%v", albums, err)
 	}
 
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions)
+    VALUES (2, CURRENT_DATE, 4, 4, 4, 20000, 2)
+    ON CONFLICT (article_id, metric_date) DO UPDATE SET unique_readers = 4, effective_sessions = 4;
+INSERT INTO t_article_reaction (article_id, user_info_id, reaction) VALUES (4, 1, 'like'), (4, 2, 'like'), (4, 1, 'favorite');
+INSERT INTO t_article_reaction (article_id, user_info_id, reaction, create_time) VALUES (6, 1, 'favorite', CURRENT_TIMESTAMP - INTERVAL '30 days');
+INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_review, create_time) VALUES
+    (2, 5, 'hot comment one', 1, 0, 1, CURRENT_TIMESTAMP),
+    (1, 5, 'hot comment two', 1, 0, 1, CURRENT_TIMESTAMP),
+    (2, 5, 'hot comment three', 1, 0, 1, CURRENT_TIMESTAMP);`); err != nil {
+		t.Fatalf("seed discovery ranking signals: %v", err)
+	}
+	hotArticles, hotCount, err := platformRepo.ListFeedArticlesHot(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("list hot feed: %v", err)
+	}
+	// Article 1 keeps its two approved comments, one like, one favourite and one
+	// daily reader; the seeded signals then rank 5, 4 and 2 behind it. Article 3
+	// is a draft and article 6 only has an out-of-window reaction, so neither can
+	// appear.
+	wantHotOrder := []int{1, 5, 4, 2}
+	if hotCount != len(wantHotOrder) || len(hotArticles) != len(wantHotOrder) {
+		t.Fatalf("unexpected hot feed size: count=%d ids=%v want=%v", hotCount, articleIDs(hotArticles), wantHotOrder)
+	}
+	for index, article := range hotArticles {
+		if article.Id != wantHotOrder[index] {
+			t.Fatalf("unexpected hot order at %d: got %d want %d (records=%+v)", index, article.Id, wantHotOrder[index], hotArticles)
+		}
+	}
+	if err := platformRepo.ModerateContent(ctx, "article", 2, 1, true, "integration discovery"); err != nil {
+		t.Fatalf("hide hot article: %v", err)
+	}
+	hiddenHot, hiddenCount, err := platformRepo.ListAuthorArticlesHot(ctx, 1, 1, 10)
+	if err != nil {
+		t.Fatalf("list hidden author hot feed: %v", err)
+	}
+	for _, article := range hiddenHot {
+		if article.Id == 2 {
+			t.Fatalf("hidden article must leave the author hot feed: count=%d records=%+v", hiddenCount, hiddenHot)
+		}
+	}
+	if err := platformRepo.ModerateContent(ctx, "article", 2, 1, false, ""); err != nil {
+		t.Fatalf("restore hot article: %v", err)
+	}
+	overview, err := platformRepo.ListTopicOverview(ctx, 10)
+	if err != nil {
+		t.Fatalf("list topic overview: %v", err)
+	}
+	tagCounts := map[string]int{}
+	for _, item := range overview.Tags {
+		tagCounts[item.Name] = item.ArticleCount
+	}
+	if len(overview.Tags) == 0 || overview.Tags[0].Name != "integration tag" {
+		t.Fatalf("hottest tag must lead the plaza: topics=%+v", overview.Tags)
+	}
+	if tagCounts["integration tag"] != 3 {
+		t.Fatalf("draft article must not count towards its tag: tags=%+v", overview.Tags)
+	}
+	categoryCounts := map[string]int{}
+	for _, item := range overview.Categories {
+		categoryCounts[item.Name] = item.ArticleCount
+	}
+	if categoryCounts["integration category"] != 5 || categoryCounts["second category"] != 1 {
+		t.Fatalf("unexpected category counts: categories=%+v", overview.Categories)
+	}
+	if len(overview.Series) != 1 || overview.Series[0].Id != 10 || overview.Series[0].ArticleCount != 3 {
+		t.Fatalf("unexpected series plaza entries: series=%+v", overview.Series)
+	}
+	activeAuthors, activeCount, err := platformRepo.ListAuthors(ctx, 1, 10, 0, port.AuthorSortActive)
+	if err != nil || activeCount != 1 || len(activeAuthors) != 1 || activeAuthors[0].LastPublishedAt == nil {
+		t.Fatalf("unexpected active author board: authors=%+v count=%d err=%v", activeAuthors, activeCount, err)
+	}
+	followerAuthors, followerBoardCount, err := platformRepo.ListAuthors(ctx, 1, 10, 0, port.AuthorSortFollowers)
+	if err != nil || followerBoardCount != 1 || len(followerAuthors) != 1 || followerAuthors[0].FollowerCount != 1 {
+		t.Fatalf("unexpected follower author board: authors=%+v count=%d err=%v", followerAuthors, followerBoardCount, err)
+	}
+	articleAuthors, articleBoardCount, err := platformRepo.ListAuthors(ctx, 1, 10, 0, port.AuthorSortArticles)
+	if err != nil || articleBoardCount != 1 || len(articleAuthors) != 1 || articleAuthors[0].Id != 1 {
+		t.Fatalf("unexpected article author board: authors=%+v count=%d err=%v", articleAuthors, articleBoardCount, err)
+	}
 	redisContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "redis:8.10.0-alpine3.23",
@@ -553,6 +633,15 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	}
 }
 
+func articleIDs(cards []*port.ArticleCard) []int {
+	ids := make([]int, 0, len(cards))
+	for _, card := range cards {
+		if card != nil {
+			ids = append(ids, card.Id)
+		}
+	}
+	return ids
+}
 func pingDatabase(ctx context.Context, db *sql.DB) error {
 	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

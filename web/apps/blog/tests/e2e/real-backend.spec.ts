@@ -80,6 +80,8 @@ test.describe('blog real backend main chain @integration', () => {
       '/search?q=integration',
       `/articles/${fixtureArticleID}`,
       '/u/e2e-admin',
+      '/authors',
+      '/topics',
       '/talks',
       '/series'
     ]
@@ -172,6 +174,97 @@ test.describe('blog real backend main chain @integration', () => {
     const unread = await getAPIData(request, '/api/v1/auth/me/notifications/unread-count', admin.token)
     expect(Number(unread.count || 0)).toBe(0)
   })
+
+  test('ranks real reader signals and keeps private work out of discovery', async ({ request }) => {
+    const publicTitle = `integration discovery public ${runID}`
+    const privateTitle = `integration private ${runID}`
+    const publicArticle = await postAPI(request, '/api/v1/studio/articles', admin.token, {
+      articleTitle: publicTitle,
+      articleContent: 'public discovery fixture',
+      visibility: 'public',
+      type: 1
+    })
+    const publicArticleID = Number(publicArticle?.id || 0)
+    expect(publicArticleID, 'public article must be created').toBeGreaterThan(0)
+    const created = await postAPI(request, '/api/v1/studio/articles', admin.token, {
+      articleTitle: privateTitle,
+      articleContent: 'private discovery fixture',
+      visibility: 'private',
+      type: 1
+    })
+    const privateArticleID = Number(created?.id || 0)
+    expect(privateArticleID, 'private article must be created').toBeGreaterThan(0)
+
+    try {
+      const authorLatest = await getAPIData(request, '/api/v1/public/authors/e2e-admin/articles?sort=latest&current=1&size=36')
+      const authorLatestRecords = itemsOf(authorLatest)
+      expect(
+        authorLatestRecords.some((item: any) => Number(item.id) === publicArticleID),
+        'a freshly published article must reach its public author feed'
+      ).toBe(true)
+      expect(authorLatestRecords.some((item: any) => Number(item.id) === privateArticleID)).toBe(false)
+      const hot = await getAPIData(request, '/api/v1/public/feed?type=article&sort=hot&current=1&size=12')
+      const hotRecords = itemsOf(hot)
+      expect(hotRecords.length, 'hot feed must not be empty').toBeGreaterThan(0)
+      expect(hotRecords.every((item: any) => Number(item.status) === 1)).toBe(true)
+      expect(hotRecords.every((item: any) => typeof item.likeCount === 'number')).toBe(true)
+      expect(
+        hotRecords.some((item: any) => Number(item.id) === fixtureArticleID),
+        'the fixture article carries seeded reads, a like, a favourite and approved comments'
+      ).toBe(true)
+
+      const latest = await getAPIData(request, '/api/v1/public/feed?type=article&sort=latest&current=1&size=12')
+      expect(itemsOf(latest).length).toBeGreaterThan(0)
+
+      const featured = await getAPIData(request, '/api/v1/public/feed?type=article&sort=featured&current=1&size=12')
+      expect(Array.isArray(itemsOf(featured))).toBe(true)
+
+      const authors = await getAPIData(request, '/api/v1/public/authors?sort=followers&current=1&size=12')
+      expect(itemsOf(authors).some((item: any) => item.handle === 'e2e-admin')).toBe(true)
+
+      const activeAuthors = await getAPIData(request, '/api/v1/public/authors?sort=active&current=1&size=12')
+      const activeEntry = itemsOf(activeAuthors).find((item: any) => item.handle === 'e2e-admin')
+      expect(activeEntry?.lastPublishedAt, 'active ranking must expose the last public publish').toBeTruthy()
+
+      const topics = await getAPIData(request, '/api/v1/public/topics?size=12')
+      const topicGroups = [
+        ...(Array.isArray(topics?.categories) ? topics.categories : []),
+        ...(Array.isArray(topics?.tags) ? topics.tags : []),
+        ...(Array.isArray(topics?.series) ? topics.series : [])
+      ]
+      expect(topicGroups.length, 'topic plaza must expose at least one public topic').toBeGreaterThan(0)
+      expect(topicGroups.every((item: any) => Number(item.articleCount) > 0)).toBe(true)
+
+      const authorHot = await getAPIData(request, '/api/v1/public/authors/e2e-admin/articles?sort=hot&current=1&size=24')
+      expect(itemsOf(authorHot).some((item: any) => Number(item.id) === fixtureArticleID)).toBe(true)
+
+      // The private article is the isolation probe: it must never surface on a
+      // public discovery surface, in any sort order.
+      const publicSurfaces = [
+        ...hotRecords,
+        ...itemsOf(latest),
+        ...itemsOf(featured),
+        ...itemsOf(await getAPIData(request, '/api/v1/public/feed?type=article&sort=hot&current=1&size=36')),
+        ...itemsOf(await getAPIData(request, '/api/v1/public/authors/e2e-admin/articles?sort=latest&current=1&size=36')),
+        ...itemsOf(authorHot)
+      ]
+      expect(publicSurfaces.some((item: any) => Number(item.id) === privateArticleID)).toBe(false)
+      expect(publicSurfaces.some((item: any) => String(item.articleTitle || '').includes(privateTitle))).toBe(false)
+
+      const search = await getAPIData(request, `/api/v1/public/articles/search?keywords=${encodeURIComponent(privateTitle)}`)
+      expect(JSON.stringify(search || {})).not.toContain(privateTitle)
+
+      // Direct access is the last line of defence: even knowing the id, an
+      // anonymous reader must not receive the private body.
+      const privateResponse = await request.get(`/api/v1/public/articles/${privateArticleID}`)
+      expect(await privateResponse.text()).not.toContain('private discovery fixture')
+
+      const publicResponse = await request.get(`/api/v1/public/articles/${publicArticleID}`)
+      expect(await publicResponse.text()).toContain('public discovery fixture')
+    } finally {
+      await deleteAPI(request, '/api/v1/studio/articles', admin.token, [publicArticleID, privateArticleID]).catch(() => undefined)
+    }
+  })
 })
 
 async function loginByAPI(request: APIRequestContext, email: string, password: string): Promise<LoginSession> {
@@ -209,6 +302,11 @@ async function getAPIData(request: APIRequestContext, path: string, token = ''):
   const payload = JSON.parse(body)
   expect(Boolean(payload.flag || payload.code === 'OK'), `${path}: ${body}`).toBe(true)
   return payload.data
+}
+
+async function postAPI(request: APIRequestContext, path: string, token: string, data: unknown): Promise<any> {
+  const response = await request.post(path, { headers: authorization(token), data })
+  return assertMutation(response, `POST ${path}`)
 }
 
 async function putAPI(request: APIRequestContext, path: string, token: string, data: unknown): Promise<any> {

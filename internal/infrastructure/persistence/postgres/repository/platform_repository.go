@@ -66,7 +66,7 @@ func (r *MyPlatformRepo) attachAuthorCounts(session *xorm.Session, author *port.
 	return nil
 }
 
-func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size, viewerID int) ([]*port.AuthorCard, int, error) {
+func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size, viewerID int, sort string) ([]*port.AuthorCard, int, error) {
 	session, err := repoSession(r.engine, ctx, "platform.authors")
 	if err != nil {
 		return nil, 0, err
@@ -89,6 +89,17 @@ func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size, viewerI
 		)`).Get(&count); err != nil {
 		return nil, 0, apperrors.Unavailable("platform.authors.count", err)
 	}
+	order := discoveryAuthorArticleCountSQL + ` DESC, ui.id ASC`
+	switch sort {
+	case port.AuthorSortFollowers:
+		order = `(
+			SELECT count(1) FROM t_user_follow follow
+			JOIN t_user_info follower ON follower.id = follow.follower_id AND follower.is_disable = 0
+			WHERE follow.author_id = ui.id
+		) DESC, ` + discoveryAuthorArticleCountSQL + ` DESC, ui.id ASC`
+	case port.AuthorSortActive:
+		order = discoveryAuthorActivitySQL + ` DESC NULLS LAST, ui.id ASC`
+	}
 	var users []entity.TUserInfo
 	if err := session.SQL(`
 		SELECT ui.*
@@ -105,10 +116,7 @@ func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size, viewerI
 				WHERE s.user_id = ui.id AND s.is_delete = 0 AND s.status = 1 AND s.moderation_status = 'visible'
 			)
 		)
-		ORDER BY (
-			SELECT count(1) FROM t_article a
-			WHERE a.user_id = ui.id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
-		) DESC, ui.id ASC LIMIT ? OFFSET ?`, limit, offset).Find(&users); err != nil {
+		ORDER BY `+order+` LIMIT ? OFFSET ?`, limit, offset).Find(&users); err != nil {
 		return nil, 0, apperrors.Unavailable("platform.authors.list", err)
 	}
 	authors := make([]*port.AuthorCard, 0, len(users))
@@ -119,9 +127,134 @@ func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size, viewerI
 		}
 		authors = append(authors, author)
 	}
+	if sort == port.AuthorSortActive {
+		if err := r.attachAuthorActivity(session, authors); err != nil {
+			return nil, 0, err
+		}
+	}
 	return authors, count, nil
 }
 
+// discoveryHotWindowDays is the trailing window every public ranking surface
+// aggregates over. It is a constant on purpose: the API exposes no window
+// parameter, so a client can never trigger an unbounded table aggregation.
+const discoveryHotWindowDays = 7
+
+// discoveryHotScoreCTE aggregates the reader signals behind the public "hot"
+// ranking. All three sub-selects are windowed, so the score reflects current
+// interest instead of lifetime totals, and only public, visible, approved rows
+// contribute. Callers must bind three arguments: metric date, reaction time and
+// comment time, in that order.
+const discoveryHotScoreCTE = `
+	WITH window_metrics AS (
+		SELECT m.article_id, SUM(m.unique_readers) AS readers
+		FROM t_article_daily_metric m
+		WHERE m.metric_date >= ?
+		GROUP BY m.article_id
+	),
+	window_reactions AS (
+		SELECT r.article_id,
+		       count(1) FILTER (WHERE r.reaction = 'favorite') AS favorites,
+		       count(1) FILTER (WHERE r.reaction = 'like') AS likes
+		FROM t_article_reaction r
+		WHERE r.create_time >= ?
+		GROUP BY r.article_id
+	),
+	window_comments AS (
+		SELECT c.topic_id AS article_id, count(1) AS comments
+		FROM t_comment c
+		WHERE c.type = 1 AND c.is_review = 1 AND c.is_delete = 0 AND c.create_time >= ?
+		GROUP BY c.topic_id
+	),
+	scored AS (
+		SELECT a.id,
+		       5 * COALESCE(wr.favorites, 0) + 4 * COALESCE(wc.comments, 0)
+		       + 3 * COALESCE(wr.likes, 0) + 2 * COALESCE(wm.readers, 0) AS hot_score
+		FROM t_article a
+		LEFT JOIN window_reactions wr ON wr.article_id = a.id
+		LEFT JOIN window_comments wc ON wc.article_id = a.id
+		LEFT JOIN window_metrics wm ON wm.article_id = a.id
+		WHERE a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+	)
+`
+
+// discoveryAuthorArticleCountSQL is the public-article count used to rank the
+// author board. It resolves the surrounding query alias "ui".
+const discoveryAuthorArticleCountSQL = `(
+			SELECT count(1) FROM t_article a
+			WHERE a.user_id = ui.id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+		)`
+
+// discoveryAuthorActivitySQL is the "most recent public publish" timestamp
+// behind the active-author ranking. Publish events whose content was later
+// hidden, deleted or made private no longer count as activity.
+const discoveryAuthorActivitySQL = `(
+			SELECT max(event.published_at) FROM t_author_publish_event event
+			WHERE event.author_id = ui.id AND (
+				(event.content_type = 'article' AND EXISTS (
+					SELECT 1 FROM t_article a
+					WHERE a.id = event.content_id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+				)) OR (event.content_type = 'talk' AND EXISTS (
+					SELECT 1 FROM t_talk t
+					WHERE t.id = event.content_id AND t.status = 1 AND t.moderation_status = 'visible'
+				))
+			)
+		)`
+
+// discoveryWindow returns the start of the ranking window as a timestamp for
+// row-level columns and as a date for the daily metric table.
+func discoveryWindow(now time.Time) (time.Time, string) {
+	start := now.AddDate(0, 0, -discoveryHotWindowDays)
+	return start, start.Format("2006-01-02")
+}
+
+// attachAuthorActivity fills LastPublishedAt for a page of authors with one
+// grouped query, so the active ranking never degrades into a per-author lookup.
+func (r *MyPlatformRepo) attachAuthorActivity(session *xorm.Session, authors []*port.AuthorCard) error {
+	ids := make([]int, 0, len(authors))
+	for _, author := range authors {
+		if author != nil && author.Id > 0 {
+			ids = append(ids, author.Id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []struct {
+		AuthorID        int       `xorm:"author_id"`
+		LastPublishedAt time.Time `xorm:"last_published_at"`
+	}
+	query := `
+		SELECT event.author_id, max(event.published_at) AS last_published_at
+		FROM t_author_publish_event event
+		WHERE event.author_id IN (` + placeholders(len(ids)) + `) AND (
+			(event.content_type = 'article' AND EXISTS (
+				SELECT 1 FROM t_article a
+				WHERE a.id = event.content_id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+			)) OR (event.content_type = 'talk' AND EXISTS (
+				SELECT 1 FROM t_talk t
+				WHERE t.id = event.content_id AND t.status = 1 AND t.moderation_status = 'visible'
+			))
+		)
+		GROUP BY event.author_id`
+	if err := session.SQL(query, intArgs(ids)...).Find(&rows); err != nil {
+		return apperrors.Unavailable("platform.authors.activity", err)
+	}
+	activity := make(map[int]time.Time, len(rows))
+	for _, row := range rows {
+		activity[row.AuthorID] = row.LastPublishedAt
+	}
+	for _, author := range authors {
+		if author == nil {
+			continue
+		}
+		if at, ok := activity[author.Id]; ok {
+			published := at
+			author.LastPublishedAt = &published
+		}
+	}
+	return nil
+}
 func (r *MyPlatformRepo) StudioDashboard(ctx context.Context, userID int) (port.StudioDashboard, error) {
 	session, err := repoSession(r.engine, ctx, "platform.studio.dashboard")
 	if err != nil {
@@ -243,6 +376,40 @@ func (r *MyPlatformRepo) ListFeedArticles(ctx context.Context, current, size int
 	return articles, count, nil
 }
 
+func (r *MyPlatformRepo) ListFeedArticlesHot(ctx context.Context, current, size int) ([]*port.ArticleCard, int, error) {
+	session, err := repoSession(r.engine, ctx, "platform.feed.articles.hot")
+	if err != nil {
+		return nil, 0, err
+	}
+	limit, offset := pgsql.Page(current, size)
+	windowStart, windowDate := discoveryWindow(time.Now())
+	windowArgs := []interface{}{windowDate, windowStart, windowStart}
+	var count int
+	if _, err := session.SQL(discoveryHotScoreCTE+`
+		SELECT count(1) FROM scored WHERE hot_score > 0`, windowArgs...).Get(&count); err != nil {
+		return nil, 0, apperrors.Unavailable("platform.feed.articles.hot.count", err)
+	}
+	if count == 0 {
+		return []*port.ArticleCard{}, 0, nil
+	}
+	pageArgs := append(append([]interface{}{}, windowArgs...), limit, offset)
+	var articles []*port.ArticleCard
+	if err := session.SQL(discoveryHotScoreCTE+`
+		SELECT a.id, a.user_id, a.article_cover, a.article_title, SUBSTR(a.article_content, 1, 500) AS article_content,
+		       a.is_top, a.is_featured, c.category_name, a.status, a.moderation_status, a.create_time, a.update_time
+		FROM t_article a
+		JOIN scored s ON s.id = a.id
+		LEFT JOIN t_category c ON a.category_id = c.id
+		WHERE s.hot_score > 0
+		ORDER BY s.hot_score DESC, a.create_time DESC, a.id DESC
+		LIMIT ? OFFSET ?`, pageArgs...).Find(&articles); err != nil {
+		return nil, 0, apperrors.Unavailable("platform.feed.articles.hot.list", err)
+	}
+	if err := r.attachArticleAuthorsAndTags(ctx, session, articles); err != nil {
+		return nil, 0, err
+	}
+	return articles, count, nil
+}
 func (r *MyPlatformRepo) attachArticleAuthorsAndTags(ctx context.Context, session *xorm.Session, articles []*port.ArticleCard) error {
 	if len(articles) == 0 {
 		return nil
@@ -325,6 +492,42 @@ func (r *MyPlatformRepo) ListAuthorArticles(ctx context.Context, userID, current
 	return articles, count, nil
 }
 
+func (r *MyPlatformRepo) ListAuthorArticlesHot(ctx context.Context, userID, current, size int) ([]*port.ArticleCard, int, error) {
+	session, err := repoSession(r.engine, ctx, "platform.author.articles.hot")
+	if err != nil {
+		return nil, 0, err
+	}
+	limit, offset := pgsql.Page(current, size)
+	windowStart, windowDate := discoveryWindow(time.Now())
+	windowArgs := []interface{}{windowDate, windowStart, windowStart}
+	var count int
+	if _, err := session.SQL(discoveryHotScoreCTE+`
+		SELECT count(1) FROM scored s
+		JOIN t_article a ON a.id = s.id
+		WHERE s.hot_score > 0 AND a.user_id = ?`, append(append([]interface{}{}, windowArgs...), userID)...).Get(&count); err != nil {
+		return nil, 0, apperrors.Unavailable("platform.author.articles.hot.count", err)
+	}
+	if count == 0 {
+		return []*port.ArticleCard{}, 0, nil
+	}
+	pageArgs := append(append(append([]interface{}{}, windowArgs...), userID), limit, offset)
+	var articles []*port.ArticleCard
+	if err := session.SQL(discoveryHotScoreCTE+`
+		SELECT a.id, a.user_id, a.article_cover, a.article_title, SUBSTR(a.article_content, 1, 500) AS article_content,
+		       a.is_top, a.is_featured, c.category_name, a.status, a.moderation_status, a.create_time, a.update_time
+		FROM t_article a
+		JOIN scored s ON s.id = a.id
+		LEFT JOIN t_category c ON a.category_id = c.id
+		WHERE s.hot_score > 0 AND a.user_id = ?
+		ORDER BY s.hot_score DESC, a.create_time DESC, a.id DESC
+		LIMIT ? OFFSET ?`, pageArgs...).Find(&articles); err != nil {
+		return nil, 0, apperrors.Unavailable("platform.author.articles.hot.list", err)
+	}
+	if err := r.attachArticleAuthorsAndTags(ctx, session, articles); err != nil {
+		return nil, 0, err
+	}
+	return articles, count, nil
+}
 func (r *MyPlatformRepo) ListAuthorTalks(ctx context.Context, userID, current, size int) ([]*port.Talk, int, error) {
 	session, err := repoSession(r.engine, ctx, "platform.author.talks")
 	if err != nil {
@@ -407,6 +610,98 @@ func (r *MyPlatformRepo) ListTopicArticles(ctx context.Context, topic, slug stri
 	return articles, count, nil
 }
 
+// ListTopicOverview ranks the public taxonomy surfaces by the same windowed
+// hot score the feed uses, so the plaza and the trending feed agree on what
+// "recently interesting" means. Every group is aggregated once and truncated
+// by the given size; empty groups are dropped.
+func (r *MyPlatformRepo) ListTopicOverview(ctx context.Context, size int) (port.TopicOverview, error) {
+	overview := port.TopicOverview{
+		Categories: []port.TopicOverviewItem{},
+		Tags:       []port.TopicOverviewItem{},
+		Series:     []port.TopicOverviewItem{},
+	}
+	session, err := repoSession(r.engine, ctx, "platform.topics.overview")
+	if err != nil {
+		return overview, err
+	}
+	windowStart, windowDate := discoveryWindow(time.Now())
+	windowArgs := []interface{}{windowDate, windowStart, windowStart}
+	limitArgs := func() []interface{} {
+		return append(append([]interface{}{}, windowArgs...), size)
+	}
+
+	if err := session.SQL(discoveryHotScoreCTE+`
+		, category_groups AS (
+			SELECT lower(btrim(c.category_name)) AS group_key, min(c.id) AS id, min(c.category_name) AS name
+			FROM t_category c
+			GROUP BY 1
+		),
+		category_articles AS (
+			SELECT g.group_key, a.id AS article_id
+			FROM category_groups g
+			JOIN t_category c ON lower(btrim(c.category_name)) = g.group_key
+			JOIN t_article a ON a.category_id = c.id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+			GROUP BY 1, 2
+		)
+		SELECT g.id, g.name, count(ca.article_id)::int AS article_count,
+		       COALESCE(SUM(s.hot_score), 0)::int AS hot_score
+		FROM category_groups g
+		JOIN category_articles ca ON ca.group_key = g.group_key
+		LEFT JOIN scored s ON s.id = ca.article_id
+		GROUP BY g.group_key, g.id, g.name
+		ORDER BY hot_score DESC, article_count DESC, g.name ASC
+		LIMIT ?`, limitArgs()...).Find(&overview.Categories); err != nil {
+		return overview, apperrors.Unavailable("platform.topics.categories", err)
+	}
+
+	if err := session.SQL(discoveryHotScoreCTE+`
+		, tag_groups AS (
+			SELECT lower(btrim(t.tag_name)) AS group_key, min(t.id) AS id, min(t.tag_name) AS name
+			FROM t_tag t
+			GROUP BY 1
+		),
+		tag_articles AS (
+			SELECT g.group_key, a.id AS article_id
+			FROM tag_groups g
+			JOIN t_tag t ON lower(btrim(t.tag_name)) = g.group_key
+			JOIN t_article_tag at ON at.tag_id = t.id
+			JOIN t_article a ON a.id = at.article_id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+			GROUP BY 1, 2
+		)
+		SELECT g.id, g.name, count(ta.article_id)::int AS article_count,
+		       COALESCE(SUM(s.hot_score), 0)::int AS hot_score
+		FROM tag_groups g
+		JOIN tag_articles ta ON ta.group_key = g.group_key
+		LEFT JOIN scored s ON s.id = ta.article_id
+		GROUP BY g.group_key, g.id, g.name
+		ORDER BY hot_score DESC, article_count DESC, g.name ASC
+		LIMIT ?`, limitArgs()...).Find(&overview.Tags); err != nil {
+		return overview, apperrors.Unavailable("platform.topics.tags", err)
+	}
+
+	if err := session.SQL(discoveryHotScoreCTE+`
+		, series_articles AS (
+			SELECT s.id AS series_id, a.id AS article_id
+			FROM t_series s
+			JOIN t_article a ON a.series_id = s.id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+			WHERE s.is_delete = 0 AND s.status = 1 AND s.moderation_status = 'visible'
+			GROUP BY 1, 2
+		)
+		SELECT s.id, s.series_name AS name, s.series_desc AS description, s.cover,
+		       count(sa.article_id)::int AS article_count,
+		       COALESCE(SUM(scored.hot_score), 0)::int AS hot_score
+		FROM t_series s
+		JOIN series_articles sa ON sa.series_id = s.id
+		LEFT JOIN scored ON scored.id = sa.article_id
+		WHERE s.is_delete = 0 AND s.status = 1 AND s.moderation_status = 'visible'
+		GROUP BY s.id, s.series_name, s.series_desc, s.cover
+		ORDER BY hot_score DESC, article_count DESC, s.series_name ASC
+		LIMIT ?`, limitArgs()...).Find(&overview.Series); err != nil {
+		return overview, apperrors.Unavailable("platform.topics.series", err)
+	}
+
+	return overview, nil
+}
 func (r *MyPlatformRepo) ListOwnedArticles(ctx context.Context, userID int, filter port.StudioFilter) ([]*port.ArticleAdmin, int, error) {
 	session, err := repoSession(r.engine, ctx, "platform.studio.articles")
 	if err != nil {
