@@ -239,6 +239,10 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	if count != 6 || len(articles) != 6 {
 		t.Fatalf("unexpected article repository result: count=%d articles=%+v", count, articles)
 	}
+	topFeatured, err := NewArticleRepo(xormEngine).ListTopAndFeaturedArticles(ctx)
+	if err != nil || len(topFeatured) == 0 {
+		t.Fatalf("unexpected top and featured article result: articles=%+v err=%v", topFeatured, err)
+	}
 	site := NewSiteInfoRepo(xormEngine)
 	articleCount, err := site.CountArticles(ctx)
 	if err != nil || articleCount != 7 {

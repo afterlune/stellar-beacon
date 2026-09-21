@@ -4,7 +4,6 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 const apiTarget = process.env.VITE_ADMIN_API_TARGET || process.env.VITE_API_TARGET || 'https://localhost:7777'
-const preserveApiPrefix = process.env.VITE_ADMIN_API_PRESERVE_API_PREFIX === '1'
 
 function manualChunks(id: string): string | undefined {
   const normalized = id.replace(/\\/g, '/')
@@ -38,8 +37,7 @@ export default defineConfig({
       '/api': {
         target: apiTarget,
         changeOrigin: true,
-        secure: false,
-        ...(preserveApiPrefix ? {} : { rewrite: (path: string) => path.replace(/^\/api/, '') })
+        secure: false
       }
     }
   },

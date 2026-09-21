@@ -150,7 +150,7 @@ func commentFilters(filter port.CommentFilter) (string, []interface{}) {
 		args = append(args, filter.IsReview)
 	}
 	if filter.Keywords != "" {
-		query += " AND u.nickname LIKE ? ESCAPE '\\'"
+		query += " AND c.comment_content LIKE ? ESCAPE '\\'"
 		args = append(args, pgsql.ContainsPattern(filter.Keywords))
 	}
 	return query, args

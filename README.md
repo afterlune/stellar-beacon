@@ -68,6 +68,12 @@ pwsh ./scripts/integration/seed.ps1
 pwsh ./scripts/integration/smoke.ps1
 ```
 
+一键执行真实前后端主链路联调（会重建隔离栈、执行迁移/种子/冒烟、博客真实后端 E2E、管理端真实集成套件和博客视觉门禁）：
+
+```powershell
+pwsh ./scripts/integration/verify.ps1
+```
+
 结束时只清理隔离项目：
 
 ```powershell

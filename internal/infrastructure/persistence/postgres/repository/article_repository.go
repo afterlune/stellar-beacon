@@ -591,6 +591,9 @@ func (a *MyArticleRepo) SaveOrUpdate(ctx context.Context, article entity.TArticl
 		if category.Id != 0 {
 			article.CategoryId = category.Id
 		}
+		if article.Id == 0 && article.ModerationStatus == "" {
+			article.ModerationStatus = "visible"
+		}
 		if article.Id != 0 {
 			var existing struct {
 				Status           int    `xorm:"status"`

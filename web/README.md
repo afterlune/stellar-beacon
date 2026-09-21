@@ -30,3 +30,9 @@ npm run serve --workspace=@stellar-beacon/admin-next
 ## 联调
 
 完整联调使用仓库根目录的 `scripts/integration/` 脚本与隔离 Compose 项目，不触碰已有数据库、缓存、搜索、对象存储或 Caddy 容器。
+
+```powershell
+pwsh ./scripts/integration/verify.ps1
+```
+
+该脚本会重建并迁移隔离栈、准备确定性测试数据，然后运行博客真实后端 E2E、管理端真实集成套件和博客视觉门禁。联调数据库可写，但脚本只使用 `stellar-beacon-integration-v17` 项目。

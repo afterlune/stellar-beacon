@@ -110,6 +110,12 @@ func (r *MySeriesRepo) Get(ctx context.Context, seriesID int) (entity.TSeries, e
 func (r *MySeriesRepo) SaveOrUpdate(ctx context.Context, series entity.TSeries) (entity.TSeries, error) {
 	err := repoTx(r.engine, ctx, "series.save", func(session *xorm.Session) error {
 		if series.Id == 0 {
+			if series.Status == 0 {
+				series.Status = 1
+			}
+			if series.ModerationStatus == "" {
+				series.ModerationStatus = "visible"
+			}
 			if _, err := session.Insert(&series); err != nil {
 				return apperrors.Unavailable("series.create", err)
 			}

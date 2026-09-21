@@ -149,6 +149,9 @@ func (t *MyTalkRepo) GetAdmin(ctx context.Context, id int) (port.TalkAdmin, erro
 func (t *MyTalkRepo) SaveOrUpdate(ctx context.Context, talk entity.TTalk) error {
 	wasPublic := false
 	return ormInit.WithEngineTx(t.engine, ctx, func(session *xorm.Session) error {
+		if talk.Id == 0 && talk.ModerationStatus == "" {
+			talk.ModerationStatus = "visible"
+		}
 		if talk.Id != 0 {
 			var existing entity.TTalk
 			found, err := session.ID(talk.Id).Get(&existing)

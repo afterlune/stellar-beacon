@@ -289,6 +289,7 @@ export default defineComponent({
     const userStore = useUserStore()
     const reactionPending = ref(false)
     const reactionMessage = ref('')
+    let reactionStateRequest = 0
     const reactions = reactive({
       like: false,
       favorite: false,
@@ -849,6 +850,7 @@ export default defineComponent({
         })
     }
     const fetchReactionStates = () => {
+      const requestID = ++reactionStateRequest
       reactions.like = false
       reactions.favorite = false
       if (!userStore.token || !reactiveData.articleId) return
@@ -857,12 +859,14 @@ export default defineComponent({
       api
         .getArticleReactionStates([articleId])
         .then(({ data }: any) => {
+          if (requestID !== reactionStateRequest) return
           const entry = (data?.data || [])[0]
           if (!entry) return
           reactions.like = Boolean(entry.like)
           reactions.favorite = Boolean(entry.favorite)
         })
         .catch(() => {
+          if (requestID !== reactionStateRequest) return
           reactions.like = false
           reactions.favorite = false
         })
@@ -875,12 +879,13 @@ export default defineComponent({
       }
       const articleId = Number(reactiveData.articleId)
       if (!Number.isFinite(articleId) || articleId <= 0 || reactionPending.value) return
+      reactionStateRequest++
       reactionPending.value = true
       reactionMessage.value = ''
       api
         .toggleArticleReaction({ articleId, reaction: kind, active: !reactions[kind] })
         .then(({ data }: any) => {
-          if (data?.code && data.code !== 'OK') {
+          if (data?.flag === false) {
             reactionMessage.value = t('reactions.failed')
             return
           }

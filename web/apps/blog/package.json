@@ -8,6 +8,7 @@
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
     "test:e2e": "playwright test --config playwright.config.ts",
+    "test:e2e:integration": "playwright test --config playwright.config.ts --grep @integration",
     "test:visual": "playwright test --config playwright.visual.config.ts"
   },
   "dependencies": {

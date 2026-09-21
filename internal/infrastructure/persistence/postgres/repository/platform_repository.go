@@ -737,6 +737,12 @@ func (r *MyPlatformRepo) GetOwnedSeries(ctx context.Context, userID, seriesID in
 func (r *MyPlatformRepo) SaveOwnedSeries(ctx context.Context, series entity.TSeries) (entity.TSeries, error) {
 	err := ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
 		if series.Id == 0 {
+			if series.Status == 0 {
+				series.Status = 1
+			}
+			if series.ModerationStatus == "" {
+				series.ModerationStatus = "visible"
+			}
 			if _, err := session.Insert(&series); err != nil {
 				return apperrors.Unavailable("platform.studio.series.create", err)
 			}

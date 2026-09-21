@@ -21,6 +21,13 @@ try {
     Pop-Location
 }
 
+# Website configuration changes must bypass the process-external cache so the
+# next API read observes the deterministic review/email settings written above.
+Invoke-IntegrationCompose -Arguments @(
+    'exec', '-T', 'redis', 'redis-cli', '--no-auth-warning', '-a', $env:REDIS_PASSWORD,
+    '-n', '1', 'DEL', 'website_config'
+) | Out-Null
+
 $meiliBase = 'http://127.0.0.1:17700'
 $meiliHeaders = @{ Authorization = "Bearer $env:MEILI_MASTER_KEY" }
 $indexBody = '{"uid":"articles","primaryKey":"id"}'
@@ -36,8 +43,8 @@ try {
 }
 
 $documents = @(
-    @{ id = 147; articleTitle = 'Integration smoke article'; articleContent = 'stellar-beacon integration search'; isDelete = 0; status = 1 },
-    @{ id = 152; articleTitle = 'Caddy integration article'; articleContent = 'frontend backend caddy minio'; isDelete = 0; status = 1 }
+    @{ id = 147; articleTitle = 'Integration smoke article'; articleContent = 'stellar-beacon integration search'; isDelete = 0; status = 1; moderationStatus = 'visible' },
+    @{ id = 152; articleTitle = 'Caddy integration article'; articleContent = 'frontend backend caddy minio'; isDelete = 0; status = 1; moderationStatus = 'visible' }
 )
 $documentsBody = $documents | ConvertTo-Json -Depth 5 -Compress
 $task = Invoke-RestMethod -Method Post -Uri "$meiliBase/indexes/articles/documents" -Headers $meiliHeaders -ContentType 'application/json' -Body $documentsBody
@@ -50,6 +57,12 @@ $settingsBody = '["articleTitle","articleContent"]'
 $settingsTask = Invoke-RestMethod -Method Put -Uri "$meiliBase/indexes/articles/settings/searchable-attributes" -Headers $meiliHeaders -ContentType 'application/json' -Body $settingsBody
 if ($null -ne $settingsTask.taskUid) {
     Wait-IntegrationMeiliTask -TaskUid ([string]$settingsTask.taskUid)
+}
+
+$filterableBody = '["isDelete","status","moderationStatus"]'
+$filterableTask = Invoke-RestMethod -Method Put -Uri "$meiliBase/indexes/articles/settings/filterable-attributes" -Headers $meiliHeaders -ContentType 'application/json' -Body $filterableBody
+if ($null -ne $filterableTask.taskUid) {
+    Wait-IntegrationMeiliTask -TaskUid ([string]$filterableTask.taskUid)
 }
 
 Write-Host 'Integration database users and Meilisearch index are ready.' -ForegroundColor Green
