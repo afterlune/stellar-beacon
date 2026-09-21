@@ -535,6 +535,7 @@ type UserDetailsDTO struct {
 	IsSubscribe       int       `json:"isSubscribe"`
 	NotifyComment     int       `json:"notifyComment"`
 	NotifyInteraction int       `json:"notifyInteraction"`
+	NotifyTopic       int       `json:"notifyTopic"`
 	Browser           string    `json:"browser"`
 	Os                string    `json:"os"`
 	ExpireTime        time.Time `json:"expireTime"`
@@ -646,10 +647,12 @@ type ReactionStateDTO struct {
 	Favorite  bool `json:"favorite"`
 }
 
-// NotificationPreferenceVO toggles the in-app interaction notification
-// preference of the authenticated account.
+// NotificationPreferenceVO toggles the in-app notification preferences of the
+// authenticated account. NotifyTopic is optional: a request that omits it keeps
+// the stored topic preference untouched.
 type NotificationPreferenceVO struct {
-	NotifyInteraction int `json:"notifyInteraction" form:"notifyInteraction"`
+	NotifyInteraction int  `json:"notifyInteraction" form:"notifyInteraction"`
+	NotifyTopic       *int `json:"notifyTopic" form:"notifyTopic"`
 }
 
 // CommentNoticeVO toggles the comment email notification preference of the

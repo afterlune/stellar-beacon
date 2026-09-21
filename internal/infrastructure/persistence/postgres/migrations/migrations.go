@@ -98,6 +98,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyDiscoveryRankingSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyTopicSubscriptionSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1337,6 +1340,60 @@ func applyDiscoveryRankingSchema(ctx context.Context, engine *xorm.Engine) error
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit discovery ranking migration: %w", err)
+	}
+	return nil
+}
+
+// applyTopicSubscriptionSchema adds the reader-facing topic subscription ledger.
+// A subscription is keyed by the normalised topic name rather than a taxonomy id,
+// because public categories and tags are per author while the plaza aggregates
+// them by name. Only article ticks are published, so talks need no key.
+func applyTopicSubscriptionSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 21)").Get(&applied); err != nil {
+		return fmt.Errorf("check topic subscription migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin topic subscription migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`ALTER TABLE t_user_info ADD COLUMN IF NOT EXISTS notify_topic SMALLINT NOT NULL DEFAULT 1`,
+		`CREATE TABLE IF NOT EXISTS t_topic_subscription (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			topic_type VARCHAR(16) NOT NULL,
+			topic_key VARCHAR(64) NOT NULL,
+			topic_name VARCHAR(50) NOT NULL,
+			muted SMALLINT NOT NULL DEFAULT 0,
+			start_event_id BIGINT NOT NULL DEFAULT 0,
+			last_read_event_id BIGINT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (user_id, topic_type, topic_key)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_topic_subscription_user ON t_topic_subscription(user_id, updated_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_topic_subscription_topic ON t_topic_subscription(topic_type, topic_key)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply topic subscription schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 21, "topic-subscriptions"); err != nil {
+		return fmt.Errorf("record topic subscription migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit topic subscription migration: %w", err)
 	}
 	return nil
 }

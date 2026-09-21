@@ -41,7 +41,8 @@ export default defineComponent({
       { value: 'all', label: '全部' },
       { value: 'publish', label: '发布' },
       { value: 'comment', label: '评论与回复' },
-      { value: 'reaction', label: '赞与收藏' }
+      { value: 'reaction', label: '赞与收藏' },
+      { value: 'topic', label: '话题订阅' }
     ]
     const activeGroup = ref<NotificationGroup>('all')
     const records = ref<NotificationItem[]>([])
@@ -97,6 +98,7 @@ export default defineComponent({
       favorite: '收藏'
     })[type] || '互动'
     const headline = (item: NotificationItem) => {
+      if (item.group === 'topic') return `你订阅的话题有新文章：${item.title || item.excerpt || '查看文章'}`
       if (item.type === 'reply') return `回复了你的评论：${item.excerpt || '查看回复'}`
       if (item.type === 'comment') return `评论了你的内容：${item.title || item.excerpt || '查看评论'}`
       if (item.type === 'like') return `赞了你的内容：${item.title || item.excerpt || '查看文章'}`

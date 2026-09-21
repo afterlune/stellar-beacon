@@ -88,6 +88,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	studioOperations := repository.NewStudioOperationsRepo(engine)
 	contentAudit := repository.NewContentAuditRepo(engine)
 	followRepo := repository.NewFollowRepo(engine)
+	topicSubscriptionRepo := repository.NewTopicSubscriptionRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -241,34 +242,35 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	jobService := service.NewJobService(job, scheduler)
 
 	api.ConfigureServices(api.Services{
-		Article:          articleService,
-		Platform:         platformService,
-		ArticleReaction:  articleReactionService,
-		Series:           seriesService,
-		StellarBeacon:    stellarBeacon,
-		Category:         service.NewCategoryService(category),
-		Comment:          commentService,
-		ErrorLog:         service.NewErrorLogService(errorLog),
-		FriendLink:       service.NewFriendLinkService(friendLink),
-		JobLog:           service.NewJobLogService(jobLog),
-		Job:              jobService,
-		Menu:             service.NewMenuService(menu),
-		Media:            mediaService,
-		OperationLog:     service.NewOperationLogService(operationLog),
-		PhotoAlbum:       photoAlbumService,
-		Photo:            photoService,
-		Resource:         service.NewResourceService(resource),
-		Role:             service.NewRoleService(role),
-		Tag:              service.NewTagService(tag),
-		Talk:             talkService,
-		UserAuth:         userAuthService,
-		UserInfo:         userInfoService,
-		Seo:              seoService,
-		Newsletter:       newsletterService,
-		Growth:           growthService,
-		ContentAnalytics: contentAnalyticsService,
-		ContentAudit:     service.NewContentAuditService(contentAudit),
-		Follow:           service.NewFollowService(followRepo),
+		Article:           articleService,
+		Platform:          platformService,
+		ArticleReaction:   articleReactionService,
+		Series:            seriesService,
+		StellarBeacon:     stellarBeacon,
+		Category:          service.NewCategoryService(category),
+		Comment:           commentService,
+		ErrorLog:          service.NewErrorLogService(errorLog),
+		FriendLink:        service.NewFriendLinkService(friendLink),
+		JobLog:            service.NewJobLogService(jobLog),
+		Job:               jobService,
+		Menu:              service.NewMenuService(menu),
+		Media:             mediaService,
+		OperationLog:      service.NewOperationLogService(operationLog),
+		PhotoAlbum:        photoAlbumService,
+		Photo:             photoService,
+		Resource:          service.NewResourceService(resource),
+		Role:              service.NewRoleService(role),
+		Tag:               service.NewTagService(tag),
+		Talk:              talkService,
+		UserAuth:          userAuthService,
+		UserInfo:          userInfoService,
+		Seo:               seoService,
+		Newsletter:        newsletterService,
+		Growth:            growthService,
+		ContentAnalytics:  contentAnalyticsService,
+		ContentAudit:      service.NewContentAuditService(contentAudit),
+		Follow:            service.NewFollowService(followRepo),
+		TopicSubscription: service.NewTopicSubscriptionService(topicSubscriptionRepo),
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

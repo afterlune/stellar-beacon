@@ -7,6 +7,7 @@ const (
 	NotificationGroupPublish  = "publish"
 	NotificationGroupComment  = "comment"
 	NotificationGroupReaction = "reaction"
+	NotificationGroupTopic    = "topic"
 )
 
 const (
@@ -19,7 +20,7 @@ const (
 
 func ValidNotificationGroup(value string) bool {
 	switch value {
-	case NotificationGroupAll, NotificationGroupPublish, NotificationGroupComment, NotificationGroupReaction:
+	case NotificationGroupAll, NotificationGroupPublish, NotificationGroupComment, NotificationGroupReaction, NotificationGroupTopic:
 		return true
 	default:
 		return false
@@ -45,6 +46,7 @@ type NotificationItem struct {
 type NotificationCursor struct {
 	PublishEventId int64 `json:"publishEventId"`
 	InteractionId  int64 `json:"interactionId"`
+	TopicEventId   int64 `json:"topicEventId"`
 }
 
 type NotificationPage struct {

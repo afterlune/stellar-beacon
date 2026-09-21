@@ -86,6 +86,13 @@ func (f *fakeArticleRepository) ListArticles(context.Context, int, int) ([]*port
 	}
 	return []*port.ArticleCard{{Id: 1, ArticleTitle: "test"}}, 1, nil
 }
+func (f *fakeArticleRepository) GetArticlesByCategoryName(context.Context, int, int, string) ([]*port.ArticleCard, int, error) {
+	return nil, 0, nil
+}
+
+func (f *fakeArticleRepository) ListArticlesByTagName(context.Context, int, int, string) ([]*port.ArticleCard, int, error) {
+	return nil, 0, nil
+}
 func (f *fakeArticleRepository) GetArticlesByCategoryID(context.Context, int, int, int) ([]*port.ArticleCard, int, error) {
 	return nil, 0, nil
 }

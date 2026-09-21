@@ -86,9 +86,13 @@ export default defineComponent({
           current: pagination.current,
           size: pagination.size
         }
+        // The topic surfaces group per-author taxonomy by normalised name, so
+        // the landing page forwards the name and lets the API aggregate across
+        // authors; the id keeps working for links that do not carry a name.
+        const topicName = queryName()
         const response = isCategory.value
-          ? await api.getArticlesByCategoryId({ ...params, categoryId: routeId.value })
-          : await api.getArticlesByTagId({ ...params, tagId: routeId.value })
+          ? await api.getArticlesByCategoryId({ ...params, categoryId: routeId.value, categoryName: topicName })
+          : await api.getArticlesByTagId({ ...params, tagId: routeId.value, tagName: topicName })
         const payload = response.data?.data || {}
         const records = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.records) ? payload.records : []
         records.forEach((item: any) => {

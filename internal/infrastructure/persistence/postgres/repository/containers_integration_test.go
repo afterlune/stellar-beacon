@@ -75,7 +75,7 @@ CREATE TABLE t_user_info (
     handle VARCHAR(40) NOT NULL UNIQUE,
     email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
     intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
-    notify_comment SMALLINT NOT NULL DEFAULT 1, notify_interaction SMALLINT NOT NULL DEFAULT 1,
+    notify_comment SMALLINT NOT NULL DEFAULT 1, notify_interaction SMALLINT NOT NULL DEFAULT 1, notify_topic SMALLINT NOT NULL DEFAULT 1,
     is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
 );
 CREATE TABLE t_user_auth (
@@ -181,6 +181,13 @@ CREATE TABLE t_article_reaction (
     id SERIAL PRIMARY KEY, article_id INTEGER NOT NULL, user_info_id INTEGER NOT NULL,
     reaction VARCHAR(16) NOT NULL, create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (article_id, user_info_id, reaction)
+);
+CREATE TABLE t_topic_subscription (
+    id BIGSERIAL PRIMARY KEY, user_id INTEGER NOT NULL, topic_type VARCHAR(16) NOT NULL,
+    topic_key VARCHAR(64) NOT NULL, topic_name VARCHAR(50) NOT NULL, muted SMALLINT NOT NULL DEFAULT 0,
+    start_event_id BIGINT NOT NULL DEFAULT 0, last_read_event_id BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, topic_type, topic_key)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
@@ -592,6 +599,120 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	if err != nil || articleBoardCount != 1 || len(articleAuthors) != 1 || articleAuthors[0].Id != 1 {
 		t.Fatalf("unexpected article author board: authors=%+v count=%d err=%v", articleAuthors, articleBoardCount, err)
 	}
+	topicRepo := NewTopicSubscriptionRepo(xormEngine)
+	if err := topicRepo.Subscribe(ctx, 2, port.TopicTypeTag, "integration tag"); err != nil {
+		t.Fatalf("subscribe to topic: %v", err)
+	}
+	if err := topicRepo.Subscribe(ctx, 2, port.TopicTypeTag, "integration tag"); err != nil {
+		t.Fatalf("repeat subscribe must be idempotent: %v", err)
+	}
+	if err := topicRepo.Subscribe(ctx, 2, "series", "integration tag"); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("series subscriptions are out of scope, got %v", err)
+	}
+	if err := topicRepo.Subscribe(ctx, 2, port.TopicTypeTag, "missing topic"); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("unknown topic must fail, got %v", err)
+	}
+	subscriptions, subscriptionCount, err := topicRepo.ListSubscriptions(ctx, 2, 1, 10)
+	if err != nil || subscriptionCount != 1 || len(subscriptions) != 1 {
+		t.Fatalf("unexpected subscriptions: subscriptions=%+v count=%d err=%v", subscriptions, subscriptionCount, err)
+	}
+	// Articles 1, 2 and 5 are still public under "integration tag"; article 3 was
+	// turned into a draft earlier in this test.
+	if subscriptions[0].ArticleCount != 3 || subscriptions[0].HotScore <= 0 || subscriptions[0].UnreadCount != 0 {
+		t.Fatalf("unexpected subscription counters: %+v", subscriptions[0])
+	}
+
+	// A second author publishing under the same normalised tag must reach the
+	// subscriber, and an article the subscriber owns must not notify them.
+	readerCategoryID, err := ensureNamedCategoryForTest(ctx, db, "integration reader category")
+	if err != nil {
+		t.Fatalf("create reader category: %v", err)
+	}
+	readerArticleID, err := insertPublicArticle(ctx, db, 2, readerCategoryID, "reader topic article", "integration tag")
+	if err != nil {
+		t.Fatalf("insert reader topic article: %v", err)
+	}
+	authorArticleID, err := insertPublicArticle(ctx, db, 1, 1, "author topic article", "integration tag")
+	if err != nil {
+		t.Fatalf("insert author topic article: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO t_author_publish_event (author_id, content_type, content_id, published_at)
+		VALUES (1, 'article', $1, CURRENT_TIMESTAMP), (2, 'article', $2, CURRENT_TIMESTAMP)`, authorArticleID, readerArticleID); err != nil {
+		t.Fatalf("record topic publish events: %v", err)
+	}
+	// The topic feed carries every published article that matches a subscription,
+	// including the reader's own; only the notification inbox skips self-authored
+	// content.
+	topicFeed, topicFeedCount, err := topicRepo.ListTopicFeed(ctx, 2, 1, 10)
+	if err != nil || topicFeedCount != 2 || len(topicFeed) != 2 {
+		t.Fatalf("unexpected topic feed: feed=%+v count=%d err=%v", topicFeed, topicFeedCount, err)
+	}
+	feedHasAuthorArticle := false
+	for _, item := range topicFeed {
+		if len(item.Topics) != 1 || item.Topics[0] != "integration tag" {
+			t.Fatalf("topic feed must report the matched topic: %+v", item.Topics)
+		}
+		if item.ContentId == authorArticleID {
+			feedHasAuthorArticle = true
+		}
+	}
+	if !feedHasAuthorArticle {
+		t.Fatalf("topic feed must carry the cross-author article: %+v", topicFeed)
+	}
+	topicNotifications, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupTopic, 1, 10)
+	if err != nil || topicNotifications.Count != 1 || topicNotifications.UnreadCount != 1 {
+		t.Fatalf("unexpected topic notifications: %+v err=%v", topicNotifications, err)
+	}
+	if err := topicRepo.SetMuted(ctx, 2, port.TopicTypeTag, "integration tag", true); err != nil {
+		t.Fatalf("mute topic subscription: %v", err)
+	}
+	mutedNotifications, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupTopic, 1, 10)
+	if err != nil || mutedNotifications.Count != 0 {
+		t.Fatalf("muted subscription must not notify: %+v err=%v", mutedNotifications, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_user_info SET notify_topic = 0 WHERE id = 2`); err != nil {
+		t.Fatalf("disable topic notifications: %v", err)
+	}
+	if err := topicRepo.SetMuted(ctx, 2, port.TopicTypeTag, "integration tag", false); err != nil {
+		t.Fatalf("unmute topic subscription: %v", err)
+	}
+	disabledNotifications, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupTopic, 1, 10)
+	if err != nil || disabledNotifications.Count != 0 {
+		t.Fatalf("global topic switch must suppress notifications: %+v err=%v", disabledNotifications, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_user_info SET notify_topic = 1 WHERE id = 2`); err != nil {
+		t.Fatalf("restore topic notifications: %v", err)
+	}
+	restoredNotifications, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupTopic, 1, 10)
+	if err != nil || restoredNotifications.Count != 1 || restoredNotifications.UnreadCount != 1 {
+		t.Fatalf("restored topic notifications: %+v err=%v", restoredNotifications, err)
+	}
+	if err := followRepo.MarkNotificationsRead(ctx, 2, restoredNotifications.ReadCursor); err != nil {
+		t.Fatalf("mark topic notifications read: %v", err)
+	}
+	topicUnread, err := followRepo.UnreadNotificationCount(ctx, 2)
+	if err != nil || topicUnread != 0 {
+		t.Fatalf("topic notifications must be read: count=%d err=%v", topicUnread, err)
+	}
+	// The named lookup must aggregate the same tag name across both authors.
+	namedArticles, namedCount, err := NewArticleRepo(xormEngine).ListArticlesByTagName(ctx, 1, 10, "Integration Tag")
+	if err != nil || namedCount != 5 || len(namedArticles) != 5 {
+		t.Fatalf("tag name lookup must aggregate every author: count=%d err=%v", namedCount, err)
+	}
+	authors := map[int]bool{}
+	for _, article := range namedArticles {
+		authors[article.UserId] = true
+	}
+	if !authors[1] || !authors[2] {
+		t.Fatalf("tag name lookup must cross authors: authors=%v", authors)
+	}
+	if err := topicRepo.Unsubscribe(ctx, 2, port.TopicTypeTag, "integration tag"); err != nil {
+		t.Fatalf("unsubscribe from topic: %v", err)
+	}
+	if _, count, err := topicRepo.ListTopicFeed(ctx, 2, 1, 10); err != nil || count != 0 {
+		t.Fatalf("unsubscribed topic feed must be empty: count=%d err=%v", count, err)
+	}
 	redisContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "redis:8.10.0-alpine3.23",
@@ -641,6 +762,49 @@ func articleIDs(cards []*port.ArticleCard) []int {
 		}
 	}
 	return ids
+}
+
+// insertPublicArticle creates one public visible article owned by authorID and
+// attaches the named tag to it, returning the new article id.
+func insertPublicArticle(ctx context.Context, db *sql.DB, authorID, categoryID int, title, tagName string) (int, error) {
+	var articleID int
+	if err := db.QueryRowContext(ctx, `
+		INSERT INTO t_article
+			(id, user_id, category_id, article_title, article_content, is_top, is_featured, is_delete, status, type, create_time, update_time)
+		VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM t_article), $1, $2, $3, 'topic fixture content', 0, 0, 0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		RETURNING id`, authorID, categoryID, title).Scan(&articleID); err != nil {
+		return 0, err
+	}
+	var tagID int
+	if err := db.QueryRowContext(ctx, `
+		SELECT id FROM t_tag WHERE lower(btrim(tag_name)) = lower(btrim($1)) ORDER BY id ASC LIMIT 1`, tagName).Scan(&tagID); err != nil {
+		return 0, err
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO t_article_tag (id, article_id, tag_id)
+		VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM t_article_tag), $1, $2)`, articleID, tagID); err != nil {
+		return 0, err
+	}
+	return articleID, nil
+}
+
+func ensureNamedCategoryForTest(ctx context.Context, db *sql.DB, name string) (int, error) {
+	var id int
+	err := db.QueryRowContext(ctx, `
+		SELECT id FROM t_category WHERE lower(btrim(category_name)) = lower(btrim($1)) ORDER BY id ASC LIMIT 1`, name).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+	if err := db.QueryRowContext(ctx, `
+		INSERT INTO t_category (id, category_name)
+		VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM t_category), $1)
+		RETURNING id`, name).Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 func pingDatabase(ctx context.Context, db *sql.DB) error {
 	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)

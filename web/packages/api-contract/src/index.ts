@@ -376,7 +376,7 @@ export interface FollowFeedItem {
   publishedAt: string
 }
 
-export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction'
+export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction' | 'topic'
 export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite'
 
 export interface NotificationItem {
@@ -833,4 +833,21 @@ export interface SeriesSummary {
   seriesDesc: string
   cover: string
   articleCount: number
+}
+
+export type TopicType = 'category' | 'tag'
+
+export interface TopicSubscription {
+  topicType: TopicType
+  topicKey: string
+  topicName: string
+  articleCount: number
+  hotScore: number
+  muted: boolean
+  unreadCount: number
+  subscribedAt: string
+}
+
+export interface TopicFeedItem extends FollowFeedItem {
+  topics: string[]
 }

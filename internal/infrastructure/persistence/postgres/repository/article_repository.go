@@ -129,6 +129,83 @@ func (a *MyArticleRepo) GetArticlesByCategoryID(ctx context.Context, current, si
 	return articles, count, nil
 }
 
+// GetArticlesByCategoryName aggregates every author's articles that share a
+// normalised category name, which is how the public discovery surfaces group
+// categories. The id-based lookup stays available for legacy links.
+func (a *MyArticleRepo) GetArticlesByCategoryName(ctx context.Context, current, size int, name string) ([]*port.ArticleCard, int, error) {
+	limit, offset := pgsql.Page(current, size)
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	var count int
+	if _, err := session.SQL(`
+		SELECT count(DISTINCT a.id)
+		FROM t_article a
+		JOIN t_category c ON c.id = a.category_id
+		WHERE lower(btrim(c.category_name)) = lower(btrim(?))
+		  AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'`, name).Get(&count); err != nil {
+		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count_by_category_name", err)
+	}
+	var articles []*port.ArticleCard
+	if err := session.SQL(`
+		SELECT a.id, a.user_id, a.article_cover, a.article_title, SUBSTR(a.article_content, 1, 500) AS article_content,
+		       a.is_top, a.is_featured, c.category_name, a.status, a.moderation_status, a.create_time, a.update_time
+		FROM t_article a
+		JOIN t_category c ON c.id = a.category_id
+		WHERE lower(btrim(c.category_name)) = lower(btrim(?))
+		  AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+		ORDER BY a.create_time DESC, a.id DESC LIMIT ? OFFSET ?`, name, limit, offset).Find(&articles); err != nil {
+		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_category_name", err)
+	}
+	for _, article := range articles {
+		article.Tags, err = a.attachTags(ctx, session, article)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	return articles, count, nil
+}
+
+// ListArticlesByTagName is the tag counterpart of GetArticlesByCategoryName.
+func (a *MyArticleRepo) ListArticlesByTagName(ctx context.Context, current, size int, name string) ([]*port.ArticleCard, int, error) {
+	limit, offset := pgsql.Page(current, size)
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	var count int
+	if _, err := session.SQL(`
+		SELECT count(DISTINCT a.id)
+		FROM t_article a
+		JOIN t_article_tag at ON at.article_id = a.id
+		JOIN t_tag t ON t.id = at.tag_id
+		WHERE lower(btrim(t.tag_name)) = lower(btrim(?))
+		  AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'`, name).Get(&count); err != nil {
+		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.count_by_tag_name", err)
+	}
+	var articles []*port.ArticleCard
+	if err := session.SQL(`
+		SELECT DISTINCT a.id, a.user_id, a.article_cover, a.article_title, SUBSTR(a.article_content, 1, 500) AS article_content,
+		       a.is_top, a.is_featured, c.category_name, a.status, a.moderation_status, a.create_time, a.update_time
+		FROM t_article a
+		JOIN t_article_tag at ON at.article_id = a.id
+		JOIN t_tag t ON t.id = at.tag_id
+		LEFT JOIN t_category c ON c.id = a.category_id
+		WHERE lower(btrim(t.tag_name)) = lower(btrim(?))
+		  AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+		ORDER BY a.create_time DESC, a.id DESC LIMIT ? OFFSET ?`, name, limit, offset).Find(&articles); err != nil {
+		return nil, 0, apperrors.Wrap(apperrors.KindUnavailable, "article.list_by_tag_name", err)
+	}
+	for _, article := range articles {
+		article.Tags, err = a.attachTags(ctx, session, article)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	return articles, count, nil
+}
+
 // ListArticleCardsByIDs loads public article cards for an explicit id set. The
 // reader-interaction feature uses it to render an account's favourites.
 func (a *MyArticleRepo) ListArticleCardsByIDs(ctx context.Context, articleIDs []int) ([]*port.ArticleCard, error) {

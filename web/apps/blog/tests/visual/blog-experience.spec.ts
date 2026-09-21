@@ -2,6 +2,15 @@ import { expect, test, type Page } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 
+const adminEmail = process.env.E2E_ADMIN_EMAIL || ''
+const adminPassword = process.env.E2E_ADMIN_PASSWORD || ''
+// The authenticated reader routes are only audited when the run can obtain a
+// real session; a fake token would only screenshot an error state. Every other
+// route keeps the historical fake token so the audit baseline is unchanged.
+const authenticatedRoutes = adminEmail && adminPassword
+  ? [{ name: 'following', path: '/following', authenticated: true }]
+  : []
+
 const routes = [
   { name: 'home', path: '/' },
   { name: 'author', path: '/u/admin' },
@@ -21,14 +30,20 @@ const routes = [
 ]
 
 const themes = ['theme-dark', 'theme-light']
+let session: { token: string; userInfo: Record<string, unknown> } | null = null
 const outputRoot = 'test-results/visual/screens'
 
-async function browse(page: Page, route: string, theme: string): Promise<void> {
-  await page.context().addInitScript((themeName) => {
+async function browse(page: Page, route: string, theme: string, authenticated = false): Promise<void> {
+  await page.context().addInitScript(({ themeName, session: current }) => {
     document.cookie = 'locale=cn; path=/'
     document.cookie = `theme=${themeName}; path=/`
-    sessionStorage.setItem('token', 'visual-reading-token')
-  }, theme)
+    sessionStorage.setItem('token', current?.token || 'visual-reading-token')
+    if (current) {
+      sessionStorage.setItem('userStore', JSON.stringify({
+        userVisible: false, userInfo: current.userInfo, token: current.token, accessArticles: [], tab: 0, page: 1
+      }))
+    }
+  }, { themeName: theme, session: authenticated ? session : null })
   await page.goto(route, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1200)
 }
@@ -116,6 +131,12 @@ test.describe('blog visual gate', () => {
   test.beforeAll(async ({ request }) => {
     const probe = await request.get('/api/v1/public/').catch(() => null)
     test.skip(!probe || !probe.ok(), 'visual gate needs a reachable blog environment')
+    if (!adminEmail || !adminPassword) return
+    const login = await request.post('/api/v1/auth/login', { form: { username: adminEmail, password: adminPassword } }).catch(() => null)
+    if (!login || !login.ok()) return
+    const payload = await login.json().catch(() => null)
+    const token = String(payload?.data?.token || '')
+    if (token) session = { token, userInfo: payload.data }
   })
 
   for (const theme of themes) {
@@ -125,8 +146,8 @@ test.describe('blog visual gate', () => {
       fs.mkdirSync(outputDir, { recursive: true })
       const failures: string[] = []
 
-      for (const route of routes) {
-        await browse(page, route.path, theme)
+      for (const route of [...routes, ...authenticatedRoutes]) {
+        await browse(page, route.path, theme, 'authenticated' in route && Boolean(route.authenticated))
         const audit = await auditPage(page, mobile, theme === 'theme-light')
         await page.screenshot({ path: path.join(outputDir, `${route.name}.png`) })
         await page.screenshot({ path: path.join(outputDir, `${route.name}-full.png`), fullPage: true })

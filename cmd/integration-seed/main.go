@@ -26,6 +26,10 @@ const (
 	fixtureArticleTitle  = "Integration notification fixture"
 	fixtureArticleBody   = "Stable public content used by the isolated frontend/backend integration suite."
 	fixtureAuthorComment = "Integration author root comment"
+	// Both seeded authors publish under this normalised topic name so the suite
+	// can prove that topic aggregation and subscription cross author boundaries.
+	fixtureTopicName          = "Integration Topic"
+	fixtureReaderArticleTitle = "Integration reader topic fixture"
 )
 
 func main() {
@@ -86,6 +90,9 @@ func main() {
 	}
 	if err := ensureIntegrationFixture(ctx, db, userIDs[0], userIDs[1]); err != nil {
 		fail("seed integration fixture: %v", err)
+	}
+	if err := ensureTopicFixture(ctx, db, userIDs[0], userIDs[1]); err != nil {
+		fail("seed topic fixture: %v", err)
 	}
 	fmt.Println("integration users, public fixture and notification preferences are ready")
 }
@@ -295,6 +302,152 @@ func ensureIntegrationFixture(ctx context.Context, db *sql.DB, authorID, readerI
 		return fmt.Errorf("commit fixture transaction: %w", err)
 	}
 	return nil
+}
+
+// ensureNamedCategory returns the author's category with the given name,
+// creating it when missing. Categories and tags are owned per account, so the
+// shared topic name has to exist once per author.
+func ensureNamedCategory(ctx context.Context, tx *sql.Tx, userID int, name string) (int, error) {
+	var id int
+	err := tx.QueryRowContext(ctx, `
+		SELECT id FROM t_category
+		WHERE user_id = $1 AND lower(btrim(category_name)) = lower(btrim($2))
+		ORDER BY id ASC LIMIT 1`, userID, name).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("find category %q: %w", name, err)
+	}
+	if err := tx.QueryRowContext(ctx, `
+		INSERT INTO t_category (user_id, category_name, create_time, update_time)
+		VALUES ($1, $2, NOW(), NOW()) RETURNING id`, userID, name).Scan(&id); err != nil {
+		return 0, fmt.Errorf("insert category %q: %w", name, err)
+	}
+	return id, nil
+}
+
+func ensureNamedTag(ctx context.Context, tx *sql.Tx, userID int, name string) (int, error) {
+	var id int
+	err := tx.QueryRowContext(ctx, `
+		SELECT id FROM t_tag
+		WHERE user_id = $1 AND lower(btrim(tag_name)) = lower(btrim($2))
+		ORDER BY id ASC LIMIT 1`, userID, name).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("find tag %q: %w", name, err)
+	}
+	if err := tx.QueryRowContext(ctx, `
+		INSERT INTO t_tag (user_id, tag_name, create_time, update_time)
+		VALUES ($1, $2, NOW(), NOW()) RETURNING id`, userID, name).Scan(&id); err != nil {
+		return 0, fmt.Errorf("insert tag %q: %w", name, err)
+	}
+	return id, nil
+}
+
+func ensureArticleTag(ctx context.Context, tx *sql.Tx, articleID, tagID int) error {
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO t_article_tag (article_id, tag_id)
+		SELECT $1, $2
+		WHERE NOT EXISTS (SELECT 1 FROM t_article_tag WHERE article_id = $1 AND tag_id = $2)`,
+		articleID, tagID); err != nil {
+		return fmt.Errorf("attach tag %d to article %d: %w", tagID, articleID, err)
+	}
+	return nil
+}
+
+func recordFixturePublishEvent(ctx context.Context, tx *sql.Tx, authorID, articleID int) error {
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO t_author_publish_event (author_id, content_type, content_id, published_at)
+		VALUES ($1, 'article', $2, NOW())
+		ON CONFLICT (content_type, content_id) DO NOTHING`, authorID, articleID); err != nil {
+		return fmt.Errorf("record publish event for article %d: %w", articleID, err)
+	}
+	return nil
+}
+
+// ensureTopicFixture gives both seeded authors a public article that shares the
+// same normalised category and tag name, which is what the topic subscription
+// and topic plaza assertions rely on.
+func ensureTopicFixture(ctx context.Context, db *sql.DB, authorID, readerID int) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin topic fixture transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	var authorArticleID int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id FROM t_article
+		WHERE user_id = $1 AND article_title = $2 AND is_delete = 0
+		ORDER BY id ASC LIMIT 1`, authorID, fixtureArticleTitle).Scan(&authorArticleID); err != nil {
+		return fmt.Errorf("find author fixture article: %w", err)
+	}
+	authorCategoryID, err := ensureNamedCategory(ctx, tx, authorID, fixtureTopicName)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE t_article SET category_id = $1, update_time = NOW()
+		WHERE id = $2 AND category_id <> $1`, authorCategoryID, authorArticleID); err != nil {
+		return fmt.Errorf("move author fixture article: %w", err)
+	}
+	authorTagID, err := ensureNamedTag(ctx, tx, authorID, fixtureTopicName)
+	if err != nil {
+		return err
+	}
+	if err := ensureArticleTag(ctx, tx, authorArticleID, authorTagID); err != nil {
+		return err
+	}
+	if err := recordFixturePublishEvent(ctx, tx, authorID, authorArticleID); err != nil {
+		return err
+	}
+
+	readerCategoryID, err := ensureNamedCategory(ctx, tx, readerID, fixtureTopicName)
+	if err != nil {
+		return err
+	}
+	readerTagID, err := ensureNamedTag(ctx, tx, readerID, fixtureTopicName)
+	if err != nil {
+		return err
+	}
+	var readerArticleID int
+	err = tx.QueryRowContext(ctx, `
+		SELECT id FROM t_article
+		WHERE user_id = $1 AND article_title = $2 AND is_delete = 0
+		ORDER BY id ASC LIMIT 1`, readerID, fixtureReaderArticleTitle).Scan(&readerArticleID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if err := tx.QueryRowContext(ctx, `
+			INSERT INTO t_article
+				(user_id, category_id, article_cover, article_title, article_content, article_content_html,
+				 series_id, series_order, is_top, is_featured, is_delete, status, moderation_status,
+				 type, password, original_url, create_time, update_time)
+			VALUES ($1, $2, '', $3, $4, $5, 0, 0, 0, 0, 0, 1, 'visible', 1, '', '', NOW(), NOW())
+			RETURNING id`, readerID, readerCategoryID, fixtureReaderArticleTitle, fixtureArticleBody, "<p>"+fixtureArticleBody+"</p>").Scan(&readerArticleID); err != nil {
+			return fmt.Errorf("insert reader topic article: %w", err)
+		}
+	case err != nil:
+		return fmt.Errorf("find reader topic article: %w", err)
+	default:
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE t_article
+			SET category_id = $1, status = 1, moderation_status = 'visible', is_delete = 0, update_time = NOW()
+			WHERE id = $2`, readerCategoryID, readerArticleID); err != nil {
+			return fmt.Errorf("update reader topic article: %w", err)
+		}
+	}
+	if err := ensureArticleTag(ctx, tx, readerArticleID, readerTagID); err != nil {
+		return err
+	}
+	if err := recordFixturePublishEvent(ctx, tx, readerID, readerArticleID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func required(name string) string {

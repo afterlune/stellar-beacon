@@ -191,7 +191,20 @@ func (u *MyUserInfoService) UpdateUserNotificationPreferences(c *gin.Context) mo
 	if err := u.userInfoRepository().UpdateNotifyInteraction(c.Request.Context(), dto.UserInfoId, notify); err != nil {
 		return model.ResultFromError(err)
 	}
-	return model.ResultOkWithData(map[string]int{"notifyInteraction": notify})
+	data := map[string]int{"notifyInteraction": notify}
+	// An omitted notifyTopic keeps the stored value so older clients that only
+	// send notifyInteraction cannot silently reset the topic preference.
+	if vo.NotifyTopic != nil {
+		topicNotify := 0
+		if *vo.NotifyTopic == 1 {
+			topicNotify = 1
+		}
+		if err := u.userInfoRepository().UpdateNotifyTopic(c.Request.Context(), dto.UserInfoId, topicNotify); err != nil {
+			return model.ResultFromError(err)
+		}
+		data["notifyTopic"] = topicNotify
+	}
+	return model.ResultOkWithData(data)
 }
 
 func (u *MyUserInfoService) UpdateUserRole(c *gin.Context) model.ResultVO {

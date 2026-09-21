@@ -140,13 +140,11 @@ func (r *MyPlatformRepo) ListAuthors(ctx context.Context, current, size, viewerI
 // parameter, so a client can never trigger an unbounded table aggregation.
 const discoveryHotWindowDays = 7
 
-// discoveryHotScoreCTE aggregates the reader signals behind the public "hot"
-// ranking. All three sub-selects are windowed, so the score reflects current
-// interest instead of lifetime totals, and only public, visible, approved rows
-// contribute. Callers must bind three arguments: metric date, reaction time and
-// comment time, in that order.
-const discoveryHotScoreCTE = `
-	WITH window_metrics AS (
+// discoveryScoredCTE holds the windowed aggregates without the leading WITH
+// keyword so another query can compose its own CTEs in front of them. Callers
+// must bind three arguments: metric date, reaction time and comment time.
+const discoveryScoredCTE = `
+	window_metrics AS (
 		SELECT m.article_id, SUM(m.unique_readers) AS readers
 		FROM t_article_daily_metric m
 		WHERE m.metric_date >= ?
@@ -177,6 +175,9 @@ const discoveryHotScoreCTE = `
 		WHERE a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
 	)
 `
+
+// discoveryHotScoreCTE is the standalone form used by the feed queries.
+const discoveryHotScoreCTE = "\n\tWITH " + discoveryScoredCTE
 
 // discoveryAuthorArticleCountSQL is the public-article count used to rank the
 // author board. It resolves the surrounding query alias "ui".

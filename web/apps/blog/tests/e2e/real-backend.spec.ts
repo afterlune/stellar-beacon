@@ -265,6 +265,76 @@ test.describe('blog real backend main chain @integration', () => {
       await deleteAPI(request, '/api/v1/studio/articles', admin.token, [publicArticleID, privateArticleID]).catch(() => undefined)
     }
   })
+
+  test('subscribes to a cross-author topic and receives the feed and notification', async ({ request, browser }) => {
+    const topicName = 'Integration Topic'
+    const topicKey = 'integration topic'
+    readerSession = await createBrowserSession(browser, user)
+    authorSession = await createBrowserSession(browser, admin)
+
+    // Start from a clean slate: an earlier run must never leave the reader
+    // already subscribed, which would hide the subscribe control.
+    for (const topicType of ['category', 'tag']) {
+      await deleteAPI(request, `/api/v1/auth/me/topic-subscriptions/${topicType}/${encodeURIComponent(topicKey)}`, user.token).catch(() => undefined)
+    }
+
+    // Subscribe from the public plaza so the reader-facing control is exercised.
+    // The category and tag groups share the display name, so the tag group is
+    // targeted explicitly.
+    await readerSession.page.goto('/topics', { waitUntil: 'domcontentloaded' })
+    const tagGroup = readerSession.page.locator('.topics-group').filter({ has: readerSession.page.locator('h2', { hasText: '标签' }) })
+    const topicCard = tagGroup.locator('.topic-card', { hasText: topicName }).first()
+    await expect(topicCard).toBeVisible()
+    await topicCard.getByRole('button', { name: '订阅', exact: true }).click()
+    await expect(topicCard.getByRole('button', { name: '已订阅', exact: true })).toBeVisible()
+
+    const subscriptions = await getAPIData(request, '/api/v1/auth/me/topic-subscriptions?current=1&size=50', user.token)
+    const subscription = itemsOf(subscriptions).find((item: any) => item.topicKey === topicKey)
+    expect(subscription, 'subscription must be stored').toBeTruthy()
+    expect(Number(subscription.articleCount), 'seeded topic spans both authors').toBeGreaterThanOrEqual(2)
+
+    // Publish a matching article as the other author.
+    const tags = await getAPIData(request, '/api/v1/studio/tags', admin.token)
+    const tagItems = Array.isArray(tags) ? tags : Array.isArray(tags?.records) ? tags.records : []
+    const tag = tagItems.find((item: any) => String(item.tagName || '').trim().toLowerCase() === topicKey)
+    expect(tag, 'seeded topic tag must belong to the author').toBeTruthy()
+
+    const articleTitle = `integration topic article ${runID}`
+    const created = await postAPI(request, '/api/v1/studio/articles', admin.token, {
+      articleTitle,
+      articleContent: 'topic subscription fixture',
+      visibility: 'public',
+      type: 1,
+      tagIds: [Number(tag.id)]
+    })
+    const articleID = Number(created?.id || 0)
+    expect(articleID, 'topic article must be created').toBeGreaterThan(0)
+
+    try {
+      const feed = await getAPIData(request, '/api/v1/auth/me/topic-feed?current=1&size=20', user.token)
+      expect(itemsOf(feed).some((item: any) => Number(item.contentId) === articleID)).toBe(true)
+
+      const notifications = await getAPIData(request, '/api/v1/auth/me/notifications?group=topic&current=1&size=20', user.token)
+      expect(itemsOf(notifications).some((item: any) => Number(item.contentId) === articleID)).toBe(true)
+      expect(Number(notifications.unreadCount)).toBeGreaterThan(0)
+
+      // Muting the subscription hides the notification but keeps the feed.
+      await putAPI(request, `/api/v1/auth/me/topic-subscriptions/${encodeURIComponent('tag')}/${encodeURIComponent(topicKey)}/mute`, user.token, { muted: 1 })
+      const muted = await getAPIData(request, '/api/v1/auth/me/notifications?group=topic&current=1&size=20', user.token)
+      expect(itemsOf(muted).some((item: any) => Number(item.contentId) === articleID)).toBe(false)
+      const mutedFeed = await getAPIData(request, '/api/v1/auth/me/topic-feed?current=1&size=20', user.token)
+      expect(itemsOf(mutedFeed).some((item: any) => Number(item.contentId) === articleID)).toBe(true)
+
+      // The authenticated following page renders the same content.
+      await readerSession.page.goto('/following', { waitUntil: 'domcontentloaded' })
+      await readerSession.page.getByRole('button', { name: '话题', exact: true }).click()
+      await expect(readerSession.page.getByText(articleTitle).first()).toBeVisible()
+      await expect(readerSession.page.getByRole('button', { name: '恢复通知', exact: true })).toBeVisible()
+    } finally {
+      await deleteAPI(request, '/api/v1/studio/articles', admin.token, [articleID]).catch(() => undefined)
+      await deleteAPI(request, `/api/v1/auth/me/topic-subscriptions/${encodeURIComponent('tag')}/${encodeURIComponent(topicKey)}`, user.token).catch(() => undefined)
+    }
+  })
 })
 
 async function loginByAPI(request: APIRequestContext, email: string, password: string): Promise<LoginSession> {

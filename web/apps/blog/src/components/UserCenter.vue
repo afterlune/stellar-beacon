@@ -41,6 +41,13 @@
             @change="changeInteractionNotice" />
         </div>
         <div class="account-row">
+          <div><strong>话题订阅提醒</strong><small>订阅的话题有新文章时进入通知中心</small></div>
+          <el-switch
+            :model-value="Number(userInfo.notifyTopic ?? 1) === 1"
+            :disabled="loading"
+            @change="changeTopicNotice" />
+        </div>
+        <div class="account-row">
           <div><strong>评论邮件通知</strong><small>有人回复你时发送邮件提醒</small></div>
           <el-switch
             :model-value="Number(userInfo.notifyComment) === 1"
@@ -142,10 +149,30 @@ export default defineComponent({
       reactiveData.loading = true
       try {
         const notifyInteraction = value ? 1 : 0
-        const response = await api.updateNotificationPreferences({ notifyInteraction })
+        const response = await api.updateNotificationPreferences({
+          notifyInteraction,
+          notifyTopic: Number(userStore.userInfo?.notifyTopic ?? 1)
+        })
         if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
         userStore.userInfo = { ...(userStore.userInfo || {}), notifyInteraction }
         proxy.$notify({ title: '成功', message: '站内通知设置已更新', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '通知设置保存失败', type: 'error' })
+      } finally {
+        reactiveData.loading = false
+      }
+    }
+    const changeTopicNotice = async (value: boolean) => {
+      reactiveData.loading = true
+      try {
+        const notifyTopic = value ? 1 : 0
+        const response = await api.updateNotificationPreferences({
+          notifyInteraction: Number(userStore.userInfo?.notifyInteraction ?? 1),
+          notifyTopic
+        })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
+        userStore.userInfo = { ...(userStore.userInfo || {}), notifyTopic }
+        proxy.$notify({ title: '成功', message: '话题订阅通知已更新', type: 'success' })
       } catch (reason: any) {
         proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '通知设置保存失败', type: 'error' })
       } finally {
@@ -165,7 +192,7 @@ export default defineComponent({
 
     return {
       userInfo, visible, defaultAvatar, ...toRefs(reactiveData), handleClose, openStudioProfile,
-      bindingEmail, changeSubscribe, changeInteractionNotice, changeCommentNotice, sendCode
+      bindingEmail, changeSubscribe, changeInteractionNotice, changeTopicNotice, changeCommentNotice, sendCode
     }
   }
 })

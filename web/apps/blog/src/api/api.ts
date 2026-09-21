@@ -202,8 +202,23 @@ export default {
   markFollowNotificationsRead: (cursor: NotificationCursor) => {
     return http.post('/auth/me/notifications/read', cursor)
   },
-  updateNotificationPreferences: (params: { notifyInteraction: number }) => {
+  updateNotificationPreferences: (params: { notifyInteraction: number; notifyTopic: number }) => {
     return http.put('/auth/me/notification-preferences', params)
+  },
+  subscribeTopic: (topicType: string, topicKey: string) => {
+    return http.put(`/auth/me/topic-subscriptions/${encodeURIComponent(topicType)}/${encodeURIComponent(topicKey)}`)
+  },
+  unsubscribeTopic: (topicType: string, topicKey: string) => {
+    return http.delete(`/auth/me/topic-subscriptions/${encodeURIComponent(topicType)}/${encodeURIComponent(topicKey)}`)
+  },
+  muteTopicSubscription: (topicType: string, topicKey: string, muted: number) => {
+    return http.put(`/auth/me/topic-subscriptions/${encodeURIComponent(topicType)}/${encodeURIComponent(topicKey)}/mute`, { muted })
+  },
+  getTopicSubscriptions: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/topic-subscriptions', { params })
+  },
+  getTopicFeed: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/topic-feed', { params })
   },
   followAuthor: (authorId: number) => {
     return http.put('/auth/me/following/' + encodeURIComponent(authorId))

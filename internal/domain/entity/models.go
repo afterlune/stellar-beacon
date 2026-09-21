@@ -395,11 +395,27 @@ type TUserInfo struct {
 	IsSubscribe       int       `xorm:"comment('是否订阅') SMALLINT" json:"isSubscribe"`
 	NotifyComment     int       `xorm:"notify_comment not null default 1 comment('是否接收评论邮件通知') SMALLINT" json:"notifyComment"`
 	NotifyInteraction int       `xorm:"notify_interaction not null default 1 comment('是否接收站内互动通知') SMALLINT" json:"notifyInteraction"`
+	NotifyTopic       int       `xorm:"notify_topic not null default 1 comment('是否接收话题订阅通知') SMALLINT" json:"notifyTopic"`
 	IsDisable         int       `xorm:"not null comment('是否禁用') SMALLINT" json:"isDisable"`
 	CreateTime        time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
 	UpdateTime        time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
+// TTopicSubscription records one reader following one normalised topic. The key
+// is the lower-cased trimmed taxonomy name, matching how the public discovery
+// surfaces group per-owner categories and tags.
+type TTopicSubscription struct {
+	Id              int       `xorm:"bigint autoincr not null pk unique" json:"id"`
+	UserId          int       `xorm:"user_id not null index INTEGER" json:"userId"`
+	TopicType       string    `xorm:"topic_type not null VARCHAR(16)" json:"topicType"`
+	TopicKey        string    `xorm:"topic_key not null VARCHAR(64)" json:"topicKey"`
+	TopicName       string    `xorm:"topic_name not null VARCHAR(50)" json:"topicName"`
+	Muted           int       `xorm:"muted not null default 0 SMALLINT" json:"muted"`
+	StartEventId    int64     `xorm:"start_event_id not null default 0 BIGINT" json:"startEventId"`
+	LastReadEventId int64     `xorm:"last_read_event_id not null default 0 BIGINT" json:"lastReadEventId"`
+	CreateTime      time.Time `xorm:"created not null created_at DATETIME" json:"createTime"`
+	UpdateTime      time.Time `xorm:"updated not null updated_at DATETIME" json:"updateTime"`
+}
 type TUserRole struct {
 	Id     int `xorm:"autoincr not null pk unique INTEGER"`
 	UserId int `xorm:"comment('用户id') INTEGER"`

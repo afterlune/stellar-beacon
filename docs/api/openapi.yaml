@@ -19,9 +19,19 @@ paths:
   /public/articles/featured:
     get: { tags: [public], summary: Get top and featured articles, operationId: listFeaturedArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/articles/by-category:
-    get: { tags: [public], summary: List articles by category, operationId: listArticlesByCategory, responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get:
+      tags: [public]
+      summary: List articles by category
+      description: Passing `categoryName` (or `name`) aggregates every author that uses the same normalised category name; `categoryId` keeps the original single-row behaviour.
+      operationId: listArticlesByCategory
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /public/articles/by-tag:
-    get: { tags: [public], summary: List articles by tag, operationId: listArticlesByTag, responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get:
+      tags: [public]
+      summary: List articles by tag
+      description: Passing `tagName` aggregates every author that uses the same normalised tag name; `tagId` keeps the original single-row behaviour.
+      operationId: listArticlesByTag
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /public/articles/search:
     get: { tags: [public], summary: Search articles, operationId: searchArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/articles/{articleId}:
@@ -168,7 +178,66 @@ paths:
   /auth/me/notifications/read:
     post: { tags: [auth], summary: Mark unified notifications read through a cursor, operationId: markFollowNotificationsRead, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/notification-preferences:
-    put: { tags: [auth], summary: Set the in-app interaction notification preference, operationId: updateNotificationPreferences, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put:
+      tags: [auth]
+      summary: Set the in-app notification preferences
+      description: |
+        `notifyInteraction` keeps its historical meaning and is always written.
+        `notifyTopic` is optional: when the field is omitted the stored topic
+        preference stays untouched, so older clients cannot reset it.
+      operationId: updateNotificationPreferences
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/topic-subscriptions:
+    get: { tags: [auth], summary: List the topics subscribed by the current account, operationId: listTopicSubscriptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/topic-subscriptions/{topicType}/{topicKey}:
+    put:
+      tags: [auth]
+      summary: Subscribe to a normalised topic
+      description: '`topicType` is `category` or `tag`; `topicKey` is the trimmed lower-cased topic name. A topic with no public article yet is rejected.'
+      operationId: subscribeTopic
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: topicType, in: path, required: true, schema: { type: string, enum: [category, tag] } }
+        - { name: topicKey, in: path, required: true, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    delete:
+      tags: [auth]
+      summary: Unsubscribe from a normalised topic
+      operationId: unsubscribeTopic
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: topicType, in: path, required: true, schema: { type: string, enum: [category, tag] } }
+        - { name: topicKey, in: path, required: true, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/topic-subscriptions/{topicType}/{topicKey}/mute:
+    put:
+      tags: [auth]
+      summary: Mute or unmute one topic subscription
+      description: A muted subscription keeps appearing in the topic feed but never reaches the notification inbox.
+      operationId: muteTopicSubscription
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: topicType, in: path, required: true, schema: { type: string, enum: [category, tag] } }
+        - { name: topicKey, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [muted]
+              properties:
+                muted: { type: integer, enum: [0, 1] }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/topic-feed:
+    get:
+      tags: [auth]
+      summary: List published articles matching the account topic subscriptions
+      description: Only articles count, because talks carry no category or tag. The feed includes the reader's own articles; the notification inbox excludes them.
+      operationId: listTopicSubscriptionFeed
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /auth/me/following/{authorId}:
     put: { tags: [auth], summary: Follow an author, operationId: followAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     delete: { tags: [auth], summary: Unfollow an author, operationId: unfollowAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }

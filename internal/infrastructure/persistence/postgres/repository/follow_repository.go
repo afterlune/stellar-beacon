@@ -223,7 +223,7 @@ func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group 
 	if _, err := session.SQL("SELECT count(1) FROM ("+notificationFeedSQL+") notification_feed WHERE is_read = false", notificationFeedArgs(userID, "")...).Get(&result.TotalUnreadCount); err != nil {
 		return port.NotificationPage{}, apperrors.Unavailable("notification.unread", err)
 	}
-	if _, err := session.SQL(`
+	if _, err := session.SQL("WITH "+taxonomyMembershipCTE+`
 		SELECT
 			COALESCE((
 				SELECT MAX(event.id)
@@ -231,8 +231,19 @@ func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group 
 				JOIN t_user_follow follow ON follow.author_id = event.author_id
 					AND follow.follower_id = ? AND event.id > follow.start_event_id
 			), 0) AS publish_event_id,
-			COALESCE((SELECT MAX(id) FROM t_user_notification WHERE recipient_id = ?), 0) AS interaction_id`,
-		userID, userID).Get(&result.ReadCursor); err != nil {
+			COALESCE((SELECT MAX(id) FROM t_user_notification WHERE recipient_id = ?), 0) AS interaction_id,
+			COALESCE((
+				SELECT MAX(event.id)
+				FROM t_topic_subscription subscription
+				JOIN topic_membership membership
+					ON membership.topic_type = subscription.topic_type AND membership.topic_key = subscription.topic_key
+				JOIN t_article article ON article.id = membership.article_id
+					AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+				JOIN t_author_publish_event event
+					ON event.content_type = 'article' AND event.content_id = article.id AND event.id > subscription.start_event_id
+				WHERE subscription.user_id = ?
+			), 0) AS topic_event_id`,
+		userID, userID, userID).Get(&result.ReadCursor); err != nil {
 		return port.NotificationPage{}, apperrors.Unavailable("notification.cursor", err)
 	}
 	page, offset := pgsql.Page(current, size)
@@ -284,7 +295,7 @@ func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cu
 		return apperrors.Invalid("notification.read", "invalid user")
 	}
 	return ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
-		var maxPublish, maxInteraction int64
+		var maxPublish, maxInteraction, maxTopic int64
 		if _, err := session.SQL(`
 			SELECT COALESCE(MAX(event.id), 0)
 			FROM t_author_publish_event event
@@ -295,11 +306,26 @@ func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cu
 		if _, err := session.SQL(`SELECT COALESCE(MAX(id), 0) FROM t_user_notification WHERE recipient_id = ?`, userID).Get(&maxInteraction); err != nil {
 			return apperrors.Unavailable("notification.read.interaction_cursor", err)
 		}
+		if _, err := session.SQL("WITH "+taxonomyMembershipCTE+`
+			SELECT COALESCE(MAX(event.id), 0)
+			FROM t_topic_subscription subscription
+			JOIN topic_membership membership
+				ON membership.topic_type = subscription.topic_type AND membership.topic_key = subscription.topic_key
+			JOIN t_article article ON article.id = membership.article_id
+				AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+			JOIN t_author_publish_event event
+				ON event.content_type = 'article' AND event.content_id = article.id AND event.id > subscription.start_event_id
+			WHERE subscription.user_id = ?`, userID).Get(&maxTopic); err != nil {
+			return apperrors.Unavailable("notification.read.topic_cursor", err)
+		}
 		if cursor.PublishEventId <= 0 || cursor.PublishEventId > maxPublish {
 			cursor.PublishEventId = maxPublish
 		}
 		if cursor.InteractionId <= 0 || cursor.InteractionId > maxInteraction {
 			cursor.InteractionId = maxInteraction
+		}
+		if cursor.TopicEventId <= 0 || cursor.TopicEventId > maxTopic {
+			cursor.TopicEventId = maxTopic
 		}
 		if _, err := session.Exec(`
 			UPDATE t_user_follow
@@ -313,11 +339,21 @@ func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cu
 			WHERE recipient_id = ? AND id <= ? AND read_at IS NULL`, userID, cursor.InteractionId); err != nil {
 			return apperrors.Unavailable("notification.read.interaction", err)
 		}
+		if _, err := session.Exec(`
+			UPDATE t_topic_subscription
+			SET last_read_event_id = GREATEST(last_read_event_id, ?), updated_at = CURRENT_TIMESTAMP
+			WHERE user_id = ?`, cursor.TopicEventId, userID); err != nil {
+			return apperrors.Unavailable("notification.read.topic", err)
+		}
 		return nil
 	})
 }
 
-const notificationFeedSQL = `
+// notificationFeedSQL derives the unified inbox. The topic branch reuses the
+// same normalised topic keys the discovery surfaces group by, so a subscription
+// matches the moment any author publishes under that name. All three branches
+// are resolved at read time; nothing fans out per recipient.
+const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 	SELECT
 		'publish:' || event.id::text AS notification_key,
 		'publish' AS notification_type,
@@ -387,10 +423,42 @@ const notificationFeedSQL = `
 		(notification.type IN ('like', 'favorite') AND reaction.id IS NOT NULL AND notification.content_type = 'article' AND article.id IS NOT NULL)
 	  )
 	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply')) OR (? = 'reaction' AND notification.type IN ('like', 'favorite')))
+	UNION ALL
+	SELECT
+		'topic:' || event.id::text AS notification_key,
+		'publish' AS notification_type,
+		'topic' AS notification_group,
+		event.author_id,
+		author.handle AS actor_handle,
+		author.nickname AS actor_name,
+		author.avatar AS actor_avatar,
+		event.content_type,
+		event.content_id,
+		0::bigint AS comment_id,
+		COALESCE(article.article_title, '') AS title,
+		COALESCE(SUBSTR(article.article_content, 1, 240), '') AS excerpt,
+		COALESCE(article.article_cover, '') AS cover,
+		'' AS images,
+		event.published_at AS created_at,
+		bool_and(event.id <= subscription.last_read_event_id) AS is_read,
+		event.id AS sort_id
+	FROM t_author_publish_event event
+	JOIN t_article article ON event.content_type = 'article' AND article.id = event.content_id
+		AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+	JOIN t_user_info author ON author.id = event.author_id AND author.is_disable = 0
+	JOIN topic_membership membership ON membership.article_id = article.id
+	JOIN t_topic_subscription subscription ON subscription.user_id = ? AND subscription.muted = 0
+		AND subscription.topic_type = membership.topic_type AND subscription.topic_key = membership.topic_key
+	WHERE event.id > subscription.start_event_id
+	  AND event.author_id <> subscription.user_id
+	  AND (SELECT notify_topic FROM t_user_info WHERE id = ?) = 1
+	  AND (? = '' OR ? = 'topic')
+	GROUP BY event.id, event.content_type, event.content_id, event.author_id, event.published_at,
+	         author.handle, author.nickname, author.avatar, article.article_title, article.article_content, article.article_cover
 `
 
 func notificationFeedArgs(userID int, group string) []interface{} {
-	return []interface{}{userID, group, group, userID, group, group, group}
+	return []interface{}{userID, group, group, userID, group, group, group, userID, userID, group, group}
 }
 func decodeTalkImages(value string) []string {
 	value = strings.TrimSpace(value)

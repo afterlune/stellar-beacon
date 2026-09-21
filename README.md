@@ -32,6 +32,7 @@
 - `GET /api/v1/public/feed?sort=latest|hot|featured`：公共信息流；`hot` 按近 7 天的收藏、审核通过评论、点赞与独立读者加权排序。
 - `GET /api/v1/public/authors?sort=articles|followers|active`：作者榜；`active` 按最近一次公开发布排序。
 - `GET /api/v1/public/topics`：话题广场，分类、标签与系列复用同一热度口径聚合。
+- `GET`/`PUT`/`DELETE /api/v1/auth/me/topic-subscriptions*`：读者按**归一化话题名**（分类或标签，跨作者）订阅、静音与取消订阅；`GET /api/v1/auth/me/topic-feed` 返回订阅话题下的新文章，通知中心新增 `topic` 分组（受账号级 `notifyTopic` 开关与单订阅静音控制）。
 
 ## 开发检查
 

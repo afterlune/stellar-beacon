@@ -230,6 +230,23 @@ func (a *MyArticleService) ListArticlesByCategoryId(c *gin.Context) model.Result
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
 
+	// Category names are also matched across authors when the caller supplies
+	// one; the id path is kept for existing links.
+	categoryName := strings.TrimSpace(c.Query("categoryName"))
+	if categoryName == "" {
+		categoryName = strings.TrimSpace(c.Query("name"))
+	}
+	if categoryName != "" {
+		data, count, err := a.articleRepository().GetArticlesByCategoryName(c.Request.Context(), current, size, categoryName)
+		if err != nil {
+			return model.ResultFromError(err)
+		}
+		a.attachCardReactionCounts(c.Request.Context(), data)
+		if len(data) == 0 {
+			return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		}
+		return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: count})
+	}
 	categoryID, err := strconv.Atoi(c.Query("categoryId"))
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
@@ -418,6 +435,21 @@ func (a *MyArticleService) ListArticlesByTagId(c *gin.Context) model.ResultVO {
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	// The discovery surfaces group per-author tags by their trimmed lower-cased
+	// name, so a named lookup aggregates across authors. The id lookup stays as
+	// the compatibility path for older links.
+	tagName := strings.TrimSpace(c.Query("tagName"))
+	if tagName != "" {
+		data, count, err := a.articleRepository().ListArticlesByTagName(c.Request.Context(), current, size, tagName)
+		if err != nil {
+			return model.ResultFromError(err)
+		}
+		a.attachCardReactionCounts(c.Request.Context(), data)
+		if len(data) == 0 {
+			return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
+		}
+		return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: count})
 	}
 	tagId := c.Query("tagId")
 	id, err := strconv.Atoi(tagId)
