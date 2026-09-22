@@ -260,6 +260,31 @@ paths:
       operationId: listTopicSubscriptionFeed
       security: [{ bearerAuth: [] }]
       responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/collection-subscriptions/{collectionId}:
+    get: { tags: [auth], summary: Get collection subscription status, operationId: getCollectionSubscriptionStatus, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [auth], summary: Subscribe to a public or unlisted collection, operationId: subscribeCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [auth], summary: Unsubscribe from a collection, operationId: unsubscribeCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/collection-subscriptions/{collectionId}/mute:
+    put:
+      tags: [auth]
+      summary: Mute or unmute one collection subscription
+      operationId: muteCollectionSubscription
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [muted]
+              properties:
+                muted: { type: integer, enum: [0, 1] }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/collection-subscriptions:
+    get: { tags: [auth], summary: List the current account's collection subscriptions, operationId: listCollectionSubscriptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/collection-feed:
+    get: { tags: [auth], summary: List collection updates since each subscription began, operationId: listCollectionSubscriptionFeed, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/recommendations/query:
     post:
       tags: [auth]
@@ -609,6 +634,16 @@ components:
         total: { type: integer, format: int64 }
         page: { type: integer, minimum: 1 }
         pageSize: { type: integer, minimum: 0 }
+    PublicAuthorSummary:
+      type: object
+      required: [id, handle, nickname, avatar]
+      properties:
+        id: { type: integer, format: int64 }
+        handle: { type: string }
+        nickname: { type: string }
+        avatar: { type: string }
+        intro: { type: string }
+        website: { type: string }
     CollectionSaveInput:
       type: object
       required: [title, visibility]
@@ -630,6 +665,40 @@ components:
           maxItems: 500
           uniqueItems: true
           items: { type: integer, format: int64 }
+    CollectionSubscriptionStatus:
+      type: object
+      required: [subscribed, muted]
+      properties:
+        subscribed: { type: boolean }
+        muted: { type: boolean }
+    CollectionSubscription:
+      type: object
+      required: [collectionId, slug, title, articleCount, muted, unreadCount, subscribedAt]
+      properties:
+        collectionId: { type: integer, format: int64 }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        cover: { type: string }
+        articleCount: { type: integer }
+        owner: { $ref: '#/components/schemas/PublicAuthorSummary' }
+        muted: { type: boolean }
+        unreadCount: { type: integer }
+        subscribedAt: { type: string, format: date-time }
+    CollectionFeedItem:
+      type: object
+      required: [eventId, collectionId, slug, collectionTitle, articleId, articleTitle, publishedAt]
+      properties:
+        eventId: { type: integer, format: int64 }
+        collectionId: { type: integer, format: int64 }
+        slug: { type: string }
+        collectionTitle: { type: string }
+        articleId: { type: integer, format: int64 }
+        articleTitle: { type: string }
+        excerpt: { type: string }
+        cover: { type: string }
+        owner: { $ref: '#/components/schemas/PublicAuthorSummary' }
+        publishedAt: { type: string, format: date-time }
     ArticleReadSession:
       type: object
       required: [sessionId, activeMs, maxScrollPercent]

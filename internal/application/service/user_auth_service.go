@@ -458,6 +458,7 @@ func (u *MyUserAuthService) Authenticate(ctx context.Context, vo model.UserVO) (
 		NotifyComment:     user.Info.NotifyComment,
 		NotifyInteraction: user.Info.NotifyInteraction,
 		NotifyTopic:       user.Info.NotifyTopic,
+		NotifyCollection:  user.Info.NotifyCollection,
 		IsDisable:         user.Info.IsDisable,
 	}, nil
 }

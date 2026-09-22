@@ -71,6 +71,7 @@ func (f notificationUsers) UpdateSubscribe(context.Context, int, int) error     
 func (f notificationUsers) UpdateNotifyComment(context.Context, int, int) error     { return nil }
 func (f notificationUsers) UpdateNotifyInteraction(context.Context, int, int) error { return nil }
 func (f notificationUsers) UpdateNotifyTopic(context.Context, int, int) error       { return nil }
+func (f notificationUsers) UpdateNotifyCollection(context.Context, int, int) error  { return nil }
 func (f notificationUsers) UpdateRole(context.Context, int, string, []int) error    { return nil }
 func (f notificationUsers) UpdateDisable(context.Context, int, int) error           { return nil }
 func (f notificationUsers) FindAuthByUserInfoID(context.Context, int) (entity.TUserAuth, error) {

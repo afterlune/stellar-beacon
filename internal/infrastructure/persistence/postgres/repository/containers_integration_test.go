@@ -76,6 +76,7 @@ CREATE TABLE t_user_info (
     email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
     intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
     notify_comment SMALLINT NOT NULL DEFAULT 1, notify_interaction SMALLINT NOT NULL DEFAULT 1, notify_topic SMALLINT NOT NULL DEFAULT 1,
+    notify_collection SMALLINT NOT NULL DEFAULT 1,
     is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
 );
 CREATE TABLE t_user_auth (
@@ -209,6 +210,19 @@ CREATE TABLE t_collection_item (
     article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE, note VARCHAR(280) NOT NULL DEFAULT '',
     sort_order INTEGER NOT NULL DEFAULT 0, create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (collection_id, article_id)
+);
+CREATE TABLE t_collection_update_event (
+    id BIGSERIAL PRIMARY KEY, collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
+    owner_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE t_collection_subscription (
+    id BIGSERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
+    muted SMALLINT NOT NULL DEFAULT 0, start_event_id BIGINT NOT NULL DEFAULT 0, last_read_event_id BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, collection_id)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
@@ -930,6 +944,121 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 		Title: "stolen", Description: "", Visibility: port.CollectionVisibilityPublic,
 	}); !apperrors.IsKind(err, apperrors.KindNotFound) {
 		t.Fatalf("non-owner collection update must be rejected: %v", err)
+	}
+
+	subscriptionCollection, err := collectionRepo.CreateOwned(ctx, 1, "integration-subscription-list", port.CollectionSaveInput{
+		Title: "Subscription reading list", Description: "collection update stream", Visibility: port.CollectionVisibilityPublic,
+	})
+	if err != nil {
+		t.Fatalf("create subscription collection: %v", err)
+	}
+	if err := collectionRepo.AddItem(ctx, 1, subscriptionCollection.ID, 2, "existing item"); err != nil {
+		t.Fatalf("seed subscription collection item: %v", err)
+	}
+	collectionSubscriptions := NewCollectionSubscriptionRepo(xormEngine)
+	if err := collectionSubscriptions.Subscribe(ctx, 1, subscriptionCollection.ID); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("self subscription must be rejected: %v", err)
+	}
+	if err := collectionSubscriptions.Subscribe(ctx, 2, subscriptionCollection.ID); err != nil {
+		t.Fatalf("subscribe collection: %v", err)
+	}
+	status, err := collectionSubscriptions.GetStatus(ctx, 2, subscriptionCollection.ID)
+	if err != nil || !status.Subscribed || status.Muted {
+		t.Fatalf("unexpected subscription status: status=%+v err=%v", status, err)
+	}
+	if err := collectionRepo.AddItem(ctx, 1, subscriptionCollection.ID, 2, "updated existing note"); err != nil {
+		t.Fatalf("update existing collection note: %v", err)
+	}
+	if _, total, err := collectionSubscriptions.ListFeed(ctx, 2, 1, 10); err != nil || total != 0 {
+		t.Fatalf("note updates must not create events: total=%d err=%v", total, err)
+	}
+	if err := collectionRepo.AddItem(ctx, 1, subscriptionCollection.ID, 4, "new item"); err != nil {
+		t.Fatalf("add subscribed collection item: %v", err)
+	}
+	collectionSubs, total, err := collectionSubscriptions.ListSubscriptions(ctx, 2, 1, 10)
+	if err != nil || total != 1 || len(collectionSubs) != 1 || collectionSubs[0].UnreadCount != 1 || collectionSubs[0].CollectionID != subscriptionCollection.ID {
+		t.Fatalf("unexpected collection subscriptions: items=%+v total=%d err=%v", collectionSubs, total, err)
+	}
+	collectionFeed, total, err := collectionSubscriptions.ListFeed(ctx, 2, 1, 10)
+	if err != nil || total != 1 || len(collectionFeed) != 1 || collectionFeed[0].ArticleID != 4 || collectionFeed[0].CollectionID != subscriptionCollection.ID {
+		t.Fatalf("unexpected collection feed: items=%+v total=%d err=%v", collectionFeed, total, err)
+	}
+	collectionNotifications, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupCollection, 1, 10)
+	if err != nil || collectionNotifications.Count != 1 || collectionNotifications.UnreadCount != 1 || len(collectionNotifications.Records) != 1 {
+		t.Fatalf("unexpected collection notifications: page=%+v err=%v", collectionNotifications, err)
+	}
+	notification := collectionNotifications.Records[0]
+	if notification.Type != port.NotificationTypeCollectionUpdate || notification.Slug != subscriptionCollection.Slug || notification.ArticleId != 4 {
+		t.Fatalf("unexpected collection notification item: %+v", notification)
+	}
+	if err := followRepo.MarkNotificationsRead(ctx, 2, collectionNotifications.ReadCursor); err != nil {
+		t.Fatalf("mark collection notifications read: %v", err)
+	}
+	if err := collectionSubscriptions.SetMuted(ctx, 2, subscriptionCollection.ID, true); err != nil {
+		t.Fatalf("mute collection subscription: %v", err)
+	}
+	if err := collectionRepo.AddItem(ctx, 1, subscriptionCollection.ID, 5, "muted item"); err != nil {
+		t.Fatalf("add muted collection item: %v", err)
+	}
+	if page, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupCollection, 1, 10); err != nil || page.UnreadCount != 0 || page.Count != 0 {
+		t.Fatalf("muted collection update must not notify: page=%+v err=%v", page, err)
+	}
+	if _, total, err := collectionSubscriptions.ListFeed(ctx, 2, 1, 10); err != nil || total != 2 {
+		t.Fatalf("muted collection updates must remain in the feed: total=%d err=%v", total, err)
+	}
+	if err := collectionSubscriptions.SetMuted(ctx, 2, subscriptionCollection.ID, false); err != nil {
+		t.Fatalf("unmute collection subscription: %v", err)
+	}
+	if page, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupCollection, 1, 10); err != nil || page.UnreadCount != 1 {
+		t.Fatalf("unmuted collection update must become unread: page=%+v err=%v", page, err)
+	} else if err := followRepo.MarkNotificationsRead(ctx, 2, page.ReadCursor); err != nil {
+		t.Fatalf("mark unmuted collection update read: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE t_user_info SET notify_collection = 0 WHERE id = 2"); err != nil {
+		t.Fatalf("disable collection notifications: %v", err)
+	}
+	if err := collectionRepo.AddItem(ctx, 1, subscriptionCollection.ID, 6, "disabled item"); err != nil {
+		t.Fatalf("add disabled-notification collection item: %v", err)
+	}
+	if page, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupCollection, 1, 10); err != nil || page.Count != 0 || page.UnreadCount != 0 {
+		t.Fatalf("disabled collection notifications must be suppressed: page=%+v err=%v", page, err)
+	}
+	if collectionSubs, _, err := collectionSubscriptions.ListSubscriptions(ctx, 2, 1, 10); err != nil || len(collectionSubs) != 1 || collectionSubs[0].UnreadCount != 0 {
+		t.Fatalf("disabled global preference must hide unread count: items=%+v err=%v", collectionSubs, err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE t_user_info SET notify_collection = 1 WHERE id = 2"); err != nil {
+		t.Fatalf("enable collection notifications: %v", err)
+	}
+	if page, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupCollection, 1, 10); err != nil || page.UnreadCount != 1 {
+		t.Fatalf("re-enabled collection notification must be unread: page=%+v err=%v", page, err)
+	}
+	if _, err := collectionRepo.UpdateOwned(ctx, 1, subscriptionCollection.ID, port.CollectionSaveInput{
+		Title: subscriptionCollection.Title, Description: subscriptionCollection.Description, Visibility: port.CollectionVisibilityPrivate,
+	}); err != nil {
+		t.Fatalf("make subscribed collection private: %v", err)
+	}
+	if collectionSubs, total, err := collectionSubscriptions.ListSubscriptions(ctx, 2, 1, 10); err != nil || total != 0 || len(collectionSubs) != 0 {
+		t.Fatalf("private collection must leave subscriber surfaces: items=%+v total=%d err=%v", collectionSubs, total, err)
+	}
+	if feed, total, err := collectionSubscriptions.ListFeed(ctx, 2, 1, 10); err != nil || total != 0 || len(feed) != 0 {
+		t.Fatalf("private collection must leave feed: items=%+v total=%d err=%v", feed, total, err)
+	}
+	if page, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupCollection, 1, 10); err != nil || page.Count != 0 {
+		t.Fatalf("private collection must leave notifications: page=%+v err=%v", page, err)
+	}
+	if _, err := collectionRepo.UpdateOwned(ctx, 1, subscriptionCollection.ID, port.CollectionSaveInput{
+		Title: subscriptionCollection.Title, Description: subscriptionCollection.Description, Visibility: port.CollectionVisibilityUnlisted,
+	}); err != nil {
+		t.Fatalf("make subscribed collection unlisted: %v", err)
+	}
+	if collectionSubs, total, err := collectionSubscriptions.ListSubscriptions(ctx, 2, 1, 10); err != nil || total != 1 || len(collectionSubs) != 1 || collectionSubs[0].Slug != subscriptionCollection.Slug {
+		t.Fatalf("unlisted collection must remain subscribable: items=%+v total=%d err=%v", collectionSubs, total, err)
+	}
+	if err := collectionSubscriptions.Unsubscribe(ctx, 2, subscriptionCollection.ID); err != nil {
+		t.Fatalf("unsubscribe collection: %v", err)
+	}
+	if status, err := collectionSubscriptions.GetStatus(ctx, 2, subscriptionCollection.ID); err != nil || status.Subscribed {
+		t.Fatalf("unsubscribed status must be clear: status=%+v err=%v", status, err)
 	}
 	redisContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{

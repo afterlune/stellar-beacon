@@ -107,6 +107,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyCollectionSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyCollectionSubscriptionSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1528,6 +1531,67 @@ func applyCollectionSchema(ctx context.Context, engine *xorm.Engine) error {
 	}
 	return nil
 }
+
+// applyCollectionSubscriptionSchema adds reader subscriptions and the append-
+// only update stream used by the in-app feed and notification inbox. Updates
+// remain references, so private or moderated collections disappear at read
+// time without deleting subscriber state.
+func applyCollectionSubscriptionSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 24)").Get(&applied); err != nil {
+		return fmt.Errorf("check collection subscription migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin collection subscription migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`ALTER TABLE t_user_info ADD COLUMN IF NOT EXISTS notify_collection SMALLINT NOT NULL DEFAULT 1`,
+		`CREATE TABLE IF NOT EXISTS t_collection_update_event (
+			id BIGSERIAL PRIMARY KEY,
+			collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
+			owner_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_update_event_stream ON t_collection_update_event(collection_id, created_at DESC, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS t_collection_subscription (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
+			muted SMALLINT NOT NULL DEFAULT 0,
+			start_event_id BIGINT NOT NULL DEFAULT 0,
+			last_read_event_id BIGINT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (user_id, collection_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_subscription_user ON t_collection_subscription(user_id, updated_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_subscription_collection ON t_collection_subscription(collection_id)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply collection subscription schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 24, "collection-subscriptions"); err != nil {
+		return fmt.Errorf("record collection subscription migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit collection subscription migration: %w", err)
+	}
+	return nil
+}
+
 func handleBase(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var builder strings.Builder

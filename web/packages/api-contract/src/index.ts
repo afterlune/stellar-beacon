@@ -406,6 +406,7 @@ export interface PublicAuthorProfile extends PublicAuthorSummary {
 }
 
 export type FollowContentType = 'article' | 'talk'
+export type NotificationContentType = FollowContentType | 'collection'
 
 export interface FollowUser {
   id: number
@@ -428,17 +429,19 @@ export interface FollowFeedItem {
   publishedAt: string
 }
 
-export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction' | 'topic'
-export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite'
+export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction' | 'topic' | 'collection'
+export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite' | 'collection_update'
 
 export interface NotificationItem {
   key: string
   type: NotificationType
   group: Exclude<NotificationGroup, 'all'>
   actor: PublicAuthorSummary
-  contentType: FollowContentType
+  contentType: NotificationContentType
   contentId: number
   commentId?: number
+  articleId?: number
+  slug?: string
   title: string
   excerpt: string
   cover?: string
@@ -450,6 +453,8 @@ export interface NotificationItem {
 export interface NotificationCursor {
   publishEventId: number
   interactionId: number
+  topicEventId?: number
+  collectionEventId?: number
 }
 
 export interface NotificationPage extends Page<NotificationItem> {
@@ -940,4 +945,35 @@ export interface CollectionSaveInput {
   title: string
   description: string
   visibility: CollectionVisibility
+}
+
+export interface CollectionSubscriptionStatus {
+  subscribed: boolean
+  muted: boolean
+}
+
+export interface CollectionSubscription {
+  collectionId: number
+  slug: string
+  title: string
+  description: string
+  cover?: string
+  articleCount: number
+  owner: PublicAuthorSummary
+  muted: boolean
+  unreadCount: number
+  subscribedAt: string
+}
+
+export interface CollectionFeedItem {
+  eventId: number
+  collectionId: number
+  slug: string
+  collectionTitle: string
+  articleId: number
+  articleTitle: string
+  excerpt: string
+  cover?: string
+  owner: PublicAuthorSummary
+  publishedAt: string
 }

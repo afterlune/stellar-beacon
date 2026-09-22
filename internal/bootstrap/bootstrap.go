@@ -91,6 +91,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	topicSubscriptionRepo := repository.NewTopicSubscriptionRepo(engine)
 	recommendationRepo := repository.NewRecommendationRepo(engine)
 	collectionRepo := repository.NewCollectionRepo(engine)
+	collectionSubRepo := repository.NewCollectionSubscriptionRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -242,6 +243,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.service.collection", err)
 	}
+	collectionSubService := service.NewCollectionSubscriptionService(collectionSubRepo)
 
 	scheduler := task.NewScheduler(job, jobLog, redisCache)
 	if err := task.RegisterDefaultTargets(scheduler, task.DefaultTargetsDeps{
@@ -285,6 +287,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		TopicSubscription: service.NewTopicSubscriptionService(topicSubscriptionRepo),
 		Recommendation:    recommendationService,
 		Collection:        collectionService,
+		CollectionSub:     collectionSubService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

@@ -4,7 +4,7 @@
       <div>
         <p>FOLLOWING FEED</p>
         <h1>关注动态</h1>
-        <span>只展示你关注作者在关注之后发布的新内容。</span>
+        <span>汇集关注作者、话题订阅和书单订阅在订阅之后产生的新内容。</span>
       </div>
       <router-link to="/authors">发现作者 →</router-link>
     </header>
@@ -13,6 +13,7 @@
       <button type="button" :class="{ active: tab === 'following' }" @click="switchTab('following')">关注中</button>
       <button type="button" :class="{ active: tab === 'followers' }" @click="switchTab('followers')">粉丝</button>
       <button type="button" :class="{ active: tab === 'topics' }" @click="switchTab('topics')">话题</button>
+      <button type="button" :class="{ active: tab === 'collections' }" @click="switchTab('collections')">书单</button>
     </nav>
     <div v-if="tab === 'feed'" class="following-filters">
       <button v-for="item in feedTypes" :key="item.value" type="button" :class="{ active: feedType === item.value }" @click="changeFeedType(item.value)">{{ item.label }}</button>
@@ -72,6 +73,42 @@
       </div>
       <p v-else class="following-state">订阅话题后的新文章会出现在这里。</p>
     </template>
+    <template v-else-if="tab === 'collections'">
+      <section class="following-topics following-collections">
+        <header>
+          <div><h2>我订阅的书单</h2><span>书单新增文章后进入下面的更新流和通知中心。</span></div>
+          <router-link to="/collections">发现公开书单 →</router-link>
+        </header>
+        <div v-if="collectionSubscriptions.length" class="following-topics__list">
+          <article v-for="item in collectionSubscriptions" :key="item.collectionId">
+            <router-link :to="`/collections/${item.slug}`" class="following-topics__main">
+              <strong>{{ item.title }}</strong>
+              <small>{{ item.owner.nickname || item.owner.handle }} · {{ item.articleCount }} 篇文章</small>
+            </router-link>
+            <span v-if="item.unreadCount" class="following-topics__unread">{{ item.unreadCount }} 条更新</span>
+            <div class="following-topics__actions">
+              <button type="button" :disabled="busyCollection === item.collectionId" @click="toggleCollectionMute(item)">{{ item.muted ? '恢复通知' : '静音' }}</button>
+              <button type="button" class="is-danger" :disabled="busyCollection === item.collectionId" @click="unsubscribeCollection(item)">取消订阅</button>
+            </div>
+          </article>
+        </div>
+        <p v-else class="following-state">还没有订阅书单，去公开书单挑一个吧。</p>
+      </section>
+      <div v-if="records.length" class="following-feed">
+        <article v-for="item in records" :key="item.eventId">
+          <router-link :to="collectionPath(item)" class="following-feed__main">
+            <span>书单更新 · {{ formatDateTime(item.publishedAt) }}</span>
+            <h2>{{ item.collectionTitle }}</h2>
+            <p>新增：{{ item.articleTitle }}<template v-if="item.excerpt && item.excerpt !== item.articleTitle"> · {{ excerpt(item.excerpt) }}</template></p>
+          </router-link>
+          <router-link :to="`/u/${item.owner.handle}`" class="following-feed__author">
+            <img :src="item.owner.avatar || defaultAvatar" :alt="item.owner.nickname || item.owner.handle" />
+            <span>{{ item.owner.nickname || item.owner.handle }}</span>
+          </router-link>
+        </article>
+      </div>
+      <p v-else class="following-state">订阅书单后的新增文章会出现在这里。</p>
+    </template>
     <template v-else>
       <div v-if="records.length" class="following-users">
         <article v-for="item in records" :key="item.id">
@@ -91,7 +128,7 @@ import { defineComponent, onMounted, ref } from 'vue'
 import api from '@/api/api'
 import FollowButton from '@/components/FollowButton.vue'
 
-type Tab = 'feed' | 'following' | 'followers' | 'topics'
+type Tab = 'feed' | 'following' | 'followers' | 'topics' | 'collections'
 type FeedType = 'all' | 'article' | 'talk'
 
 const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" rx="48" fill="%23172554"/%3E%3Ccircle cx="48" cy="36" r="17" fill="%239bb8ff"/%3E%3Cpath d="M16 89c5-23 16-34 32-34s27 11 32 34" fill="%239bb8ff"/%3E%3C/svg%3E'
@@ -104,7 +141,9 @@ export default defineComponent({
     const feedType = ref<FeedType>('all')
     const records = ref<any[]>([])
     const subscriptions = ref<any[]>([])
+    const collectionSubscriptions = ref<any[]>([])
     const busyTopic = ref('')
+    const busyCollection = ref(0)
     const loading = ref(false)
     const error = ref('')
     const page = ref(1)
@@ -126,6 +165,15 @@ export default defineComponent({
         subscriptions.value = Array.isArray(data.items) ? data.items : Array.isArray(data.records) ? data.records : []
       } catch {
         subscriptions.value = []
+      }
+    }
+    const loadCollectionSubscriptions = async () => {
+      try {
+        const response = await api.getCollectionSubscriptions({ current: 1, size: 100 })
+        const data = response?.data?.data || {}
+        collectionSubscriptions.value = Array.isArray(data.items) ? data.items : Array.isArray(data.records) ? data.records : []
+      } catch {
+        collectionSubscriptions.value = []
       }
     }
     const toggleMute = async (item: any) => {
@@ -153,6 +201,31 @@ export default defineComponent({
         busyTopic.value = ''
       }
     }
+    const toggleCollectionMute = async (item: any) => {
+      busyCollection.value = Number(item.collectionId)
+      try {
+        const response = await api.muteCollectionSubscription(Number(item.collectionId), item.muted ? 0 : 1)
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
+        await loadCollectionSubscriptions()
+      } catch (reason: any) {
+        error.value = reason?.response?.data?.message || reason?.message || '操作失败'
+      } finally {
+        busyCollection.value = 0
+      }
+    }
+    const unsubscribeCollection = async (item: any) => {
+      busyCollection.value = Number(item.collectionId)
+      try {
+        const response = await api.unsubscribeCollection(Number(item.collectionId))
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
+        await loadCollectionSubscriptions()
+        await load(true)
+      } catch (reason: any) {
+        error.value = reason?.response?.data?.message || reason?.message || '操作失败'
+      } finally {
+        busyCollection.value = 0
+      }
+    }
     const load = async (reset = false) => {
       if (reset) {
         page.value = 1
@@ -168,7 +241,9 @@ export default defineComponent({
             ? await api.getMyFollowing(params)
             : tab.value === 'topics'
               ? await api.getTopicFeed(params)
-              : await api.getMyFollowers(params)
+              : tab.value === 'collections'
+                ? await api.getCollectionFeed(params)
+                : await api.getMyFollowers(params)
         const data = response?.data?.data || {}
         // The HTTP page shape is { items, total }; records/count stay supported
         // for the legacy envelopes some endpoints still return.
@@ -185,6 +260,7 @@ export default defineComponent({
       if (tab.value === value) return
       tab.value = value
       if (value === 'topics') void loadSubscriptions()
+      if (value === 'collections') void loadCollectionSubscriptions()
       void load(true)
     }
     const changeFeedType = (value: FeedType) => {
@@ -201,13 +277,14 @@ export default defineComponent({
       total.value = Math.max(0, total.value - 1)
     }
     const contentPath = (item: any) => item.contentType === 'article' ? `/articles/${item.contentId}` : `/talks/${item.contentId}`
+    const collectionPath = (item: any) => `/collections/${item.slug}?article=${item.articleId}`
     const excerpt = (value: string, limit = 180) => {
       const text = String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
       return text.length > limit ? text.slice(0, limit) + '…' : text
     }
     const formatDateTime = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : ''
     onMounted(() => { void load(true) })
-    return { tab, feedType, feedTypes, records, subscriptions, busyTopic, loading, error, total, defaultAvatar, switchTab, changeFeedType, loadMore, userChanged, contentPath, excerpt, formatDateTime, subscriptionPath, topicId, toggleMute, unsubscribe }
+    return { tab, feedType, feedTypes, records, subscriptions, collectionSubscriptions, busyTopic, busyCollection, loading, error, total, defaultAvatar, switchTab, changeFeedType, loadMore, userChanged, contentPath, collectionPath, excerpt, formatDateTime, subscriptionPath, topicId, toggleMute, unsubscribe, toggleCollectionMute, unsubscribeCollection }
   }
 })
 </script>

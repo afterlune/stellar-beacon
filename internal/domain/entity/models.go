@@ -396,6 +396,7 @@ type TUserInfo struct {
 	NotifyComment     int       `xorm:"notify_comment not null default 1 comment('是否接收评论邮件通知') SMALLINT" json:"notifyComment"`
 	NotifyInteraction int       `xorm:"notify_interaction not null default 1 comment('是否接收站内互动通知') SMALLINT" json:"notifyInteraction"`
 	NotifyTopic       int       `xorm:"notify_topic not null default 1 comment('是否接收话题订阅通知') SMALLINT" json:"notifyTopic"`
+	NotifyCollection  int       `xorm:"notify_collection not null default 1 comment('是否接收书单更新通知') SMALLINT" json:"notifyCollection"`
 	IsDisable         int       `xorm:"not null comment('是否禁用') SMALLINT" json:"isDisable"`
 	CreateTime        time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
 	UpdateTime        time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`

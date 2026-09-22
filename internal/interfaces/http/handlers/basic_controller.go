@@ -3,37 +3,38 @@ package api
 import "github.com/eternallyzzz/stellar-beacon/internal/application/service"
 
 var (
-	articleService           service.ArticleService           = new(service.MyArticleService)
-	platformService          service.PlatformService          = new(service.MyPlatformService)
-	articleReactionService   service.ArticleReactionService   = new(service.MyArticleReactionService)
-	seriesService            service.SeriesService            = new(service.MySeriesService)
-	stellarBeaconService     service.StellarBeaconInfoService = new(service.MyStellarBeaconInfoService)
-	categoryService          service.CategoryService          = new(service.MyCategoryService)
-	commentService           service.CommentService           = new(service.MyCommentService)
-	errorLogService          service.ErrorLogService          = new(service.MyErrorLogService)
-	friendLinkService        service.FriendLinkService        = new(service.MyFriendLinkService)
-	jobLogService            service.JobLogService            = new(service.MyJobLogService)
-	jobService               service.JobService               = new(service.MyJobService)
-	menuService              service.MenuService              = new(service.MyMenuSService)
-	mediaService             service.MediaService             = new(service.MyMediaService)
-	operationLogService      service.OperationLogService      = new(service.MyOperationLogService)
-	photoAlbumService        service.PhotoAlbumService        = new(service.MyPhotoAlbumService)
-	photoService             service.PhotoService             = new(service.MyPhotoService)
-	resourceService          service.ResourceService          = new(service.MyResourceService)
-	roleService              service.RoleService              = new(service.MyRoleService)
-	tagService               service.TagService               = new(service.MyTagService)
-	talkService              service.TalkService              = new(service.MyTalkService)
-	userAuthService          service.UserAuthService          = new(service.MyUserAuthService)
-	userInfoService          service.UserInfoService          = new(service.MyUserInfoService)
-	seoService               service.SeoService               = new(service.MySeoService)
-	newsletterService        service.NewsletterService        = new(service.MyNewsletterService)
-	growthService            service.GrowthService            = new(service.MyGrowthService)
-	contentAnalyticsService  service.ContentAnalyticsService  = new(service.MyContentAnalyticsService)
-	contentAuditService      service.ContentAuditService      = new(service.MyContentAuditService)
-	followService            service.FollowService            = new(service.MyFollowService)
-	topicSubscriptionService service.TopicSubscriptionService = new(service.MyTopicSubscriptionService)
-	recommendationService    service.RecommendationService    = new(service.MyRecommendationService)
-	collectionService        service.CollectionService        = new(service.MyCollectionService)
+	articleService           service.ArticleService                = new(service.MyArticleService)
+	platformService          service.PlatformService               = new(service.MyPlatformService)
+	articleReactionService   service.ArticleReactionService        = new(service.MyArticleReactionService)
+	seriesService            service.SeriesService                 = new(service.MySeriesService)
+	stellarBeaconService     service.StellarBeaconInfoService      = new(service.MyStellarBeaconInfoService)
+	categoryService          service.CategoryService               = new(service.MyCategoryService)
+	commentService           service.CommentService                = new(service.MyCommentService)
+	errorLogService          service.ErrorLogService               = new(service.MyErrorLogService)
+	friendLinkService        service.FriendLinkService             = new(service.MyFriendLinkService)
+	jobLogService            service.JobLogService                 = new(service.MyJobLogService)
+	jobService               service.JobService                    = new(service.MyJobService)
+	menuService              service.MenuService                   = new(service.MyMenuSService)
+	mediaService             service.MediaService                  = new(service.MyMediaService)
+	operationLogService      service.OperationLogService           = new(service.MyOperationLogService)
+	photoAlbumService        service.PhotoAlbumService             = new(service.MyPhotoAlbumService)
+	photoService             service.PhotoService                  = new(service.MyPhotoService)
+	resourceService          service.ResourceService               = new(service.MyResourceService)
+	roleService              service.RoleService                   = new(service.MyRoleService)
+	tagService               service.TagService                    = new(service.MyTagService)
+	talkService              service.TalkService                   = new(service.MyTalkService)
+	userAuthService          service.UserAuthService               = new(service.MyUserAuthService)
+	userInfoService          service.UserInfoService               = new(service.MyUserInfoService)
+	seoService               service.SeoService                    = new(service.MySeoService)
+	newsletterService        service.NewsletterService             = new(service.MyNewsletterService)
+	growthService            service.GrowthService                 = new(service.MyGrowthService)
+	contentAnalyticsService  service.ContentAnalyticsService       = new(service.MyContentAnalyticsService)
+	contentAuditService      service.ContentAuditService           = new(service.MyContentAuditService)
+	followService            service.FollowService                 = new(service.MyFollowService)
+	topicSubscriptionService service.TopicSubscriptionService      = new(service.MyTopicSubscriptionService)
+	recommendationService    service.RecommendationService         = new(service.MyRecommendationService)
+	collectionService        service.CollectionService             = new(service.MyCollectionService)
+	collectionSubService     service.CollectionSubscriptionService = new(service.MyCollectionSubscriptionService)
 )
 
 type Services struct {
@@ -68,6 +69,7 @@ type Services struct {
 	TopicSubscription service.TopicSubscriptionService
 	Recommendation    service.RecommendationService
 	Collection        service.CollectionService
+	CollectionSub     service.CollectionSubscriptionService
 }
 
 func ConfigureServices(s Services) {
@@ -102,4 +104,5 @@ func ConfigureServices(s Services) {
 	topicSubscriptionService = s.TopicSubscription
 	recommendationService = s.Recommendation
 	collectionService = s.Collection
+	collectionSubService = s.CollectionSub
 }

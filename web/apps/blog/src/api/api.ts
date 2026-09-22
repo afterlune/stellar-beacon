@@ -202,7 +202,7 @@ export default {
   markFollowNotificationsRead: (cursor: NotificationCursor) => {
     return http.post('/auth/me/notifications/read', cursor)
   },
-  updateNotificationPreferences: (params: { notifyInteraction: number; notifyTopic: number }) => {
+  updateNotificationPreferences: (params: { notifyInteraction: number; notifyTopic?: number; notifyCollection?: number }) => {
     return http.put('/auth/me/notification-preferences', params)
   },
   subscribeTopic: (topicType: string, topicKey: string) => {
@@ -219,6 +219,24 @@ export default {
   },
   getTopicFeed: (params: { current?: number; size?: number }) => {
     return http.get('/auth/me/topic-feed', { params })
+  },
+  subscribeCollection: (collectionId: number) => {
+    return http.put(`/auth/me/collection-subscriptions/${encodeURIComponent(collectionId)}`)
+  },
+  unsubscribeCollection: (collectionId: number) => {
+    return http.delete(`/auth/me/collection-subscriptions/${encodeURIComponent(collectionId)}`)
+  },
+  muteCollectionSubscription: (collectionId: number, muted: number) => {
+    return http.put(`/auth/me/collection-subscriptions/${encodeURIComponent(collectionId)}/mute`, { muted })
+  },
+  getCollectionSubscriptionStatus: (collectionId: number) => {
+    return http.get(`/auth/me/collection-subscriptions/${encodeURIComponent(collectionId)}`)
+  },
+  getCollectionSubscriptions: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/collection-subscriptions', { params })
+  },
+  getCollectionFeed: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/collection-feed', { params })
   },
   getRecommendations: (params: { cursor?: string; size?: number; seedArticleIds?: number[] }) => {
     return http.post('/auth/me/recommendations/query', params)

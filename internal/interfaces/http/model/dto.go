@@ -536,6 +536,7 @@ type UserDetailsDTO struct {
 	NotifyComment     int       `json:"notifyComment"`
 	NotifyInteraction int       `json:"notifyInteraction"`
 	NotifyTopic       int       `json:"notifyTopic"`
+	NotifyCollection  int       `json:"notifyCollection"`
 	Browser           string    `json:"browser"`
 	Os                string    `json:"os"`
 	ExpireTime        time.Time `json:"expireTime"`
@@ -653,6 +654,7 @@ type ReactionStateDTO struct {
 type NotificationPreferenceVO struct {
 	NotifyInteraction int  `json:"notifyInteraction" form:"notifyInteraction"`
 	NotifyTopic       *int `json:"notifyTopic" form:"notifyTopic"`
+	NotifyCollection  *int `json:"notifyCollection" form:"notifyCollection"`
 }
 
 // CommentNoticeVO toggles the comment email notification preference of the

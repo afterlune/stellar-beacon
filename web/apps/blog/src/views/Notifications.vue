@@ -1,7 +1,7 @@
 <template>
   <div class="notifications-page">
     <header class="notifications-head">
-      <div><p>SIGNAL INBOX</p><h1>互动通知</h1><span>发布、评论回复和文章互动都会汇流到这里。</span></div>
+      <div><p>SIGNAL INBOX</p><h1>互动通知</h1><span>发布、评论回复、文章互动和书单更新都会汇流到这里。</span></div>
       <router-link to="/following">关注动态 →</router-link>
     </header>
     <nav class="notification-filters" aria-label="通知筛选">
@@ -42,7 +42,8 @@ export default defineComponent({
       { value: 'publish', label: '发布' },
       { value: 'comment', label: '评论与回复' },
       { value: 'reaction', label: '赞与收藏' },
-      { value: 'topic', label: '话题订阅' }
+      { value: 'topic', label: '话题订阅' },
+      { value: 'collection', label: '书单更新' }
     ]
     const activeGroup = ref<NotificationGroup>('all')
     const records = ref<NotificationItem[]>([])
@@ -95,10 +96,12 @@ export default defineComponent({
       comment: '新评论',
       reply: '新回复',
       like: '点赞',
-      favorite: '收藏'
+      favorite: '收藏',
+      collection_update: '书单更新'
     })[type] || '互动'
     const headline = (item: NotificationItem) => {
       if (item.group === 'topic') return `你订阅的话题有新文章：${item.title || item.excerpt || '查看文章'}`
+      if (item.group === 'collection') return `书单「${item.title || '未命名'}」新增了：${item.excerpt || '查看更新'}`
       if (item.type === 'reply') return `回复了你的评论：${item.excerpt || '查看回复'}`
       if (item.type === 'comment') return `评论了你的内容：${item.title || item.excerpt || '查看评论'}`
       if (item.type === 'like') return `赞了你的内容：${item.title || item.excerpt || '查看文章'}`
@@ -106,6 +109,7 @@ export default defineComponent({
       return item.title || item.excerpt || '发布了新内容'
     }
     const notificationPath = (item: NotificationItem) => {
+      if (item.contentType === 'collection') return `/collections/${item.slug || item.contentId}${item.articleId ? `?article=${item.articleId}` : ''}`
       const base = item.contentType === 'article' ? `/articles/${item.contentId}` : `/talks/${item.contentId}`
       if ((item.type === 'comment' || item.type === 'reply') && item.commentId) {
         return `${base}?comment=${item.commentId}#comment-${item.commentId}`
@@ -129,7 +133,7 @@ export default defineComponent({
 .notifications-head p { margin: 0 0 8px; color: var(--color-ob); font-size: 10px; letter-spacing: .2em; }
 .notifications-head h1 { margin: 0 0 10px; font-size: clamp(2rem, 4vw, 3.4rem); }
 .notifications-head span { color: var(--text-ob-dim); }
-.notifications-head a { color: var(--color-ob); text-decoration: none; }
+.notifications-head a { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 0; color: var(--color-ob); text-decoration: none; }
 .notification-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
 .notification-filters button { padding: 8px 15px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: var(--text-ob-dim); cursor: pointer; }
 .notification-filters button.active { border-color: var(--color-ob); color: var(--color-ob); }

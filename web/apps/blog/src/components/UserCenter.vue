@@ -48,6 +48,13 @@
             @change="changeTopicNotice" />
         </div>
         <div class="account-row">
+          <div><strong>书单更新提醒</strong><small>订阅的书单新增文章时进入通知中心</small></div>
+          <el-switch
+            :model-value="Number(userInfo.notifyCollection ?? 1) === 1"
+            :disabled="loading"
+            @change="changeCollectionNotice" />
+        </div>
+        <div class="account-row">
           <div><strong>评论邮件通知</strong><small>有人回复你时发送邮件提醒</small></div>
           <el-switch
             :model-value="Number(userInfo.notifyComment) === 1"
@@ -165,7 +172,8 @@ export default defineComponent({
         const notifyInteraction = value ? 1 : 0
         const response = await api.updateNotificationPreferences({
           notifyInteraction,
-          notifyTopic: Number(userStore.userInfo?.notifyTopic ?? 1)
+          notifyTopic: Number(userStore.userInfo?.notifyTopic ?? 1),
+          notifyCollection: Number(userStore.userInfo?.notifyCollection ?? 1)
         })
         if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
         userStore.userInfo = { ...(userStore.userInfo || {}), notifyInteraction }
@@ -182,11 +190,30 @@ export default defineComponent({
         const notifyTopic = value ? 1 : 0
         const response = await api.updateNotificationPreferences({
           notifyInteraction: Number(userStore.userInfo?.notifyInteraction ?? 1),
-          notifyTopic
+          notifyTopic,
+          notifyCollection: Number(userStore.userInfo?.notifyCollection ?? 1)
         })
         if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
         userStore.userInfo = { ...(userStore.userInfo || {}), notifyTopic }
         proxy.$notify({ title: '成功', message: '话题订阅通知已更新', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '通知设置保存失败', type: 'error' })
+      } finally {
+        reactiveData.loading = false
+      }
+    }
+    const changeCollectionNotice = async (value: boolean) => {
+      reactiveData.loading = true
+      try {
+        const notifyCollection = value ? 1 : 0
+        const response = await api.updateNotificationPreferences({
+          notifyInteraction: Number(userStore.userInfo?.notifyInteraction ?? 1),
+          notifyTopic: Number(userStore.userInfo?.notifyTopic ?? 1),
+          notifyCollection
+        })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
+        userStore.userInfo = { ...(userStore.userInfo || {}), notifyCollection }
+        proxy.$notify({ title: '成功', message: '书单更新通知已更新', type: 'success' })
       } catch (reason: any) {
         proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '通知设置保存失败', type: 'error' })
       } finally {
@@ -235,7 +262,7 @@ export default defineComponent({
 
     return {
       userInfo, visible, defaultAvatar, ...toRefs(reactiveData), handleClose, openStudioProfile,
-      bindingEmail, changeSubscribe, changeInteractionNotice, changeTopicNotice, changeCommentNotice, sendCode,
+      bindingEmail, changeSubscribe, changeInteractionNotice, changeTopicNotice, changeCollectionNotice, changeCommentNotice, sendCode,
       feedbackTypeLabel, restoreRecommendation
     }
   }

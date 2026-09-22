@@ -31,6 +31,7 @@ test.describe('blog real backend main chain @integration', () => {
   let fixtureRootCommentID = 0
   let createdTalkID = 0
   let createdCollectionID = 0
+  let createdSubscriptionCollectionID = 0
   let admin: LoginSession
   let user: LoginSession
   let authorSession: BrowserSession
@@ -71,6 +72,9 @@ test.describe('blog real backend main chain @integration', () => {
     }
     if (createdCollectionID > 0) {
       await deleteAPI(request, `/api/v1/studio/collections/${createdCollectionID}`, user.token).catch(() => undefined)
+    }
+    if (createdSubscriptionCollectionID > 0) {
+      await deleteAPI(request, `/api/v1/studio/collections/${createdSubscriptionCollectionID}`, admin.token).catch(() => undefined)
     }
   })
 
@@ -164,6 +168,62 @@ test.describe('blog real backend main chain @integration', () => {
       hidden: false,
       reason: ''
     })
+  })
+
+  test('subscribes to collection updates and receives in-app notifications', async ({ request, browser }) => {
+    const title = `integration subscribed list ${runID}`
+    const readerFixtureID = await findReaderFixtureArticleID(request)
+    const created = await postAPI(request, '/api/v1/studio/collections', admin.token, {
+      title,
+      description: 'integration subscribed collection',
+      visibility: 'public'
+    })
+    createdSubscriptionCollectionID = Number(created.id)
+    expect(createdSubscriptionCollectionID).toBeGreaterThan(0)
+
+    await putAPI(request, `/api/v1/studio/collections/${createdSubscriptionCollectionID}/items/${fixtureArticleID}`, admin.token, {
+      note: 'existing item before subscription'
+    })
+    await putAPI(request, `/api/v1/auth/me/collection-subscriptions/${createdSubscriptionCollectionID}`, user.token, {})
+    const status = await getAPIData(request, `/api/v1/auth/me/collection-subscriptions/${createdSubscriptionCollectionID}`, user.token)
+    expect(status.subscribed).toBe(true)
+    expect(status.muted).toBe(false)
+
+    await putAPI(request, `/api/v1/studio/collections/${createdSubscriptionCollectionID}/items/${readerFixtureID}`, admin.token, {
+      note: 'new item after subscription'
+    })
+    const feed = await getAPIData(request, '/api/v1/auth/me/collection-feed?current=1&size=20', user.token)
+    const update = itemsOf(feed).find((item: any) => Number(item.collectionId) === createdSubscriptionCollectionID)
+    expect(update?.articleId).toBe(readerFixtureID)
+    expect(update?.slug).toBe(created.slug)
+
+    const notificationPage = await getAPIData(request, '/api/v1/auth/me/notifications?group=collection&current=1&size=20', user.token)
+    const notification = itemsOf(notificationPage).find((item: any) => Number(item.contentId) === createdSubscriptionCollectionID)
+    expect(notification?.type).toBe('collection_update')
+    expect(notification?.articleId).toBe(readerFixtureID)
+    expect(notification?.slug).toBe(created.slug)
+
+    const session = await createBrowserSession(browser, user)
+    try {
+      await session.page.goto('/following', { waitUntil: 'domcontentloaded' })
+      await session.page.getByRole('button', { name: '书单', exact: true }).click()
+      await expect(session.page.getByText(title).first()).toBeVisible()
+      await expect(session.page.getByText('新增：', { exact: false }).first()).toBeVisible()
+
+      await session.page.goto('/notifications', { waitUntil: 'domcontentloaded' })
+      await session.page.getByRole('button', { name: '书单更新', exact: true }).click()
+      const headline = session.page.getByText(`书单「${title}」新增了`, { exact: false }).first()
+      await expect(headline).toBeVisible()
+      await headline.click()
+      await session.page.waitForURL(new RegExp(`/collections/${created.slug}\\?article=${readerFixtureID}`))
+      await expect(session.page.locator(`[data-article-id="${readerFixtureID}"]`)).toHaveClass(/is-highlighted/)
+    } finally {
+      await session.context.close()
+    }
+
+    await deleteAPI(request, `/api/v1/auth/me/collection-subscriptions/${createdSubscriptionCollectionID}`, user.token)
+    const unsubscribed = await getAPIData(request, `/api/v1/auth/me/collection-subscriptions/${createdSubscriptionCollectionID}`, user.token)
+    expect(unsubscribed.subscribed).toBe(false)
   })
 
   test('personalizes recommendations and persists reader feedback', async ({ request, browser }) => {

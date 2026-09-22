@@ -94,7 +94,7 @@ export default defineComponent({
 .collection-admin-grid h2 { margin: 9px 0; font-size: 1.1rem; }
 .collection-admin-grid p { min-height: 36px; color: var(--text-ob-dim); font-size: 11px; line-height: 1.6; }
 .collection-admin-grid footer { display: flex; justify-content: space-between; margin-top: 15px; color: var(--text-ob-dim); font-size: 10px; }
-.collection-admin-grid footer a { color: var(--color-ob); text-decoration: none; }
+.collection-admin-grid footer a { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 0; color: var(--color-ob); text-decoration: none; }
 .studio-state { padding: 60px 0; color: var(--text-ob-dim); text-align: center; }
 @media (max-width: 760px) { .collection-admin-grid { grid-template-columns: 1fr; } }
 </style>

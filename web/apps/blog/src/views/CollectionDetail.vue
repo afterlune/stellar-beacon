@@ -13,13 +13,15 @@
               <img :src="detail.collection.owner.avatar || defaultAvatar" :alt="detail.collection.owner.nickname" />
               {{ detail.collection.owner.nickname || detail.collection.owner.handle }}
             </router-link>
+            <router-link v-if="isOwner" :to="`/studio/collections/${detail.collection.id}/edit`">管理书单</router-link>
+            <CollectionSubscribeButton v-else :collection-id="Number(detail.collection.id)" />
             <button type="button" @click="share">{{ copied ? '链接已复制' : '分享书单' }}</button>
           </div>
         </div>
         <aside><strong>{{ detail.items.length }}</strong><small>篇文章</small><em>{{ detail.collection.visibility === 'unlisted' ? '链接可见' : '公开书单' }}</em></aside>
       </header>
       <ol class="collection-items">
-        <li v-for="(item, index) in detail.items" :key="item.articleId">
+        <li v-for="(item, index) in detail.items" :key="item.articleId" :class="{ 'is-highlighted': Number(item.articleId) === highlightedArticleId }" :data-article-id="item.articleId">
           <span class="collection-items__index">{{ String(Number(index) + 1).padStart(2, '0') }}</span>
           <router-link v-if="item.article" :to="`/articles/${item.article.id}`" class="collection-items__main">
             <img v-if="item.article.articleCover" :src="item.article.articleCover" :alt="item.article.articleTitle" loading="lazy" />
@@ -36,18 +38,27 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineComponent, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api/api'
+import { useUserStore } from '@/stores/user'
+import CollectionSubscribeButton from '@/components/CollectionSubscribeButton.vue'
 
 export default defineComponent({
   name: 'CollectionDetail',
+  components: { CollectionSubscribeButton },
   setup() {
     const route = useRoute()
+    const userStore = useUserStore()
     const detail = ref<any>(null)
     const loading = ref(true)
     const error = ref('')
     const copied = ref(false)
+    const highlightedArticleId = ref(0)
+    const isOwner = computed(() => {
+      const currentID = Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0)
+      return currentID > 0 && currentID === Number(detail.value?.collection?.owner?.id || 0)
+    })
     const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="72" height="72"%3E%3Crect width="72" height="72" rx="36" fill="%23172554"/%3E%3Ccircle cx="36" cy="27" r="13" fill="%239bb8ff"/%3E%3Cpath d="M12 67c4-17 12-25 24-25s20 8 24 25" fill="%239bb8ff"/%3E%3C/svg%3E'
     const load = async () => {
       loading.value = true; error.value = ''
@@ -55,6 +66,11 @@ export default defineComponent({
         const response = await api.getPublicCollection(String(route.params.slug || ''))
         detail.value = response?.data?.data || null
         if (!detail.value?.collection) throw new Error('missing collection')
+        highlightedArticleId.value = Number(route.query.article || 0)
+        if (highlightedArticleId.value > 0) {
+          await nextTick()
+          document.querySelector(`[data-article-id="${highlightedArticleId.value}"]`)?.scrollIntoView({ block: 'center' })
+        }
       } catch { error.value = '没有找到这个公开书单。'; detail.value = null } finally { loading.value = false }
     }
     const share = async () => {
@@ -68,7 +84,7 @@ export default defineComponent({
     const formatDate = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value)) : ''
     watch(() => route.params.slug, () => void load())
     onMounted(() => void load())
-    return { detail, loading, error, copied, defaultAvatar, share, excerpt, formatDate }
+    return { detail, loading, error, copied, highlightedArticleId, isOwner, defaultAvatar, share, excerpt, formatDate }
   }
 })
 </script>
@@ -88,6 +104,7 @@ export default defineComponent({
 .collection-hero aside em { margin-top: 8px; color: var(--color-ob); }
 .collection-items { display: grid; gap: 12px; margin: 22px 0 0; padding: 0; list-style: none; }
 .collection-items li { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; align-items: start; padding: 15px; border: 1px solid var(--border-hairline); border-radius: 17px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
+.collection-items li.is-highlighted { border-color: var(--color-ob); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ob) 12%, transparent); }
 .collection-items__index { padding-top: 7px; color: var(--color-ob); font-family: ui-monospace, monospace; font-size: 11px; }
 .collection-items__main { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 18px; color: inherit; text-decoration: none; }
 .collection-items__main img { grid-column: 2; grid-row: 1; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; object-fit: cover; }

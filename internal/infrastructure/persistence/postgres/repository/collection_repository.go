@@ -371,8 +371,22 @@ func (r *MyCollectionRepo) touchOwned(session *xorm.Session, userID, collectionI
 
 func (r *MyCollectionRepo) AddItem(ctx context.Context, userID, collectionID, articleID int, note string) error {
 	return ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
-		if err := r.touchOwned(session, userID, collectionID); err != nil {
-			return err
+		var collection struct {
+			Visibility       string `xorm:"visibility"`
+			ModerationStatus string `xorm:"moderation_status"`
+		}
+		found, err := session.SQL(`SELECT visibility, moderation_status FROM t_collection
+			WHERE id = ? AND user_id = ? AND is_delete = 0 FOR UPDATE`, collectionID, userID).Get(&collection)
+		if err != nil {
+			return apperrors.Unavailable("collection.item.owner", err)
+		}
+		if !found {
+			return apperrors.NotFound("collection.item.owner")
+		}
+		var existed bool
+		if _, err := session.SQL(`SELECT EXISTS (SELECT 1 FROM t_collection_item WHERE collection_id = ? AND article_id = ?)`,
+			collectionID, articleID).Get(&existed); err != nil {
+			return apperrors.Unavailable("collection.item.exists", err)
 		}
 		var next int
 		if _, err := session.SQL(`SELECT COALESCE(MAX(sort_order), 0) + 1 FROM t_collection_item WHERE collection_id = ?`, collectionID).Get(&next); err != nil {
@@ -381,9 +395,25 @@ func (r *MyCollectionRepo) AddItem(ctx context.Context, userID, collectionID, ar
 		if _, err := session.Exec(`
 			INSERT INTO t_collection_item (collection_id, article_id, note, sort_order)
 			VALUES (?, ?, ?, ?)
-			ON CONFLICT (collection_id, article_id)
-			DO UPDATE SET note = EXCLUDED.note, update_time = CURRENT_TIMESTAMP`, collectionID, articleID, note, next); err != nil {
+		ON CONFLICT (collection_id, article_id)
+		DO UPDATE SET note = EXCLUDED.note, update_time = CURRENT_TIMESTAMP`, collectionID, articleID, note, next); err != nil {
 			return apperrors.Unavailable("collection.item.add", err)
+		}
+		if !existed && collection.ModerationStatus == "visible" &&
+			(collection.Visibility == port.CollectionVisibilityPublic || collection.Visibility == port.CollectionVisibilityUnlisted) {
+			var hasSubscriber bool
+			if _, err := session.SQL(`SELECT EXISTS (SELECT 1 FROM t_collection_subscription WHERE collection_id = ?)`, collectionID).Get(&hasSubscriber); err != nil {
+				return apperrors.Unavailable("collection.item.subscribers", err)
+			}
+			if hasSubscriber {
+				if _, err := session.Exec(`INSERT INTO t_collection_update_event (collection_id, owner_id, article_id) VALUES (?, ?, ?)`,
+					collectionID, userID, articleID); err != nil {
+					return apperrors.Unavailable("collection.item.event", err)
+				}
+			}
+		}
+		if _, err := session.Exec(`UPDATE t_collection SET update_time = CURRENT_TIMESTAMP WHERE id = ?`, collectionID); err != nil {
+			return apperrors.Unavailable("collection.item.touch", err)
 		}
 		return nil
 	})

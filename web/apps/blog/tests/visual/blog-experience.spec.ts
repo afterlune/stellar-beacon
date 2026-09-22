@@ -11,7 +11,8 @@ const authenticatedRoutes = adminEmail && adminPassword
   ? [
       { name: 'for-you', path: '/for-you', authenticated: true },
       { name: 'following', path: '/following', authenticated: true },
-      { name: 'studio-collections', path: '/studio/collections', authenticated: true }
+      { name: 'studio-collections', path: '/studio/collections', authenticated: true },
+      { name: 'notifications', path: '/notifications', authenticated: true }
     ]
   : []
 

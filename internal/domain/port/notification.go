@@ -3,24 +3,26 @@ package port
 import "time"
 
 const (
-	NotificationGroupAll      = "all"
-	NotificationGroupPublish  = "publish"
-	NotificationGroupComment  = "comment"
-	NotificationGroupReaction = "reaction"
-	NotificationGroupTopic    = "topic"
+	NotificationGroupAll        = "all"
+	NotificationGroupPublish    = "publish"
+	NotificationGroupComment    = "comment"
+	NotificationGroupReaction   = "reaction"
+	NotificationGroupTopic      = "topic"
+	NotificationGroupCollection = "collection"
 )
 
 const (
-	NotificationTypePublish  = "publish"
-	NotificationTypeComment  = "comment"
-	NotificationTypeReply    = "reply"
-	NotificationTypeLike     = "like"
-	NotificationTypeFavorite = "favorite"
+	NotificationTypePublish          = "publish"
+	NotificationTypeComment          = "comment"
+	NotificationTypeReply            = "reply"
+	NotificationTypeLike             = "like"
+	NotificationTypeFavorite         = "favorite"
+	NotificationTypeCollectionUpdate = "collection_update"
 )
 
 func ValidNotificationGroup(value string) bool {
 	switch value {
-	case NotificationGroupAll, NotificationGroupPublish, NotificationGroupComment, NotificationGroupReaction, NotificationGroupTopic:
+	case NotificationGroupAll, NotificationGroupPublish, NotificationGroupComment, NotificationGroupReaction, NotificationGroupTopic, NotificationGroupCollection:
 		return true
 	default:
 		return false
@@ -35,6 +37,8 @@ type NotificationItem struct {
 	ContentType string       `json:"contentType"`
 	ContentId   int          `json:"contentId"`
 	CommentId   int          `json:"commentId,omitempty"`
+	ArticleId   int          `json:"articleId,omitempty"`
+	Slug        string       `json:"slug,omitempty"`
 	Title       string       `json:"title"`
 	Excerpt     string       `json:"excerpt"`
 	Cover       string       `json:"cover,omitempty"`
@@ -44,9 +48,10 @@ type NotificationItem struct {
 }
 
 type NotificationCursor struct {
-	PublishEventId int64 `json:"publishEventId"`
-	InteractionId  int64 `json:"interactionId"`
-	TopicEventId   int64 `json:"topicEventId"`
+	PublishEventId    int64 `json:"publishEventId"`
+	InteractionId     int64 `json:"interactionId"`
+	TopicEventId      int64 `json:"topicEventId"`
+	CollectionEventId int64 `json:"collectionEventId"`
 }
 
 type NotificationPage struct {

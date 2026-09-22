@@ -242,8 +242,18 @@ func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group 
 				JOIN t_author_publish_event event
 					ON event.content_type = 'article' AND event.content_id = article.id AND event.id > subscription.start_event_id
 				WHERE subscription.user_id = ?
-			), 0) AS topic_event_id`,
-		userID, userID, userID).Get(&result.ReadCursor); err != nil {
+			), 0) AS topic_event_id,
+			COALESCE((
+				SELECT MAX(event.id)
+				FROM t_collection_subscription subscription
+				JOIN t_collection c ON c.id = subscription.collection_id AND c.is_delete = 0
+					AND c.visibility IN ('public', 'unlisted') AND c.moderation_status = 'visible'
+				JOIN t_collection_update_event event ON event.collection_id = c.id AND event.id > subscription.start_event_id
+				JOIN t_article article ON article.id = event.article_id
+					AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+				WHERE subscription.user_id = ?
+			), 0) AS collection_event_id`,
+		userID, userID, userID, userID).Get(&result.ReadCursor); err != nil {
 		return port.NotificationPage{}, apperrors.Unavailable("notification.cursor", err)
 	}
 	page, offset := pgsql.Page(current, size)
@@ -258,6 +268,8 @@ func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group 
 		ContentType string    `xorm:"content_type"`
 		ContentId   int       `xorm:"content_id"`
 		CommentId   int       `xorm:"comment_id"`
+		ArticleId   int       `xorm:"article_id"`
+		Slug        string    `xorm:"slug"`
 		Title       string    `xorm:"title"`
 		Excerpt     string    `xorm:"excerpt"`
 		Cover       string    `xorm:"cover"`
@@ -275,6 +287,7 @@ func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group 
 			Key: row.Key, Type: row.Type, Group: row.Group,
 			Actor:       port.PublicAuthor{Id: row.ActorId, Handle: row.ActorHandle, Nickname: row.ActorName, Avatar: row.ActorAvatar},
 			ContentType: row.ContentType, ContentId: row.ContentId, CommentId: row.CommentId,
+			ArticleId: row.ArticleId, Slug: row.Slug,
 			Title: row.Title, Excerpt: row.Excerpt, Cover: row.Cover, Images: decodeTalkImages(row.Images),
 			CreatedAt: row.CreatedAt, Read: row.IsRead,
 		})
@@ -295,7 +308,7 @@ func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cu
 		return apperrors.Invalid("notification.read", "invalid user")
 	}
 	return ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
-		var maxPublish, maxInteraction, maxTopic int64
+		var maxPublish, maxInteraction, maxTopic, maxCollection int64
 		if _, err := session.SQL(`
 			SELECT COALESCE(MAX(event.id), 0)
 			FROM t_author_publish_event event
@@ -318,6 +331,17 @@ func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cu
 			WHERE subscription.user_id = ?`, userID).Get(&maxTopic); err != nil {
 			return apperrors.Unavailable("notification.read.topic_cursor", err)
 		}
+		if _, err := session.SQL(`
+			SELECT COALESCE(MAX(event.id), 0)
+			FROM t_collection_subscription subscription
+			JOIN t_collection c ON c.id = subscription.collection_id AND c.is_delete = 0
+				AND c.visibility IN ('public', 'unlisted') AND c.moderation_status = 'visible'
+			JOIN t_collection_update_event event ON event.collection_id = c.id AND event.id > subscription.start_event_id
+			JOIN t_article article ON article.id = event.article_id
+				AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+			WHERE subscription.user_id = ?`, userID).Get(&maxCollection); err != nil {
+			return apperrors.Unavailable("notification.read.collection_cursor", err)
+		}
 		if cursor.PublishEventId <= 0 || cursor.PublishEventId > maxPublish {
 			cursor.PublishEventId = maxPublish
 		}
@@ -326,6 +350,9 @@ func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cu
 		}
 		if cursor.TopicEventId <= 0 || cursor.TopicEventId > maxTopic {
 			cursor.TopicEventId = maxTopic
+		}
+		if cursor.CollectionEventId <= 0 || cursor.CollectionEventId > maxCollection {
+			cursor.CollectionEventId = maxCollection
 		}
 		if _, err := session.Exec(`
 			UPDATE t_user_follow
@@ -344,6 +371,12 @@ func (r *MyFollowRepo) MarkNotificationsRead(ctx context.Context, userID int, cu
 			SET last_read_event_id = GREATEST(last_read_event_id, ?), updated_at = CURRENT_TIMESTAMP
 			WHERE user_id = ?`, cursor.TopicEventId, userID); err != nil {
 			return apperrors.Unavailable("notification.read.topic", err)
+		}
+		if _, err := session.Exec(`
+			UPDATE t_collection_subscription
+			SET last_read_event_id = GREATEST(last_read_event_id, ?), updated_at = CURRENT_TIMESTAMP
+			WHERE user_id = ?`, cursor.CollectionEventId, userID); err != nil {
+			return apperrors.Unavailable("notification.read.collection", err)
 		}
 		return nil
 	})
@@ -365,6 +398,8 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		event.content_type,
 		event.content_id,
 		0::bigint AS comment_id,
+		CASE WHEN event.content_type = 'article' THEN article.id ELSE 0 END AS article_id,
+		'' AS slug,
 		COALESCE(article.article_title, '') AS title,
 		CASE WHEN event.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '') ELSE COALESCE(SUBSTR(talk.content, 1, 240), '') END AS excerpt,
 		COALESCE(article.article_cover, '') AS cover,
@@ -393,6 +428,8 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		notification.content_type,
 		notification.content_id,
 		notification.comment_id,
+		CASE WHEN notification.content_type = 'article' THEN article.id ELSE 0 END AS article_id,
+		'' AS slug,
 		CASE WHEN notification.content_type = 'article' THEN COALESCE(article.article_title, '') ELSE '' END AS title,
 		CASE
 			WHEN notification.type IN ('comment', 'reply') THEN COALESCE(SUBSTR(comment.comment_content, 1, 240), '')
@@ -435,6 +472,8 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		event.content_type,
 		event.content_id,
 		0::bigint AS comment_id,
+		article.id AS article_id,
+		'' AS slug,
 		COALESCE(article.article_title, '') AS title,
 		COALESCE(SUBSTR(article.article_content, 1, 240), '') AS excerpt,
 		COALESCE(article.article_cover, '') AS cover,
@@ -453,12 +492,44 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 	  AND event.author_id <> subscription.user_id
 	  AND (SELECT notify_topic FROM t_user_info WHERE id = ?) = 1
 	  AND (? = '' OR ? = 'topic')
-	GROUP BY event.id, event.content_type, event.content_id, event.author_id, event.published_at,
+	GROUP BY event.id, event.content_type, event.content_id, event.author_id, event.published_at, article.id,
 	         author.handle, author.nickname, author.avatar, article.article_title, article.article_content, article.article_cover
+	UNION ALL
+	SELECT
+		'collection:' || event.id::text AS notification_key,
+		'collection_update' AS notification_type,
+		'collection' AS notification_group,
+		owner.id AS actor_id,
+		owner.handle AS actor_handle,
+		owner.nickname AS actor_name,
+		owner.avatar AS actor_avatar,
+		'collection' AS content_type,
+		c.id AS content_id,
+		0::bigint AS comment_id,
+		article.id AS article_id,
+		c.slug AS slug,
+		c.title AS title,
+		article.article_title AS excerpt,
+		COALESCE(article.article_cover, '') AS cover,
+		'' AS images,
+		event.created_at AS created_at,
+		(event.id <= subscription.last_read_event_id) AS is_read,
+		event.id AS sort_id
+	FROM t_collection_update_event event
+	JOIN t_collection_subscription subscription ON subscription.collection_id = event.collection_id
+		AND subscription.user_id = ? AND event.id > subscription.start_event_id AND subscription.muted = 0
+	JOIN t_collection c ON c.id = event.collection_id AND c.is_delete = 0
+		AND c.visibility IN ('public', 'unlisted') AND c.moderation_status = 'visible'
+	JOIN t_user_info owner ON owner.id = c.user_id AND owner.is_disable = 0
+	JOIN t_user_info subscriber ON subscriber.id = subscription.user_id
+		AND subscriber.is_disable = 0 AND subscriber.notify_collection = 1
+	JOIN t_article article ON article.id = event.article_id
+		AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
+	WHERE (? = '' OR ? = 'collection')
 `
 
 func notificationFeedArgs(userID int, group string) []interface{} {
-	return []interface{}{userID, group, group, userID, group, group, group, userID, userID, group, group}
+	return []interface{}{userID, group, group, userID, group, group, group, userID, userID, group, group, userID, group, group}
 }
 func decodeTalkImages(value string) []string {
 	value = strings.TrimSpace(value)
