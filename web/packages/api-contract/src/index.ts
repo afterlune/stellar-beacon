@@ -921,6 +921,8 @@ export interface CollectionSummary {
   owner?: PublicAuthorSummary
   cover?: string
   articleCount: number
+  likeCount: number
+  commentCount: number
   hotScore?: number
   moderationStatus?: 'visible' | 'hidden' | string
   moderationReason?: string
@@ -950,6 +952,16 @@ export interface CollectionSaveInput {
 export interface CollectionSubscriptionStatus {
   subscribed: boolean
   muted: boolean
+}
+
+export interface CollectionReactionToggleResult {
+  active: boolean
+  likeCount: number
+}
+
+export interface CollectionReactionState {
+  collectionId: number
+  like: boolean
 }
 
 export interface CollectionSubscription {

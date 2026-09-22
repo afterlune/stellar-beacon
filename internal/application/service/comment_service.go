@@ -27,8 +27,9 @@ const (
 // Comment types carried by t_comment.type. Public count surfaces reuse these
 // so a counter can never disagree with the target a comment was accepted for.
 const (
-	commentTypeArticle = 1
-	commentTypeTalk    = 5
+	commentTypeArticle    = 1
+	commentTypeTalk       = 5
+	commentTypeCollection = 6
 )
 
 type CommentService interface {
@@ -47,6 +48,7 @@ type MyCommentService struct {
 	users         port.UserInfoRepository
 	articles      port.ArticleRepository
 	talks         port.TalkRepository
+	collections   port.CollectionPublicReader
 	notifications port.CommentNotifier
 	limiter       port.RateLimiter
 }
@@ -61,6 +63,7 @@ func NewCommentService(deps CommentServiceDeps) (*MyCommentService, error) {
 		users:         deps.Users,
 		articles:      deps.Articles,
 		talks:         deps.Talks,
+		collections:   deps.Collections,
 		notifications: deps.Notifications,
 		limiter:       deps.Limiter,
 	}, nil
@@ -247,6 +250,21 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		recipientID = talk.UserId
 		contentType = port.FollowContentTalk
 		contentID = talk.Id
+	case created.Type == commentTypeCollection && created.TopicId != 0:
+		if c.collections == nil {
+			return
+		}
+		collection, err := c.collections.GetPublicByID(ctx, created.TopicId)
+		if err != nil {
+			slog.WarnContext(ctx, "load collection for notification failed", "error", err)
+			return
+		}
+		if collection.Owner == nil {
+			return
+		}
+		recipientID = collection.Owner.Id
+		contentType = port.FollowContentCollection
+		contentID = collection.ID
 	default:
 		return
 	}
@@ -283,7 +301,7 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		notification.ArticleID = article.Id
 		notification.ArticleTitle = article.ArticleTitle
 		notification.ArticleURL = config.PublicSiteURL + "/articles/" + strconv.Itoa(article.Id)
-	} else {
+	} else if contentType == port.FollowContentTalk {
 		talk, err := c.talks.Get(ctx, contentID)
 		if err != nil {
 			slog.WarnContext(ctx, "load talk notification payload failed", "error", err)
@@ -292,6 +310,18 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		notification.ArticleID = talk.Id
 		notification.ArticleTitle = commentExcerpt(talk.Content, 80)
 		notification.ArticleURL = config.PublicSiteURL + "/talks/" + strconv.Itoa(talk.Id)
+	} else {
+		if c.collections == nil {
+			return
+		}
+		collection, err := c.collections.GetPublicByID(ctx, contentID)
+		if err != nil {
+			slog.WarnContext(ctx, "load collection notification payload failed", "error", err)
+			return
+		}
+		notification.ArticleID = collection.ID
+		notification.ArticleTitle = collection.Title
+		notification.ArticleURL = config.PublicSiteURL + "/collections/" + collection.Slug
 	}
 	if err := c.notifications.EnqueueComment(notification); err != nil {
 		slog.WarnContext(ctx, "enqueue comment notification failed", "error", err)
@@ -307,6 +337,8 @@ func commentTarget(commentType, topicID int) (string, int) {
 		return port.FollowContentArticle, topicID
 	case commentTypeTalk:
 		return port.FollowContentTalk, topicID
+	case commentTypeCollection:
+		return port.FollowContentCollection, topicID
 	default:
 		return "", 0
 	}
@@ -429,7 +461,7 @@ func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO)
 	if len(TypeHM[vo.Type]) == 0 {
 		return apperrors.Invalid("comment.validate", "invalid comment type")
 	}
-	if vo.Type == Article || vo.Type == Talk {
+	if vo.Type == Article || vo.Type == Talk || vo.Type == Collection {
 		if vo.TopicId == "" {
 			return apperrors.Invalid("comment.validate", "topic is required")
 		}

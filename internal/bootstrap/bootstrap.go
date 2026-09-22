@@ -92,6 +92,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	recommendationRepo := repository.NewRecommendationRepo(engine)
 	collectionRepo := repository.NewCollectionRepo(engine)
 	collectionSubRepo := repository.NewCollectionSubscriptionRepo(engine)
+	collectionReactionRepo := repository.NewCollectionReactionRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -161,6 +162,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		Users:         userInfo,
 		Articles:      article,
 		Talks:         talk,
+		Collections:   collectionRepo,
 		Notifications: notification.Notifier(),
 		Limiter:       redisCache,
 	})
@@ -244,6 +246,13 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		return nil, errors.Unavailable("bootstrap.service.collection", err)
 	}
 	collectionSubService := service.NewCollectionSubscriptionService(collectionSubRepo)
+	collectionReactionService, err := service.NewCollectionReactionService(service.CollectionReactionServiceDeps{
+		Repo: collectionReactionRepo, Limiter: redisCache,
+	})
+	if err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.collection_reaction", err)
+	}
 
 	scheduler := task.NewScheduler(job, jobLog, redisCache)
 	if err := task.RegisterDefaultTargets(scheduler, task.DefaultTargetsDeps{
@@ -256,38 +265,39 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	jobService := service.NewJobService(job, scheduler)
 
 	api.ConfigureServices(api.Services{
-		Article:           articleService,
-		Platform:          platformService,
-		ArticleReaction:   articleReactionService,
-		Series:            seriesService,
-		StellarBeacon:     stellarBeacon,
-		Category:          service.NewCategoryService(category),
-		Comment:           commentService,
-		ErrorLog:          service.NewErrorLogService(errorLog),
-		FriendLink:        service.NewFriendLinkService(friendLink),
-		JobLog:            service.NewJobLogService(jobLog),
-		Job:               jobService,
-		Menu:              service.NewMenuService(menu),
-		Media:             mediaService,
-		OperationLog:      service.NewOperationLogService(operationLog),
-		PhotoAlbum:        photoAlbumService,
-		Photo:             photoService,
-		Resource:          service.NewResourceService(resource),
-		Role:              service.NewRoleService(role),
-		Tag:               service.NewTagService(tag),
-		Talk:              talkService,
-		UserAuth:          userAuthService,
-		UserInfo:          userInfoService,
-		Seo:               seoService,
-		Newsletter:        newsletterService,
-		Growth:            growthService,
-		ContentAnalytics:  contentAnalyticsService,
-		ContentAudit:      service.NewContentAuditService(contentAudit),
-		Follow:            service.NewFollowService(followRepo),
-		TopicSubscription: service.NewTopicSubscriptionService(topicSubscriptionRepo),
-		Recommendation:    recommendationService,
-		Collection:        collectionService,
-		CollectionSub:     collectionSubService,
+		Article:            articleService,
+		Platform:           platformService,
+		ArticleReaction:    articleReactionService,
+		Series:             seriesService,
+		StellarBeacon:      stellarBeacon,
+		Category:           service.NewCategoryService(category),
+		Comment:            commentService,
+		ErrorLog:           service.NewErrorLogService(errorLog),
+		FriendLink:         service.NewFriendLinkService(friendLink),
+		JobLog:             service.NewJobLogService(jobLog),
+		Job:                jobService,
+		Menu:               service.NewMenuService(menu),
+		Media:              mediaService,
+		OperationLog:       service.NewOperationLogService(operationLog),
+		PhotoAlbum:         photoAlbumService,
+		Photo:              photoService,
+		Resource:           service.NewResourceService(resource),
+		Role:               service.NewRoleService(role),
+		Tag:                service.NewTagService(tag),
+		Talk:               talkService,
+		UserAuth:           userAuthService,
+		UserInfo:           userInfoService,
+		Seo:                seoService,
+		Newsletter:         newsletterService,
+		Growth:             growthService,
+		ContentAnalytics:   contentAnalyticsService,
+		ContentAudit:       service.NewContentAuditService(contentAudit),
+		Follow:             service.NewFollowService(followRepo),
+		TopicSubscription:  service.NewTopicSubscriptionService(topicSubscriptionRepo),
+		Recommendation:     recommendationService,
+		Collection:         collectionService,
+		CollectionSub:      collectionSubService,
+		CollectionReaction: collectionReactionService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

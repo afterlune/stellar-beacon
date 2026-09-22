@@ -110,6 +110,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyCollectionSubscriptionSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyCollectionInteractionSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1588,6 +1591,52 @@ func applyCollectionSubscriptionSchema(ctx context.Context, engine *xorm.Engine)
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit collection subscription migration: %w", err)
+	}
+	return nil
+}
+
+// applyCollectionInteractionSchema adds direct likes for reader-curated
+// collections. Comments reuse t_comment with type 6, so only the reaction
+// ledger needs a new table.
+func applyCollectionInteractionSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 25)").Get(&applied); err != nil {
+		return fmt.Errorf("check collection interaction migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin collection interaction migration: %w", err)
+	}
+	defer session.Rollback()
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS t_collection_reaction (
+			id BIGSERIAL PRIMARY KEY,
+			collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
+			user_info_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			reaction VARCHAR(16) NOT NULL DEFAULT 'like',
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK (reaction = 'like'),
+			UNIQUE (collection_id, user_info_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_reaction_collection ON t_collection_reaction(collection_id, create_time DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_reaction_user ON t_collection_reaction(user_info_id, create_time DESC, id DESC)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply collection interaction schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 25, "collection-interactions"); err != nil {
+		return fmt.Errorf("record collection interaction migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit collection interaction migration: %w", err)
 	}
 	return nil
 }

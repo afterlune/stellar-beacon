@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,18 @@ import (
 )
 
 type fakeCommentRepository struct{}
+
+type targetRecordingCommentRepository struct {
+	fakeCommentRepository
+	Type    int
+	TopicID int
+}
+
+func (f *targetRecordingCommentRepository) ValidateTarget(_ context.Context, commentType, topicID int) error {
+	f.Type = commentType
+	f.TopicID = topicID
+	return nil
+}
 
 func (f *fakeCommentRepository) ListComments(context.Context, port.CommentFilter) ([]*port.Comment, int, error) {
 	return []*port.Comment{{Id: 10}}, 1, nil
@@ -59,5 +72,16 @@ func TestCommentServiceAttachesRepliesUsingPortData(t *testing.T) {
 	}
 	if result.Data == nil {
 		t.Fatal("expected page data")
+	}
+}
+
+func TestCommentServiceAcceptsCollectionTopic(t *testing.T) {
+	repo := &targetRecordingCommentRepository{}
+	service := mustCommentService(t, repo)
+	if err := service.checkComment(context.Background(), model.CommentVO{Type: Collection, TopicId: "42"}); err != nil {
+		t.Fatalf("collection comment must validate: %v", err)
+	}
+	if repo.Type != Collection || repo.TopicID != 42 {
+		t.Fatalf("unexpected target validation: type=%d topic=%d", repo.Type, repo.TopicID)
 	}
 }

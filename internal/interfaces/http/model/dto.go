@@ -648,6 +648,23 @@ type ReactionStateDTO struct {
 	Favorite  bool `json:"favorite"`
 }
 
+// CollectionReactionToggleVO carries the desired state so retries remain
+// idempotent instead of toggling an already-applied like.
+type CollectionReactionToggleVO struct {
+	CollectionId int  `json:"collectionId" form:"collectionId"`
+	Active       bool `json:"active" form:"active"`
+}
+
+type CollectionReactionToggleDTO struct {
+	Active    bool `json:"active"`
+	LikeCount int  `json:"likeCount"`
+}
+
+type CollectionReactionStateDTO struct {
+	CollectionId int  `json:"collectionId"`
+	Like         bool `json:"like"`
+}
+
 // NotificationPreferenceVO toggles the in-app notification preferences of the
 // authenticated account. NotifyTopic is optional: a request that omits it keeps
 // the stored topic preference untouched.

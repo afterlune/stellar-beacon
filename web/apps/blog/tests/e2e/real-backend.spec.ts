@@ -32,6 +32,7 @@ test.describe('blog real backend main chain @integration', () => {
   let createdTalkID = 0
   let createdCollectionID = 0
   let createdSubscriptionCollectionID = 0
+  let createdInteractionCollectionID = 0
   let admin: LoginSession
   let user: LoginSession
   let authorSession: BrowserSession
@@ -75,6 +76,9 @@ test.describe('blog real backend main chain @integration', () => {
     }
     if (createdSubscriptionCollectionID > 0) {
       await deleteAPI(request, `/api/v1/studio/collections/${createdSubscriptionCollectionID}`, admin.token).catch(() => undefined)
+    }
+    if (createdInteractionCollectionID > 0) {
+      await deleteAPI(request, `/api/v1/studio/collections/${createdInteractionCollectionID}`, admin.token).catch(() => undefined)
     }
   })
 
@@ -224,6 +228,75 @@ test.describe('blog real backend main chain @integration', () => {
     await deleteAPI(request, `/api/v1/auth/me/collection-subscriptions/${createdSubscriptionCollectionID}`, user.token)
     const unsubscribed = await getAPIData(request, `/api/v1/auth/me/collection-subscriptions/${createdSubscriptionCollectionID}`, user.token)
     expect(unsubscribed.subscribed).toBe(false)
+  })
+
+  test('likes and reviews comments on a public reading list', async ({ request, browser }) => {
+    await putAPI(request, '/api/v1/auth/me/notification-preferences', admin.token, { notifyInteraction: 1 })
+    const title = `integration interaction list ${runID}`
+    const commentText = `integration collection comment ${runID}`
+    const created = await postAPI(request, '/api/v1/studio/collections', admin.token, {
+      title,
+      description: 'integration interaction collection',
+      visibility: 'public'
+    })
+    createdInteractionCollectionID = Number(created.id)
+    expect(createdInteractionCollectionID).toBeGreaterThan(0)
+    await putAPI(request, `/api/v1/studio/collections/${createdInteractionCollectionID}/items/${fixtureArticleID}`, admin.token, {
+      note: 'integration interaction item'
+    })
+
+    const liked = await putAPI(request, '/api/v1/auth/me/collection-reactions', user.token, {
+      collectionId: createdInteractionCollectionID,
+      active: true
+    })
+    expect(liked.active).toBe(true)
+    expect(liked.likeCount).toBe(1)
+    const retried = await putAPI(request, '/api/v1/auth/me/collection-reactions', user.token, {
+      collectionId: createdInteractionCollectionID,
+      active: true
+    })
+    expect(retried.likeCount, 'liking twice must stay idempotent').toBe(1)
+    const state = await getAPIData(request, `/api/v1/auth/me/collection-reactions/state?collectionId=${createdInteractionCollectionID}`, user.token)
+    expect(state.like).toBe(true)
+
+    await postAPI(request, '/api/v1/public/comments', user.token, {
+      type: 6,
+      topicId: String(createdInteractionCollectionID),
+      commentContent: commentText
+    })
+    const commentID = await waitForPendingComment(request, admin.token, commentText)
+    createdCommentIDs.push(commentID)
+
+    const pendingDetail = await getAPIData(request, `/api/v1/public/collections/${created.slug}`)
+    expect(pendingDetail.collection.likeCount).toBe(1)
+    expect(pendingDetail.collection.commentCount, 'pending comments must not count publicly').toBe(0)
+
+    const reactionPage = await getAPIData(request, '/api/v1/auth/me/notifications?group=reaction&current=1&size=50', admin.token)
+    const reactionNotification = itemsOf(reactionPage).find((item: any) => item.contentType === 'collection' && Number(item.contentId) === createdInteractionCollectionID)
+    expect(reactionNotification?.type).toBe('like')
+    expect(reactionNotification?.slug).toBe(created.slug)
+
+    await approveComments(request, admin.token, [commentID])
+    const approvedDetail = await getAPIData(request, `/api/v1/public/collections/${created.slug}`)
+    expect(approvedDetail.collection.commentCount).toBe(1)
+    const commentPage = await getAPIData(request, '/api/v1/auth/me/notifications?group=comment&current=1&size=50', admin.token)
+    const commentNotification = itemsOf(commentPage).find((item: any) => item.contentType === 'collection' && Number(item.commentId) === commentID)
+    expect(commentNotification?.type).toBe('comment')
+    expect(commentNotification?.slug).toBe(created.slug)
+
+    const session = await createBrowserSession(browser, user)
+    try {
+      await session.page.goto(`/collections/${created.slug}`, { waitUntil: 'domcontentloaded' })
+      await expect(session.page.getByText(commentText)).toBeVisible()
+      const likeButton = session.page.getByRole('button', { name: /已点赞/ })
+      await expect(likeButton).toBeVisible()
+      await likeButton.click()
+      await expect(session.page.getByRole('button', { name: /点赞 · 0/ })).toBeVisible()
+      const unliked = await getAPIData(request, `/api/v1/auth/me/collection-reactions/state?collectionId=${createdInteractionCollectionID}`, user.token)
+      expect(unliked.like).toBe(false)
+    } finally {
+      await session.context.close()
+    }
   })
 
   test('personalizes recommendations and persists reader feedback', async ({ request, browser }) => {

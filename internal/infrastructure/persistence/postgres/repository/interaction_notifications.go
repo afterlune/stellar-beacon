@@ -49,6 +49,15 @@ func recordCommentNotification(session *xorm.Session, commentID int) error {
 		if _, err := session.SQL(`SELECT user_id FROM t_talk WHERE id = ? AND status = 1 AND moderation_status = 'visible'`, contentID).Get(&recipientID); err != nil {
 			return apperrors.Unavailable("notification.comment.talk", err)
 		}
+	case comment.Type == 6 && comment.TopicId > 0:
+		contentType = port.FollowContentCollection
+		contentID = comment.TopicId
+		if _, err := session.SQL(`SELECT c.user_id FROM t_collection c
+			JOIN t_user_info owner ON owner.id = c.user_id AND owner.is_disable = 0
+			WHERE c.id = ? AND c.is_delete = 0 AND c.moderation_status = 'visible'
+			  AND c.visibility IN ('public', 'unlisted')`, contentID).Get(&recipientID); err != nil {
+			return apperrors.Unavailable("notification.comment.collection", err)
+		}
 	}
 	if recipientID <= 0 || recipientID == comment.UserId || contentType == "" || contentID <= 0 {
 		return nil
@@ -108,6 +117,8 @@ func commentContentTarget(commentType, topicID int) (string, int) {
 		return port.FollowContentArticle, topicID
 	case 5:
 		return port.FollowContentTalk, topicID
+	case 6:
+		return port.FollowContentCollection, topicID
 	default:
 		return "", 0
 	}

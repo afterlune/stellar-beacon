@@ -429,11 +429,16 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		notification.content_id,
 		notification.comment_id,
 		CASE WHEN notification.content_type = 'article' THEN article.id ELSE 0 END AS article_id,
-		'' AS slug,
-		CASE WHEN notification.content_type = 'article' THEN COALESCE(article.article_title, '') ELSE '' END AS title,
+		CASE WHEN notification.content_type = 'collection' THEN COALESCE(collection.slug, '') ELSE '' END AS slug,
+		CASE
+			WHEN notification.content_type = 'article' THEN COALESCE(article.article_title, '')
+			WHEN notification.content_type = 'collection' THEN COALESCE(collection.title, '')
+			ELSE ''
+		END AS title,
 		CASE
 			WHEN notification.type IN ('comment', 'reply') THEN COALESCE(SUBSTR(comment.comment_content, 1, 240), '')
 			WHEN notification.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '')
+			WHEN notification.content_type = 'collection' THEN COALESCE(SUBSTR(collection.description, 1, 240), '')
 			ELSE COALESCE(SUBSTR(talk.content, 1, 240), '')
 		END AS excerpt,
 		COALESCE(article.article_cover, '') AS cover,
@@ -448,16 +453,30 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
 	LEFT JOIN t_talk talk ON notification.content_type = 'talk' AND talk.id = notification.content_id
 		AND talk.status = 1 AND talk.moderation_status = 'visible'
+	LEFT JOIN t_collection collection ON notification.content_type = 'collection' AND collection.id = notification.content_id
+		AND collection.is_delete = 0 AND collection.moderation_status = 'visible'
+		AND collection.visibility IN ('public', 'unlisted')
+	LEFT JOIN t_user_info collection_owner ON collection_owner.id = collection.user_id AND collection_owner.is_disable = 0
 	LEFT JOIN t_article_reaction reaction ON notification.type IN ('like', 'favorite')
 		AND reaction.article_id = notification.content_id
 		AND reaction.user_info_id = notification.actor_id
 		AND reaction.reaction = notification.type
+	LEFT JOIN t_collection_reaction collection_reaction ON notification.type = 'like'
+		AND notification.content_type = 'collection'
+		AND collection_reaction.collection_id = notification.content_id
+		AND collection_reaction.user_info_id = notification.actor_id
+		AND collection_reaction.reaction = 'like'
 	WHERE notification.recipient_id = ?
 	  AND (
 		(notification.type IN ('comment', 'reply') AND comment.id IS NOT NULL AND comment.is_delete = 0 AND comment.is_review = 1
-			AND ((notification.content_type = 'article' AND article.id IS NOT NULL) OR (notification.content_type = 'talk' AND talk.id IS NOT NULL)))
+			AND ((notification.content_type = 'article' AND article.id IS NOT NULL)
+				OR (notification.content_type = 'talk' AND talk.id IS NOT NULL)
+				OR (notification.content_type = 'collection' AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))
 		OR
-		(notification.type IN ('like', 'favorite') AND reaction.id IS NOT NULL AND notification.content_type = 'article' AND article.id IS NOT NULL)
+		(notification.type IN ('like', 'favorite')
+			AND ((notification.content_type = 'article' AND reaction.id IS NOT NULL AND article.id IS NOT NULL)
+				OR (notification.content_type = 'collection' AND collection_reaction.id IS NOT NULL
+					AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))
 	  )
 	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply')) OR (? = 'reaction' AND notification.type IN ('like', 'favorite')))
 	UNION ALL

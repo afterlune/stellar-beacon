@@ -29,6 +29,8 @@ type CollectionSummary struct {
 	Owner            *PublicAuthor `json:"owner,omitempty"`
 	Cover            string        `json:"cover,omitempty"`
 	ArticleCount     int           `json:"articleCount"`
+	LikeCount        int           `json:"likeCount"`
+	CommentCount     int           `json:"commentCount"`
 	HotScore         int           `json:"hotScore,omitempty"`
 	ModerationStatus string        `json:"moderationStatus,omitempty"`
 	ModerationReason string        `json:"moderationReason,omitempty"`
@@ -59,6 +61,12 @@ type CollectionDetail struct {
 type CollectionRecord struct {
 	Collection CollectionSummary
 	Items      []CollectionItemRecord
+}
+
+// CollectionPublicReader is the narrow read surface used by comments and
+// moderation-aware flows that only need one visible collection.
+type CollectionPublicReader interface {
+	GetPublicByID(ctx context.Context, collectionID int) (CollectionSummary, error)
 }
 
 type CollectionSaveInput struct {

@@ -285,6 +285,27 @@ paths:
     get: { tags: [auth], summary: List the current account's collection subscriptions, operationId: listCollectionSubscriptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/collection-feed:
     get: { tags: [auth], summary: List collection updates since each subscription began, operationId: listCollectionSubscriptionFeed, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/collection-reactions:
+    put:
+      tags: [auth]
+      summary: Set the current account's like state for a public or unlisted collection
+      operationId: setCollectionReaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionReactionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/collection-reactions/state:
+    get:
+      tags: [auth]
+      summary: Read the current account's like state for one collection
+      operationId: getCollectionReactionState
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: collectionId, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /auth/me/recommendations/query:
     post:
       tags: [auth]
@@ -671,6 +692,24 @@ components:
       properties:
         subscribed: { type: boolean }
         muted: { type: boolean }
+    CollectionReactionInput:
+      type: object
+      required: [collectionId, active]
+      properties:
+        collectionId: { type: integer, format: int64, minimum: 1 }
+        active: { type: boolean }
+    CollectionReactionToggle:
+      type: object
+      required: [active, likeCount]
+      properties:
+        active: { type: boolean }
+        likeCount: { type: integer, minimum: 0 }
+    CollectionReactionState:
+      type: object
+      required: [collectionId, like]
+      properties:
+        collectionId: { type: integer, format: int64 }
+        like: { type: boolean }
     CollectionSubscription:
       type: object
       required: [collectionId, slug, title, articleCount, muted, unreadCount, subscribedAt]

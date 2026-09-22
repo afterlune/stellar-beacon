@@ -32,6 +32,8 @@ type collectionSummaryRow struct {
 	OwnerAvatar      string    `xorm:"owner_avatar"`
 	Cover            string    `xorm:"cover"`
 	ArticleCount     int       `xorm:"article_count"`
+	LikeCount        int       `xorm:"like_count"`
+	CommentCount     int       `xorm:"comment_count"`
 	HotScore         int       `xorm:"hot_score"`
 	ModerationStatus string    `xorm:"moderation_status"`
 	ModerationReason string    `xorm:"moderation_reason"`
@@ -44,7 +46,8 @@ func (row collectionSummaryRow) toPort() *port.CollectionSummary {
 		ID: row.ID, Slug: row.Slug, Title: row.Title, Description: row.Description,
 		Visibility: row.Visibility,
 		Owner:      &port.PublicAuthor{Id: row.OwnerID, Handle: row.OwnerHandle, Nickname: row.OwnerNickname, Avatar: row.OwnerAvatar},
-		Cover:      row.Cover, ArticleCount: row.ArticleCount, HotScore: row.HotScore,
+		Cover:      row.Cover, ArticleCount: row.ArticleCount, LikeCount: row.LikeCount, CommentCount: row.CommentCount,
+		HotScore:         row.HotScore,
 		ModerationStatus: row.ModerationStatus, ModerationReason: row.ModerationReason,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
@@ -65,6 +68,15 @@ const collectionSummarySelect = `
 	         JOIN t_article a ON a.id = visible_item.article_id AND ` + collectionVisibleArticle + `
 	         WHERE visible_item.collection_id = c.id
 	       ), 0) AS article_count,
+	       COALESCE((
+	         SELECT count(1) FROM t_collection_reaction reaction
+	         WHERE reaction.collection_id = c.id AND reaction.reaction = 'like'
+	       ), 0) AS like_count,
+	       COALESCE((
+	         SELECT count(1) FROM t_comment comment
+	         WHERE comment.type = 6 AND comment.topic_id = c.id AND comment.parent_id = 0
+	           AND comment.is_review = 1 AND comment.is_delete = 0
+	       ), 0) AS comment_count,
 	       0 AS hot_score,
 	       c.moderation_status, c.moderation_reason,
 	       c.create_time AS created_at, c.update_time AS updated_at
@@ -91,7 +103,13 @@ func (r *MyCollectionRepo) ListPublic(ctx context.Context, sort string, current,
 	if sort == port.CollectionSortHot {
 		query := "WITH " + discoveryScoredCTE + `,
 			collection_hot AS (
-				SELECT i.collection_id, SUM(COALESCE(s.hot_score, 0))::int AS hot_score
+				SELECT i.collection_id,
+				       (SUM(COALESCE(s.hot_score, 0))
+				        + 4 * (SELECT count(1) FROM t_comment comment
+				               WHERE comment.type = 6 AND comment.topic_id = i.collection_id
+				                 AND comment.parent_id = 0 AND comment.is_review = 1 AND comment.is_delete = 0)
+				        + 3 * (SELECT count(1) FROM t_collection_reaction reaction
+				               WHERE reaction.collection_id = i.collection_id AND reaction.reaction = 'like'))::int AS hot_score
 				FROM t_collection_item i
 				JOIN t_collection c ON c.id = i.collection_id
 				JOIN t_article a ON a.id = i.article_id AND ` + collectionVisibleArticle + `
@@ -101,7 +119,8 @@ func (r *MyCollectionRepo) ListPublic(ctx context.Context, sort string, current,
 			)
 			SELECT base.id, base.slug, base.title, base.description, base.visibility,
 			       base.owner_id, base.owner_handle, base.owner_nickname, base.owner_avatar,
-			       base.cover, base.article_count, COALESCE(hot.hot_score, 0) AS hot_score,
+			       base.cover, base.article_count, base.like_count, base.comment_count,
+			       COALESCE(hot.hot_score, 0) AS hot_score,
 			       base.moderation_status, base.moderation_reason, base.created_at, base.updated_at
 			FROM (` + collectionSummarySelect + filter + `) base
 			JOIN collection_hot hot ON hot.collection_id = base.id
@@ -207,6 +226,22 @@ func (r *MyCollectionRepo) GetPublicBySlug(ctx context.Context, slug string) (po
 	result.Collection = *row.toPort()
 	result.Items = items
 	return result, nil
+}
+
+func (r *MyCollectionRepo) GetPublicByID(ctx context.Context, collectionID int) (port.CollectionSummary, error) {
+	if collectionID <= 0 {
+		return port.CollectionSummary{}, apperrors.Invalid("collection.public.get", "invalid collection")
+	}
+	session, err := repoSession(r.engine, ctx, "collection.public.get")
+	if err != nil {
+		return port.CollectionSummary{}, err
+	}
+	row, err := r.getSummary(session, `c.id = ? AND c.visibility IN ('public', 'unlisted')
+		AND c.moderation_status = 'visible' AND c.is_delete = 0`, collectionID)
+	if err != nil {
+		return port.CollectionSummary{}, err
+	}
+	return *row.toPort(), nil
 }
 
 func (r *MyCollectionRepo) ListOwned(ctx context.Context, userID, current, size int) ([]*port.CollectionSummary, int, error) {

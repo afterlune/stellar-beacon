@@ -150,6 +150,8 @@ func RouterSetup(router *gin.Engine) {
 	auth.GET("/me/collection-subscriptions/:collectionId", api.GetCollectionSubscriptionStatus)
 	auth.GET("/me/collection-subscriptions", api.ListCollectionSubscriptions)
 	auth.GET("/me/collection-feed", api.ListCollectionSubscriptionFeed)
+	auth.PUT("/me/collection-reactions", api.ToggleCollectionReaction)
+	auth.GET("/me/collection-reactions/state", api.GetCollectionReactionState)
 	auth.POST("/me/recommendations/query", api.QueryRecommendations)
 	auth.GET("/me/recommendation-feedback", api.ListRecommendationFeedback)
 	auth.PUT("/me/recommendation-feedback", api.SaveRecommendationFeedback)

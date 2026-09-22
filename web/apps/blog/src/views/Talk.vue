@@ -80,6 +80,7 @@ export default defineComponent({
       size: 7
     })
     commentStore.type = 5
+    commentStore.topicId = route.params.talkId
     onMounted(() => {
       toPageTop()
       fetchTalk()

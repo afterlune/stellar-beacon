@@ -109,7 +109,11 @@ export default defineComponent({
       return item.title || item.excerpt || '发布了新内容'
     }
     const notificationPath = (item: NotificationItem) => {
-      if (item.contentType === 'collection') return `/collections/${item.slug || item.contentId}${item.articleId ? `?article=${item.articleId}` : ''}`
+      if (item.contentType === 'collection') {
+        const base = `/collections/${item.slug || item.contentId}`
+        if ((item.type === 'comment' || item.type === 'reply') && item.commentId) return `${base}?comment=${item.commentId}#comment-${item.commentId}`
+        return `${base}${item.articleId ? `?article=${item.articleId}` : ''}`
+      }
       const base = item.contentType === 'article' ? `/articles/${item.contentId}` : `/talks/${item.contentId}`
       if ((item.type === 'comment' || item.type === 'reply') && item.commentId) {
         return `${base}?comment=${item.commentId}#comment-${item.commentId}`

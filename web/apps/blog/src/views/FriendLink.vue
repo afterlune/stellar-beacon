@@ -99,6 +99,7 @@ export default defineComponent({
       size: 7
     })
     commentStore.type = 4
+    commentStore.topicId = ''
     onMounted(() => {
       fetchLinks()
       fetchComments()

@@ -33,7 +33,6 @@ import emitter from '@/utils/mitt'
 import { useUserStore } from '@/stores/user'
 import { useCommentStore } from '@/stores/comment'
 import { useAppStore } from '@/stores/app'
-import { useRoute } from 'vue-router'
 import api from '@/api/api'
 
 export default defineComponent({
@@ -46,7 +45,6 @@ export default defineComponent({
     const userStore = useUserStore()
     const commentStore = useCommentStore()
     const appStore = useAppStore()
-    const route = useRoute()
     const reactiveData = reactive({
       commentContent: '' as any
     })
@@ -69,15 +67,13 @@ export default defineComponent({
         })
         return
       }
-      const path = route.path
-      const arr = path.split('/')
       const params: any = {
         type: commentStore.type,
         replyUserId: props.replyUserId,
         parentId: parentId,
-        commentContent: reactiveData.commentContent
+        commentContent: reactiveData.commentContent,
+        topicId: commentStore.topicId
       }
-      params.topicId = arr[2]
       api.saveComment(params).then(({ data }) => {
         if (data.flag) {
           emit('changeShow')
@@ -122,6 +118,10 @@ export default defineComponent({
           break
         case 5:
           emitter.emit('talkFetchReplies', index)
+          break
+        case 6:
+          emitter.emit('collectionFetchReplies', index)
+          break
       }
     }
     const CancelReply = () => {

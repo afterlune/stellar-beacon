@@ -15,10 +15,13 @@
             </router-link>
             <router-link v-if="isOwner" :to="`/studio/collections/${detail.collection.id}/edit`">管理书单</router-link>
             <CollectionSubscribeButton v-else :collection-id="Number(detail.collection.id)" />
+            <button type="button" class="collection-like" :class="{ 'is-active': liked }" :disabled="likeBusy" @click="toggleLike">
+              {{ liked ? '已点赞' : '点赞' }} · {{ likeCount }}
+            </button>
             <button type="button" @click="share">{{ copied ? '链接已复制' : '分享书单' }}</button>
           </div>
         </div>
-        <aside><strong>{{ detail.items.length }}</strong><small>篇文章</small><em>{{ detail.collection.visibility === 'unlisted' ? '链接可见' : '公开书单' }}</em></aside>
+        <aside><strong>{{ detail.items.length }}</strong><small>篇文章</small><small>{{ likeCount }} 赞 · {{ detail.collection.commentCount || 0 }} 评论</small><em>{{ detail.collection.visibility === 'unlisted' ? '链接可见' : '公开书单' }}</em></aside>
       </header>
       <ol class="collection-items">
         <li v-for="(item, index) in detail.items" :key="item.articleId" :class="{ 'is-highlighted': Number(item.articleId) === highlightedArticleId }" :data-article-id="item.articleId">
@@ -33,45 +36,134 @@
           </router-link>
         </li>
       </ol>
+      <Comment />
     </template>
   </div>
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, defineComponent, nextTick, onMounted, onUnmounted, provide, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import api from '@/api/api'
 import { useUserStore } from '@/stores/user'
+import { useCommentStore } from '@/stores/comment'
+import { Comment } from '@/components/Comment'
 import CollectionSubscribeButton from '@/components/CollectionSubscribeButton.vue'
+import emitter from '@/utils/mitt'
+import { pageCount, pageRecords } from '@/utils/page'
 
 export default defineComponent({
   name: 'CollectionDetail',
-  components: { CollectionSubscribeButton },
+  components: { Comment, CollectionSubscribeButton },
   setup() {
     const route = useRoute()
+    const router = useRouter()
     const userStore = useUserStore()
+    const commentStore = useCommentStore()
     const detail = ref<any>(null)
     const loading = ref(true)
     const error = ref('')
     const copied = ref(false)
     const highlightedArticleId = ref(0)
+    const comments = ref<any[]>([])
+    const haveMore = ref(false)
+    const isReload = ref(false)
+    const pageInfo = reactive({ current: 1, size: 7 })
+    const liked = ref(false)
+    const likeCount = ref(0)
+    const likeBusy = ref(false)
     const isOwner = computed(() => {
       const currentID = Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0)
       return currentID > 0 && currentID === Number(detail.value?.collection?.owner?.id || 0)
     })
     const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="72" height="72"%3E%3Crect width="72" height="72" rx="36" fill="%23172554"/%3E%3Ccircle cx="36" cy="27" r="13" fill="%239bb8ff"/%3E%3Cpath d="M12 67c4-17 12-25 24-25s20 8 24 25" fill="%239bb8ff"/%3E%3C/svg%3E'
+    const focusComment = (commentID: number) => {
+      if (commentID <= 0) return
+      void nextTick(() => {
+        const element = document.getElementById(`comment-${commentID}`)
+        if (!element) return
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        element.classList.remove('comment-focus')
+        void element.offsetWidth
+        element.classList.add('comment-focus')
+        window.setTimeout(() => element.classList.remove('comment-focus'), 2500)
+      })
+    }
+    const fetchComments = async () => {
+      const collectionID = Number(detail.value?.collection?.id || 0)
+      if (!collectionID) return
+      commentStore.type = 6
+      commentStore.topicId = String(collectionID)
+      const commentID = Number(route.query.comment || 0)
+      const params: any = { type: 6, topicId: String(collectionID), current: pageInfo.current, size: pageInfo.size }
+      if (commentID > 0) params.focusCommentId = commentID
+      const response = await api.getComments(params)
+      const records = pageRecords(response?.data)
+      const reloading = isReload.value
+      if (reloading) {
+        comments.value = records
+        isReload.value = false
+      } else {
+        comments.value.push(...records)
+      }
+      if (detail.value?.collection) detail.value.collection.commentCount = pageCount(response?.data)
+      haveMore.value = comments.value.length < pageCount(response?.data)
+      if (commentID > 0 && reloading) focusComment(commentID)
+    }
+    const fetchReplies = async (index: number) => {
+      const comment = comments.value[index]
+      if (!comment?.id) return
+      const response = await api.getRepliesByCommentId(comment.id)
+      comment.replyDTOs = Array.isArray(response?.data?.data) ? response.data.data : []
+    }
+    const fetchReactionState = async () => {
+      const collectionID = Number(detail.value?.collection?.id || 0)
+      if (!collectionID || !userStore.token) return
+      try {
+        const response = await api.getCollectionReactionState(collectionID)
+        liked.value = Boolean(response?.data?.data?.like)
+      } catch {
+        liked.value = false
+      }
+    }
     const load = async () => {
       loading.value = true; error.value = ''
       try {
         const response = await api.getPublicCollection(String(route.params.slug || ''))
         detail.value = response?.data?.data || null
         if (!detail.value?.collection) throw new Error('missing collection')
+        likeCount.value = Number(detail.value.collection.likeCount || 0)
+        liked.value = false
+        pageInfo.current = 1
+        isReload.value = true
+        comments.value = []
+        await Promise.allSettled([fetchComments(), fetchReactionState()])
         highlightedArticleId.value = Number(route.query.article || 0)
         if (highlightedArticleId.value > 0) {
           await nextTick()
           document.querySelector(`[data-article-id="${highlightedArticleId.value}"]`)?.scrollIntoView({ block: 'center' })
         }
-      } catch { error.value = '没有找到这个公开书单。'; detail.value = null } finally { loading.value = false }
+      } catch { error.value = '没有找到这个公开书单。'; detail.value = null; comments.value = [] } finally { loading.value = false }
+    }
+    const toggleLike = async () => {
+      const collectionID = Number(detail.value?.collection?.id || 0)
+      if (!collectionID) return
+      if (!userStore.userInfo) {
+        await router.push({ path: route.path, query: { ...route.query, login: '1', redirect: route.fullPath } })
+        return
+      }
+      likeBusy.value = true
+      try {
+        const response = await api.setCollectionReaction({ collectionId: collectionID, active: !liked.value })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '点赞失败')
+        liked.value = Boolean(response.data.data?.active)
+        likeCount.value = Number(response.data.data?.likeCount || 0)
+      } catch (reason: any) {
+        ElMessage.error(reason?.response?.data?.message || reason?.message || '点赞失败')
+      } finally {
+        likeBusy.value = false
+      }
     }
     const share = async () => {
       const url = window.location.href
@@ -82,9 +174,19 @@ export default defineComponent({
     }
     const excerpt = (value: string) => String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)
     const formatDate = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value)) : ''
+    provide('comments', computed(() => comments.value))
+    provide('haveMore', computed(() => haveMore.value))
+    emitter.on('collectionFetchComment', () => { pageInfo.current = 1; isReload.value = true; void fetchComments() })
+    emitter.on('collectionFetchReplies', (index: any) => { void fetchReplies(Number(index)) })
+    emitter.on('collectionLoadMore', () => { if (haveMore.value) { pageInfo.current += 1; void fetchComments() } })
+    onUnmounted(() => {
+      emitter.off('collectionFetchComment')
+      emitter.off('collectionFetchReplies')
+      emitter.off('collectionLoadMore')
+    })
     watch(() => route.params.slug, () => void load())
     onMounted(() => void load())
-    return { detail, loading, error, copied, highlightedArticleId, isOwner, defaultAvatar, share, excerpt, formatDate }
+    return { detail, loading, error, copied, highlightedArticleId, isOwner, defaultAvatar, liked, likeCount, likeBusy, toggleLike, share, excerpt, formatDate }
   }
 })
 </script>
@@ -97,10 +199,13 @@ export default defineComponent({
 .collection-hero > div > span { color: var(--text-ob-dim); font-size: 13px; line-height: 1.8; }
 .collection-hero__actions { display: flex; align-items: center; gap: 12px; margin-top: 24px; }
 .collection-hero__actions a, .collection-hero__actions button { display: inline-flex; align-items: center; min-height: 36px; padding: 7px 12px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
+.collection-hero__actions .collection-like.is-active { border-color: var(--color-ob); background: color-mix(in srgb, var(--color-ob) 12%, transparent); color: var(--color-ob); }
+.collection-hero__actions button:disabled { opacity: .55; cursor: wait; }
 .collection-hero__actions img { width: 25px; height: 25px; margin-right: 7px; border-radius: 50%; object-fit: cover; }
 .collection-hero aside { display: grid; place-content: center; border: 1px solid var(--border-hairline); border-radius: 18px; text-align: center; }
 .collection-hero aside strong { font-size: 2.4rem; }
 .collection-hero aside small, .collection-hero aside em { color: var(--text-ob-dim); font-size: 11px; font-style: normal; }
+.collection-hero aside small + small { margin-top: 6px; }
 .collection-hero aside em { margin-top: 8px; color: var(--color-ob); }
 .collection-items { display: grid; gap: 12px; margin: 22px 0 0; padding: 0; list-style: none; }
 .collection-items li { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; align-items: start; padding: 15px; border: 1px solid var(--border-hairline); border-radius: 17px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }

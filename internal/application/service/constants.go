@@ -52,6 +52,7 @@ const (
 	Abouts
 	Link
 	Talk
+	Collection
 )
 
 const (
@@ -61,9 +62,10 @@ const (
 )
 
 var TypeHM = map[int]map[string]string{
-	Article: {"desc": "文章", "path": "/articles/"},
-	Message: {"desc": "留言", "path": "/message/"},
-	Abouts:  {"desc": "关于我", "path": "/about/"},
-	Link:    {"desc": "友链", "path": "/friends/"},
-	Talk:    {"desc": "说说", "path": "/talks/"},
+	Article:    {"desc": "文章", "path": "/articles/"},
+	Message:    {"desc": "留言", "path": "/message/"},
+	Abouts:     {"desc": "关于我", "path": "/about/"},
+	Link:       {"desc": "友链", "path": "/friends/"},
+	Talk:       {"desc": "说说", "path": "/talks/"},
+	Collection: {"desc": "书单", "path": "/collections/"},
 }

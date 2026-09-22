@@ -27,7 +27,6 @@ import { defineComponent, toRefs, reactive, getCurrentInstance, computed } from 
 import Avatar from '@/components/Avatar.vue'
 import { SubTitle } from '@/components/Title'
 import { useUserStore } from '@/stores/user'
-import { useRoute } from 'vue-router'
 import { useCommentStore } from '@/stores/comment'
 import { useAppStore } from '@/stores/app'
 import api from '@/api/api'
@@ -41,7 +40,6 @@ export default defineComponent({
     const userStore = useUserStore()
     const commentStore = useCommentStore()
     const appStore = useAppStore()
-    const route = useRoute()
     const reactiveData = reactive({
       commentContent: '' as any
     })
@@ -62,13 +60,11 @@ export default defineComponent({
         })
         return
       }
-      const path = route.path
-      const arr = path.split('/')
       const params: any = {
         commentContent: reactiveData.commentContent,
-        type: commentStore.type
+        type: commentStore.type,
+        topicId: commentStore.topicId
       }
-      params.topicId = arr[2]
       api.saveComment(params).then(({ data }) => {
         if (data.flag) {
           fetchComments()
@@ -112,6 +108,10 @@ export default defineComponent({
           break
         case 5:
           emitter.emit('talkFetchComment')
+          break
+        case 6:
+          emitter.emit('collectionFetchComment')
+          break
       }
     }
     return {

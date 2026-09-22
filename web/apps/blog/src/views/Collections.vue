@@ -3,7 +3,7 @@
     <header class="collections-hero">
       <p>CURATED SIGNALS</p>
       <h1>公开书单</h1>
-      <span>读者整理的公开文章路径。按最新整理或近期文章热度发现下一条内容线索。</span>
+      <span>读者整理的公开文章路径。按最新整理，或按文章热度、点赞和评论互动发现下一条内容线索。</span>
       <div class="collections-tabs">
         <button type="button" :class="{ active: sort === 'latest' }" @click="switchSort('latest')">最新整理</button>
         <button type="button" :class="{ active: sort === 'hot' }" @click="switchSort('hot')">近期热门</button>
@@ -18,7 +18,7 @@
           <span v-else>{{ String(item.title || 'LIST').slice(0, 1) }}</span>
         </div>
         <div class="collection-card__body">
-          <small>{{ item.articleCount }} 篇文章 · 更新于 {{ formatDate(item.updatedAt) }}</small>
+          <small>{{ item.articleCount }} 篇文章 · {{ item.likeCount || 0 }} 赞 · {{ item.commentCount || 0 }} 评论 · 更新于 {{ formatDate(item.updatedAt) }}</small>
           <h2>{{ item.title }}</h2>
           <p>{{ item.description || '这位读者还没有写书单简介。' }}</p>
           <div>

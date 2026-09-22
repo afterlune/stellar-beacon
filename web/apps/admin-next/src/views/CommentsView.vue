@@ -58,7 +58,7 @@
           <template #id="{ record }"><span class="admin-id-cell">#{{ record.id }}</span></template>
           <template #article="{ record }">
             <span v-if="record.articleTitle" :title="String(record.articleTitle)" class="comment-article">
-              {{ record.articleTitle }}
+              <small v-if="Number(record.type) === 6">书单 · </small>{{ record.articleTitle }}
             </span>
             <span v-else class="admin-muted-cell">{{ t('comments.comments.noArticle') }}</span>
           </template>
@@ -121,6 +121,7 @@ import { tablePagination } from '@/utils/pagination'
 
 interface CommentRow extends Record<string, unknown> {
   id: number
+  type?: number
   isReview?: number
   commentContent?: string
   createTime?: string

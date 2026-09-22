@@ -505,6 +505,7 @@ export default defineComponent({
 
     watch([() => reactiveData.article, seriesInfo, seriesArticles], scheduleContinuationTracking, { flush: 'post' })
     commentStore.type = 1
+    commentStore.topicId = route.params.articleId
     onMounted(() => {
       if (typeof IntersectionObserver !== 'undefined') {
         continuationObserver = new IntersectionObserver(handleContinuationIntersection, { threshold: 0.5 })

@@ -176,7 +176,7 @@ func (c *MyCommentRepo) ListCommentsAdmin(ctx context.Context, filter port.Comme
 	}
 	limit, offset := pgsql.Page(filter.Current, filter.Size)
 	filters, args := commentFilters(filter)
-	query := "SELECT c.id, u.avatar, u.nickname, r.nickname AS reply_nickname, a.article_title, c.comment_content, c.type, c.is_review, c.create_time FROM t_comment c LEFT JOIN t_article a ON c.topic_id = a.id LEFT JOIN t_user_info u ON c.user_id = u.id LEFT JOIN t_user_info r ON c.reply_user_id = r.id" + filters + " ORDER BY c.id DESC LIMIT ? OFFSET ?"
+	query := "SELECT c.id, u.avatar, u.nickname, r.nickname AS reply_nickname, COALESCE(a.article_title, collection.title, '') AS article_title, c.comment_content, c.type, c.is_review, c.create_time FROM t_comment c LEFT JOIN t_article a ON c.type = 1 AND c.topic_id = a.id LEFT JOIN t_collection collection ON c.type = 6 AND c.topic_id = collection.id LEFT JOIN t_user_info u ON c.user_id = u.id LEFT JOIN t_user_info r ON c.reply_user_id = r.id" + filters + " ORDER BY c.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 	var comments []*port.CommentAdmin
 	if err := session.SQL(query, args...).Find(&comments); err != nil {
@@ -231,6 +231,11 @@ func (c *MyCommentRepo) ValidateTarget(ctx context.Context, commentType, topicID
 		query = "SELECT id FROM t_article WHERE id = ?"
 	case 5:
 		query = "SELECT id FROM t_talk WHERE id = ?"
+	case 6:
+		query = `SELECT c.id FROM t_collection c
+			JOIN t_user_info owner ON owner.id = c.user_id AND owner.is_disable = 0
+			WHERE c.id = ? AND c.is_delete = 0 AND c.moderation_status = 'visible'
+			  AND c.visibility IN ('public', 'unlisted')`
 	default:
 		return nil
 	}

@@ -39,6 +39,10 @@ export default defineComponent({
           break
         case 5:
           emitter.emit('talkLoadMore')
+          break
+        case 6:
+          emitter.emit('collectionLoadMore')
+          break
       }
     }
     return {

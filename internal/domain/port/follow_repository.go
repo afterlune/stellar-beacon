@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	FollowContentArticle = "article"
-	FollowContentTalk    = "talk"
+	FollowContentArticle    = "article"
+	FollowContentTalk       = "talk"
+	FollowContentCollection = "collection"
 )
 
 type FollowUser struct {

@@ -57,6 +57,7 @@ type CommentServiceDeps struct {
 	Users         port.UserInfoRepository
 	Articles      port.ArticleRepository
 	Talks         port.TalkRepository
+	Collections   port.CollectionPublicReader
 	Notifications port.CommentNotifier
 	Limiter       port.RateLimiter
 }
@@ -84,6 +85,13 @@ type ArticleReactionServiceDeps struct {
 	Repo     port.ArticleReactionRepository
 	Articles port.ArticleRepository
 	Limiter  port.RateLimiter
+}
+
+// CollectionReactionServiceDeps contains the collection-like ledger plus the
+// rate limiter shared by authenticated reader interactions.
+type CollectionReactionServiceDeps struct {
+	Repo    port.CollectionReactionRepository
+	Limiter port.RateLimiter
 }
 
 // PhotoAlbumServiceDeps contains the album repository, photo repository and
@@ -225,6 +233,13 @@ func (d ArticleReactionServiceDeps) validate() error {
 	}
 	if d.Articles == nil {
 		return missingServiceDependency("article_reaction", "article repository")
+	}
+	return nil
+}
+
+func (d CollectionReactionServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("collection_reaction", "repository")
 	}
 	return nil
 }
