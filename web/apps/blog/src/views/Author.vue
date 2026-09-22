@@ -20,6 +20,7 @@
           <div><dt>{{ author.articleCount }}</dt><dd>公开文章</dd></div>
           <div><dt>{{ author.talkCount }}</dt><dd>公开随想</dd></div>
           <div><dt>{{ author.seriesCount }}</dt><dd>公开系列</dd></div>
+          <div><dt>{{ author.collectionCount || 0 }}</dt><dd>公开书单</dd></div>
         </dl>
       </section>
 
@@ -53,6 +54,7 @@
           <button type="button" :class="{ active: tab === 'articles' }" @click="switchTab('articles')">文章</button>
           <button type="button" :class="{ active: tab === 'talks' }" @click="switchTab('talks')">随想</button>
           <button type="button" :class="{ active: tab === 'series' }" @click="switchTab('series')">系列</button>
+          <button type="button" :class="{ active: tab === 'collections' }" @click="switchTab('collections')">书单</button>
         </nav>
 
         <p v-if="loading" class="author-state">加载中…</p>
@@ -73,13 +75,24 @@
             <small>{{ formatDate(item.createTime) }} · {{ item.commentCount || 0 }} 条回应</small>
           </article>
         </div>
-        <div v-else class="author-series">
+        <div v-else-if="tab === 'series'" class="author-series">
           <router-link v-for="item in records" :key="item.id" :to="`/series/${item.id}`" class="author-series__card">
             <img v-if="item.cover" :src="item.cover" :alt="item.seriesName" />
             <span>
               <small>{{ item.articleCount }} 篇文章</small>
               <h2>{{ item.seriesName }}</h2>
               <p>{{ item.seriesDesc || '暂无系列说明' }}</p>
+            </span>
+          </router-link>
+        </div>
+        <div v-else class="author-series author-collections">
+          <router-link v-for="item in records" :key="item.slug" :to="`/collections/${item.slug}`" class="author-series__card">
+            <img v-if="item.cover" :src="item.cover" :alt="item.title" />
+            <span v-else class="author-collection__cover">{{ String(item.title || 'LIST').slice(0, 1) }}</span>
+            <span>
+              <small>{{ item.articleCount }} 篇文章</small>
+              <h2>{{ item.title }}</h2>
+              <p>{{ item.description || '暂无书单简介' }}</p>
             </span>
           </router-link>
         </div>
@@ -107,7 +120,7 @@ export default defineComponent({
     const userStore = useUserStore()
     const author = ref<any>(null)
     const records = ref<any[]>([])
-    const tab = ref<'articles' | 'talks' | 'series'>('articles')
+    const tab = ref<'articles' | 'talks' | 'series' | 'collections'>('articles')
     const highlights = ref<any[]>([])
     const highlightSeries = ref<any[]>([])
     const loading = ref(false)
@@ -169,11 +182,13 @@ export default defineComponent({
           ? api.getAuthorArticles(handle, params)
           : tab.value === 'talks'
             ? api.getAuthorTalks(handle, params)
-            : api.getAuthorSeries(handle, params)
+            : tab.value === 'series'
+              ? api.getAuthorSeries(handle, params)
+              : api.getAuthorCollections(handle, params)
         const data = responseData(await request)
-        const next = Array.isArray(data.records) ? data.records : []
+        const next = Array.isArray(data.items) ? data.items : Array.isArray(data.records) ? data.records : []
         records.value = reset ? next : records.value.concat(next)
-        total.value = Number(data.count || 0)
+        total.value = Number(data.total ?? data.count ?? 0)
       } catch {
         records.value = []
       } finally {
@@ -181,7 +196,7 @@ export default defineComponent({
       }
     }
 
-    const switchTab = (next: 'articles' | 'talks' | 'series') => {
+    const switchTab = (next: 'articles' | 'talks' | 'series' | 'collections') => {
       tab.value = next
       void loadContent(true)
     }
@@ -237,7 +252,7 @@ export default defineComponent({
 .author-hero__intro { max-width: 620px; margin: 18px 0 8px; color: var(--text-ob-dim); line-height: 1.75; }
 .author-hero__actions { margin-top: 16px; }
 .author-hero__copy a { display: inline-flex; align-items: center; min-height: 24px; color: var(--color-ob); font-size: 12px; text-decoration: none; }
-.author-hero__stats { display: grid; grid-template-columns: repeat(3, auto); gap: 20px; margin: 0; }
+.author-hero__stats { display: grid; grid-template-columns: repeat(5, auto); gap: 20px; margin: 0; }
 .author-hero__stats div { text-align: center; }
 .author-hero__stats dt { font-size: 1.7rem; font-weight: 800; }
 .author-hero__stats dd { margin: 4px 0 0; color: var(--text-ob-dim); font-size: 11px; }
@@ -260,6 +275,7 @@ export default defineComponent({
 .author-series { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .author-series__card { display: grid; grid-template-columns: 110px 1fr; gap: 18px; min-height: 150px; padding: 18px; border: 1px solid var(--border-hairline); border-radius: 18px; color: inherit; text-decoration: none; }
 .author-series__card img { width: 110px; height: 100%; border-radius: 12px; object-fit: cover; }
+.author-collection__cover { display: grid; width: 110px; height: 100%; min-height: 110px; place-items: center; border: 1px solid var(--border-hairline); border-radius: 12px; background: color-mix(in srgb, var(--color-ob) 12%, transparent); color: var(--color-ob); font-size: 2rem; font-weight: 800; }
 .author-series__card h2 { margin: 7px 0; }
 .author-series__card p { line-height: 1.6; }
 .author-more { display: block; margin: 28px auto 0; padding: 9px 22px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }

@@ -30,6 +30,7 @@ test.describe('blog real backend main chain @integration', () => {
   let fixtureAuthorID = 0
   let fixtureRootCommentID = 0
   let createdTalkID = 0
+  let createdCollectionID = 0
   let admin: LoginSession
   let user: LoginSession
   let authorSession: BrowserSession
@@ -68,6 +69,9 @@ test.describe('blog real backend main chain @integration', () => {
     if (createdTalkID > 0) {
       await deleteAPI(request, '/api/v1/studio/talks', admin.token, [createdTalkID]).catch(() => undefined)
     }
+    if (createdCollectionID > 0) {
+      await deleteAPI(request, `/api/v1/studio/collections/${createdCollectionID}`, user.token).catch(() => undefined)
+    }
   })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -82,6 +86,7 @@ test.describe('blog real backend main chain @integration', () => {
       '/u/e2e-admin',
       '/authors',
       '/topics',
+      '/collections',
       '/talks',
       '/series'
     ]
@@ -91,6 +96,74 @@ test.describe('blog real backend main chain @integration', () => {
       await expect(page.locator('#App-Container'), route).toBeVisible()
       await expect(page.locator('body'), route).not.toContainText('页面不存在')
     }
+  })
+
+  test('creates, discovers and moderates a public reading list', async ({ request, browser }) => {
+    const title = `integration reading list ${runID}`
+    const created = await postAPI(request, '/api/v1/studio/collections', user.token, {
+      title,
+      description: 'integration collection description',
+      visibility: 'public'
+    })
+    createdCollectionID = Number(created.id)
+    expect(createdCollectionID).toBeGreaterThan(0)
+    expect(String(created.slug)).toBeTruthy()
+
+    await putAPI(request, `/api/v1/studio/collections/${createdCollectionID}/items/${fixtureArticleID}`, user.token, {
+      note: 'integration recommendation note'
+    })
+    await putAPI(request, `/api/v1/studio/collections/${createdCollectionID}/order`, user.token, {
+      articleIds: [fixtureArticleID]
+    })
+
+    const publicDetail = await getAPIData(request, `/api/v1/public/collections/${created.slug}`)
+    expect(publicDetail.collection.title).toBe(title)
+    expect(itemsOf(publicDetail)).toHaveLength(1)
+    expect(publicDetail.items[0].note).toBe('integration recommendation note')
+
+    const discovered = await getAPIData(request, '/api/v1/public/collections?sort=latest&current=1&size=100')
+    expect(itemsOf(discovered).some((item: any) => item.slug === created.slug)).toBe(true)
+
+    const session = await createBrowserSession(browser, user)
+    try {
+      await session.page.goto(`/collections/${created.slug}`, { waitUntil: 'domcontentloaded' })
+      await expect(session.page.getByRole('heading', { name: title })).toBeVisible()
+      await expect(session.page.getByText('integration recommendation note')).toBeVisible()
+      await session.page.goto('/collections', { waitUntil: 'domcontentloaded' })
+      await expect(session.page.getByText(title).first()).toBeVisible()
+    } finally {
+      await session.context.close()
+    }
+
+    await putAPI(request, `/api/v1/studio/collections/${createdCollectionID}`, user.token, {
+      title,
+      description: 'integration collection description',
+      visibility: 'unlisted'
+    })
+    const unlistedPage = await getAPIData(request, '/api/v1/public/collections?sort=latest&current=1&size=100')
+    expect(itemsOf(unlistedPage).some((item: any) => item.slug === created.slug)).toBe(false)
+    await getAPIData(request, `/api/v1/public/collections/${created.slug}`)
+
+    await putAPI(request, `/api/v1/studio/collections/${createdCollectionID}`, user.token, {
+      title,
+      description: 'integration collection description',
+      visibility: 'public'
+    })
+    await putAPI(request, `/api/v1/admin/content/collection/${createdCollectionID}/moderation`, admin.token, {
+      contentType: 'collection',
+      id: createdCollectionID,
+      hidden: true,
+      reason: 'integration moderation exercise'
+    })
+    const hiddenResponse = await request.get(`/api/v1/public/collections/${created.slug}`)
+    const hiddenPayload = await hiddenResponse.json()
+    expect(hiddenPayload.code).not.toBe('OK')
+    await putAPI(request, `/api/v1/admin/content/collection/${createdCollectionID}/moderation`, admin.token, {
+      contentType: 'collection',
+      id: createdCollectionID,
+      hidden: false,
+      reason: ''
+    })
   })
 
   test('personalizes recommendations and persists reader feedback', async ({ request, browser }) => {

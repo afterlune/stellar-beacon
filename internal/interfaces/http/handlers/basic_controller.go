@@ -33,6 +33,7 @@ var (
 	followService            service.FollowService            = new(service.MyFollowService)
 	topicSubscriptionService service.TopicSubscriptionService = new(service.MyTopicSubscriptionService)
 	recommendationService    service.RecommendationService    = new(service.MyRecommendationService)
+	collectionService        service.CollectionService        = new(service.MyCollectionService)
 )
 
 type Services struct {
@@ -66,6 +67,7 @@ type Services struct {
 	Follow            service.FollowService
 	TopicSubscription service.TopicSubscriptionService
 	Recommendation    service.RecommendationService
+	Collection        service.CollectionService
 }
 
 func ConfigureServices(s Services) {
@@ -99,4 +101,5 @@ func ConfigureServices(s Services) {
 	followService = s.Follow
 	topicSubscriptionService = s.TopicSubscription
 	recommendationService = s.Recommendation
+	collectionService = s.Collection
 }

@@ -75,6 +75,16 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/Topics.vue')
   },
   {
+    path: '/collections',
+    name: 'Collections',
+    component: () => import('../views/Collections.vue')
+  },
+  {
+    path: '/collections/:slug',
+    name: 'CollectionDetail',
+    component: () => import('../views/CollectionDetail.vue')
+  },
+  {
     path: '/for-you',
     name: 'ForYou',
     component: () => import('../views/ForYou.vue'),
@@ -112,6 +122,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'series/new', name: 'StudioSeriesNew', component: () => import('../views/studio/StudioEditorView.vue'), props: { kind: 'series' } },
       { path: 'series/:id/edit', name: 'StudioSeriesEdit', component: () => import('../views/studio/StudioEditorView.vue'), props: { kind: 'series' } },
       { path: 'series/:id/preview', name: 'StudioSeriesPreview', component: () => import('../views/studio/StudioPreviewView.vue'), props: { kind: 'series' } },
+      { path: 'collections', name: 'StudioCollections', component: () => import('../views/studio/StudioCollections.vue') },
+      { path: 'collections/:id/edit', name: 'StudioCollectionEdit', component: () => import('../views/studio/StudioCollectionEditor.vue') },
       { path: 'topics', name: 'StudioTopics', component: () => import('../views/studio/StudioTopics.vue') },
       { path: 'library', redirect: '/studio/library/reading' },
       { path: 'library/reading', name: 'StudioReading', component: () => import('../views/Reading.vue') },

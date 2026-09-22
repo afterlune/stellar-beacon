@@ -148,6 +148,28 @@ paths:
     get: { tags: [public], summary: List an author's public talks, operationId: listAuthorTalks, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/authors/{handle}/series:
     get: { tags: [public], summary: List an author's public series, operationId: listAuthorSeries, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/collections:
+    get:
+      tags: [public]
+      summary: List public reading lists
+      description: Only public, moderation-visible lists with at least one currently public article are returned. Since each member article is an immutable reference rather than a content snapshot, private, deleted, draft or hidden articles disappear immediately.
+      operationId: listPublicCollections
+      parameters:
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [latest, hot], default: latest } }
+        - { name: current, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/collections/{slug}:
+    get:
+      tags: [public]
+      summary: Get a public or unlisted reading list by slug
+      description: Private and moderated lists are absent. An unlisted list is reachable by its stable slug but never appears in discovery.
+      operationId: getPublicCollection
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/authors/{handle}/collections:
+    get: { tags: [public], summary: List an author's public reading lists, operationId: listAuthorCollections, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/reports/visit:
     post: { tags: [public], summary: Report a visit, operationId: reportVisit, responses: { '200': { $ref: '#/components/responses/Result' } } }
   /public/diagnostics/business-error:
@@ -308,6 +330,62 @@ paths:
     get: { tags: [auth], summary: List the current account reactions, operationId: listMyArticleReactions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/reactions/state:
     get: { tags: [auth], summary: Read reaction state for a set of articles, operationId: listArticleReactionStates, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /studio/collections:
+    get: { tags: [auth], summary: List reading lists owned by the current account, operationId: listStudioCollections, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post:
+      tags: [auth]
+      summary: Create a reading list
+      operationId: createStudioCollection
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionSaveInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}:
+    get: { tags: [auth], summary: Get an owned reading list with ordered items, operationId: getStudioCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put:
+      tags: [auth]
+      summary: Update owned reading-list metadata
+      operationId: updateStudioCollection
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionSaveInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    delete: { tags: [auth], summary: Soft-delete an owned reading list, operationId: deleteStudioCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /studio/collections/{collectionId}/items/{articleId}:
+    put:
+      tags: [auth]
+      summary: Add or update one article in an owned reading list
+      operationId: addStudioCollectionItem
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { $ref: '#/components/parameters/ArticleId' }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionItemInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    delete: { tags: [auth], summary: Remove one article from an owned reading list, operationId: removeStudioCollectionItem, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }, { $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /studio/collections/{collectionId}/order:
+    put:
+      tags: [auth]
+      summary: Replace the complete manual order of an owned reading list
+      operationId: reorderStudioCollection
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionOrderInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /admin/dashboard:
     get: { tags: [admin], summary: Get dashboard information, operationId: getAdminDashboard, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/content/analytics:
@@ -389,6 +467,8 @@ paths:
     delete: { tags: [admin], summary: Delete article collections, operationId: deleteSeries, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/series/options:
     get: { tags: [admin], summary: List article collection options, operationId: listSeriesOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/collections:
+    get: { tags: [admin], summary: List reading lists for moderation, operationId: listAdminCollections, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     post: { tags: [admin], summary: Save tag, operationId: saveTag, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     delete: { tags: [admin], summary: Delete tags, operationId: deleteTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/tags/search:
@@ -503,6 +583,7 @@ components:
     ArticleId: { name: articleId, in: path, required: true, schema: { type: integer, format: int64 } }
     AlbumId: { name: albumId, in: path, required: true, schema: { type: integer, format: int64 } }
     CommentId: { name: commentId, in: path, required: true, schema: { type: integer, format: int64 } }
+    CollectionId: { name: collectionId, in: path, required: true, schema: { type: integer, format: int64 } }
     TalkId: { name: talkId, in: path, required: true, schema: { type: integer, format: int64 } }
     UserInfoId: { name: userInfoId, in: path, required: true, schema: { type: integer, format: int64 } }
     AnalyticsRange: { name: range, in: query, schema: { type: string, enum: [7d, 30d, 90d, 12m], default: 7d } }
@@ -528,6 +609,27 @@ components:
         total: { type: integer, format: int64 }
         page: { type: integer, minimum: 1 }
         pageSize: { type: integer, minimum: 0 }
+    CollectionSaveInput:
+      type: object
+      required: [title, visibility]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 500, default: '' }
+        visibility: { type: string, enum: [private, unlisted, public] }
+    CollectionItemInput:
+      type: object
+      properties:
+        note: { type: string, maxLength: 280, default: '' }
+    CollectionOrderInput:
+      type: object
+      required: [articleIds]
+      properties:
+        articleIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items: { type: integer, format: int64 }
     ArticleReadSession:
       type: object
       required: [sessionId, activeMs, maxScrollPercent]

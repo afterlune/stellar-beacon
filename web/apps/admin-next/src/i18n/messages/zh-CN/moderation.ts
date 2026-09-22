@@ -1,8 +1,8 @@
 export default {
   'moderation.title': '内容审核',
-  'moderation.description': '集中查看文章、随想和系列的公开状态、审核理由与分发情况。',
+  'moderation.description': '集中查看文章、随想、系列和公开书单的公开状态、审核理由与分发情况。',
   'moderation.refresh': '刷新',
-  'moderation.searchPlaceholder': '搜索标题、正文或系列名称',
+  'moderation.searchPlaceholder': '搜索标题、正文、系列名称或书单',
   'moderation.allStatuses': '全部可见状态',
   'moderation.published': '公开',
   'moderation.private': '私有',
@@ -50,5 +50,9 @@ export default {
   'moderation.tabs.articles': '文章',
   'moderation.tabs.talks': '随想',
   'moderation.tabs.series': '系列',
+  'moderation.tabs.collections': '书单',
+  'moderation.collectionPublic': '公开',
+  'moderation.collectionUnlisted': '链接可见',
+  'moderation.collectionPrivate': '私有',
   'moderation.empty': '当前筛选条件下没有内容'
 }

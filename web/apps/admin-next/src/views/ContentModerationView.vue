@@ -20,11 +20,12 @@
         <a-tab-pane key="article" :title="t('moderation.tabs.articles')" />
         <a-tab-pane key="talk" :title="t('moderation.tabs.talks')" />
         <a-tab-pane key="series" :title="t('moderation.tabs.series')" />
+        <a-tab-pane key="collection" :title="t('moderation.tabs.collections')" />
       </a-tabs>
 
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
-          <a-select v-model="statusFilter" :placeholder="t('moderation.allStatuses')" allow-clear style="width: 150px" @change="reload">
+          <a-select v-if="activeKind !== 'collection'" v-model="statusFilter" :placeholder="t('moderation.allStatuses')" allow-clear style="width: 150px" @change="reload">
             <a-option :value="1">{{ t('moderation.published') }}</a-option>
             <a-option :value="2">{{ t('moderation.private') }}</a-option>
             <a-option :value="3">{{ t('moderation.draft') }}</a-option>
@@ -67,12 +68,12 @@
           </template>
           <template #author="{ record }">
             <div class="moderation-author-cell">
-              <span>{{ String(record.authorNickname || record.nickname || record.authorHandle || '—') }}</span>
-              <small v-if="record.authorHandle">@{{ record.authorHandle }}</small>
+              <span>{{ authorName(record) }}</span>
+              <small v-if="authorHandle(record)">@{{ authorHandle(record) }}</small>
             </div>
           </template>
           <template #status="{ record }">
-            <a-tag :color="visibilityColor(record.status)">{{ visibilityLabel(record.status) }}</a-tag>
+            <a-tag :color="contentVisibilityColor(record)">{{ contentVisibilityLabel(record) }}</a-tag>
           </template>
           <template #moderation="{ record }">
             <a-tag :color="record.moderationStatus === 'hidden' ? 'red' : 'green'">
@@ -86,7 +87,7 @@
               {{ Number(record.isFeatured) === 1 ? t('moderation.featured') : t('moderation.notFeatured') }}
             </a-tag>
           </template>
-          <template #updatedAt="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(String(record.updateTime || record.createTime || '')) }}</span></template>
+          <template #updatedAt="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(String(record.updatedAt || record.updateTime || record.createTime || '')) }}</span></template>
           <template #actions="{ record }">
             <a-dropdown trigger="click" position="br">
               <a-button type="text" size="small">{{ t('moderation.actions') }} <IconDown /></a-button>
@@ -102,10 +103,10 @@
                     {{ t('moderation.newsletter') }}
                   </a-doption>
                 </template>
-                <a-doption v-if="isOwner(record)" @click="editItem(record)">
+                <a-doption v-if="isOwner(record) && activeKind !== 'collection'" @click="editItem(record)">
                   {{ activeKind === 'series' ? t('moderation.manageSeries') : t('moderation.edit') }}
                 </a-doption>
-                <a-doption v-if="isOwner(record)" class="admin-danger-option" @click="deleteItem(record)">{{ t('moderation.delete') }}</a-doption>
+                <a-doption v-if="isOwner(record) && activeKind !== 'collection'" class="admin-danger-option" @click="deleteItem(record)">{{ t('moderation.delete') }}</a-doption>
               </template>
             </a-dropdown>
           </template>
@@ -141,6 +142,7 @@ import {
   deleteAdminSeries,
   deleteAdminTalks,
   distributeAdminArticle,
+  getAdminCollections,
   getAdminSeries,
   listAdminPage,
   moderateAdminContent,
@@ -155,7 +157,7 @@ import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
 
-type ContentKind = 'article' | 'talk' | 'series'
+type ContentKind = 'article' | 'talk' | 'series' | 'collection'
 type ModerationItem = Record<string, unknown> & { id: number; moderationStatus?: string; status?: number }
 
 const router = useRouter()
@@ -204,7 +206,9 @@ async function load(): Promise<void> {
       ? await listAdminPage<AdminArticle>('admin/articles', params)
       : activeKind.value === 'talk'
         ? await listAdminPage<AdminTalk>('admin/talks', params)
-        : await getAdminSeries(params)
+        : activeKind.value === 'series'
+          ? await getAdminSeries(params)
+          : await getAdminCollections(params)
     records.value = page.items as ModerationItem[]
     total.value = page.total
     clearSelection()
@@ -239,14 +243,41 @@ function isOwner(record: ModerationItem): boolean {
   return Number(record.userId) > 0 && Number(record.userId) === Number(auth.user?.userInfoId || auth.user?.id || 0)
 }
 function contentTitle(record: ModerationItem): string {
+  if (activeKind.value === 'collection') return String(record.title || '')
   if (activeKind.value === 'talk') return String(record.content || '')
   if (activeKind.value === 'series') return String(record.seriesName || '')
   return String(record.articleTitle || '')
 }
 function contentExcerpt(record: ModerationItem): string {
+  if (activeKind.value === 'collection') return String(record.description || '')
   if (activeKind.value === 'article') return String(record.categoryName || '')
   if (activeKind.value === 'series') return String(record.seriesDesc || '')
   return String(record.createTime || '')
+}
+function nestedOwner(record: ModerationItem): Record<string, unknown> {
+  return (record.owner || {}) as Record<string, unknown>
+}
+function authorName(record: ModerationItem): string {
+  const owner = nestedOwner(record)
+  return String(record.authorNickname || record.nickname || record.authorHandle || owner.nickname || owner.handle || '—')
+}
+function authorHandle(record: ModerationItem): string {
+  const owner = nestedOwner(record)
+  return String(record.authorHandle || owner.handle || '')
+}
+function contentVisibilityLabel(record: ModerationItem): string {
+  if (activeKind.value !== 'collection') return visibilityLabel(record.status)
+  const visibility = String(record.visibility || 'private')
+  if (visibility === 'public') return t('moderation.collectionPublic')
+  if (visibility === 'unlisted') return t('moderation.collectionUnlisted')
+  return t('moderation.collectionPrivate')
+}
+function contentVisibilityColor(record: ModerationItem): string {
+  if (activeKind.value !== 'collection') return visibilityColor(record.status)
+  const visibility = String(record.visibility || 'private')
+  if (visibility === 'public') return 'green'
+  if (visibility === 'unlisted') return 'orange'
+  return 'arcoblue'
 }
 function visibilityLabel(value: unknown): string {
   const status = Number(value)

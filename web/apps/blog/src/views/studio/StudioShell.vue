@@ -48,10 +48,11 @@ export default defineComponent({
       { path: '/studio/articles', index: '02', label: '文章', hint: '公开、私有与草稿' },
       { path: '/studio/talks', index: '03', label: '随想', hint: '轻量内容' },
       { path: '/studio/series', index: '04', label: '系列', hint: '组织长期主题' },
-      { path: '/studio/topics', index: '05', label: '分类与标签', hint: '私有词汇表' },
-      { path: '/studio/library/reading', index: '06', label: '阅读记录', hint: '最近读过' },
-      { path: '/studio/library/favorites', index: '07', label: '我的收藏', hint: '稍后阅读' },
-      { path: '/studio/profile', index: '08', label: '公开资料', hint: '主页身份与头像' }
+      { path: '/studio/collections', index: '05', label: '书单', hint: '公开文章收藏集' },
+      { path: '/studio/topics', index: '06', label: '分类与标签', hint: '私有词汇表' },
+      { path: '/studio/library/reading', index: '07', label: '阅读记录', hint: '最近读过' },
+      { path: '/studio/library/favorites', index: '08', label: '我的收藏', hint: '稍后阅读' },
+      { path: '/studio/profile', index: '09', label: '公开资料', hint: '主页身份与头像' }
     ]
     const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
     const logout = async () => {

@@ -123,11 +123,12 @@ type TopicOverview struct {
 }
 type AuthorCard struct {
 	PublicAuthor
-	ArticleCount  int  `json:"articleCount"`
-	TalkCount     int  `json:"talkCount"`
-	SeriesCount   int  `json:"seriesCount"`
-	FollowerCount int  `json:"followerCount"`
-	IsFollowing   bool `json:"isFollowing,omitempty"`
+	ArticleCount    int  `json:"articleCount"`
+	TalkCount       int  `json:"talkCount"`
+	SeriesCount     int  `json:"seriesCount"`
+	CollectionCount int  `json:"collectionCount"`
+	FollowerCount   int  `json:"followerCount"`
+	IsFollowing     bool `json:"isFollowing,omitempty"`
 	// LastPublishedAt is only filled for the active-author ranking, where the
 	// reader needs to see why an author is listed as recently active.
 	LastPublishedAt *time.Time `json:"lastPublishedAt,omitempty"`

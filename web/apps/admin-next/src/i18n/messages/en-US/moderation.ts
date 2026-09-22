@@ -1,8 +1,8 @@
 export default {
   'moderation.title': 'Content moderation',
-  'moderation.description': 'Review visibility, moderation reasons and distribution for articles, talks and series.',
+  'moderation.description': 'Review visibility, moderation reasons and distribution for articles, talks, series and public reading lists.',
   'moderation.refresh': 'Refresh',
-  'moderation.searchPlaceholder': 'Search titles, body text or series names',
+  'moderation.searchPlaceholder': 'Search titles, body text, series or reading lists',
   'moderation.allStatuses': 'All visibility states',
   'moderation.published': 'Public',
   'moderation.private': 'Private',
@@ -50,5 +50,9 @@ export default {
   'moderation.tabs.articles': 'Articles',
   'moderation.tabs.talks': 'Talks',
   'moderation.tabs.series': 'Series',
+  'moderation.tabs.collections': 'Reading lists',
+  'moderation.collectionPublic': 'Public',
+  'moderation.collectionUnlisted': 'Link only',
+  'moderation.collectionPrivate': 'Private',
   'moderation.empty': 'No content matches the current filters'
 }

@@ -223,6 +223,39 @@ export default {
   getRecommendations: (params: { cursor?: string; size?: number; seedArticleIds?: number[] }) => {
     return http.post('/auth/me/recommendations/query', params)
   },
+  getPublicCollections: (params: { sort?: 'latest' | 'hot'; current?: number; size?: number }) => {
+    return http.get('/public/collections', { params })
+  },
+  getPublicCollection: (slug: string) => {
+    return http.get('/public/collections/' + encodeURIComponent(slug))
+  },
+  getAuthorCollections: (handle: string, params: { current?: number; size?: number }) => {
+    return http.get('/public/authors/' + encodeURIComponent(handle) + '/collections', { params })
+  },
+  getStudioCollections: (params: { current?: number; size?: number }) => {
+    return http.get('/studio/collections', { params })
+  },
+  getStudioCollection: (collectionId: number) => {
+    return http.get('/studio/collections/' + encodeURIComponent(collectionId))
+  },
+  createStudioCollection: (params: { title: string; description: string; visibility: string }) => {
+    return http.post('/studio/collections', params)
+  },
+  updateStudioCollection: (collectionId: number, params: { title: string; description: string; visibility: string }) => {
+    return http.put('/studio/collections/' + encodeURIComponent(collectionId), params)
+  },
+  deleteStudioCollection: (collectionId: number) => {
+    return http.delete('/studio/collections/' + encodeURIComponent(collectionId))
+  },
+  addStudioCollectionItem: (collectionId: number, articleId: number, note = '') => {
+    return http.put(`/studio/collections/${encodeURIComponent(collectionId)}/items/${encodeURIComponent(articleId)}`, { note })
+  },
+  removeStudioCollectionItem: (collectionId: number, articleId: number) => {
+    return http.delete(`/studio/collections/${encodeURIComponent(collectionId)}/items/${encodeURIComponent(articleId)}`)
+  },
+  reorderStudioCollection: (collectionId: number, articleIds: number[]) => {
+    return http.put(`/studio/collections/${encodeURIComponent(collectionId)}/order`, { articleIds })
+  },
   getRecommendationFeedback: (params: { current?: number; size?: number }) => {
     return http.get('/auth/me/recommendation-feedback', { params })
   },

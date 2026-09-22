@@ -37,6 +37,15 @@ export default {
       children: []
     },
     {
+      name: 'Collections',
+      path: '/collections',
+      i18n: {
+        cn: '书单',
+        en: 'Reading Lists'
+      },
+      children: []
+    },
+    {
       name: 'Talks',
       path: '/talks',
       i18n: {

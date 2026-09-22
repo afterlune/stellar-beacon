@@ -1,7 +1,7 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticle, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
+import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticle, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type CollectionSummary, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
   type ContentAuditItem, type ContentAuditRecord, type ContentContinuationTarget, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
@@ -261,6 +261,10 @@ export async function getAdminSeries(params: Record<string, string | number> = {
   return listAdminPage<AdminSeries>('admin/series', params, config)
 }
 
+export async function getAdminCollections(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<CollectionSummary>> {
+  return listAdminPage<CollectionSummary>('admin/collections', params, config)
+}
+
 export async function listAdminSeriesOptions(): Promise<AdminSeries[]> {
   const response = await http.get<ResultVO<AdminSeries[]>>('admin/series/options')
   return responseData(response)
@@ -453,7 +457,7 @@ export async function saveAdminArticle(payload: Record<string, unknown>): Promis
   responseData(response)
 }
 
-export async function moderateAdminContent(payload: { contentType: 'article' | 'talk' | 'series'; id: number; hidden: boolean; reason: string }): Promise<void> {
+export async function moderateAdminContent(payload: { contentType: 'article' | 'talk' | 'series' | 'collection'; id: number; hidden: boolean; reason: string }): Promise<void> {
   const response = await http.put<ResultVO<unknown>>(`admin/content/${payload.contentType}/${encodeURIComponent(payload.id)}/moderation`, payload)
   responseData(response)
 }

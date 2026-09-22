@@ -52,6 +52,9 @@ func (r *MyPlatformRepo) attachAuthorCounts(session *xorm.Session, author *port.
 	if _, err := session.SQL(`SELECT count(1) FROM t_series WHERE user_id = ? AND is_delete = 0 AND status = 1 AND moderation_status = 'visible'`, author.Id).Get(&author.SeriesCount); err != nil {
 		return apperrors.Unavailable("platform.author.series_count", err)
 	}
+	if _, err := session.SQL(`SELECT count(1) FROM t_collection c WHERE c.user_id = ? AND c.visibility = 'public' AND c.moderation_status = 'visible' AND c.is_delete = 0 AND EXISTS (SELECT 1 FROM t_collection_item i JOIN t_article a ON a.id = i.article_id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible' WHERE i.collection_id = c.id)`, author.Id).Get(&author.CollectionCount); err != nil {
+		return apperrors.Unavailable("platform.author.collection_count", err)
+	}
 	if _, err := session.SQL(`
 		SELECT count(1) FROM t_user_follow follow
 		JOIN t_user_info follower ON follower.id = follow.follower_id AND follower.is_disable = 0
@@ -1246,6 +1249,8 @@ func (r *MyPlatformRepo) ModerateContent(ctx context.Context, contentType string
 		table = "t_talk"
 	case "series":
 		table = "t_series"
+	case "collection":
+		table = "t_collection"
 	default:
 		return apperrors.Invalid("platform.moderation", "unsupported content type")
 	}

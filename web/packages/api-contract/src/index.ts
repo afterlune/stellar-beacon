@@ -903,3 +903,41 @@ export interface TopicSubscription {
 export interface TopicFeedItem extends FollowFeedItem {
   topics: string[]
 }
+
+export type CollectionVisibility = 'private' | 'unlisted' | 'public'
+export type CollectionSort = 'latest' | 'hot'
+
+export interface CollectionSummary {
+  id?: number
+  slug: string
+  title: string
+  description: string
+  visibility: CollectionVisibility
+  owner?: PublicAuthorSummary
+  cover?: string
+  articleCount: number
+  hotScore?: number
+  moderationStatus?: 'visible' | 'hidden' | string
+  moderationReason?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CollectionItemView {
+  articleId: number
+  note: string
+  position: number
+  available: boolean
+  article?: Omit<RecommendationItem, 'reason'>
+}
+
+export interface CollectionDetail {
+  collection: CollectionSummary
+  items: CollectionItemView[]
+}
+
+export interface CollectionSaveInput {
+  title: string
+  description: string
+  visibility: CollectionVisibility
+}

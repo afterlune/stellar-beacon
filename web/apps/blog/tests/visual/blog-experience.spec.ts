@@ -10,7 +10,8 @@ const adminPassword = process.env.E2E_ADMIN_PASSWORD || ''
 const authenticatedRoutes = adminEmail && adminPassword
   ? [
       { name: 'for-you', path: '/for-you', authenticated: true },
-      { name: 'following', path: '/following', authenticated: true }
+      { name: 'following', path: '/following', authenticated: true },
+      { name: 'studio-collections', path: '/studio/collections', authenticated: true }
     ]
   : []
 
@@ -21,6 +22,7 @@ const routes = [
   { name: 'archives', path: '/archives' },
   { name: 'tags', path: '/tags' },
   { name: 'topics', path: '/topics' },
+  { name: 'collections', path: '/collections' },
   { name: 'categories', path: '/categories' },
   { name: 'series', path: '/series' },
   { name: 'talks', path: '/talks' },

@@ -104,6 +104,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyRecommendationFeedbackSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyCollectionSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1454,6 +1457,74 @@ func applyRecommendationFeedbackSchema(ctx context.Context, engine *xorm.Engine)
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit recommendation feedback migration: %w", err)
+	}
+	return nil
+}
+
+// applyCollectionSchema adds reader-curated article collections. Collections
+// are owner-scoped; public and unlisted items remain references so article
+// withdrawal and moderation can never be bypassed.
+func applyCollectionSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 23)").Get(&applied); err != nil {
+		return fmt.Errorf("check collection migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin collection migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS t_collection (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			slug VARCHAR(80) NOT NULL UNIQUE,
+			title VARCHAR(80) NOT NULL,
+			description VARCHAR(500) NOT NULL DEFAULT '',
+			visibility VARCHAR(16) NOT NULL DEFAULT 'private',
+			moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible',
+			moderation_reason VARCHAR(255) NOT NULL DEFAULT '',
+			moderated_by INTEGER NOT NULL DEFAULT 0,
+			moderated_at TIMESTAMPTZ NULL,
+			is_delete SMALLINT NOT NULL DEFAULT 0,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK (visibility IN ('private', 'unlisted', 'public')),
+			CHECK (moderation_status IN ('visible', 'hidden'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_owner ON t_collection(user_id, is_delete, update_time DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_public ON t_collection(visibility, moderation_status, is_delete, update_time DESC, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS t_collection_item (
+			id BIGSERIAL PRIMARY KEY,
+			collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
+			article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			note VARCHAR(280) NOT NULL DEFAULT '',
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (collection_id, article_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_item_order ON t_collection_item(collection_id, sort_order, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_item_article ON t_collection_item(article_id, collection_id)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply collection schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 23, "reader-collections"); err != nil {
+		return fmt.Errorf("record collection migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit collection migration: %w", err)
 	}
 	return nil
 }

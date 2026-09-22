@@ -133,6 +133,7 @@
             <span>{{ reactions.favorite ? t('reactions.favorited') : t('reactions.favorite') }}</span>
             <span class="article-reaction__count">{{ reactions.favoriteCount }}</span>
           </button>
+          <AddToCollectionButton v-if="userToken && article.id" :article-id="Number(article.id)" />
           <router-link v-if="userToken" class="article-reaction__link" to="/favorites">{{ t('reactions.favorites') }}</router-link>
           <router-link v-if="seriesInfo" class="article-reaction__link" :to="'/series/' + seriesInfo.id">
             {{ t('series.inSeries', { name: seriesInfo.seriesName }) }}
@@ -241,6 +242,7 @@ import markdownToHtml from '@/utils/markdown'
 import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
 import { pageCount, pageRecords } from '@/utils/page'
 import NewsletterSubscribe from '@/components/NewsletterSubscribe.vue'
+import AddToCollectionButton from '@/components/AddToCollectionButton.vue'
 import { useSeoMeta } from '@/composables/useSeoMeta'
 import { useReaderStore } from '@/stores/reader'
 import { scrollToArticleHeading } from '@/utils/article-reader'
@@ -260,7 +262,7 @@ function createReadingSessionId(): string {
 
 export default defineComponent({
   name: 'Article',
-  components: { Sidebar, Comment, SubTitle, ArticleCard, Profile, Sticky, Navigator, NewsletterSubscribe },
+  components: { Sidebar, Comment, SubTitle, ArticleCard, Profile, Sticky, Navigator, NewsletterSubscribe, AddToCollectionButton },
   setup() {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
     const commonStore = useCommonStore()

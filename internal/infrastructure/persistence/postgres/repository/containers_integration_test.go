@@ -195,6 +195,20 @@ CREATE TABLE t_recommendation_feedback (
     topic_type VARCHAR(16) NULL, topic_key VARCHAR(64) NULL, target_label VARCHAR(255) NOT NULL,
     create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (user_id, target_type, target_key)
+);
+CREATE TABLE t_collection (
+    id BIGSERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    slug VARCHAR(80) NOT NULL UNIQUE, title VARCHAR(80) NOT NULL, description VARCHAR(500) NOT NULL DEFAULT '',
+    visibility VARCHAR(16) NOT NULL DEFAULT 'private', moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible',
+    moderation_reason VARCHAR(255) NOT NULL DEFAULT '', moderated_by INTEGER NOT NULL DEFAULT 0, moderated_at TIMESTAMPTZ NULL,
+    is_delete SMALLINT NOT NULL DEFAULT 0, create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE t_collection_item (
+    id BIGSERIAL PRIMARY KEY, collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
+    article_id INTEGER NOT NULL REFERENCES t_article(id) ON DELETE CASCADE, note VARCHAR(280) NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0, create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE (collection_id, article_id)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
@@ -851,6 +865,71 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	coldStart, err := recommendationRepo.ListRecommendations(ctx, port.RecommendationRequest{UserID: 5, Size: 10, Snapshot: time.Now().UTC()})
 	if err != nil || coldStart.Personalized || len(coldStart.Items) == 0 {
 		t.Fatalf("cold-start recommendations must stay available: page=%+v err=%v", coldStart, err)
+	}
+
+	collectionRepo := NewCollectionRepo(xormEngine)
+	collection, err := collectionRepo.CreateOwned(ctx, 1, "integration-reading-list", port.CollectionSaveInput{
+		Title: "Integration reading list", Description: "public article path", Visibility: port.CollectionVisibilityPublic,
+	})
+	if err != nil || collection.ID <= 0 {
+		t.Fatalf("create collection: collection=%+v err=%v", collection, err)
+	}
+	if _, total, err := collectionRepo.ListPublic(ctx, port.CollectionSortLatest, 1, 10); err != nil || total != 0 {
+		t.Fatalf("empty public collection must stay undiscoverable: total=%d err=%v", total, err)
+	}
+	if err := collectionRepo.AddItem(ctx, 1, collection.ID, 1, "first note"); err != nil {
+		t.Fatalf("add first collection item: %v", err)
+	}
+	if err := collectionRepo.AddItem(ctx, 1, collection.ID, 2, "second note"); err != nil {
+		t.Fatalf("add second collection item: %v", err)
+	}
+	publicCollections, total, err := collectionRepo.ListPublic(ctx, port.CollectionSortHot, 1, 10)
+	if err != nil || total != 1 || len(publicCollections) != 1 || publicCollections[0].ID != collection.ID || publicCollections[0].HotScore <= 0 {
+		t.Fatalf("unexpected public collection page: items=%+v total=%d err=%v", publicCollections, total, err)
+	}
+	if err := collectionRepo.Reorder(ctx, 1, collection.ID, []int{2, 1}); err != nil {
+		t.Fatalf("reorder collection: %v", err)
+	}
+	detail, err := collectionRepo.GetPublicBySlug(ctx, collection.Slug)
+	if err != nil || len(detail.Items) != 2 || detail.Items[0].ArticleID != 2 || detail.Items[0].Note != "second note" {
+		t.Fatalf("unexpected ordered collection: detail=%+v err=%v", detail, err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE t_article SET status = 2 WHERE id = 1"); err != nil {
+		t.Fatalf("make collected article private: %v", err)
+	}
+	if _, total, err := collectionRepo.ListPublic(ctx, port.CollectionSortLatest, 1, 10); err != nil || total != 1 {
+		t.Fatalf("collection with one remaining article must stay public: total=%d err=%v", total, err)
+	}
+	if detail, err := collectionRepo.GetPublicBySlug(ctx, collection.Slug); err != nil || len(detail.Items) != 2 || detail.Items[0].ArticleID != 2 || detail.Items[1].ArticleID != 1 || detail.Items[1].Available {
+		t.Fatalf("owner-facing collection detail must retain unavailable references: detail=%+v err=%v", detail, err)
+	}
+	if _, err := collectionRepo.UpdateOwned(ctx, 1, collection.ID, port.CollectionSaveInput{
+		Title: collection.Title, Description: collection.Description, Visibility: port.CollectionVisibilityUnlisted,
+	}); err != nil {
+		t.Fatalf("make collection unlisted: %v", err)
+	}
+	if _, total, err := collectionRepo.ListPublic(ctx, port.CollectionSortLatest, 1, 10); err != nil || total != 0 {
+		t.Fatalf("unlisted collection must leave discovery: total=%d err=%v", total, err)
+	}
+	if _, err := collectionRepo.GetPublicBySlug(ctx, collection.Slug); err != nil {
+		t.Fatalf("unlisted collection must stay reachable by slug: %v", err)
+	}
+	if err := platformRepo.ModerateContent(ctx, "collection", collection.ID, 1, true, "integration collection"); err != nil {
+		t.Fatalf("hide collection: %v", err)
+	}
+	if _, err := collectionRepo.GetPublicBySlug(ctx, collection.Slug); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("hidden collection must not be publicly reachable: %v", err)
+	}
+	if adminCollections, total, err := collectionRepo.ListAdmin(ctx, 1, 10, "hidden", "Integration reading"); err != nil || total != 1 || len(adminCollections) != 1 {
+		t.Fatalf("hidden collection must remain visible to admins: items=%+v total=%d err=%v", adminCollections, total, err)
+	}
+	if err := platformRepo.ModerateContent(ctx, "collection", collection.ID, 1, false, ""); err != nil {
+		t.Fatalf("restore collection: %v", err)
+	}
+	if _, err := collectionRepo.UpdateOwned(ctx, 2, collection.ID, port.CollectionSaveInput{
+		Title: "stolen", Description: "", Visibility: port.CollectionVisibilityPublic,
+	}); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("non-owner collection update must be rejected: %v", err)
 	}
 	redisContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
