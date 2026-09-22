@@ -93,6 +93,59 @@ test.describe('blog real backend main chain @integration', () => {
     }
   })
 
+  test('personalizes recommendations and persists reader feedback', async ({ request, browser }) => {
+    const topicKey = 'integration topic'
+    const readerFixtureID = await findReaderFixtureArticleID(request)
+    const existing = await getAPIData(request, '/api/v1/auth/me/recommendation-feedback?current=1&size=100', user.token)
+    for (const item of itemsOf(existing)) {
+      await deleteAPI(request, `/api/v1/auth/me/recommendation-feedback/${Number(item.id)}`, user.token).catch(() => undefined)
+    }
+    await deleteAPI(request, `/api/v1/auth/me/following/${fixtureAuthorID}`, user.token).catch(() => undefined)
+    await putAPI(request, '/api/v1/auth/me/reactions', user.token, { articleId: fixtureArticleID, reaction: 'favorite', active: false }).catch(() => undefined)
+    await putAPI(request, '/api/v1/auth/me/reactions', user.token, { articleId: fixtureArticleID, reaction: 'like', active: false }).catch(() => undefined)
+    await putAPI(request, `/api/v1/auth/me/topic-subscriptions/${encodeURIComponent('tag')}/${encodeURIComponent(topicKey)}`, user.token, {}).catch(() => undefined)
+
+    try {
+      const personalized = await postAPI(request, '/api/v1/auth/me/recommendations/query', user.token, {
+        size: 12,
+        seedArticleIds: [readerFixtureID]
+      })
+      expect(personalized.personalized, 'a topic subscription and local seed must personalize the feed').toBe(true)
+      const recommendations = itemsOf(personalized)
+      expect(recommendations.length, 'recommendations must contain public articles').toBeGreaterThan(0)
+      expect(recommendations.some((item: any) => Number(item.id) === fixtureArticleID)).toBe(true)
+      expect(recommendations.every((item: any) => item.author?.handle !== 'e2e-user')).toBe(true)
+      expect(recommendations.every((item: any) => Boolean(item.reason?.label))).toBe(true)
+
+      const target = recommendations.find((item: any) => Number(item.id) === fixtureArticleID)
+      const articleFeedback = await putAPI(request, '/api/v1/auth/me/recommendation-feedback', user.token, {
+        targetType: 'article', articleId: fixtureArticleID
+      })
+      expect(Number(articleFeedback.id)).toBeGreaterThan(0)
+      const hidden = await postAPI(request, '/api/v1/auth/me/recommendations/query', user.token, { size: 12 })
+      expect(itemsOf(hidden).some((item: any) => Number(item.id) === fixtureArticleID)).toBe(false)
+      await deleteAPI(request, `/api/v1/auth/me/recommendation-feedback/${Number(articleFeedback.id)}`, user.token)
+
+      const authorFeedback = await putAPI(request, '/api/v1/auth/me/recommendation-feedback', user.token, {
+        targetType: 'author', authorId: Number(target.userId)
+      })
+      const topicFeedback = await putAPI(request, '/api/v1/auth/me/recommendation-feedback', user.token, {
+        targetType: 'topic', topicType: 'tag', topicKey
+      })
+      const stored = await getAPIData(request, '/api/v1/auth/me/recommendation-feedback?current=1&size=100', user.token)
+      expect(itemsOf(stored).some((item: any) => Number(item.id) === Number(authorFeedback.id))).toBe(true)
+      expect(itemsOf(stored).some((item: any) => Number(item.id) === Number(topicFeedback.id))).toBe(true)
+      await deleteAPI(request, `/api/v1/auth/me/recommendation-feedback/${Number(authorFeedback.id)}`, user.token)
+      await deleteAPI(request, `/api/v1/auth/me/recommendation-feedback/${Number(topicFeedback.id)}`, user.token)
+
+      readerSession = await createBrowserSession(browser, user)
+      await readerSession.page.goto('/for-you', { waitUntil: 'domcontentloaded' })
+      await expect(readerSession.page.getByTestId('recommendation-panel')).toBeVisible()
+      await expect(readerSession.page.getByTestId('recommendation-card').first()).toBeVisible()
+    } finally {
+      await deleteAPI(request, `/api/v1/auth/me/topic-subscriptions/${encodeURIComponent('tag')}/${encodeURIComponent(topicKey)}`, user.token).catch(() => undefined)
+    }
+  })
   test('publishes content and completes interaction notification flows', async ({ request, browser }) => {
     authorSession = await createBrowserSession(browser, admin)
     readerSession = await createBrowserSession(browser, user)
@@ -408,6 +461,12 @@ async function findFixtureArticleID(request: APIRequestContext): Promise<number>
   return Number(item.id)
 }
 
+async function findReaderFixtureArticleID(request: APIRequestContext): Promise<number> {
+  const data = await getAPIData(request, '/api/v1/public/authors/e2e-user/articles?current=1&size=100')
+  const item = itemsOf(data).find((entry: any) => entry.articleTitle === 'Integration reader topic fixture')
+  expect(item, 'seeded reader topic article must exist').toBeTruthy()
+  return Number(item.id)
+}
 async function findRootCommentID(request: APIRequestContext, articleID: number): Promise<number> {
   const data = await getAPIData(request, `/api/v1/public/comments?type=1&topicId=${articleID}&current=1&size=100`)
   const item = itemsOf(data).find((entry: any) => entry.commentContent === 'Integration author root comment')

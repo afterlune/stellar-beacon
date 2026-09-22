@@ -33,6 +33,8 @@
 - `GET /api/v1/public/authors?sort=articles|followers|active`：作者榜；`active` 按最近一次公开发布排序。
 - `GET /api/v1/public/topics`：话题广场，分类、标签与系列复用同一热度口径聚合。
 - `GET`/`PUT`/`DELETE /api/v1/auth/me/topic-subscriptions*`：读者按**归一化话题名**（分类或标签，跨作者）订阅、静音与取消订阅；`GET /api/v1/auth/me/topic-feed` 返回订阅话题下的新文章，通知中心新增 `topic` 分组（受账号级 `notifyTopic` 开关与单订阅静音控制）。
+- `POST /api/v1/auth/me/recommendations/query`：登录态“为你推荐”；组合关注、话题订阅、点赞收藏与请求体内的本机阅读种子，排除本人和已关注作者，结果带可解释理由与游标。
+- `GET`/`PUT`/`DELETE /api/v1/auth/me/recommendation-feedback*`：管理隐藏文章、减少作者或主题的推荐偏好并恢复。
 
 ## 开发检查
 

@@ -145,3 +145,33 @@ func minInt(left, right int) int {
 	}
 	return right
 }
+
+func TestIsReadLimitedRequestKeepsBodyRecommendationOnReadBudget(t *testing.T) {
+	tests := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{method: http.MethodGet, path: "/v1/public/feed", want: true},
+		{method: http.MethodGet, path: "/v1/auth/me/notifications/unread-count", want: true},
+		{method: http.MethodGet, path: "/v1/auth/verification-code", want: false},
+		{method: http.MethodPost, path: "/v1/auth/me/recommendations/query", want: true},
+		{method: http.MethodPost, path: "/v1/auth/me/topic-subscriptions/tag/go", want: false},
+	}
+	for _, tt := range tests {
+		if got := isReadLimitedRequest(tt.method, tt.path); got != tt.want {
+			t.Fatalf("isReadLimitedRequest(%s, %s) = %v, want %v", tt.method, tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestRecommendationQueryOmitsSeedsFromOperationAndExceptionLogs(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/me/recommendations/query", strings.NewReader(`{"seedArticleIds":[42]}`))
+	payload := requestLogPayload(req, []byte(`{"seedArticleIds":[42]}`))
+	if strings.Contains(payload, "42") {
+		t.Fatalf("recommendation seeds leaked into log payload: %q", payload)
+	}
+	if shouldRecordOperation(http.MethodPost, "/v1/auth/me/recommendations/query") {
+		t.Fatal("read-only recommendation queries must not create operation-log rows")
+	}
+}

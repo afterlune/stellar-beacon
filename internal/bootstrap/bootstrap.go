@@ -89,6 +89,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	contentAudit := repository.NewContentAuditRepo(engine)
 	followRepo := repository.NewFollowRepo(engine)
 	topicSubscriptionRepo := repository.NewTopicSubscriptionRepo(engine)
+	recommendationRepo := repository.NewRecommendationRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -230,6 +231,11 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		return nil, errors.Unavailable("bootstrap.service.series", err)
 	}
 	mediaService := service.NewMediaService(ossStorage)
+	recommendationService, err := service.NewRecommendationService(recommendationRepo, articleReaction)
+	if err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.recommendation", err)
+	}
 
 	scheduler := task.NewScheduler(job, jobLog, redisCache)
 	if err := task.RegisterDefaultTargets(scheduler, task.DefaultTargetsDeps{
@@ -271,6 +277,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		ContentAudit:      service.NewContentAuditService(contentAudit),
 		Follow:            service.NewFollowService(followRepo),
 		TopicSubscription: service.NewTopicSubscriptionService(topicSubscriptionRepo),
+		Recommendation:    recommendationService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

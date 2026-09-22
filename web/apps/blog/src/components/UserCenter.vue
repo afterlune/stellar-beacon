@@ -55,6 +55,18 @@
             @change="changeCommentNotice" />
         </div>
       </section>
+
+      <section class="account-section">
+        <header><h3>推荐偏好</h3><span>管理隐藏文章和减少的作者、主题</span></header>
+        <p v-if="feedbackLoading" class="account-empty">正在加载…</p>
+        <div v-else-if="feedbackItems.length" class="account-feedback-list">
+          <div v-for="item in feedbackItems" :key="item.id" class="account-row">
+            <div><strong>{{ item.label }}</strong><small>{{ feedbackTypeLabel(item.targetType) }}</small></div>
+            <button type="button" @click="restoreRecommendation(item)">恢复推荐</button>
+          </div>
+        </div>
+        <p v-else class="account-empty">还没有推荐偏好。</p>
+      </section>
     </template>
   </el-drawer>
 
@@ -78,7 +90,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, getCurrentInstance, reactive, toRef, toRefs } from 'vue'
+import { defineComponent, getCurrentInstance, reactive, toRef, toRefs, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api/api'
 import { useUserStore } from '@/stores/user'
@@ -97,7 +109,9 @@ export default defineComponent({
       emailDialogVisible: false,
       email: '',
       verificationCode: '',
-      loading: false
+      loading: false,
+      feedbackLoading: false,
+      feedbackItems: [] as any[]
     })
 
     const handleClose = () => {
@@ -179,6 +193,35 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
+    const feedbackTypeLabel = (targetType: string) => {
+      if (targetType === 'article') return '已隐藏文章'
+      if (targetType === 'author') return '已减少作者'
+      return '已减少主题'
+    }
+    const loadRecommendationFeedback = async () => {
+      if (!userStore.token || !userStore.userInfo?.userInfoId) return
+      reactiveData.feedbackLoading = true
+      try {
+        const response = await api.getRecommendationFeedback({ current: 1, size: 100 })
+        const data = response?.data?.data || {}
+        reactiveData.feedbackItems = Array.isArray(data.items) ? data.items : Array.isArray(data.records) ? data.records : []
+      } catch {
+        reactiveData.feedbackItems = []
+      } finally {
+        reactiveData.feedbackLoading = false
+      }
+    }
+    const restoreRecommendation = async (item: any) => {
+      try {
+        const response = await api.deleteRecommendationFeedback(Number(item.id))
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '恢复推荐失败')
+        reactiveData.feedbackItems = reactiveData.feedbackItems.filter((row) => row.id !== item.id)
+        proxy.$notify({ title: '成功', message: '推荐偏好已恢复', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '恢复推荐失败', type: 'error' })
+      }
+    }
+    watch(visible, (open) => { if (open) void loadRecommendationFeedback() })
     const sendCode = async () => {
       try {
         const response = await api.sendValidationCode(reactiveData.email)
@@ -192,7 +235,8 @@ export default defineComponent({
 
     return {
       userInfo, visible, defaultAvatar, ...toRefs(reactiveData), handleClose, openStudioProfile,
-      bindingEmail, changeSubscribe, changeInteractionNotice, changeTopicNotice, changeCommentNotice, sendCode
+      bindingEmail, changeSubscribe, changeInteractionNotice, changeTopicNotice, changeCommentNotice, sendCode,
+      feedbackTypeLabel, restoreRecommendation
     }
   }
 })
@@ -214,6 +258,6 @@ export default defineComponent({
 .account-section header span { color: var(--text-ob-dim); font-size: 11px; }
 .account-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 0; border-top: 1px solid var(--border-hairline); }
 .account-row strong, .account-row small { display: block; }
-.account-row small { margin-top: 3px; color: var(--text-ob-dim); font-size: 11px; }
+.account-row small { margin-top: 3px; color: var(--text-ob-dim); font-size: 11px; } .account-empty { margin: 0; padding: 14px 0; color: var(--text-ob-dim); font-size: 11px; } .account-feedback-list .account-row strong { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 620px) { .account-identity { grid-template-columns: 52px 1fr; } .account-identity button { grid-column: 1 / -1; text-align: left; } }
 </style>

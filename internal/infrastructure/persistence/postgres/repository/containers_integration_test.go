@@ -188,6 +188,13 @@ CREATE TABLE t_topic_subscription (
     start_event_id BIGINT NOT NULL DEFAULT 0, last_read_event_id BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (user_id, topic_type, topic_key)
+);
+CREATE TABLE t_recommendation_feedback (
+    id BIGSERIAL PRIMARY KEY, user_id INTEGER NOT NULL, target_type VARCHAR(16) NOT NULL,
+    target_key VARCHAR(160) NOT NULL, article_id INTEGER NULL, author_id INTEGER NULL,
+    topic_type VARCHAR(16) NULL, topic_key VARCHAR(64) NULL, target_label VARCHAR(255) NOT NULL,
+    create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, target_type, target_key)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
@@ -712,6 +719,138 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	}
 	if _, count, err := topicRepo.ListTopicFeed(ctx, 2, 1, 10); err != nil || count != 0 {
 		t.Fatalf("unsubscribed topic feed must be empty: count=%d err=%v", count, err)
+	}
+	// Recommendation fixtures cover the account-scoped ranking path, including
+	// followed-author exclusion, local reading seeds and persistent feedback.
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO t_user_info (id, handle, email, nickname, avatar, is_subscribe, is_disable)
+		VALUES (3, 'recommend-author', 'rec-author@example.com', 'Recommend Author', '', 0, 0),
+		       (4, 'followed-author', 'followed@example.com', 'Followed Author', '', 0, 0),
+		       (5, 'archive-author', 'archive@example.com', 'Archive Author', '', 0, 0);
+		INSERT INTO t_tag (id, tag_name) VALUES (5, 'recommendation topic');`); err != nil {
+		t.Fatalf("insert recommendation users: %v", err)
+	}
+	recommendationCategoryID, err := ensureNamedCategoryForTest(ctx, db, "Recommendation Category")
+	if err != nil {
+		t.Fatalf("create recommendation category: %v", err)
+	}
+	recArticleA, err := insertPublicArticle(ctx, db, 3, recommendationCategoryID, "recommendation primary", "recommendation topic")
+	if err != nil {
+		t.Fatalf("insert recommendation primary: %v", err)
+	}
+	recArticleB, err := insertPublicArticle(ctx, db, 3, recommendationCategoryID, "recommendation secondary", "recommendation topic")
+	if err != nil {
+		t.Fatalf("insert recommendation secondary: %v", err)
+	}
+	recArticleC, err := insertPublicArticle(ctx, db, 3, recommendationCategoryID, "recommendation third", "recommendation topic")
+	if err != nil {
+		t.Fatalf("insert recommendation third: %v", err)
+	}
+	selfArticle, err := insertPublicArticle(ctx, db, 2, recommendationCategoryID, "recommendation self", "recommendation topic")
+	if err != nil {
+		t.Fatalf("insert self recommendation article: %v", err)
+	}
+	followedArticle, err := insertPublicArticle(ctx, db, 4, recommendationCategoryID, "recommendation followed", "recommendation topic")
+	if err != nil {
+		t.Fatalf("insert followed recommendation article: %v", err)
+	}
+	archiveArticle, err := insertPublicArticle(ctx, db, 5, recommendationCategoryID, "recommendation archive", "recommendation topic")
+	if err != nil {
+		t.Fatalf("insert archive recommendation article: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE t_article SET create_time = CURRENT_TIMESTAMP - INTERVAL '200 days' WHERE id = $1", archiveArticle); err != nil {
+		t.Fatalf("age archive recommendation article: %v", err)
+	}
+	if err := topicRepo.Subscribe(ctx, 2, port.TopicTypeTag, "recommendation topic"); err != nil {
+		t.Fatalf("subscribe recommendation topic: %v", err)
+	}
+	if err := followRepo.Follow(ctx, 2, 4); err != nil {
+		t.Fatalf("follow recommendation author: %v", err)
+	}
+	recommendationRepo := NewRecommendationRepo(xormEngine)
+	recFirstPage, err := recommendationRepo.ListRecommendations(ctx, port.RecommendationRequest{
+		UserID: 2, Size: 2, Snapshot: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("list recommendations: %v", err)
+	}
+	if !recFirstPage.Personalized || len(recFirstPage.Items) == 0 || !recFirstPage.HasMore || recFirstPage.NextCursor == nil {
+		t.Fatalf("expected a personalized first page with a cursor: %+v", recFirstPage)
+	}
+	seen := map[int]bool{}
+	authorCounts := map[int]int{}
+	for _, item := range recFirstPage.Items {
+		if item.Id == selfArticle || item.Id == followedArticle {
+			t.Fatalf("self and followed articles must be excluded: %+v", item)
+		}
+		seen[item.Id] = true
+		authorCounts[item.UserId]++
+	}
+	recSecondPage, err := recommendationRepo.ListRecommendations(ctx, port.RecommendationRequest{
+		UserID: 2, Size: 2, Snapshot: recFirstPage.NextCursor.Snapshot, Cursor: recFirstPage.NextCursor,
+	})
+	if err != nil {
+		t.Fatalf("list recommendation cursor page: %v", err)
+	}
+	for _, item := range recSecondPage.Items {
+		if seen[item.Id] {
+			t.Fatalf("cursor returned a duplicate recommendation: %d", item.Id)
+		}
+	}
+	if authorCounts[3] > 2 {
+		t.Fatalf("one author must not exceed two items on a page: %v", authorCounts)
+	}
+	fullPage, err := recommendationRepo.ListRecommendations(ctx, port.RecommendationRequest{
+		UserID: 2, Size: 20, Snapshot: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("list complete recommendation page: %v", err)
+	}
+	foundSubscribed, foundArchive := false, false
+	for _, item := range fullPage.Items {
+		if item.Id == recArticleA || item.Id == recArticleB || item.Id == recArticleC {
+			if item.Reason.Type != port.RecommendationReasonSubscribedTopic {
+				t.Fatalf("topic-matched recommendation must explain the subscription: %+v", item)
+			}
+			foundSubscribed = true
+		}
+		if item.Id == archiveArticle {
+			foundArchive = true
+		}
+	}
+	if !foundSubscribed || !foundArchive {
+		t.Fatalf("subscription and archive fallback must appear: %+v", fullPage.Items)
+	}
+	hidden, err := recommendationRepo.UpsertFeedback(ctx, 2, port.RecommendationFeedbackInput{
+		TargetType: port.RecommendationTargetArticle, ArticleID: recArticleA,
+	})
+	if err != nil || hidden.ID <= 0 {
+		t.Fatalf("hide recommendation article: feedback=%+v err=%v", hidden, err)
+	}
+	withoutHidden, err := recommendationRepo.ListRecommendations(ctx, port.RecommendationRequest{UserID: 2, Size: 20, Snapshot: time.Now().UTC()})
+	if err != nil {
+		t.Fatalf("list recommendations after hide: %v", err)
+	}
+	for _, item := range withoutHidden.Items {
+		if item.Id == recArticleA {
+			t.Fatalf("hidden article was recommended again: %d", item.Id)
+		}
+	}
+	if _, err := recommendationRepo.UpsertFeedback(ctx, 2, port.RecommendationFeedbackInput{
+		TargetType: port.RecommendationTargetAuthor, AuthorID: 3,
+	}); err != nil {
+		t.Fatalf("mute recommendation author: %v", err)
+	}
+	feedbackItems, feedbackCount, err := recommendationRepo.ListFeedback(ctx, 2, 1, 10)
+	if err != nil || feedbackCount != 2 || len(feedbackItems) != 2 {
+		t.Fatalf("list recommendation feedback: items=%+v count=%d err=%v", feedbackItems, feedbackCount, err)
+	}
+	if err := recommendationRepo.DeleteFeedback(ctx, 2, hidden.ID); err != nil {
+		t.Fatalf("restore recommendation article: %v", err)
+	}
+	coldStart, err := recommendationRepo.ListRecommendations(ctx, port.RecommendationRequest{UserID: 5, Size: 10, Snapshot: time.Now().UTC()})
+	if err != nil || coldStart.Personalized || len(coldStart.Items) == 0 {
+		t.Fatalf("cold-start recommendations must stay available: page=%+v err=%v", coldStart, err)
 	}
 	redisContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{

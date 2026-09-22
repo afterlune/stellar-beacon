@@ -101,6 +101,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyTopicSubscriptionSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyRecommendationFeedbackSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1394,6 +1397,63 @@ func applyTopicSubscriptionSchema(ctx context.Context, engine *xorm.Engine) erro
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit topic subscription migration: %w", err)
+	}
+	return nil
+}
+
+// applyRecommendationFeedbackSchema adds the reader-controlled feedback ledger
+// used by the personalised discovery feed. Article feedback is a hard hide;
+// author and topic feedback are stored as ranking penalties and can be undone.
+func applyRecommendationFeedbackSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 22)").Get(&applied); err != nil {
+		return fmt.Errorf("check recommendation feedback migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin recommendation feedback migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS t_recommendation_feedback (
+			id BIGSERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			target_type VARCHAR(16) NOT NULL,
+			target_key VARCHAR(160) NOT NULL,
+			article_id INTEGER NULL REFERENCES t_article(id) ON DELETE CASCADE,
+			author_id INTEGER NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			topic_type VARCHAR(16) NULL,
+			topic_key VARCHAR(64) NULL,
+			target_label VARCHAR(255) NOT NULL,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (user_id, target_type, target_key),
+			CHECK (target_type IN ('article', 'author', 'topic')),
+			CHECK (
+				(target_type = 'article' AND article_id IS NOT NULL AND author_id IS NULL AND topic_type IS NULL AND topic_key IS NULL)
+				OR (target_type = 'author' AND article_id IS NULL AND author_id IS NOT NULL AND topic_type IS NULL AND topic_key IS NULL)
+				OR (target_type = 'topic' AND article_id IS NULL AND author_id IS NULL AND topic_type IN ('category', 'tag') AND topic_key IS NOT NULL)
+			)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_user ON t_recommendation_feedback(user_id, create_time DESC, id DESC)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply recommendation feedback schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 22, "recommendation-feedback"); err != nil {
+		return fmt.Errorf("record recommendation feedback migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit recommendation feedback migration: %w", err)
 	}
 	return nil
 }

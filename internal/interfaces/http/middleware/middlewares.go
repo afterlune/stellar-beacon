@@ -43,7 +43,21 @@ const (
 	operationLogResponseLimit     = 10000
 )
 
+func isRecommendationQuery(method, path string) bool {
+	return method == http.MethodPost && path == "/v1/auth/me/recommendations/query"
+}
+
+func shouldRecordOperation(method, path string) bool {
+	if isRecommendationQuery(method, path) {
+		return false
+	}
+	return method == http.MethodPost || method == http.MethodPut || method == http.MethodDelete
+}
+
 func requestLogPayload(req *http.Request, body []byte) string {
+	if req != nil && isRecommendationQuery(req.Method, req.URL.Path) {
+		return "[request body omitted: recommendation seeds are request-only]"
+	}
 	if len(body) == 0 {
 		return ""
 	}
@@ -247,7 +261,7 @@ func Log() gin.HandlerFunc {
 		c.Request.Body = io.NopCloser(bytes.NewReader(reqData))
 
 		c.Next()
-		if c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodDelete {
+		if shouldRecordOperation(c.Request.Method, c.Request.URL.Path) {
 			reqURI := strings.Split(c.Request.RequestURI, "?")[0]
 			reqMethod := c.Request.Method
 			ip := visitor.ClientIP(c.Request.Context(), c.Request)
@@ -744,8 +758,16 @@ func newIPRateLimiters() *ipRateLimiters {
 	}
 }
 
-func isPublicContentRead(method, path string) bool {
-	return method == http.MethodGet && strings.HasPrefix(path, "/v1/public/")
+// isReadLimitedRequest keeps body-based recommendation queries on the read
+// limiter. The endpoint is a read-only POST because local reading seeds must
+// never be placed in a URL or access log.
+func isReadLimitedRequest(method, path string) bool {
+	if method == http.MethodGet {
+		// The verification-code endpoint sends mail even though it is a GET, so
+		// it stays on the write budget. Every other GET is a read surface.
+		return path != "/v1/auth/verification-code"
+	}
+	return isRecommendationQuery(method, path)
 }
 
 var (
@@ -809,7 +831,7 @@ func AccessLimiter() gin.HandlerFunc {
 		mutex.Unlock()
 
 		limiter := limiters.write
-		if isPublicContentRead(c.Request.Method, c.Request.URL.Path) {
+		if isReadLimitedRequest(c.Request.Method, c.Request.URL.Path) {
 			limiter = limiters.read
 		}
 		if !limiter.Allow() || !globalLimiter.Allow() {

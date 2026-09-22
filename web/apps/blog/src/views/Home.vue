@@ -21,6 +21,8 @@
       </div>
     </section>
 
+    <RecommendationPanel v-if="Boolean(userInfo)" class="plaza-recommendations" compact />
+
     <section v-if="authors.length" class="plaza-authors" aria-labelledby="plaza-authors-title">
       <header>
         <div>
@@ -112,13 +114,18 @@
 import { computed, defineComponent, onMounted, ref, watch } from 'vue'
 import api from '@/api/api'
 import { useAppStore } from '@/stores/app'
+import { useUserStore } from '@/stores/user'
+import RecommendationPanel from '@/components/RecommendationPanel.vue'
 
 const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3Crect width="80" height="80" rx="40" fill="%23172554"/%3E%3Ccircle cx="40" cy="30" r="14" fill="%239bb8ff"/%3E%3Cpath d="M15 72c3-18 14-27 25-27s22 9 25 27" fill="%239bb8ff"/%3E%3C/svg%3E'
 
 export default defineComponent({
   name: 'Home',
+  components: { RecommendationPanel },
   setup() {
     const appStore = useAppStore()
+    const userStore = useUserStore()
+    const userInfo = computed(() => userStore.userInfo)
     const records = ref<any[]>([])
     const authors = ref<any[]>([])
     const activeType = ref<'article' | 'talk'>('article')
@@ -205,6 +212,7 @@ export default defineComponent({
       loading,
       error,
       total,
+      userInfo,
       defaultAvatar,
       loadMore,
       authorOf,
@@ -234,7 +242,7 @@ export default defineComponent({
 .plaza-hero__signal strong { position: relative; font-size: 2.25rem; letter-spacing: -.05em; }
 .plaza-hero__signal small { position: relative; margin-top: 4px; color: var(--text-ob-dim); font-size: 10px; letter-spacing: .18em; }
 @keyframes plazaPulse { 50% { transform: scale(.92); opacity: .45; } }
-.plaza-authors, .plaza-feed { margin-top: 38px; padding: clamp(22px, 4vw, 38px); border: 1px solid var(--border-hairline); border-radius: 24px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
+.plaza-recommendations, .plaza-authors, .plaza-feed { margin-top: 38px; padding: clamp(22px, 4vw, 38px); border: 1px solid var(--border-hairline); border-radius: 24px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
 .plaza-authors header, .plaza-feed__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
 .plaza-authors h2, .plaza-feed h2 { margin: 0; font-size: clamp(1.5rem, 3vw, 2.15rem); }
 .plaza-authors__links { display: flex; align-items: center; gap: 10px; color: var(--text-ob-dim); font-size: 12px; } .plaza-authors__more { display: inline-flex; align-items: center; min-height: 24px; padding: 0 4px; color: var(--color-ob); text-decoration: none; }

@@ -75,6 +75,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/Topics.vue')
   },
   {
+    path: '/for-you',
+    name: 'ForYou',
+    component: () => import('../views/ForYou.vue'),
+    meta: { requiresAuth: true, hideBanner: true }
+  },
+  {
     path: '/following',
     name: 'Following',
     component: () => import('../views/Following.vue'),

@@ -51,6 +51,7 @@
         </span>
         <DropdownMenu>
           <template v-if="!isMobile">
+            <DropdownItem @click="openForYou">{{ $i18n.locale === 'cn' ? '为你推荐' : 'For you' }}</DropdownItem>
             <DropdownItem @click="openStudio">{{ $i18n.locale === 'cn' ? '创作台' : 'Studio' }}</DropdownItem>
             <DropdownItem @click="openFollowing">{{ $i18n.locale === 'cn' ? '关注动态' : 'Following' }}</DropdownItem>
             <DropdownItem @click="openNotifications">{{ $i18n.locale === 'cn' ? '发布提醒' : 'Notifications' }}</DropdownItem>
@@ -289,6 +290,9 @@ export default defineComponent({
     const openFollowing = () => {
       router.push({ path: '/following' })
     }
+    const openForYou = () => {
+      router.push({ path: '/for-you' })
+    }
     const openStudioProfile = () => {
       router.push({ path: '/studio/profile' })
     }
@@ -426,6 +430,7 @@ export default defineComponent({
       openStudio,
       openNotifications,
       openFollowing,
+      openForYou,
       unreadCount: computed(() => socialStore.unreadCount),
       openStudioProfile,
       openReading,

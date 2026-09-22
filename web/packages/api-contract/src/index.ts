@@ -43,6 +43,58 @@ export interface Page<T> {
   count: number
 }
 
+export type RecommendationReasonType =
+  | 'subscribed_topic'
+  | 'favorite_similar'
+  | 'like_similar'
+  | 'reading_similar'
+  | 'followed_author_topic'
+  | 'trending'
+  | 'latest'
+
+export interface RecommendationReason {
+  type: RecommendationReasonType
+  label: string
+  topicType?: 'category' | 'tag'
+  topicKey?: string
+}
+
+export interface RecommendationItem {
+  id: number
+  userId: number
+  articleTitle: string
+  articleContent: string
+  articleCover?: string
+  categoryName?: string
+  createTime: string
+  updateTime?: string
+  author: PublicAuthorSummary
+  tags?: string[]
+  likeCount?: number
+  favoriteCount?: number
+  reason: RecommendationReason
+}
+
+export interface RecommendationFeed {
+  items: RecommendationItem[]
+  nextCursor?: string
+  hasMore: boolean
+  personalized: boolean
+}
+
+export type RecommendationTargetType = 'article' | 'author' | 'topic'
+
+export interface RecommendationFeedback {
+  id: number
+  targetType: RecommendationTargetType
+  targetKey: string
+  articleId?: number
+  authorId?: number
+  topicType?: 'category' | 'tag'
+  topicKey?: string
+  label: string
+  createdAt: string
+}
 export interface AdminAlbum {
   id: number
   albumName: string

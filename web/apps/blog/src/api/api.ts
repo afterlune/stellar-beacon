@@ -1,4 +1,4 @@
-import type { FollowContentType, NotificationCursor, NotificationGroup, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
+import type { FollowContentType, NotificationCursor, NotificationGroup, RecommendationTargetType, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
 import { createApiClient } from '@stellar-beacon/api-client'
 
 // The presentation layer still reads `flag` while the shared client is being
@@ -219,6 +219,18 @@ export default {
   },
   getTopicFeed: (params: { current?: number; size?: number }) => {
     return http.get('/auth/me/topic-feed', { params })
+  },
+  getRecommendations: (params: { cursor?: string; size?: number; seedArticleIds?: number[] }) => {
+    return http.post('/auth/me/recommendations/query', params)
+  },
+  getRecommendationFeedback: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/recommendation-feedback', { params })
+  },
+  saveRecommendationFeedback: (params: { targetType: RecommendationTargetType; articleId?: number; authorId?: number; topicType?: 'category' | 'tag'; topicKey?: string }) => {
+    return http.put('/auth/me/recommendation-feedback', params)
+  },
+  deleteRecommendationFeedback: (feedbackId: number) => {
+    return http.delete('/auth/me/recommendation-feedback/' + encodeURIComponent(feedbackId))
   },
   followAuthor: (authorId: number) => {
     return http.put('/auth/me/following/' + encodeURIComponent(authorId))

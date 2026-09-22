@@ -8,7 +8,10 @@ const adminPassword = process.env.E2E_ADMIN_PASSWORD || ''
 // real session; a fake token would only screenshot an error state. Every other
 // route keeps the historical fake token so the audit baseline is unchanged.
 const authenticatedRoutes = adminEmail && adminPassword
-  ? [{ name: 'following', path: '/following', authenticated: true }]
+  ? [
+      { name: 'for-you', path: '/for-you', authenticated: true },
+      { name: 'following', path: '/following', authenticated: true }
+    ]
   : []
 
 const routes = [

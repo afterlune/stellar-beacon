@@ -238,6 +238,62 @@ paths:
       operationId: listTopicSubscriptionFeed
       security: [{ bearerAuth: [] }]
       responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/recommendations/query:
+    post:
+      tags: [auth]
+      summary: Query the personalized public-article feed
+      description: Uses follows, topic subscriptions, reactions and at most twenty transient local reading seed ids. Seed ids are request-only, are not persisted, and the result never includes self-authored or already-followed authors.
+      operationId: queryRecommendations
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cursor: { type: string }
+                size: { type: integer, minimum: 1, maximum: 24, default: 12 }
+                seedArticleIds:
+                  type: array
+                  maxItems: 20
+                  items: { type: integer, format: int64 }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/recommendation-feedback:
+    get:
+      tags: [auth]
+      summary: List recommendation preferences
+      operationId: listRecommendationFeedback
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    put:
+      tags: [auth]
+      summary: Hide an article or reduce an author/topic
+      operationId: saveRecommendationFeedback
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetType]
+              properties:
+                targetType: { type: string, enum: [article, author, topic] }
+                articleId: { type: integer, format: int64 }
+                authorId: { type: integer, format: int64 }
+                topicType: { type: string, enum: [category, tag] }
+                topicKey: { type: string }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/recommendation-feedback/{feedbackId}:
+    delete:
+      tags: [auth]
+      summary: Restore an article, author or topic recommendation preference
+      operationId: deleteRecommendationFeedback
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: feedbackId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /auth/me/following/{authorId}:
     put: { tags: [auth], summary: Follow an author, operationId: followAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     delete: { tags: [auth], summary: Unfollow an author, operationId: unfollowAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
