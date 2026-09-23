@@ -67,3 +67,21 @@ func UpdateCommentsReview(c *gin.Context) {
 func DeleteComments(c *gin.Context) {
 	c.JSON(http.StatusOK, commentService.DeleteComments(c))
 }
+
+// PinCollectionComment
+// @Summary		 书单评论治理
+// @Description  书单作者置顶或取消置顶单条根评论
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comments/{commentId}/pin [PUT]
+func PinCollectionComment(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.PinCollectionComment(c))
+}
+
+// DeleteOwnedCollectionComment
+// @Summary		 书单评论治理
+// @Description  书单作者软删除书单内任意评论或回复
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comments/{commentId} [DELETE]
+func DeleteOwnedCollectionComment(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.DeleteOwnedCollectionComment(c))
+}

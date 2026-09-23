@@ -678,6 +678,10 @@ type CommentReactionToggleDTO struct {
 	LikeCount int  `json:"likeCount"`
 }
 
+type CommentPinVO struct {
+	Pinned *bool `json:"pinned" form:"pinned"`
+}
+
 // NotificationPreferenceVO toggles the in-app notification preferences of the
 // authenticated account. NotifyTopic is optional: a request that omits it keeps
 // the stored topic preference untouched.

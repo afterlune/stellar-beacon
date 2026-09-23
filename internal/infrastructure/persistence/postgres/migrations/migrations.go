@@ -116,6 +116,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyCollectionCommunitySchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyCommentModerationSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1689,6 +1692,44 @@ func applyCollectionCommunitySchema(ctx context.Context, engine *xorm.Engine) er
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit collection community migration: %w", err)
+	}
+	return nil
+}
+
+// applyCommentModerationSchema adds the root-comment pin marker used by
+// collection owners. The partial unique index enforces one pinned root per
+// content target without affecting replies or deleted comments.
+func applyCommentModerationSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 27)").Get(&applied); err != nil {
+		return fmt.Errorf("check comment moderation migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin comment moderation migration: %w", err)
+	}
+	defer session.Rollback()
+	statements := []string{
+		`ALTER TABLE t_comment ADD COLUMN IF NOT EXISTS is_top SMALLINT NOT NULL DEFAULT 0`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_one_pinned_root ON t_comment(type, topic_id)
+			WHERE is_top = 1 AND parent_id = 0 AND is_delete = 0`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply comment moderation schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 27, "comment-moderation"); err != nil {
+		return fmt.Errorf("record comment moderation migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit comment moderation migration: %w", err)
 	}
 	return nil
 }

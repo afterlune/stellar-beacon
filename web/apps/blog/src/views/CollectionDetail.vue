@@ -192,6 +192,8 @@ export default defineComponent({
     const formatDate = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value)) : ''
     provide('comments', computed(() => comments.value))
     provide('haveMore', computed(() => haveMore.value))
+    provide('collectionId', () => Number(detail.value?.collection?.id || 0))
+    provide('canModerate', () => isOwner.value)
     emitter.on('collectionFetchComment', () => { pageInfo.current = 1; isReload.value = true; void fetchComments() })
     emitter.on('collectionFetchReplies', (index: any) => { void fetchReplies(Number(index)) })
     emitter.on('collectionLoadMore', () => { if (haveMore.value) { pageInfo.current += 1; void fetchComments() } })

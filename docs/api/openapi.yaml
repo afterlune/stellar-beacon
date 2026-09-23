@@ -457,6 +457,41 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CollectionOrderInput' }
       responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/{commentId}/pin:
+    put:
+      tags: [auth]
+      summary: Pin or unpin one root comment on an owned reading list
+      description: >-
+        Only the reading-list owner may moderate. The comment must be an approved,
+        undeleted root comment that belongs to the reading list. Pinning a second
+        root comment automatically unpins the previous one; at most one root comment
+        is pinned per reading list. Replies cannot be pinned.
+      operationId: pinCollectionComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { $ref: '#/components/parameters/CommentId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentPinInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/{commentId}:
+    delete:
+      tags: [auth]
+      summary: Soft-delete one comment or reply on an owned reading list
+      description: >-
+        Only the reading-list owner may moderate. Deleting a root comment hides the
+        comment together with all of its replies; deleting a reply hides only that
+        reply. Deleted comments stay hidden from public listings, counts and
+        notifications, and cannot be restored by the owner.
+      operationId: deleteOwnedCollectionComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { $ref: '#/components/parameters/CommentId' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /admin/dashboard:
     get: { tags: [admin], summary: Get dashboard information, operationId: getAdminDashboard, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/content/analytics:
@@ -711,6 +746,11 @@ components:
           maxItems: 500
           uniqueItems: true
           items: { type: integer, format: int64 }
+    CommentPinInput:
+      type: object
+      required: [pinned]
+      properties:
+        pinned: { type: boolean, description: true pins the root comment and unpins any other pinned root comment on the same reading list }
     CollectionSubscriptionStatus:
       type: object
       required: [subscribed, muted]

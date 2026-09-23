@@ -21,4 +21,6 @@ type CommentRepository interface {
 	MarkNotificationDispatched(ctx context.Context, commentID int) error
 	Review(ctx context.Context, ids []int, review int) error
 	Delete(ctx context.Context, ids []int) error
+	SetPinned(ctx context.Context, userID, collectionID, commentID int, pinned bool) error
+	SoftDeleteOwned(ctx context.Context, userID, collectionID, commentID int) error
 }

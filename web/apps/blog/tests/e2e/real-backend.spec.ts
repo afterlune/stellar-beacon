@@ -322,6 +322,63 @@ test.describe('blog real backend main chain @integration', () => {
     }
   })
 
+  test('lets a reading-list owner pin and soft-delete comments', async ({ request, browser }) => {
+    const title = `integration moderation list ${runID}`
+    const keepText = `integration keep comment ${runID}`
+    const pinnedText = `integration pinned comment ${runID}`
+    const deletedText = `integration deleted comment ${runID}`
+    const replyText = `integration moderation reply ${runID}`
+    const created = await postAPI(request, '/api/v1/studio/collections', admin.token, { title, description: 'integration moderation collection', visibility: 'public' })
+    const collectionID = Number(created.id)
+    expect(collectionID).toBeGreaterThan(0)
+    await putAPI(request, `/api/v1/studio/collections/${collectionID}/items/${fixtureArticleID}`, admin.token, { note: 'integration moderation item' })
+
+    const keepCommentID = await seedApprovedCollectionComment(request, admin, collectionID, keepText)
+    const pinnedCommentID = await seedApprovedCollectionComment(request, admin, collectionID, pinnedText)
+    const deletedCommentID = await seedApprovedCollectionComment(request, admin, collectionID, deletedText)
+    const replyID = await seedApprovedCollectionReply(request, admin, collectionID, pinnedCommentID, replyText)
+
+    await expect(deleteAPI(request, `/api/v1/studio/collections/${collectionID}/comments/${replyID}`, user.token)).rejects.toThrow()
+
+    const session = await createBrowserSession(browser, admin)
+    try {
+      await session.page.goto(`/collections/${created.slug}`, { waitUntil: 'domcontentloaded' })
+      const pinnedItem = session.page.locator(`#comment-${pinnedCommentID}`)
+      await expect(pinnedItem.getByText(pinnedText)).toBeVisible()
+      const replyItem = session.page.locator(`#comment-${replyID}`)
+      await expect(replyItem.getByText(replyText)).toBeVisible()
+
+      await pinnedItem.getByTestId('comment-pin-action').click()
+      await expect(pinnedItem.getByTestId('comment-pinned')).toBeVisible()
+      await expect(replyItem.getByTestId('comment-reply-delete-action')).toBeVisible()
+
+      const ordered = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`, admin.token)
+      expect(Number(itemsOf(ordered)[0]?.id)).toBe(pinnedCommentID)
+      expect(Number(itemsOf(ordered)[0]?.isTop)).toBe(1)
+
+      await expect(replyItem.getByTestId('comment-reply-delete-action')).toBeVisible()
+      await replyItem.getByTestId('comment-reply-delete-action').click()
+      await session.page.getByRole('button', { name: '删除', exact: true }).last().click()
+      await expect(replyItem.getByText(replyText)).toHaveCount(0)
+      const replyNotifications = await getAPIData(request, '/api/v1/auth/me/notifications?group=comment&current=1&size=50', admin.token)
+      expect(itemsOf(replyNotifications).some((item: any) => Number(item.commentId) === replyID)).toBe(false)
+
+      await session.page.locator(`#comment-${deletedCommentID}`).getByTestId('comment-delete-action').click()
+      await session.page.getByRole('button', { name: '删除', exact: true }).last().click()
+      await expect(session.page.locator(`#comment-${deletedCommentID}`)).toHaveCount(0)
+      const moderated = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`, admin.token)
+      expect(itemsOf(moderated).some((item: any) => Number(item.id) === deletedCommentID)).toBe(false)
+      expect(Number(itemsOf(moderated)[0]?.id)).toBe(pinnedCommentID)
+      expect(Number(itemsOf(moderated)[0]?.isTop)).toBe(1)
+      const detail = await getAPIData(request, `/api/v1/public/collections/${created.slug}`)
+      expect(Number(detail.collection.commentCount)).toBe(2)
+      expect(Number(itemsOf(ordered).length)).toBe(3)
+      expect(itemsOf(ordered).some((item: any) => Number(item.id) === keepCommentID)).toBe(true)
+    } finally {
+      await session.context.close()
+    }
+  })
+
   test('personalizes recommendations and persists reader feedback', async ({ request, browser }) => {
     const topicKey = 'integration topic'
     const readerFixtureID = await findReaderFixtureArticleID(request)
@@ -617,6 +674,23 @@ test.describe('blog real backend main chain @integration', () => {
       await deleteAPI(request, `/api/v1/auth/me/topic-subscriptions/${encodeURIComponent('tag')}/${encodeURIComponent(topicKey)}`, user.token).catch(() => undefined)
     }
   })
+
+  async function seedApprovedCollectionComment(request: APIRequestContext, session: LoginSession, collectionID: number, text: string): Promise<number> {
+    await postAPI(request, '/api/v1/public/comments', session.token, { type: 6, topicId: String(collectionID), commentContent: text })
+    const commentID = await waitForPendingComment(request, session.token, text)
+    await approveComments(request, session.token, [commentID])
+    createdCommentIDs.push(commentID)
+    return commentID
+  }
+
+  async function seedApprovedCollectionReply(request: APIRequestContext, session: LoginSession, collectionID: number, parentCommentID: number, text: string): Promise<number> {
+    await postAPI(request, '/api/v1/public/comments', session.token, { type: 6, topicId: String(collectionID), parentId: parentCommentID, replyUserId: Number(user.userInfo.userInfoId), commentContent: text })
+    const replyID = await waitForPendingComment(request, session.token, text)
+    await approveComments(request, session.token, [replyID])
+    createdCommentIDs.push(replyID)
+    return replyID
+  }
+
 })
 
 async function loginByAPI(request: APIRequestContext, email: string, password: string): Promise<LoginSession> {
@@ -730,6 +804,7 @@ async function findCommentIDsByRun(request: APIRequestContext, token: string, ru
   const data = await getAPIData(request, `/api/v1/admin/comments?current=1&size=100&keywords=${encodeURIComponent(runID)}`, token)
   return itemsOf(data).map((entry: any) => Number(entry.id)).filter((id: number) => id > 0)
 }
+
 
 async function setInteractionPreference(request: APIRequestContext, token: string, enabled: boolean): Promise<void> {
   const payload = await putAPI(request, '/api/v1/auth/me/notification-preferences', token, { notifyInteraction: enabled ? 1 : 0 })

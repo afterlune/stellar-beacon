@@ -92,7 +92,7 @@ CREATE TABLE t_user_role (id INTEGER PRIMARY KEY, user_id INTEGER, role_id INTEG
 CREATE TABLE t_category (id INTEGER PRIMARY KEY, category_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_tag (id INTEGER PRIMARY KEY, tag_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_talk (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, content TEXT NOT NULL, images TEXT, is_top SMALLINT NOT NULL, status SMALLINT NOT NULL, moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible', moderation_reason VARCHAR(255), moderated_by INTEGER DEFAULT 0, moderated_at TIMESTAMP, create_time TIMESTAMP, update_time TIMESTAMP);
-CREATE TABLE t_comment (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, notification_dispatched_at TIMESTAMPTZ NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_comment (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, is_top SMALLINT NOT NULL DEFAULT 0, notification_dispatched_at TIMESTAMPTZ NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_unique_view (id INTEGER PRIMARY KEY, views_count INTEGER NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_website_config (id INTEGER PRIMARY KEY, config TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_about (id INTEGER PRIMARY KEY, content TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
@@ -1041,6 +1041,96 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	}
 	if err := commentRepo.ValidateTarget(ctx, 6, privateCollection.ID); !apperrors.IsKind(err, apperrors.KindValidation) {
 		t.Fatalf("private collection comments must be rejected: %v", err)
+	}
+
+	govCollection, err := collectionRepo.CreateOwned(ctx, 1, "integration-moderation-list", port.CollectionSaveInput{
+		Title: "Integration moderation list", Visibility: port.CollectionVisibilityPublic,
+	})
+	if err != nil {
+		t.Fatalf("create moderation collection: %v", err)
+	}
+	modFirstID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 2, TopicId: govCollection.ID, CommentContent: "moderation first", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create first moderation comment: %v", err)
+	}
+	modSecondID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 2, TopicId: govCollection.ID, CommentContent: "moderation second", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create second moderation comment: %v", err)
+	}
+	if err := commentRepo.SetPinned(ctx, 2, govCollection.ID, modSecondID, true); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("non owner pin must be rejected: %v", err)
+	}
+	if err := commentRepo.SetPinned(ctx, 1, govCollection.ID, modSecondID, true); err != nil {
+		t.Fatalf("pin own collection comment: %v", err)
+	}
+	if pinned, _, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govCollection.ID, Current: 1, Size: 10, ViewerID: 1}); err != nil || len(pinned) != 2 || pinned[0].Id != modSecondID || pinned[0].IsTop != 1 {
+		t.Fatalf("pinned comment must sort first: comments=%+v err=%v", pinned, err)
+	}
+	if err := commentRepo.SetPinned(ctx, 1, govCollection.ID, modFirstID, true); err != nil {
+		t.Fatalf("re-pin own collection comment: %v", err)
+	}
+	if ordered, _, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govCollection.ID, Current: 1, Size: 10, ViewerID: 1}); err != nil || len(ordered) != 2 || ordered[0].Id != modFirstID || ordered[0].IsTop != 1 || ordered[1].IsTop != 0 {
+		t.Fatalf("only one root comment may stay pinned: comments=%+v err=%v", ordered, err)
+	}
+	if err := commentRepo.SetPinned(ctx, 1, govCollection.ID, modSecondID, false); err != nil {
+		t.Fatalf("cancel pin on unpinned comment: %v", err)
+	}
+	govReplyID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 3, ReplyUserId: 2, ParentId: modFirstID, TopicId: govCollection.ID,
+		CommentContent: "moderation reply", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create moderation reply: %v", err)
+	}
+	if err := commentRepo.SetPinned(ctx, 1, govCollection.ID, govReplyID, true); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("replies must not be pinned: %v", err)
+	}
+	if err := commentRepo.SoftDeleteOwned(ctx, 2, govCollection.ID, modSecondID); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("non owner delete must be rejected: %v", err)
+	}
+	if err := commentRepo.SoftDeleteOwned(ctx, 1, govCollection.ID, govReplyID); err != nil {
+		t.Fatalf("owner deletes single reply: %v", err)
+	}
+	if replies, err := commentRepo.ListReplies(ctx, []int{modFirstID}, 1); err != nil || len(replies) != 0 {
+		t.Fatalf("deleted reply must stay hidden: replies=%+v err=%v", replies, err)
+	}
+	if remaining, _, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govCollection.ID, Current: 1, Size: 10, ViewerID: 1}); err != nil || len(remaining) != 2 {
+		t.Fatalf("sibling comments must survive reply deletion: comments=%+v err=%v", remaining, err)
+	}
+	survivorReplyID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 3, ReplyUserId: 2, ParentId: modSecondID, TopicId: govCollection.ID,
+		CommentContent: "surviving reply", Type: 6, IsReview: 1,
+	})
+	if err != nil || survivorReplyID <= 0 {
+		t.Fatalf("create sibling reply: id=%d err=%v", survivorReplyID, err)
+	}
+	if active, commentLikeCount, err = commentReactions.Set(ctx, modSecondID, 3, true); err != nil || !active || commentLikeCount != 1 {
+		t.Fatalf("like surviving root comment: active=%v count=%d err=%v", active, commentLikeCount, err)
+	}
+	if err := commentRepo.SoftDeleteOwned(ctx, 1, govCollection.ID, modSecondID); err != nil {
+		t.Fatalf("owner deletes root comment thread: %v", err)
+	}
+	if remaining, _, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govCollection.ID, Current: 1, Size: 10, ViewerID: 1}); err != nil || len(remaining) != 1 || remaining[0].Id != modFirstID {
+		t.Fatalf("root deletion must cascade its replies: comments=%+v err=%v", remaining, err)
+	}
+	if replies, err := commentRepo.ListReplies(ctx, []int{modSecondID}, 1); err != nil || len(replies) != 0 {
+		t.Fatalf("cascade deleted replies must stay hidden: replies=%+v err=%v", replies, err)
+	}
+	if detail, err := collectionRepo.GetPublicBySlug(ctx, govCollection.Slug); err != nil || detail.Collection.CommentCount != 1 {
+		t.Fatalf("comment count must drop after moderation deletes: detail=%+v err=%v", detail.Collection, err)
+	}
+	if reactions, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupReaction, 1, 10); err != nil {
+		t.Fatalf("list reaction notifications after moderation delete: %v", err)
+	} else {
+		for _, item := range reactions.Records {
+			if item.CommentId == modSecondID {
+				t.Fatalf("moderated comment like must leave notifications: page=%+v", reactions)
+			}
+		}
 	}
 	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionLike, false); err != nil || active || counts.LikeCount != 0 || counts.FavoriteCount != 1 {
 		t.Fatalf("unlike collection: active=%v counts=%+v err=%v", active, counts, err)

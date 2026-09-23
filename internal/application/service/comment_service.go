@@ -40,6 +40,8 @@ type CommentService interface {
 	ListCommentBackDTO(c *gin.Context) model.ResultVO
 	UpdateCommentsReview(c *gin.Context) model.ResultVO
 	DeleteComments(c *gin.Context) model.ResultVO
+	PinCollectionComment(c *gin.Context) model.ResultVO
+	DeleteOwnedCollectionComment(c *gin.Context) model.ResultVO
 }
 
 type MyCommentService struct {
@@ -452,6 +454,48 @@ func (c *MyCommentService) DeleteComments(ctx *gin.Context) model.ResultVO {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
 	if err := c.commentRepository().Delete(ctx.Request.Context(), ids); err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOk()
+}
+
+func (c *MyCommentService) PinCollectionComment(ctx *gin.Context) model.ResultVO {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	collectionID, err := pathID(ctx, "collectionId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	commentID, err := pathID(ctx, "commentId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	var vo model.CommentPinVO
+	if err := ctx.ShouldBind(&vo); err != nil || vo.Pinned == nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	if err := c.commentRepository().SetPinned(ctx.Request.Context(), user.UserInfoId, collectionID, commentID, *vo.Pinned); err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOk()
+}
+
+func (c *MyCommentService) DeleteOwnedCollectionComment(ctx *gin.Context) model.ResultVO {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	collectionID, err := pathID(ctx, "collectionId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	commentID, err := pathID(ctx, "commentId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	if err := c.commentRepository().SoftDeleteOwned(ctx.Request.Context(), user.UserInfoId, collectionID, commentID); err != nil {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOk()

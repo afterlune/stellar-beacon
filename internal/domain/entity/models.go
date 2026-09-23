@@ -164,6 +164,7 @@ type TComment struct {
 	Type                     int        `xorm:"not null comment('评论类型 1.文章 2.留言 3.关于我 4.友链 5.说说') SMALLINT" json:"type"`
 	IsDelete                 int        `xorm:"not null comment('是否删除  0否 1是') SMALLINT" json:"isDelete"`
 	IsReview                 int        `xorm:"not null comment('是否审核') SMALLINT" json:"isReview"`
+	IsTop                    int        `xorm:"is_top not null default 0 comment('是否置顶') SMALLINT" json:"isTop"`
 	NotificationDispatchedAt *time.Time `xorm:"notification_dispatched_at DATETIME" json:"notificationDispatchedAt,omitempty"`
 	CreateTime               time.Time  `xorm:"created not null comment('评论时间') DATETIME" json:"createTime"`
 	UpdateTime               time.Time  `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`

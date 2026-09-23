@@ -195,6 +195,7 @@ type Comment struct {
 	CreateTime     time.Time `json:"createTime"`
 	LikeCount      int       `json:"likeCount"`
 	Liked          bool      `json:"liked"`
+	IsTop          int       `json:"isTop"`
 	ReplyDTOs      []Reply   `json:"replyDTOs"`
 }
 

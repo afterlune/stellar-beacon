@@ -286,6 +286,12 @@ export default {
   reorderStudioCollection: (collectionId: number, articleIds: number[]) => {
     return http.put(`/studio/collections/${encodeURIComponent(collectionId)}/order`, { articleIds })
   },
+  pinCollectionComment: (collectionId: number, commentId: number, pinned: boolean) => {
+    return http.put(`/studio/collections/${encodeURIComponent(collectionId)}/comments/${encodeURIComponent(commentId)}/pin`, { pinned })
+  },
+  deleteOwnedCollectionComment: (collectionId: number, commentId: number) => {
+    return http.delete(`/studio/collections/${encodeURIComponent(collectionId)}/comments/${encodeURIComponent(commentId)}`)
+  },
   getRecommendationFeedback: (params: { current?: number; size?: number }) => {
     return http.get('/auth/me/recommendation-feedback', { params })
   },

@@ -107,6 +107,8 @@ func RouterSetup(router *gin.Engine) {
 	studio.PUT("/collections/:collectionId/items/:articleId", api.AddStudioCollectionItem)
 	studio.DELETE("/collections/:collectionId/items/:articleId", api.RemoveStudioCollectionItem)
 	studio.PUT("/collections/:collectionId/order", api.ReorderStudioCollection)
+	studio.PUT("/collections/:collectionId/comments/:commentId/pin", api.PinCollectionComment)
+	studio.DELETE("/collections/:collectionId/comments/:commentId", api.DeleteOwnedCollectionComment)
 	studio.GET("/series", api.ListStudioSeries)
 	studio.GET("/series/:seriesId", api.GetStudioSeries)
 	studio.POST("/series", api.SaveStudioSeries)

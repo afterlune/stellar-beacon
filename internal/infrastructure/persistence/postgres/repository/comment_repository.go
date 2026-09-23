@@ -47,7 +47,7 @@ func (c *MyCommentRepo) ListComments(ctx context.Context, filter port.CommentFil
 		return nil, 0, err
 	}
 	limit, offset := pgsql.Page(filter.Current, filter.Size)
-	query := `SELECT c.id, c.user_id, u.nickname, u.avatar, u.website, c.comment_content, c.create_time,
+	query := `SELECT c.id, c.user_id, u.nickname, u.avatar, u.website, c.comment_content, c.create_time, c.is_top,
 		COALESCE((SELECT count(1) FROM t_comment_reaction reaction WHERE reaction.comment_id = c.id AND reaction.reaction = 'like'), 0) AS like_count,
 		EXISTS (SELECT 1 FROM t_comment_reaction reaction WHERE reaction.comment_id = c.id
 			AND reaction.user_info_id = ? AND reaction.reaction = 'like') AS liked
@@ -62,7 +62,7 @@ func (c *MyCommentRepo) ListComments(ctx context.Context, filter port.CommentFil
 		countQuery += " AND c.topic_id = ?"
 		countArgs = append(countArgs, *filter.TopicID)
 	}
-	query += " ORDER BY c.id DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY c.is_top DESC, c.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 	var count int
 	if _, err := session.SQL(countQuery, countArgs...).Get(&count); err != nil {
@@ -303,6 +303,81 @@ func (c *MyCommentRepo) GetByID(ctx context.Context, commentID int) (entity.TCom
 		return entity.TComment{}, apperrors.NotFound("comment.get")
 	}
 	return comment, nil
+}
+
+func ownedCollectionComment(session *xorm.Session, userID, collectionID, commentID int) (entity.TComment, error) {
+	var owned bool
+	if _, err := session.SQL(`SELECT EXISTS (SELECT 1 FROM t_collection
+		WHERE id = ? AND user_id = ? AND is_delete = 0)`, collectionID, userID).Get(&owned); err != nil {
+		return entity.TComment{}, apperrors.Wrap(apperrors.KindUnavailable, "comment.moderation.collection", err)
+	}
+	if !owned {
+		return entity.TComment{}, apperrors.NotFound("comment.moderation.collection")
+	}
+	var comment entity.TComment
+	found, err := session.ID(commentID).Get(&comment)
+	if err != nil {
+		return entity.TComment{}, apperrors.Wrap(apperrors.KindUnavailable, "comment.moderation.lookup", err)
+	}
+	if !found {
+		return entity.TComment{}, apperrors.NotFound("comment.moderation.comment")
+	}
+	if comment.Type != 6 || comment.TopicId != collectionID || comment.IsReview != 1 || comment.IsDelete != 0 {
+		return entity.TComment{}, apperrors.Invalid("comment.moderation.target", "comment is not moderatable")
+	}
+	return comment, nil
+}
+
+func (c *MyCommentRepo) SetPinned(ctx context.Context, userID, collectionID, commentID int, pinned bool) error {
+	if userID <= 0 || collectionID <= 0 || commentID <= 0 {
+		return apperrors.Invalid("comment.moderation.pin", "invalid target")
+	}
+	return ormInit.WithEngineTx(c.engine, ctx, func(session *xorm.Session) error {
+		comment, err := ownedCollectionComment(session, userID, collectionID, commentID)
+		if err != nil {
+			return err
+		}
+		if comment.ParentId != 0 {
+			return apperrors.Invalid("comment.moderation.pin", "only root comments can be pinned")
+		}
+		if pinned {
+			if _, err := session.Exec(`UPDATE t_comment SET is_top = 0, update_time = CURRENT_TIMESTAMP
+				WHERE type = 6 AND topic_id = ? AND parent_id = 0 AND is_top = 1`, collectionID); err != nil {
+				return apperrors.Unavailable("comment.moderation.unpin_previous", err)
+			}
+		}
+		value := 0
+		if pinned {
+			value = 1
+		}
+		if _, err := session.Exec(`UPDATE t_comment SET is_top = ?, update_time = CURRENT_TIMESTAMP WHERE id = ?`, value, commentID); err != nil {
+			return apperrors.Unavailable("comment.moderation.pin_update", err)
+		}
+		return nil
+	})
+}
+
+func (c *MyCommentRepo) SoftDeleteOwned(ctx context.Context, userID, collectionID, commentID int) error {
+	if userID <= 0 || collectionID <= 0 || commentID <= 0 {
+		return apperrors.Invalid("comment.moderation.delete", "invalid target")
+	}
+	return ormInit.WithEngineTx(c.engine, ctx, func(session *xorm.Session) error {
+		comment, err := ownedCollectionComment(session, userID, collectionID, commentID)
+		if err != nil {
+			return err
+		}
+		if comment.ParentId == 0 {
+			if _, err := session.Exec(`UPDATE t_comment SET is_delete = 1, is_top = 0, update_time = CURRENT_TIMESTAMP
+				WHERE type = 6 AND topic_id = ? AND (id = ? OR parent_id = ?)`, collectionID, commentID, commentID); err != nil {
+				return apperrors.Unavailable("comment.moderation.delete_thread", err)
+			}
+			return nil
+		}
+		if _, err := session.Exec(`UPDATE t_comment SET is_delete = 1, update_time = CURRENT_TIMESTAMP WHERE id = ?`, commentID); err != nil {
+			return apperrors.Unavailable("comment.moderation.delete_reply", err)
+		}
+		return nil
+	})
 }
 
 // Create inserts the comment and returns its generated id so callers can use it

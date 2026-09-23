@@ -13,6 +13,7 @@
               :liked="Boolean(reply.liked)"
               @changed="updateLike" />
             <span @click="clickOnSonReply" class="cursor-pointer reply-button">Reply</span>
+            <button v-if="canModerate" type="button" class="reply-button" :disabled="busy" data-testid="comment-reply-delete-action" @click="removeReply">删除</button>
           </div>
         </div>
       </div>
@@ -28,7 +29,10 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, reactive, toRefs } from 'vue'
+import { computed, defineComponent, inject, reactive, ref, toRefs } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import api from '@/api/api'
+import emitter from '@/utils/mitt'
 import Avatar from '@/components/Avatar.vue'
 import CommentReplyForm from './CommentReplyForm.vue'
 import CommentLikeButton from './CommentLikeButton.vue'
@@ -41,6 +45,11 @@ export default defineComponent({
   },
   props: ['reply', 'commentUserId'],
   setup(props) {
+    const reply = computed(() => props.reply)
+    const canModerate = inject<() => boolean>('canModerate', () => false)
+    const readCollectionID = inject<() => number>('collectionId', () => 0)
+    const readIndex = inject<() => number>('index', () => 0)
+    const busy = ref(false)
     const formatTime = (time: any): any => {
       let date = new Date(time)
       let year = date.getFullYear()
@@ -74,12 +83,34 @@ export default defineComponent({
         return props.reply.commentContent
       }
     })
+    const removeReply = async () => {
+      const collectionID = Number(readCollectionID())
+      if (!collectionID) return
+      try {
+        await ElMessageBox.confirm('删除后该回复将不再公开显示。', '删除回复', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+      } catch {
+        return
+      }
+      busy.value = true
+      try {
+        const response = await api.deleteOwnedCollectionComment(collectionID, Number(reply.value.id))
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
+        emitter.emit('collectionFetchReplies', Number(readIndex()))
+      } catch (reason: any) {
+        ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
+      } finally {
+        busy.value = false
+      }
+    }
     return {
       ...toRefs(reactiveData),
       commentContent,
       clickOnSonReply,
       changeShow,
-      updateLike
+      updateLike,
+      canModerate: computed(() => Boolean(canModerate())),
+      busy,
+      removeReply
     }
   }
 })
@@ -101,6 +132,15 @@ export default defineComponent({
 }
 .reply-button {
   color: var(--text-accent);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+.reply-button:disabled {
+  opacity: .6;
+  cursor: wait;
 }
 .commentContent {
   line-height: 26px;

@@ -8,12 +8,17 @@
           <div class="flex justify-between mt-3 text-xs text-ob-dim space-x-3 md:space-x-16">
             <span>{{ comment.nickname }} | {{ time }}</span>
             <div class="flex items-center gap-3">
+              <span v-if="isPinned" class="pin-badge" data-testid="comment-pinned">置顶</span>
               <CommentLikeButton
                 :comment-id="Number(comment.id)"
                 :like-count="Number(comment.likeCount || 0)"
                 :liked="Boolean(comment.liked)"
                 @changed="updateLike" />
               <span @click="clickOnReply" class="cursor-pointer reply-button">Reply</span>
+              <template v-if="canModerate">
+                <button type="button" class="reply-button" :disabled="busy" data-testid="comment-pin-action" @click="togglePin">{{ isPinned ? '取消置顶' : '置顶' }}</button>
+                <button type="button" class="reply-button" :disabled="busy" data-testid="comment-delete-action" @click="removeComment">删除</button>
+              </template>
             </div>
           </div>
         </div>
@@ -35,11 +40,14 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, reactive, ref, toRefs, provide } from 'vue'
+import { computed, defineComponent, inject, reactive, ref, toRefs, provide } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import Avatar from '@/components/Avatar.vue'
 import CommentReplyItem from './CommentReplyItem.vue'
 import CommentReplyForm from './CommentReplyForm.vue'
 import CommentLikeButton from './CommentLikeButton.vue'
+import api from '@/api/api'
+import emitter from '@/utils/mitt'
 
 export default defineComponent({
   components: {
@@ -52,7 +60,24 @@ export default defineComponent({
   setup(props) {
     const comment: any = props.comment
     provide('parentId', comment.id)
-    provide('index', props.index)
+    provide('index', () => Number(props.index))
+    const canModerate = inject<() => boolean>('canModerate', () => false)
+    const readCollectionID = inject<() => number>('collectionId', () => 0)
+    const busy = ref(false)
+    const moderate = async (action: (collectionID: number) => Promise<any>) => {
+      const collectionID = Number(readCollectionID())
+      if (!collectionID) return
+      busy.value = true
+      try {
+        const response = await action(collectionID)
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
+        emitter.emit('collectionFetchComment')
+      } catch (reason: any) {
+        ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
+      } finally {
+        busy.value = false
+      }
+    }
     const formatTime = (time: any): any => {
       let date = new Date(time)
       let year = date.getFullYear()
@@ -76,11 +101,22 @@ export default defineComponent({
       comment.likeCount = payload.likeCount
       comment.liked = payload.active
     }
+    const isPinned = computed(() => Boolean(props.comment.isTop))
+    const togglePin = () => moderate((collectionID) => api.pinCollectionComment(collectionID, Number(comment.id), !isPinned.value))
+    const removeComment = () => moderate(async (collectionID) => {
+      await ElMessageBox.confirm('删除后该评论及其回复将不再公开显示。', '删除评论', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+      return api.deleteOwnedCollectionComment(collectionID, Number(comment.id))
+    })
     return {
       ...toRefs(reactiveData),
       clickOnReply,
       changeShow,
-      updateLike
+      updateLike,
+      canModerate: computed(() => Boolean(canModerate())),
+      busy,
+      isPinned,
+      togglePin,
+      removeComment
     }
   }
 })
@@ -102,6 +138,21 @@ export default defineComponent({
 }
 .reply-button {
   color: var(--text-accent);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+.reply-button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+.pin-badge {
+  border-radius: 999px;
+  padding: 0 8px;
+  color: #fff;
+  background: var(--main-gradient);
 }
 .commentContent {
   line-height: 26px;
