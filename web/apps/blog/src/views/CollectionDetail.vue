@@ -117,8 +117,8 @@ export default defineComponent({
       haveMore.value = comments.value.length < pageCount(response?.data)
       if (commentID > 0 && reloading) focusComment(commentID)
     }
-    const fetchReplies = async (index: number) => {
-      const comment = comments.value[index]
+    const fetchReplies = async (commentID: number) => {
+      const comment = comments.value.find((row: any) => Number(row?.id) === commentID)
       if (!comment?.id) return
       const response = await api.getRepliesByCommentId(comment.id)
       comment.replyDTOs = Array.isArray(response?.data?.data) ? response.data.data : []
@@ -195,7 +195,7 @@ export default defineComponent({
     provide('collectionId', () => Number(detail.value?.collection?.id || 0))
     provide('canModerate', () => isOwner.value)
     emitter.on('collectionFetchComment', () => { pageInfo.current = 1; isReload.value = true; void fetchComments() })
-    emitter.on('collectionFetchReplies', (index: any) => { void fetchReplies(Number(index)) })
+    emitter.on('collectionFetchReplies', (commentId: any) => { void fetchReplies(Number(commentId)) })
     emitter.on('collectionLoadMore', () => { if (haveMore.value) { pageInfo.current += 1; void fetchComments() } })
     onUnmounted(() => {
       emitter.off('collectionFetchComment')

@@ -48,7 +48,7 @@ export default defineComponent({
     const reply = computed(() => props.reply)
     const canModerate = inject<() => boolean>('canModerate', () => false)
     const readCollectionID = inject<() => number>('collectionId', () => 0)
-    const readIndex = inject<() => number>('index', () => 0)
+    const rootCommentId = inject('parentId', 0)
     const busy = ref(false)
     const formatTime = (time: any): any => {
       let date = new Date(time)
@@ -95,7 +95,7 @@ export default defineComponent({
       try {
         const response = await api.deleteOwnedCollectionComment(collectionID, Number(reply.value.id))
         if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
-        emitter.emit('collectionFetchReplies', Number(readIndex()))
+        emitter.emit('collectionFetchReplies', Number(rootCommentId))
       } catch (reason: any) {
         ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
       } finally {

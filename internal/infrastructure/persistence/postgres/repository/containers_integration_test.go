@@ -1171,6 +1171,39 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	if detail, err := collectionRepo.GetPublicBySlug(ctx, batchCollection.Slug); err != nil || detail.Collection.CommentCount != 0 {
 		t.Fatalf("batch delete must clear the public comment count: detail=%+v err=%v", detail.Collection, err)
 	}
+	pagedCollection, err := collectionRepo.CreateOwned(ctx, 1, "integration-paged-moderation-list", port.CollectionSaveInput{
+		Title: "Integration paged moderation list", Visibility: port.CollectionVisibilityPublic,
+	})
+	if err != nil {
+		t.Fatalf("create paged moderation collection: %v", err)
+	}
+	pagedIDs := make([]int, 0, 9)
+	for i := 0; i < 9; i++ {
+		id, err := commentRepo.Create(ctx, entity.TComment{
+			UserId: 2, TopicId: pagedCollection.ID, CommentContent: fmt.Sprintf("paged %d", i), Type: 6, IsReview: 1,
+		})
+		if err != nil {
+			t.Fatalf("create paged comment %d: %v", i, err)
+		}
+		pagedIDs = append(pagedIDs, id)
+	}
+	oldestPagedID := pagedIDs[0]
+	if err := commentRepo.SetPinned(ctx, 1, pagedCollection.ID, oldestPagedID, true); err != nil {
+		t.Fatalf("pin oldest paged comment: %v", err)
+	}
+	if page, err := commentRepo.ResolveCommentPage(ctx, 6, pagedCollection.ID, oldestPagedID, 7); err != nil || page != 1 {
+		t.Fatalf("a pinned root comment must resolve to the first page: page=%d err=%v", page, err)
+	}
+	// Without the is_top term the oldest comment would be ranked last (page 2).
+	if page, err := commentRepo.ResolveCommentPage(ctx, 6, pagedCollection.ID, pagedIDs[1], 7); err != nil || page != 2 {
+		t.Fatalf("the first unpinned root must resolve to the second page: page=%d err=%v", page, err)
+	}
+	if page, err := commentRepo.ResolveCommentPage(ctx, 6, pagedCollection.ID, pagedIDs[8], 7); err != nil || page != 1 {
+		t.Fatalf("the newest unpinned root must resolve to page one after the pin: page=%d err=%v", page, err)
+	}
+	if page, err := commentRepo.ResolveCommentPage(ctx, 6, pagedCollection.ID, pagedIDs[7], 7); err != nil || page != 1 {
+		t.Fatalf("second newest unpinned root must stay on page one: page=%d err=%v", page, err)
+	}
 	if owned, total, err := commentRepo.ListOwnedCollectionComments(ctx, 1, batchCollection.ID, 1, 10, "", true); err != nil || total != 2 || len(owned) != 2 {
 		t.Fatalf("owner governance list must include soft-deleted comments: owned=%+v total=%d err=%v", owned, total, err)
 	} else if owned[0].IsDelete != 1 {

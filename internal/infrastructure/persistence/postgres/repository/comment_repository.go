@@ -102,9 +102,10 @@ func (c *MyCommentRepo) ResolveCommentPage(ctx context.Context, commentType, top
 	var focus struct {
 		Id       int `xorm:"id"`
 		ParentId int `xorm:"parent_id"`
+		IsTop    int `xorm:"is_top"`
 	}
 	found, err := session.SQL(`
-		SELECT id, parent_id
+		SELECT id, parent_id, is_top
 		FROM t_comment
 		WHERE id = ? AND type = ? AND topic_id = ? AND is_delete = 0 AND is_review = 1`,
 		commentID, commentType, topicID).Get(&focus)
@@ -118,12 +119,24 @@ func (c *MyCommentRepo) ResolveCommentPage(ctx context.Context, commentType, top
 	if focus.ParentId > 0 {
 		rootID = focus.ParentId
 	}
+	// The public list orders roots by is_top DESC, id DESC, so the page of the
+	// focused comment must be derived from the same ordering. Counting only
+	// newer ids would land on the wrong page once a root comment is pinned.
+	rootIsTop := focus.IsTop
+	if focus.ParentId > 0 {
+		var parentTop int
+		if _, err := session.SQL(`SELECT is_top FROM t_comment WHERE id = ?`, rootID).Get(&parentTop); err != nil {
+			return 0, apperrors.Wrap(apperrors.KindUnavailable, "comment.focus_rank", err)
+		}
+		rootIsTop = parentTop
+	}
 	var newer int
 	if _, err := session.SQL(`
 		SELECT count(1)
 		FROM t_comment
-		WHERE type = ? AND topic_id = ? AND parent_id = 0 AND is_delete = 0 AND is_review = 1 AND id > ?`,
-		commentType, topicID, rootID).Get(&newer); err != nil {
+		WHERE type = ? AND topic_id = ? AND parent_id = 0 AND is_delete = 0 AND is_review = 1
+			AND (is_top > ? OR (is_top = ? AND id > ?))`,
+		commentType, topicID, rootIsTop, rootIsTop, rootID).Get(&newer); err != nil {
 		return 0, apperrors.Wrap(apperrors.KindUnavailable, "comment.focus_rank", err)
 	}
 	return newer/size + 1, nil
