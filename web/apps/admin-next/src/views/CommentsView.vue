@@ -23,6 +23,10 @@
             <a-radio :value="2">{{ t('status.pending') }}</a-radio>
             <a-radio :value="1">{{ t('comments.comments.filterApproved') }}</a-radio>
           </a-radio-group>
+          <a-select v-model="collectionFilter" size="small" class="admin-filter-select" @change="reload">
+            <a-option :value="0">{{ t('comments.comments.collectionAll') }}</a-option>
+            <a-option v-for="item in collections" :key="item.id" :value="Number(item.id)">{{ item.title }}</a-option>
+          </a-select>
           <span class="admin-toolbar-caption">{{ t('comments.comments.total', { total }) }}</span>
         </div>
         <div class="admin-table-toolbar-actions">
@@ -42,6 +46,7 @@
       <AdminBatchBar :count="selectedIds.length" :hint="t('comments.common.pageCount', { count: records.length })" @clear="clearSelection">
         <a-button size="small" type="primary" :loading="batchApproving" @click="batchReview">{{ t('comments.comments.batchApprove') }}</a-button>
         <a-button size="small" status="danger" :loading="batchDeleting" @click="batchDelete">{{ t('comments.common.batchDelete') }}</a-button>
+        <a-button size="small" :loading="batchRestoring" @click="batchRestore">{{ t('comments.comments.batchRestore') }}</a-button>
       </AdminBatchBar>
 
       <div class="admin-table-shell">
@@ -68,9 +73,21 @@
           <template #review="{ record }">
             <AdminStatusTag :kind="Number(record.isReview) === 1 ? 'reviewed' : 'pending'" />
           </template>
+          <template #status="{ record }">
+            <a-space size="mini">
+              <AdminStatusTag v-if="Number(record.isDelete) === 1" kind="failed" :label="t('comments.comments.softDeleted')" />
+              <AdminStatusTag v-if="Number(record.isTop) === 1" kind="top" />
+              <span v-if="Number(record.reportCount) > 0" class="comment-report-count">{{ t('comments.comments.reports') }} {{ record.reportCount }}</span>
+            </a-space>
+          </template>
           <template #time="{ record }"><span class="admin-cell-nowrap">{{ formatDateTime(record.createTime) }}</span></template>
           <template #actions="{ record }">
-            <a-space class="admin-action-space">
+            <a-space v-if="Number(record.isDelete) === 1" class="admin-action-space">
+              <a-popconfirm :content="t('comments.comments.restoreConfirm')" @ok="restoreOne(record.id)">
+                <a-button type="text" size="small" :loading="isPending(record.id)">{{ t('comments.comments.restore') }}</a-button>
+              </a-popconfirm>
+            </a-space>
+            <a-space v-else class="admin-action-space">
               <a-button type="text" size="small" :loading="isPending(record.id)" @click="toggleReview(record)">
                 {{ Number(record.isReview) === 1 ? t('comments.comments.revokeReview') : t('comments.comments.approve') }}
               </a-button>
@@ -94,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconMessage, IconRefresh } from '@arco-design/web-vue/es/icon'
 
@@ -102,7 +119,10 @@ import {
   apiErrorMessage,
   deleteComment,
   deleteComments,
+  getAdminCollections,
   listAdminPage,
+  listCollectionComments,
+  restoreComment,
   reviewComment,
   reviewComments
 } from '@/api/http'
@@ -115,6 +135,7 @@ import { useAsyncList } from '@/composables/useAsyncList'
 import { usePendingIds } from '@/composables/usePendingIds'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { readStoredPageSize, useStoredPageSize } from '@/composables/useTablePrefs'
+import type { CollectionSummary } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 import { formatDateTime, plainText } from '@/utils/format'
 import { tablePagination } from '@/utils/pagination'
@@ -136,16 +157,20 @@ const columns = computed(() => [
   { title: t('comments.comments.article'), dataIndex: 'articleTitle', width: 200, slotName: 'article' },
   { title: t('comments.common.content'), dataIndex: 'commentContent', minWidth: 260, slotName: 'content' },
   { title: t('comments.comments.review'), dataIndex: 'isReview', width: 104, slotName: 'review' },
+  { title: t('comments.comments.status'), dataIndex: 'isDelete', width: 150, slotName: 'status' },
   { title: t('comments.common.createdAt'), dataIndex: 'createTime', width: 184, slotName: 'time' },
   { title: t('common.actions'), dataIndex: 'actions', width: 168, slotName: 'actions' }
 ])
 
 const keywords = ref('')
 const reviewFilter = ref(0)
+const collectionFilter = ref(0)
+const collections = ref<CollectionSummary[]>([])
 const selectedKeys = ref<number[]>([])
 const approvingAll = ref(false)
 const batchApproving = ref(false)
 const batchDeleting = ref(false)
+const batchRestoring = ref(false)
 
 const { isPending, withPending } = usePendingIds()
 
@@ -161,12 +186,17 @@ const {
   changePage: gotoPage,
   changePageSize: applyPageSize
 } = useAsyncList<CommentRow>(
-  ({ current: page, pageSize: size, signal }) => listAdminPage<CommentRow>('admin/comments', {
-    current: page,
-    size,
-    keywords: keywords.value.trim(),
-    isReview: reviewFilter.value
-  }, { signal }),
+  ({ current: page, pageSize: size, signal }) => {
+    const params = {
+      current: page,
+      size,
+      keywords: keywords.value.trim(),
+      isReview: reviewFilter.value
+    }
+    return Number(collectionFilter.value) > 0
+      ? listCollectionComments(Number(collectionFilter.value), { ...params, type: 6 }, { signal })
+      : listAdminPage<CommentRow>('admin/comments', params, { signal })
+  },
   // fallbackMessage 只在 setup 时取一次值（useAsyncList 的参数是普通字符串），
   // 因此这里保留当前语言的快照；错误块的标题会跟着语言切换重新渲染。
   { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('comments.comments.loadFailed') }
@@ -176,6 +206,7 @@ useStoredPageSize(VIEW_KEY, pageSize)
 useQueryFilters([
   { key: 'keywords', ref: keywords, debounce: true },
   { key: 'isReview', ref: reviewFilter },
+  { key: 'collectionId', ref: collectionFilter },
   { key: 'page', ref: current }
 ], { onRestore: () => void load(), onSearch: () => void reload() })
 
@@ -264,6 +295,52 @@ async function approveAllPending(): Promise<void> {
   }
 }
 
+async function loadCollections(): Promise<void> {
+  try {
+    const page = await getAdminCollections({ current: 1, size: 100 })
+    collections.value = page.items ?? []
+  } catch {
+    collections.value = []
+  }
+}
+
+async function restoreOne(id: unknown): Promise<void> {
+  const commentId = Number(id)
+  if (!Number.isInteger(commentId) || commentId <= 0) return
+  await withPending(commentId, async () => {
+    try {
+      await restoreComment(commentId)
+      Message.success(t('comments.comments.restored'))
+      await load()
+    } catch (error) {
+      Message.error(apiErrorMessage(error, t('comments.comments.restoreFailed')))
+    }
+  })
+}
+
+async function batchRestore(): Promise<void> {
+  const ids = selectedIds.value
+  if (ids.length === 0) return
+  batchRestoring.value = true
+  try {
+    let restored = 0
+    for (const id of ids) {
+      try {
+        await restoreComment(id)
+        restored += 1
+      } catch {
+        // 单条失败不阻塞其余恢复，最终以成功数量提示。
+      }
+    }
+    Message.success(t('comments.comments.restoredCount', { count: restored }))
+    clearSelection()
+    await load()
+  } finally {
+    batchRestoring.value = false
+  }
+}
+
+onMounted(() => void loadCollections())
 async function remove(id: unknown): Promise<void> {
   const commentId = Number(id)
   if (!Number.isInteger(commentId) || commentId <= 0) return
@@ -295,5 +372,15 @@ async function remove(id: unknown): Promise<void> {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
+}
+
+.admin-filter-select {
+  width: 200px;
+}
+
+.comment-report-count {
+  color: var(--color-warning, #d2761b);
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>

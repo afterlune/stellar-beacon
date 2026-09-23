@@ -43,6 +43,8 @@ type CommentService interface {
 	PinCollectionComment(c *gin.Context) model.ResultVO
 	DeleteOwnedCollectionComment(c *gin.Context) model.ResultVO
 	ListOwnedCollectionComments(c *gin.Context) model.ResultVO
+	ListCollectionCommentsAdmin(c *gin.Context) model.ResultVO
+	RestoreCommentsAdmin(c *gin.Context) model.ResultVO
 	BatchModerateCollectionComments(c *gin.Context) model.ResultVO
 	RestoreOwnedCollectionComments(c *gin.Context) model.ResultVO
 }
@@ -565,6 +567,65 @@ func (c *MyCommentService) RestoreOwnedCollectionComments(ctx *gin.Context) mode
 	return model.ResultOkWithData(result)
 }
 
+func (c *MyCommentService) ListCollectionCommentsAdmin(ctx *gin.Context) model.ResultVO {
+	collectionID, err := pathID(ctx, "collectionId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	var vo model.ConditionVO
+	if err := ctx.ShouldBind(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	if vo.Current <= 0 {
+		vo.Current = 1
+	}
+	if vo.Size <= 0 || vo.Size > 100 {
+		vo.Size = 12
+	}
+	filter := port.CommentFilter{
+		Current:      vo.Current,
+		Size:         vo.Size,
+		Keywords:     vo.Keywords,
+		Type:         6,
+		IsReview:     vo.IsReview,
+		CollectionID: collectionID,
+	}
+	total, err := c.commentRepository().CountComments(ctx.Request.Context(), filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	records, err := c.commentRepository().ListCommentsAdmin(ctx.Request.Context(), filter)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if records == nil {
+		records = []*port.CommentAdmin{}
+	}
+	return model.ResultOkWithData(model.PageResultDTO{Records: records, Count: int(total), Page: vo.Current, PageSize: vo.Size})
+}
+
+func (c *MyCommentService) RestoreCommentsAdmin(ctx *gin.Context) model.ResultVO {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	commentID, err := pathID(ctx, "commentId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	comment, err := c.commentRepository().GetByID(ctx.Request.Context(), commentID)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	if comment.Type != 6 || comment.TopicId <= 0 {
+		return model.ResultFailWithMessage("只有书单评论支持恢复")
+	}
+	result, err := c.commentRepository().RestoreAsAdmin(ctx.Request.Context(), user.UserInfoId, comment.TopicId, []int{commentID})
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(result)
+}
 func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO) error {
 	if len(TypeHM[vo.Type]) == 0 {
 		return apperrors.Invalid("comment.validate", "invalid comment type")

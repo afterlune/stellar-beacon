@@ -194,6 +194,10 @@ func commentFilters(filter port.CommentFilter) (string, []interface{}) {
 		query += " AND c.comment_content LIKE ? ESCAPE '\\'"
 		args = append(args, pgsql.ContainsPattern(filter.Keywords))
 	}
+	if filter.CollectionID > 0 {
+		query += " AND c.type = 6 AND c.topic_id = ?"
+		args = append(args, filter.CollectionID)
+	}
 	return query, args
 }
 
@@ -217,7 +221,7 @@ func (c *MyCommentRepo) ListCommentsAdmin(ctx context.Context, filter port.Comme
 	}
 	limit, offset := pgsql.Page(filter.Current, filter.Size)
 	filters, args := commentFilters(filter)
-	query := "SELECT c.id, u.avatar, u.nickname, r.nickname AS reply_nickname, COALESCE(a.article_title, collection.title, '') AS article_title, c.comment_content, c.type, c.is_review, c.create_time FROM t_comment c LEFT JOIN t_article a ON c.type = 1 AND c.topic_id = a.id LEFT JOIN t_collection collection ON c.type = 6 AND c.topic_id = collection.id LEFT JOIN t_user_info u ON c.user_id = u.id LEFT JOIN t_user_info r ON c.reply_user_id = r.id" + filters + " ORDER BY c.id DESC LIMIT ? OFFSET ?"
+	query := "SELECT c.id, u.avatar, u.nickname, r.nickname AS reply_nickname, COALESCE(a.article_title, collection.title, '') AS article_title, c.comment_content, c.type, c.is_review, c.is_top, c.is_delete, CASE WHEN c.type = 6 THEN c.topic_id ELSE 0 END AS collection_id, (SELECT count(1) FROM t_comment_report report WHERE report.comment_id = c.id AND report.status = 'pending') AS report_count, c.create_time FROM t_comment c LEFT JOIN t_article a ON c.type = 1 AND c.topic_id = a.id LEFT JOIN t_collection collection ON c.type = 6 AND c.topic_id = collection.id LEFT JOIN t_user_info u ON c.user_id = u.id LEFT JOIN t_user_info r ON c.reply_user_id = r.id" + filters + " ORDER BY c.is_delete ASC, c.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 	var comments []*port.CommentAdmin
 	if err := session.SQL(query, args...).Find(&comments); err != nil {

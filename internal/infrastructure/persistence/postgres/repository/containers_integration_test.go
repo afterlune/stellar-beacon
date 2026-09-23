@@ -1204,6 +1204,45 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	if page, err := commentRepo.ResolveCommentPage(ctx, 6, pagedCollection.ID, pagedIDs[7], 7); err != nil || page != 1 {
 		t.Fatalf("second newest unpinned root must stay on page one: page=%d err=%v", page, err)
 	}
+	adminRows, err := commentRepo.ListCommentsAdmin(ctx, port.CommentFilter{Current: 1, Size: 10, Type: 6, CollectionID: batchCollection.ID})
+	if err != nil || len(adminRows) != 2 {
+		t.Fatalf("admin governance list must return the reading list comments: rows=%+v err=%v", adminRows, err)
+	}
+	for _, row := range adminRows {
+		if row.CollectionId != batchCollection.ID || row.IsDelete != 1 {
+			t.Fatalf("admin rows must expose the collection and deleted flag: %+v", row)
+		}
+	}
+	pinnedRows, err := commentRepo.ListCommentsAdmin(ctx, port.CommentFilter{Current: 1, Size: 20, Type: 6, CollectionID: govCollection.ID})
+	if err != nil {
+		t.Fatalf("admin rows for the moderation list: %v", err)
+	}
+	foundPinnedRow := false
+	for _, row := range pinnedRows {
+		if row.Id == modFirstID {
+			foundPinnedRow = true
+			if row.IsTop != 1 || row.IsDelete != 0 || row.CollectionId != govCollection.ID {
+				t.Fatalf("admin rows must surface the pin marker: %+v", row)
+			}
+		}
+	}
+	if !foundPinnedRow {
+		t.Fatalf("pinned comment missing from the admin rows: %+v", pinnedRows)
+	}
+	if otherRows, err := commentRepo.ListCommentsAdmin(ctx, port.CommentFilter{Current: 1, Size: 10, Type: 6, CollectionID: collection.ID}); err != nil || len(otherRows) == 0 {
+		t.Fatalf("admin collection filter must not leak across reading lists: rows=%+v err=%v", otherRows, err)
+	} else {
+		for _, row := range otherRows {
+			if row.CollectionId != collection.ID {
+				t.Fatalf("admin collection filter returned a foreign row: %+v", row)
+			}
+		}
+	}
+	for _, row := range adminRows {
+		if row.CollectionId != batchCollection.ID || row.IsDelete != 1 {
+			t.Fatalf("admin rows must expose the collection and deleted flag: %+v", row)
+		}
+	}
 	if owned, total, err := commentRepo.ListOwnedCollectionComments(ctx, 1, batchCollection.ID, 1, 10, "", true); err != nil || total != 2 || len(owned) != 2 {
 		t.Fatalf("owner governance list must include soft-deleted comments: owned=%+v total=%d err=%v", owned, total, err)
 	} else if owned[0].IsDelete != 1 {

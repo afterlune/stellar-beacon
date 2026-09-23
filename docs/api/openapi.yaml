@@ -632,6 +632,36 @@ paths:
     delete: { tags: [admin], summary: Delete tags, operationId: deleteTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/tags/search:
     get: { tags: [admin], summary: Search admin tags, operationId: searchAdminTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/collections/{collectionId}/comments:
+    get:
+      tags: [admin]
+      summary: List reading-list comments for governance
+      description: >-
+        Admin view of one reading list's comments. Soft-deleted comments stay
+        visible with isDelete = 1 so they can be restored; each row also carries
+        isTop and the number of pending reader reports.
+      operationId: listCollectionCommentsAdmin
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { name: keywords, in: query, schema: { type: string } }
+        - { name: isReview, in: query, schema: { type: integer, enum: [0, 1, 2] } }
+        - { name: current, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 12 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/comments/{commentId}/restore:
+    put:
+      tags: [admin]
+      summary: Restore a soft-deleted reading-list comment
+      description: >-
+        Administrators may restore a soft-deleted comment and the replies hidden
+        by the same deletion. Administrators cannot pin or unpin comments; pinning
+        stays with the reading-list owner.
+      operationId: restoreCommentsAdmin
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CommentId' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /admin/comments:
     get: { tags: [admin], summary: List admin comments, operationId: listAdminComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
     delete: { tags: [admin], summary: Delete comments, operationId: deleteComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }

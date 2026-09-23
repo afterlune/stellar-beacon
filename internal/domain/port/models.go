@@ -224,6 +224,10 @@ type CommentAdmin struct {
 	CommentContent string    `json:"commentContent"`
 	Type           int       `json:"type"`
 	IsReview       int       `json:"isReview"`
+	IsTop          int       `json:"isTop"`
+	IsDelete       int       `json:"isDelete"`
+	CollectionId   int       `json:"collectionId"`
+	ReportCount    int       `json:"reportCount"`
 	CreateTime     time.Time `json:"createTime"`
 }
 
@@ -257,13 +261,14 @@ type CommentCount struct {
 }
 
 type CommentFilter struct {
-	Current  int
-	Size     int
-	Keywords string
-	Type     int
-	IsReview int
-	TopicID  *int
-	ViewerID int
+	Current      int
+	Size         int
+	Keywords     string
+	Type         int
+	IsReview     int
+	TopicID      *int
+	CollectionID int
+	ViewerID     int
 }
 
 type UserFilter struct {

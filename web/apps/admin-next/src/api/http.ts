@@ -536,8 +536,38 @@ export async function deleteComments(ids: number[]): Promise<void> {
   responseData(response)
 }
 
+/** Row shape shared by the comment governance endpoints. */
+export interface AdminCommentRow extends Record<string, unknown> {
+  id: number
+  type?: number
+  isReview?: number
+  isTop?: number
+  isDelete?: number
+  collectionId?: number
+  reportCount?: number
+  commentContent?: string
+  articleTitle?: string
+  createTime?: string
+}
+
 export async function deleteComment(id: number): Promise<void> {
+
   const response = await http.delete<ResultVO<unknown>>('admin/comments', { data: [id] })
+  responseData(response)
+}
+
+/** Admin governance view of one reading list's comments, soft-deleted rows included. */
+export async function listCollectionComments(
+  collectionId: number,
+  params: Record<string, string | number> = {},
+  config?: AxiosRequestConfig
+): Promise<Page<AdminCommentRow>> {
+  return listAdminPage<AdminCommentRow>(`admin/collections/${encodeURIComponent(collectionId)}/comments`, params, config)
+}
+
+/** Administrators restore soft-deleted comments; pinning stays with the reading-list owner. */
+export async function restoreComment(id: number): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>(`admin/comments/${encodeURIComponent(id)}/restore`)
   responseData(response)
 }
 

@@ -171,6 +171,8 @@ func RouterSetup(router *gin.Engine) {
 	auth.POST("/me/notifications/read", api.MarkFollowNotificationsRead)
 
 	admin.GET("/collections", api.ListAdminCollections)
+	admin.GET("/collections/:collectionId/comments", api.ListCollectionCommentsAdmin)
+	admin.PUT("/comments/:commentId/restore", api.RestoreCommentsAdmin)
 	admin.PUT("/content/:type/:id/moderation", api.ModerateContent)
 	admin.PUT("/content/articles/:articleId/distribution", api.DistributeArticle)
 	admin.GET("/dashboard", api.GetBlogBackInfo)

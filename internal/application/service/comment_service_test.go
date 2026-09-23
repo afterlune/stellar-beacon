@@ -33,6 +33,8 @@ type moderationRecordingCommentRepository struct {
 	BatchAction         string
 	BatchCommentIDs     []int
 	RestoredCommentIDs  []int
+	AdminFilter         port.CommentFilter
+	RestoreAdminIDs     []int
 }
 
 func (f *moderationRecordingCommentRepository) SetPinned(_ context.Context, userID, collectionID, commentID int, pinned bool) error {
@@ -53,6 +55,25 @@ func (f *moderationRecordingCommentRepository) SoftDeleteOwned(_ context.Context
 func (f *moderationRecordingCommentRepository) BatchModerateOwned(_ context.Context, _, collectionID int, action string, commentIDs []int) (port.ModerationBatchResult, error) {
 	f.BatchAction = action
 	f.BatchCommentIDs = append([]int{}, commentIDs...)
+	return port.ModerationBatchResult{Succeeded: append([]int{}, commentIDs...), Failed: []port.ModerationFailure{}}, nil
+}
+
+func (f *moderationRecordingCommentRepository) ListCommentsAdmin(_ context.Context, filter port.CommentFilter) ([]*port.CommentAdmin, error) {
+	f.AdminFilter = filter
+	return []*port.CommentAdmin{{Id: 1, Type: 6, IsDelete: 1}}, nil
+}
+
+func (f *moderationRecordingCommentRepository) CountComments(_ context.Context, filter port.CommentFilter) (int64, error) {
+	f.AdminFilter = filter
+	return 1, nil
+}
+
+func (f *moderationRecordingCommentRepository) GetByID(_ context.Context, id int) (entity.TComment, error) {
+	return entity.TComment{Id: id, Type: 6, TopicId: 42, IsDelete: 1, IsReview: 1}, nil
+}
+
+func (f *moderationRecordingCommentRepository) RestoreAsAdmin(_ context.Context, _, _ int, commentIDs []int) (port.ModerationBatchResult, error) {
+	f.RestoreAdminIDs = append([]int{}, commentIDs...)
 	return port.ModerationBatchResult{Succeeded: append([]int{}, commentIDs...), Failed: []port.ModerationFailure{}}, nil
 }
 
@@ -237,5 +258,35 @@ func TestCommentServiceListOwnedCollectionComments(t *testing.T) {
 	result := mustCommentService(t, &fakeCommentRepository{}).ListOwnedCollectionComments(c)
 	if !result.Flag || result.Data == nil {
 		t.Fatalf("unexpected governance list result: %+v", result)
+	}
+}
+func TestCommentServiceListCollectionCommentsAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &moderationRecordingCommentRepository{}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Params = gin.Params{{Key: "collectionId", Value: "7"}}
+	c.Request = httptest.NewRequest(http.MethodGet, "/admin/collections/7/comments?current=1&size=20", nil)
+	result := mustCommentService(t, repo).ListCollectionCommentsAdmin(c)
+	if !result.Flag {
+		t.Fatalf("unexpected admin list result: %+v", result)
+	}
+	if repo.AdminFilter.CollectionID != 7 || repo.AdminFilter.Type != 6 {
+		t.Fatalf("admin list must be scoped to the reading list: %+v", repo.AdminFilter)
+	}
+}
+
+func TestCommentServiceRestoreCommentsAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &moderationRecordingCommentRepository{}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Params = gin.Params{{Key: "commentId", Value: "9"}}
+	c.Request = httptest.NewRequest(http.MethodPut, "/admin/comments/9/restore", nil)
+	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 3})
+	result := mustCommentService(t, repo).RestoreCommentsAdmin(c)
+	if !result.Flag {
+		t.Fatalf("unexpected admin restore result: %+v", result)
+	}
+	if len(repo.RestoreAdminIDs) != 1 || repo.RestoreAdminIDs[0] != 9 {
+		t.Fatalf("admin restore must target the requested comment: %v", repo.RestoreAdminIDs)
 	}
 }

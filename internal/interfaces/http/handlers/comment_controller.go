@@ -112,3 +112,21 @@ func BatchModerateCollectionComments(c *gin.Context) {
 func RestoreOwnedCollectionComments(c *gin.Context) {
 	c.JSON(http.StatusOK, commentService.RestoreOwnedCollectionComments(c))
 }
+
+// ListCollectionCommentsAdmin
+// @Summary		 书单评论治理
+// @Description  管理端按书单分页查看评论（含已删除与举报数）
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/admin/collections/{collectionId}/comments [GET]
+func ListCollectionCommentsAdmin(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ListCollectionCommentsAdmin(c))
+}
+
+// RestoreCommentsAdmin
+// @Summary		 书单评论治理
+// @Description  管理员恢复被软删除的书单评论
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/admin/comments/{commentId}/restore [PUT]
+func RestoreCommentsAdmin(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.RestoreCommentsAdmin(c))
+}
