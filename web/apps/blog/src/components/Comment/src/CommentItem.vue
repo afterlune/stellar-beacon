@@ -7,7 +7,12 @@
           <p class="commentContent" v-html="comment.commentContent.replaceAll('\n', '<br>')" />
           <div class="flex justify-between mt-3 text-xs text-ob-dim space-x-3 md:space-x-16">
             <span>{{ comment.nickname }} | {{ time }}</span>
-            <div>
+            <div class="flex items-center gap-3">
+              <CommentLikeButton
+                :comment-id="Number(comment.id)"
+                :like-count="Number(comment.likeCount || 0)"
+                :liked="Boolean(comment.liked)"
+                @changed="updateLike" />
               <span @click="clickOnReply" class="cursor-pointer reply-button">Reply</span>
             </div>
           </div>
@@ -34,12 +39,14 @@ import { defineComponent, reactive, ref, toRefs, provide } from 'vue'
 import Avatar from '@/components/Avatar.vue'
 import CommentReplyItem from './CommentReplyItem.vue'
 import CommentReplyForm from './CommentReplyForm.vue'
+import CommentLikeButton from './CommentLikeButton.vue'
 
 export default defineComponent({
   components: {
     Avatar,
     CommentReplyItem,
-    CommentReplyForm
+    CommentReplyForm,
+    CommentLikeButton
   },
   props: ['comment', 'index'],
   setup(props) {
@@ -65,10 +72,15 @@ export default defineComponent({
       reactiveData.replyContent = 'add reply...'
       reactiveData.show = true
     }
+    const updateLike = (payload: { active: boolean; likeCount: number }) => {
+      comment.likeCount = payload.likeCount
+      comment.liked = payload.active
+    }
     return {
       ...toRefs(reactiveData),
       clickOnReply,
-      changeShow
+      changeShow,
+      updateLike
     }
   }
 })

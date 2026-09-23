@@ -98,7 +98,7 @@ func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 	if err := ctx.ShouldBind(&commentVO); err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	filter := port.CommentFilter{Current: current, Size: size, Type: commentVO.Type}
+	filter := port.CommentFilter{Current: current, Size: size, Type: commentVO.Type, ViewerID: optionalUserID(ctx)}
 	if commentVO.TopicId != "" {
 		topicID, err := strconv.Atoi(commentVO.TopicId)
 		if err != nil {
@@ -128,7 +128,7 @@ func (c *MyCommentService) ListComments(ctx *gin.Context) model.ResultVO {
 	for _, comment := range commentData {
 		commentIDs = append(commentIDs, comment.Id)
 	}
-	replyData, err := c.commentRepository().ListReplies(ctx.Request.Context(), commentIDs)
+	replyData, err := c.commentRepository().ListReplies(ctx.Request.Context(), commentIDs, filter.ViewerID)
 	if err != nil {
 		return model.ResultFromError(err)
 	}
@@ -383,7 +383,7 @@ func (c *MyCommentService) ListRepliesByCommentId(ctx *gin.Context) model.Result
 	if err != nil {
 		return model.ResultFailWithMessage("参数格式不正确")
 	}
-	data, err := c.commentRepository().ListReplies(ctx.Request.Context(), []int{commentID})
+	data, err := c.commentRepository().ListReplies(ctx.Request.Context(), []int{commentID}, optionalUserID(ctx))
 	if err != nil {
 		return model.ResultFromError(err)
 	}

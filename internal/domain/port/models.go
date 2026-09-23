@@ -193,6 +193,8 @@ type Comment struct {
 	Website        string    `json:"website"`
 	CommentContent string    `json:"commentContent"`
 	CreateTime     time.Time `json:"createTime"`
+	LikeCount      int       `json:"likeCount"`
+	Liked          bool      `json:"liked"`
 	ReplyDTOs      []Reply   `json:"replyDTOs"`
 }
 
@@ -208,6 +210,8 @@ type Reply struct {
 	ReplyWebsite   string    `json:"replyWebsite"`
 	CommentContent string    `json:"commentContent"`
 	CreateTime     time.Time `json:"createTime"`
+	LikeCount      int       `json:"likeCount"`
+	Liked          bool      `json:"liked"`
 }
 
 type CommentAdmin struct {
@@ -234,6 +238,7 @@ type CommentFilter struct {
 	Type     int
 	IsReview int
 	TopicID  *int
+	ViewerID int
 }
 
 type UserFilter struct {

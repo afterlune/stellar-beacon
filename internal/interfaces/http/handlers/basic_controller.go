@@ -36,6 +36,7 @@ var (
 	collectionService         service.CollectionService             = new(service.MyCollectionService)
 	collectionSubService      service.CollectionSubscriptionService = new(service.MyCollectionSubscriptionService)
 	collectionReactionService service.CollectionReactionService     = new(service.MyCollectionReactionService)
+	commentReactionService    service.CommentReactionService        = new(service.MyCommentReactionService)
 )
 
 type Services struct {
@@ -72,6 +73,7 @@ type Services struct {
 	Collection         service.CollectionService
 	CollectionSub      service.CollectionSubscriptionService
 	CollectionReaction service.CollectionReactionService
+	CommentReaction    service.CommentReactionService
 }
 
 func ConfigureServices(s Services) {
@@ -108,4 +110,5 @@ func ConfigureServices(s Services) {
 	collectionService = s.Collection
 	collectionSubService = s.CollectionSub
 	collectionReactionService = s.CollectionReaction
+	commentReactionService = s.CommentReaction
 }

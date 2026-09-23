@@ -29,7 +29,7 @@ func (f *targetRecordingCommentRepository) ValidateTarget(_ context.Context, com
 func (f *fakeCommentRepository) ListComments(context.Context, port.CommentFilter) ([]*port.Comment, int, error) {
 	return []*port.Comment{{Id: 10}}, 1, nil
 }
-func (f *fakeCommentRepository) ListReplies(context.Context, []int) ([]*port.Reply, error) {
+func (f *fakeCommentRepository) ListReplies(context.Context, []int, int) ([]*port.Reply, error) {
 	return []*port.Reply{{ParentId: 10, CommentContent: "reply"}}, nil
 }
 func (f *fakeCommentRepository) ListTopSixComments(context.Context) ([]*port.Comment, error) {

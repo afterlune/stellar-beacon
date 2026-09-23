@@ -436,7 +436,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 			ELSE ''
 		END AS title,
 		CASE
-			WHEN notification.type IN ('comment', 'reply') THEN COALESCE(SUBSTR(comment.comment_content, 1, 240), '')
+			WHEN notification.comment_id > 0 THEN COALESCE(SUBSTR(comment.comment_content, 1, 240), '')
 			WHEN notification.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '')
 			WHEN notification.content_type = 'collection' THEN COALESCE(SUBSTR(collection.description, 1, 240), '')
 			ELSE COALESCE(SUBSTR(talk.content, 1, 240), '')
@@ -461,11 +461,16 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		AND reaction.article_id = notification.content_id
 		AND reaction.user_info_id = notification.actor_id
 		AND reaction.reaction = notification.type
-	LEFT JOIN t_collection_reaction collection_reaction ON notification.type = 'like'
+	LEFT JOIN t_collection_reaction collection_reaction ON notification.type IN ('like', 'favorite')
 		AND notification.content_type = 'collection'
 		AND collection_reaction.collection_id = notification.content_id
 		AND collection_reaction.user_info_id = notification.actor_id
-		AND collection_reaction.reaction = 'like'
+		AND collection_reaction.reaction = notification.type
+	LEFT JOIN t_comment_reaction comment_reaction ON notification.type = 'like'
+		AND notification.comment_id > 0
+		AND comment_reaction.comment_id = notification.comment_id
+		AND comment_reaction.user_info_id = notification.actor_id
+		AND comment_reaction.reaction = 'like'
 	WHERE notification.recipient_id = ?
 	  AND (
 		(notification.type IN ('comment', 'reply') AND comment.id IS NOT NULL AND comment.is_delete = 0 AND comment.is_review = 1
@@ -474,9 +479,15 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 				OR (notification.content_type = 'collection' AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))
 		OR
 		(notification.type IN ('like', 'favorite')
-			AND ((notification.content_type = 'article' AND reaction.id IS NOT NULL AND article.id IS NOT NULL)
-				OR (notification.content_type = 'collection' AND collection_reaction.id IS NOT NULL
-					AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))
+			AND (
+				(notification.comment_id > 0 AND comment_reaction.id IS NOT NULL
+					AND comment.id IS NOT NULL AND comment.is_delete = 0 AND comment.is_review = 1
+					AND ((notification.content_type = 'article' AND article.id IS NOT NULL)
+						OR (notification.content_type = 'talk' AND talk.id IS NOT NULL)
+						OR (notification.content_type = 'collection' AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))
+				OR (notification.comment_id = 0 AND ((notification.content_type = 'article' AND reaction.id IS NOT NULL AND article.id IS NOT NULL)
+					OR (notification.content_type = 'collection' AND collection_reaction.id IS NOT NULL
+						AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))))
 	  )
 	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply')) OR (? = 'reaction' AND notification.type IN ('like', 'favorite')))
 	UNION ALL

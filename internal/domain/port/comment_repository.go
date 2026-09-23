@@ -8,7 +8,7 @@ import (
 type CommentRepository interface {
 	ListComments(ctx context.Context, filter CommentFilter) ([]*Comment, int, error)
 	ResolveCommentPage(ctx context.Context, commentType, topicID, commentID, size int) (int, error)
-	ListReplies(ctx context.Context, commentIDs []int) ([]*Reply, error)
+	ListReplies(ctx context.Context, commentIDs []int, viewerID int) ([]*Reply, error)
 	ListTopSixComments(ctx context.Context) ([]*Comment, error)
 	CountComments(ctx context.Context, filter CommentFilter) (int64, error)
 	ListCommentsAdmin(ctx context.Context, filter CommentFilter) ([]*CommentAdmin, error)

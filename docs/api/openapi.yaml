@@ -286,9 +286,17 @@ paths:
   /auth/me/collection-feed:
     get: { tags: [auth], summary: List collection updates since each subscription began, operationId: listCollectionSubscriptionFeed, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /auth/me/collection-reactions:
+    get:
+      tags: [auth]
+      summary: List collections saved by the current account
+      operationId: listMyCollectionReactions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reaction, in: query, required: true, schema: { type: string, enum: [favorite] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
     put:
       tags: [auth]
-      summary: Set the current account's like state for a public or unlisted collection
+      summary: Set the current account's like or favorite state for a public or unlisted collection
       operationId: setCollectionReaction
       security: [{ bearerAuth: [] }]
       requestBody:
@@ -300,11 +308,28 @@ paths:
   /auth/me/collection-reactions/state:
     get:
       tags: [auth]
-      summary: Read the current account's like state for one collection
+      summary: Read the current account's like and favorite state for one collection
       operationId: getCollectionReactionState
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: collectionId, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/comment-reactions:
+    put:
+      tags: [auth]
+      summary: Set the current account's like state for a visible comment or reply
+      operationId: setCommentReaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [commentId, active]
+              properties:
+                commentId: { type: integer, format: int64, minimum: 1 }
+                active: { type: boolean }
       responses: { '200': { $ref: '#/components/responses/Result' } }
   /auth/me/recommendations/query:
     post:
@@ -697,19 +722,22 @@ components:
       required: [collectionId, active]
       properties:
         collectionId: { type: integer, format: int64, minimum: 1 }
+        reaction: { type: string, enum: [like, favorite], default: like }
         active: { type: boolean }
     CollectionReactionToggle:
       type: object
-      required: [active, likeCount]
+      required: [active, likeCount, favoriteCount]
       properties:
         active: { type: boolean }
         likeCount: { type: integer, minimum: 0 }
+        favoriteCount: { type: integer, minimum: 0 }
     CollectionReactionState:
       type: object
-      required: [collectionId, like]
+      required: [collectionId, like, favorite]
       properties:
         collectionId: { type: integer, format: int64 }
         like: { type: boolean }
+        favorite: { type: boolean }
     CollectionSubscription:
       type: object
       required: [collectionId, slug, title, articleCount, muted, unreadCount, subscribedAt]

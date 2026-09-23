@@ -651,18 +651,31 @@ type ReactionStateDTO struct {
 // CollectionReactionToggleVO carries the desired state so retries remain
 // idempotent instead of toggling an already-applied like.
 type CollectionReactionToggleVO struct {
-	CollectionId int  `json:"collectionId" form:"collectionId"`
-	Active       bool `json:"active" form:"active"`
+	CollectionId int    `json:"collectionId" form:"collectionId"`
+	Reaction     string `json:"reaction" form:"reaction"`
+	Active       bool   `json:"active" form:"active"`
 }
 
 type CollectionReactionToggleDTO struct {
-	Active    bool `json:"active"`
-	LikeCount int  `json:"likeCount"`
+	Active        bool `json:"active"`
+	LikeCount     int  `json:"likeCount"`
+	FavoriteCount int  `json:"favoriteCount"`
 }
 
 type CollectionReactionStateDTO struct {
 	CollectionId int  `json:"collectionId"`
 	Like         bool `json:"like"`
+	Favorite     bool `json:"favorite"`
+}
+
+type CommentReactionToggleVO struct {
+	CommentId int  `json:"commentId" form:"commentId"`
+	Active    bool `json:"active" form:"active"`
+}
+
+type CommentReactionToggleDTO struct {
+	Active    bool `json:"active"`
+	LikeCount int  `json:"likeCount"`
 }
 
 // NotificationPreferenceVO toggles the in-app notification preferences of the

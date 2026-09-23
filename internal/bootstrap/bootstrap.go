@@ -93,6 +93,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	collectionRepo := repository.NewCollectionRepo(engine)
 	collectionSubRepo := repository.NewCollectionSubscriptionRepo(engine)
 	collectionReactionRepo := repository.NewCollectionReactionRepo(engine)
+	commentReactionRepo := repository.NewCommentReactionRepo(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -247,11 +248,18 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	}
 	collectionSubService := service.NewCollectionSubscriptionService(collectionSubRepo)
 	collectionReactionService, err := service.NewCollectionReactionService(service.CollectionReactionServiceDeps{
-		Repo: collectionReactionRepo, Limiter: redisCache,
+		Repo: collectionReactionRepo, Collections: collectionRepo, Limiter: redisCache,
 	})
 	if err != nil {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.service.collection_reaction", err)
+	}
+	commentReactionService, err := service.NewCommentReactionService(service.CommentReactionServiceDeps{
+		Repo: commentReactionRepo, Limiter: redisCache,
+	})
+	if err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.comment_reaction", err)
 	}
 
 	scheduler := task.NewScheduler(job, jobLog, redisCache)
@@ -298,6 +306,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		Collection:         collectionService,
 		CollectionSub:      collectionSubService,
 		CollectionReaction: collectionReactionService,
+		CommentReaction:    commentReactionService,
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)

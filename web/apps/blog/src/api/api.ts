@@ -238,11 +238,17 @@ export default {
   getCollectionFeed: (params: { current?: number; size?: number }) => {
     return http.get('/auth/me/collection-feed', { params })
   },
-  setCollectionReaction: (params: { collectionId: number; active: boolean }) => {
+  setCollectionReaction: (params: { collectionId: number; reaction?: 'like' | 'favorite'; active: boolean }) => {
     return http.put('/auth/me/collection-reactions', params)
+  },
+  getMyCollectionReactions: (params: { reaction: 'favorite'; current: number; size: number }) => {
+    return http.get('/auth/me/collection-reactions', { params })
   },
   getCollectionReactionState: (collectionId: number) => {
     return http.get('/auth/me/collection-reactions/state', { params: { collectionId } })
+  },
+  setCommentReaction: (params: { commentId: number; active: boolean }) => {
+    return http.put('/auth/me/comment-reactions', params)
   },
   getRecommendations: (params: { cursor?: string; size?: number; seedArticleIds?: number[] }) => {
     return http.post('/auth/me/recommendations/query', params)

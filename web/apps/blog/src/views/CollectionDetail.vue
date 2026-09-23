@@ -18,10 +18,13 @@
             <button type="button" class="collection-like" :class="{ 'is-active': liked }" :disabled="likeBusy" @click="toggleLike">
               {{ liked ? '已点赞' : '点赞' }} · {{ likeCount }}
             </button>
+            <button type="button" class="collection-favorite" :class="{ 'is-active': favorited }" :disabled="favoriteBusy" @click="toggleFavorite">
+              {{ favorited ? '已收藏' : '收藏' }} · {{ favoriteCount }}
+            </button>
             <button type="button" @click="share">{{ copied ? '链接已复制' : '分享书单' }}</button>
           </div>
         </div>
-        <aside><strong>{{ detail.items.length }}</strong><small>篇文章</small><small>{{ likeCount }} 赞 · {{ detail.collection.commentCount || 0 }} 评论</small><em>{{ detail.collection.visibility === 'unlisted' ? '链接可见' : '公开书单' }}</em></aside>
+        <aside><strong>{{ detail.items.length }}</strong><small>篇文章</small><small>{{ likeCount }} 赞 · {{ favoriteCount }} 收藏 · {{ detail.collection.commentCount || 0 }} 评论</small><em>{{ detail.collection.visibility === 'unlisted' ? '链接可见' : '公开书单' }}</em></aside>
       </header>
       <ol class="collection-items">
         <li v-for="(item, index) in detail.items" :key="item.articleId" :class="{ 'is-highlighted': Number(item.articleId) === highlightedArticleId }" :data-article-id="item.articleId">
@@ -73,6 +76,9 @@ export default defineComponent({
     const liked = ref(false)
     const likeCount = ref(0)
     const likeBusy = ref(false)
+    const favorited = ref(false)
+    const favoriteCount = ref(0)
+    const favoriteBusy = ref(false)
     const isOwner = computed(() => {
       const currentID = Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0)
       return currentID > 0 && currentID === Number(detail.value?.collection?.owner?.id || 0)
@@ -123,8 +129,10 @@ export default defineComponent({
       try {
         const response = await api.getCollectionReactionState(collectionID)
         liked.value = Boolean(response?.data?.data?.like)
+        favorited.value = Boolean(response?.data?.data?.favorite)
       } catch {
         liked.value = false
+        favorited.value = false
       }
     }
     const load = async () => {
@@ -134,7 +142,9 @@ export default defineComponent({
         detail.value = response?.data?.data || null
         if (!detail.value?.collection) throw new Error('missing collection')
         likeCount.value = Number(detail.value.collection.likeCount || 0)
+        favoriteCount.value = Number(detail.value.collection.favoriteCount || 0)
         liked.value = false
+        favorited.value = false
         pageInfo.current = 1
         isReload.value = true
         comments.value = []
@@ -146,25 +156,31 @@ export default defineComponent({
         }
       } catch { error.value = '没有找到这个公开书单。'; detail.value = null; comments.value = [] } finally { loading.value = false }
     }
-    const toggleLike = async () => {
+    const toggleCollectionReaction = async (reaction: 'like' | 'favorite') => {
       const collectionID = Number(detail.value?.collection?.id || 0)
       if (!collectionID) return
       if (!userStore.userInfo) {
         await router.push({ path: route.path, query: { ...route.query, login: '1', redirect: route.fullPath } })
         return
       }
-      likeBusy.value = true
+      const busy = reaction === 'favorite' ? favoriteBusy : likeBusy
+      const active = reaction === 'favorite' ? favorited : liked
+      busy.value = true
       try {
-        const response = await api.setCollectionReaction({ collectionId: collectionID, active: !liked.value })
-        if (!response?.data?.flag) throw new Error(response?.data?.message || '点赞失败')
-        liked.value = Boolean(response.data.data?.active)
+        const response = await api.setCollectionReaction({ collectionId: collectionID, reaction, active: !active.value })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
+        if (reaction === 'favorite') favorited.value = Boolean(response.data.data?.active)
+        else liked.value = Boolean(response.data.data?.active)
         likeCount.value = Number(response.data.data?.likeCount || 0)
+        favoriteCount.value = Number(response.data.data?.favoriteCount || 0)
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '点赞失败')
+        ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
       } finally {
-        likeBusy.value = false
+        busy.value = false
       }
     }
+    const toggleLike = () => toggleCollectionReaction('like')
+    const toggleFavorite = () => toggleCollectionReaction('favorite')
     const share = async () => {
       const url = window.location.href
       try {
@@ -186,7 +202,7 @@ export default defineComponent({
     })
     watch(() => route.params.slug, () => void load())
     onMounted(() => void load())
-    return { detail, loading, error, copied, highlightedArticleId, isOwner, defaultAvatar, liked, likeCount, likeBusy, toggleLike, share, excerpt, formatDate }
+    return { detail, loading, error, copied, highlightedArticleId, isOwner, defaultAvatar, liked, likeCount, likeBusy, favorited, favoriteCount, favoriteBusy, toggleLike, toggleFavorite, share, excerpt, formatDate }
   }
 })
 </script>
@@ -199,7 +215,7 @@ export default defineComponent({
 .collection-hero > div > span { color: var(--text-ob-dim); font-size: 13px; line-height: 1.8; }
 .collection-hero__actions { display: flex; align-items: center; gap: 12px; margin-top: 24px; }
 .collection-hero__actions a, .collection-hero__actions button { display: inline-flex; align-items: center; min-height: 36px; padding: 7px 12px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
-.collection-hero__actions .collection-like.is-active { border-color: var(--color-ob); background: color-mix(in srgb, var(--color-ob) 12%, transparent); color: var(--color-ob); }
+.collection-hero__actions .collection-like.is-active, .collection-hero__actions .collection-favorite.is-active { border-color: var(--color-ob); background: color-mix(in srgb, var(--color-ob) 12%, transparent); color: var(--color-ob); }
 .collection-hero__actions button:disabled { opacity: .55; cursor: wait; }
 .collection-hero__actions img { width: 25px; height: 25px; margin-right: 7px; border-radius: 50%; object-fit: cover; }
 .collection-hero aside { display: grid; place-content: center; border: 1px solid var(--border-hairline); border-radius: 18px; text-align: center; }

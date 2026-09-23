@@ -228,7 +228,13 @@ CREATE TABLE t_collection_reaction (
     id BIGSERIAL PRIMARY KEY, collection_id BIGINT NOT NULL REFERENCES t_collection(id) ON DELETE CASCADE,
     user_info_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
     reaction VARCHAR(16) NOT NULL DEFAULT 'like', create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (reaction = 'like'), UNIQUE (collection_id, user_info_id)
+    CHECK (reaction IN ('like', 'favorite')), UNIQUE (collection_id, user_info_id, reaction)
+);
+CREATE TABLE t_comment_reaction (
+    id BIGSERIAL PRIMARY KEY, comment_id BIGINT NOT NULL REFERENCES t_comment(id) ON DELETE CASCADE,
+    user_info_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+    reaction VARCHAR(16) NOT NULL DEFAULT 'like', create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (reaction = 'like'), UNIQUE (comment_id, user_info_id)
 );`); err != nil {
 		t.Fatalf("create repository fixtures: %v", err)
 	}
@@ -909,14 +915,21 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	}
 	baselineCollectionHot := publicCollections[0].HotScore
 	collectionReactions := NewCollectionReactionRepo(xormEngine)
-	active, likeCount, err := collectionReactions.Set(ctx, collection.ID, 2, true)
-	if err != nil || !active || likeCount != 1 {
-		t.Fatalf("like public collection: active=%v count=%d err=%v", active, likeCount, err)
+	commentReactions := NewCommentReactionRepo(xormEngine)
+	active, counts, err := collectionReactions.Set(ctx, collection.ID, 2, port.ReactionLike, true)
+	if err != nil || !active || counts.LikeCount != 1 || counts.FavoriteCount != 0 {
+		t.Fatalf("like public collection: active=%v counts=%+v err=%v", active, counts, err)
 	}
-	if active, likeCount, err = collectionReactions.Set(ctx, collection.ID, 2, true); err != nil || !active || likeCount != 1 {
-		t.Fatalf("collection like must be idempotent: active=%v count=%d err=%v", active, likeCount, err)
+	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionLike, true); err != nil || !active || counts.LikeCount != 1 {
+		t.Fatalf("collection like must be idempotent: active=%v counts=%+v err=%v", active, counts, err)
 	}
-	if states, err := collectionReactions.States(ctx, 2, []int{collection.ID}); err != nil || !states[collection.ID] {
+	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionFavorite, true); err != nil || !active || counts.LikeCount != 1 || counts.FavoriteCount != 1 {
+		t.Fatalf("favorite public collection: active=%v counts=%+v err=%v", active, counts, err)
+	}
+	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionFavorite, true); err != nil || !active || counts.FavoriteCount != 1 {
+		t.Fatalf("collection favorite must be idempotent: active=%v counts=%+v err=%v", active, counts, err)
+	}
+	if states, err := collectionReactions.States(ctx, 2, []int{collection.ID}); err != nil || !states[collection.ID].Like || !states[collection.ID].Favorite {
 		t.Fatalf("collection like state must be visible: states=%+v err=%v", states, err)
 	}
 	if reactionPage, err := followRepo.ListNotifications(ctx, 1, port.NotificationGroupReaction, 1, 10); err != nil {
@@ -939,17 +952,42 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	if err != nil {
 		t.Fatalf("create collection comment: %v", err)
 	}
+	active, commentLikeCount, err := commentReactions.Set(ctx, collectionCommentID, 1, true)
+	if err != nil || !active || commentLikeCount != 1 {
+		t.Fatalf("like collection comment: active=%v count=%d err=%v", active, commentLikeCount, err)
+	}
+	if active, commentLikeCount, err = commentReactions.Set(ctx, collectionCommentID, 1, true); err != nil || !active || commentLikeCount != 1 {
+		t.Fatalf("comment like must be idempotent: active=%v count=%d err=%v", active, commentLikeCount, err)
+	}
+	if comments, _, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &collection.ID, Current: 1, Size: 10, ViewerID: 1}); err != nil || len(comments) == 0 || comments[0].LikeCount != 1 || !comments[0].Liked {
+		t.Fatalf("comment like state mismatch: comments=%+v err=%v", comments, err)
+	}
+	if replyID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 1, ReplyUserId: 2, ParentId: collectionCommentID, TopicId: collection.ID,
+		CommentContent: "collection reply", Type: 6, IsReview: 1,
+	}); err != nil || replyID <= 0 {
+		t.Fatalf("create collection reply: id=%d err=%v", replyID, err)
+	} else if active, commentLikeCount, err = commentReactions.Set(ctx, replyID, 2, true); err != nil || !active || commentLikeCount != 1 {
+		t.Fatalf("like collection reply: active=%v count=%d err=%v", active, commentLikeCount, err)
+	} else if replies, err := commentRepo.ListReplies(ctx, []int{collectionCommentID}, 2); err != nil || len(replies) != 1 || replies[0].LikeCount != 1 || !replies[0].Liked {
+		t.Fatalf("reply like state mismatch: replies=%+v err=%v", replies, err)
+	}
 	if pendingCommentID, err := commentRepo.Create(ctx, entity.TComment{
 		UserId: 2, TopicId: collection.ID, CommentContent: "pending collection comment", Type: 6, IsReview: 0,
 	}); err != nil || pendingCommentID <= 0 {
 		t.Fatalf("create pending collection comment: id=%d err=%v", pendingCommentID, err)
+	} else if _, _, err := commentReactions.Set(ctx, pendingCommentID, 1, true); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("pending comment like must be rejected: %v", err)
 	}
 	collectionDetail, err := collectionRepo.GetPublicBySlug(ctx, collection.Slug)
-	if err != nil || collectionDetail.Collection.LikeCount != 1 || collectionDetail.Collection.CommentCount != 1 {
+	if err != nil || collectionDetail.Collection.LikeCount != 1 || collectionDetail.Collection.FavoriteCount != 1 || collectionDetail.Collection.CommentCount != 1 {
 		t.Fatalf("collection interaction counts mismatch: detail=%+v err=%v", collectionDetail.Collection, err)
 	}
+	if favoriteIDs, favoriteTotal, err := collectionReactions.ListFavoriteCollectionIDsByUser(ctx, 2, 1, 10); err != nil || favoriteTotal != 1 || len(favoriteIDs) != 1 || favoriteIDs[0] != collection.ID {
+		t.Fatalf("collection favorites mismatch: ids=%+v total=%d err=%v", favoriteIDs, favoriteTotal, err)
+	}
 	hotCollections, _, err := collectionRepo.ListPublic(ctx, port.CollectionSortHot, 1, 10)
-	if err != nil || len(hotCollections) != 1 || hotCollections[0].HotScore < baselineCollectionHot+7 {
+	if err != nil || len(hotCollections) != 1 || hotCollections[0].HotScore < baselineCollectionHot+12 {
 		t.Fatalf("collection hot score must include interactions: before=%d after=%+v err=%v", baselineCollectionHot, hotCollections, err)
 	}
 	if commentPage, err := followRepo.ListNotifications(ctx, 1, port.NotificationGroupComment, 1, 10); err != nil || commentPage.Count < 1 {
@@ -966,26 +1004,55 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 			t.Fatalf("collection comment notification not normalized: page=%+v", commentPage)
 		}
 	}
+	if commentReactionPage, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupReaction, 1, 10); err != nil {
+		t.Fatalf("list comment like notification: %v", err)
+	} else {
+		found := false
+		for _, item := range commentReactionPage.Records {
+			if item.ContentType == port.FollowContentCollection && item.ContentId == collection.ID && item.CommentId == collectionCommentID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("comment like notification mismatch: page=%+v", commentReactionPage)
+		}
+	}
+	if active, commentLikeCount, err = commentReactions.Set(ctx, collectionCommentID, 1, false); err != nil || active || commentLikeCount != 0 {
+		t.Fatalf("unlike collection comment: active=%v count=%d err=%v", active, commentLikeCount, err)
+	}
+	if commentReactionPage, err := followRepo.ListNotifications(ctx, 2, port.NotificationGroupReaction, 1, 10); err != nil {
+		t.Fatalf("list after comment unlike: %v", err)
+	} else {
+		for _, item := range commentReactionPage.Records {
+			if item.CommentId == collectionCommentID {
+				t.Fatalf("removed comment like must leave notifications: page=%+v", commentReactionPage)
+			}
+		}
+	}
 	privateCollection, err := collectionRepo.CreateOwned(ctx, 1, "integration-private-interaction-list", port.CollectionSaveInput{
 		Title: "Private interaction list", Visibility: port.CollectionVisibilityPrivate,
 	})
 	if err != nil {
 		t.Fatalf("create private collection: %v", err)
 	}
-	if _, _, err := collectionReactions.Set(ctx, privateCollection.ID, 2, true); !apperrors.IsKind(err, apperrors.KindNotFound) {
-		t.Fatalf("private collection like must be rejected: %v", err)
+	if _, _, err := collectionReactions.Set(ctx, privateCollection.ID, 2, port.ReactionFavorite, true); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("private collection favorite must be rejected: %v", err)
 	}
 	if err := commentRepo.ValidateTarget(ctx, 6, privateCollection.ID); !apperrors.IsKind(err, apperrors.KindValidation) {
 		t.Fatalf("private collection comments must be rejected: %v", err)
 	}
-	if active, likeCount, err = collectionReactions.Set(ctx, collection.ID, 2, false); err != nil || active || likeCount != 0 {
-		t.Fatalf("unlike collection: active=%v count=%d err=%v", active, likeCount, err)
+	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionLike, false); err != nil || active || counts.LikeCount != 0 || counts.FavoriteCount != 1 {
+		t.Fatalf("unlike collection: active=%v counts=%+v err=%v", active, counts, err)
+	}
+	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionFavorite, false); err != nil || active || counts.FavoriteCount != 0 {
+		t.Fatalf("unfavorite collection: active=%v counts=%+v err=%v", active, counts, err)
 	}
 	if reactionPage, err := followRepo.ListNotifications(ctx, 1, port.NotificationGroupReaction, 1, 10); err != nil {
 		t.Fatalf("list after unlike: %v", err)
 	} else {
 		for _, item := range reactionPage.Records {
-			if item.ContentType == port.FollowContentCollection && item.ContentId == collection.ID {
+			if item.ContentType == port.FollowContentCollection && item.ContentId == collection.ID && item.CommentId == 0 {
 				t.Fatalf("removed collection like must leave notifications: page=%+v", reactionPage)
 			}
 		}

@@ -87,6 +87,7 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/v1/auth/me/reactions/state", want: true},
 		{path: "/v1/auth/me/collection-reactions", want: true},
 		{path: "/v1/auth/me/collection-reactions/state", want: true},
+		{path: "/v1/auth/me/comment-reactions", want: true},
 		{path: "/v1/auth/login", want: false},
 		{path: "/v1/auth/password", want: false},
 		{path: "/v1/public/articles", want: false},

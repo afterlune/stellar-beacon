@@ -41,7 +41,7 @@
           </ol>
           <div v-if="highlightSeries.length" class="author-highlights__series">
             <router-link v-for="item in highlightSeries" :key="item.id" :to="`/series/${item.id}`">
-              <small>{{ item.articleCount }} 篇文章</small>
+              <small>{{ item.articleCount }} 篇文章 · {{ item.favoriteCount || 0 }} 收藏</small>
               <strong>{{ item.seriesName }}</strong>
               <em>{{ item.seriesDesc || '暂无系列说明' }}</em>
             </router-link>

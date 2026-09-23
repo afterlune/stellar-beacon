@@ -247,17 +247,23 @@ test.describe('blog real backend main chain @integration', () => {
 
     const liked = await putAPI(request, '/api/v1/auth/me/collection-reactions', user.token, {
       collectionId: createdInteractionCollectionID,
+      reaction: 'like',
       active: true
     })
     expect(liked.active).toBe(true)
     expect(liked.likeCount).toBe(1)
-    const retried = await putAPI(request, '/api/v1/auth/me/collection-reactions', user.token, {
+    const favorited = await putAPI(request, '/api/v1/auth/me/collection-reactions', user.token, {
       collectionId: createdInteractionCollectionID,
+      reaction: 'favorite',
       active: true
     })
-    expect(retried.likeCount, 'liking twice must stay idempotent').toBe(1)
+    expect(favorited.favoriteCount).toBe(1)
+    expect(favorited.likeCount).toBe(1)
     const state = await getAPIData(request, `/api/v1/auth/me/collection-reactions/state?collectionId=${createdInteractionCollectionID}`, user.token)
     expect(state.like).toBe(true)
+    expect(state.favorite).toBe(true)
+    const savedCollections = await getAPIData(request, '/api/v1/auth/me/collection-reactions?reaction=favorite&current=1&size=20', user.token)
+    expect(itemsOf(savedCollections).some((item: any) => Number(item.id) === createdInteractionCollectionID)).toBe(true)
 
     await postAPI(request, '/api/v1/public/comments', user.token, {
       type: 6,
@@ -269,12 +275,15 @@ test.describe('blog real backend main chain @integration', () => {
 
     const pendingDetail = await getAPIData(request, `/api/v1/public/collections/${created.slug}`)
     expect(pendingDetail.collection.likeCount).toBe(1)
+    expect(pendingDetail.collection.favoriteCount).toBe(1)
     expect(pendingDetail.collection.commentCount, 'pending comments must not count publicly').toBe(0)
 
     const reactionPage = await getAPIData(request, '/api/v1/auth/me/notifications?group=reaction&current=1&size=50', admin.token)
-    const reactionNotification = itemsOf(reactionPage).find((item: any) => item.contentType === 'collection' && Number(item.contentId) === createdInteractionCollectionID)
+    const reactionNotification = itemsOf(reactionPage).find((item: any) => item.type === 'like' && item.contentType === 'collection' && Number(item.contentId) === createdInteractionCollectionID)
     expect(reactionNotification?.type).toBe('like')
     expect(reactionNotification?.slug).toBe(created.slug)
+    const favoriteNotification = itemsOf(reactionPage).find((item: any) => item.type === 'favorite' && item.contentType === 'collection' && Number(item.contentId) === createdInteractionCollectionID)
+    expect(favoriteNotification?.slug).toBe(created.slug)
 
     await approveComments(request, admin.token, [commentID])
     const approvedDetail = await getAPIData(request, `/api/v1/public/collections/${created.slug}`)
@@ -284,16 +293,30 @@ test.describe('blog real backend main chain @integration', () => {
     expect(commentNotification?.type).toBe('comment')
     expect(commentNotification?.slug).toBe(created.slug)
 
+    const commentLike = await putAPI(request, '/api/v1/auth/me/comment-reactions', user.token, { commentId: commentID, active: true })
+    expect(commentLike.active).toBe(true)
+    expect(commentLike.likeCount).toBe(1)
+
     const session = await createBrowserSession(browser, user)
     try {
+      await session.page.goto('/studio/library/favorites?tab=collections', { waitUntil: 'domcontentloaded' })
+      await expect(session.page.getByText(title).first()).toBeVisible()
       await session.page.goto(`/collections/${created.slug}`, { waitUntil: 'domcontentloaded' })
       await expect(session.page.getByText(commentText)).toBeVisible()
+      const commentLikeButton = session.page.locator(`#comment-${commentID} [data-testid="comment-like"]`)
+      await expect(commentLikeButton).toHaveAttribute('aria-pressed', 'true')
+      await commentLikeButton.click()
+      await expect(commentLikeButton).toHaveAttribute('aria-pressed', 'false')
       const likeButton = session.page.getByRole('button', { name: /已点赞/ })
       await expect(likeButton).toBeVisible()
       await likeButton.click()
       await expect(session.page.getByRole('button', { name: /点赞 · 0/ })).toBeVisible()
       const unliked = await getAPIData(request, `/api/v1/auth/me/collection-reactions/state?collectionId=${createdInteractionCollectionID}`, user.token)
       expect(unliked.like).toBe(false)
+      const favoriteButton = session.page.getByRole('button', { name: /已收藏/ })
+      await expect(favoriteButton).toBeVisible()
+      await favoriteButton.click()
+      await expect(session.page.getByRole('button', { name: /收藏 · 0/ })).toBeVisible()
     } finally {
       await session.context.close()
     }

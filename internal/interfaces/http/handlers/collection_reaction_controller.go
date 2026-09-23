@@ -17,3 +17,9 @@ func ToggleCollectionReaction(c *gin.Context) {
 func GetCollectionReactionState(c *gin.Context) {
 	c.JSON(http.StatusOK, collectionReactionService.GetCollectionReactionState(c))
 }
+
+// ListMyCollectionReactions lists collections saved by the current account.
+// @Router /v1/auth/me/collection-reactions [GET]
+func ListMyCollectionReactions(c *gin.Context) {
+	c.JSON(http.StatusOK, collectionReactionService.ListMyCollectionReactions(c))
+}

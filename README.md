@@ -36,7 +36,8 @@
 - `GET /api/v1/public/collections/{slug}` 与 `GET /api/v1/public/authors/{handle}/collections`：按链接打开书单，或在作者主页列出其公开书单；失效、私有或审核隐藏的文章会实时从公开详情中移除。
 - `/api/v1/studio/collections*`：登录用户创建与维护私有、链接可见或公开书单，支持手动排序、逐篇推荐语和最多 500 篇文章；`private` 仅本人可见，`unlisted` 不进入发现页但可通过链接访问。
 - `PUT`/`DELETE /api/v1/auth/me/collection-subscriptions/{collectionId}`：订阅或退订公开、链接可见的他人书单；支持 `PUT .../mute` 单书单静音、`GET /api/v1/auth/me/collection-feed` 更新流。
-- `PUT /api/v1/auth/me/collection-reactions` 与 `GET .../state`：公开、链接可见书单支持幂等点赞/取消点赞和当前账号状态查询；私有书单拒绝互动。书单评论复用 `/api/v1/public/comments`，`type=6`、`topicId` 为书单 ID，审核通过后才计入公开评论数并发送互动通知。
+- `PUT /api/v1/auth/me/collection-reactions`、`GET ...` 与 `GET .../state`：公开、链接可见书单支持独立点赞与收藏、当前账号状态查询和私人收藏列表；收藏按书单全部时间加 `5 ×` 进入热门分，私有书单拒绝互动。书单评论复用 `/api/v1/public/comments`，`type=6`、`topicId` 为书单 ID，审核通过后才计入公开评论数并发送互动通知。
+- `PUT /api/v1/auth/me/comment-reactions`：所有已审核评论与回复支持幂等点赞/取消点赞；评论列表返回 `likeCount` 和当前账号 `liked`。评论点赞不参与文章或书单热度。
 - `GET`/`PUT`/`DELETE /api/v1/auth/me/topic-subscriptions*`：读者按**归一化话题名**（分类或标签，跨作者）订阅、静音与取消订阅；`GET /api/v1/auth/me/topic-feed` 返回订阅话题下的新文章，通知中心新增 `topic` 分组（受账号级 `notifyTopic` 开关与单订阅静音控制）。
 - `POST /api/v1/auth/me/recommendations/query`：登录态“为你推荐”；组合关注、话题订阅、点赞收藏与请求体内的本机阅读种子，排除本人和已关注作者，结果带可解释理由与游标。
 - `GET`/`PUT`/`DELETE /api/v1/auth/me/recommendation-feedback*`：管理隐藏文章、减少作者或主题的推荐偏好并恢复。

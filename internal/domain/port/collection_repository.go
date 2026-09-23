@@ -30,6 +30,7 @@ type CollectionSummary struct {
 	Cover            string        `json:"cover,omitempty"`
 	ArticleCount     int           `json:"articleCount"`
 	LikeCount        int           `json:"likeCount"`
+	FavoriteCount    int           `json:"favoriteCount"`
 	CommentCount     int           `json:"commentCount"`
 	HotScore         int           `json:"hotScore,omitempty"`
 	ModerationStatus string        `json:"moderationStatus,omitempty"`
@@ -67,6 +68,10 @@ type CollectionRecord struct {
 // moderation-aware flows that only need one visible collection.
 type CollectionPublicReader interface {
 	GetPublicByID(ctx context.Context, collectionID int) (CollectionSummary, error)
+}
+
+type CollectionPublicBatchReader interface {
+	ListPublicByIDs(ctx context.Context, collectionIDs []int) ([]*CollectionSummary, error)
 }
 
 type CollectionSaveInput struct {

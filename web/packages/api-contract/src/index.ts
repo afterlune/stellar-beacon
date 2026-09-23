@@ -922,6 +922,7 @@ export interface CollectionSummary {
   cover?: string
   articleCount: number
   likeCount: number
+  favoriteCount: number
   commentCount: number
   hotScore?: number
   moderationStatus?: 'visible' | 'hidden' | string
@@ -957,11 +958,13 @@ export interface CollectionSubscriptionStatus {
 export interface CollectionReactionToggleResult {
   active: boolean
   likeCount: number
+  favoriteCount: number
 }
 
 export interface CollectionReactionState {
   collectionId: number
   like: boolean
+  favorite: boolean
 }
 
 export interface CollectionSubscription {

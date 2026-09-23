@@ -113,6 +113,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyCollectionInteractionSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyCollectionCommunitySchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1637,6 +1640,55 @@ func applyCollectionInteractionSchema(ctx context.Context, engine *xorm.Engine) 
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit collection interaction migration: %w", err)
+	}
+	return nil
+}
+
+// applyCollectionCommunitySchema extends bookmarks to reader-curated
+// collections and adds a ledger for likes on comments and replies.
+func applyCollectionCommunitySchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 26)").Get(&applied); err != nil {
+		return fmt.Errorf("check collection community migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin collection community migration: %w", err)
+	}
+	defer session.Rollback()
+	statements := []string{
+		`ALTER TABLE t_collection_reaction DROP CONSTRAINT IF EXISTS t_collection_reaction_collection_id_user_info_id_key`,
+		`ALTER TABLE t_collection_reaction DROP CONSTRAINT IF EXISTS t_collection_reaction_reaction_check`,
+		`ALTER TABLE t_collection_reaction ADD CONSTRAINT t_collection_reaction_reaction_check CHECK (reaction IN ('like', 'favorite'))`,
+		`ALTER TABLE t_collection_reaction ADD CONSTRAINT t_collection_reaction_collection_user_reaction_key UNIQUE (collection_id, user_info_id, reaction)`,
+		`CREATE TABLE IF NOT EXISTS t_comment_reaction (
+			id BIGSERIAL PRIMARY KEY,
+			comment_id BIGINT NOT NULL REFERENCES t_comment(id) ON DELETE CASCADE,
+			user_info_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
+			reaction VARCHAR(16) NOT NULL DEFAULT 'like',
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK (reaction = 'like'),
+			UNIQUE (comment_id, user_info_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_comment_reaction_comment ON t_comment_reaction(comment_id, create_time DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_comment_reaction_user ON t_comment_reaction(user_info_id, create_time DESC, id DESC)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply collection community schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 26, "collection-community"); err != nil {
+		return fmt.Errorf("record collection community migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit collection community migration: %w", err)
 	}
 	return nil
 }

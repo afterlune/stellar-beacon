@@ -90,7 +90,15 @@ type ArticleReactionServiceDeps struct {
 // CollectionReactionServiceDeps contains the collection-like ledger plus the
 // rate limiter shared by authenticated reader interactions.
 type CollectionReactionServiceDeps struct {
-	Repo    port.CollectionReactionRepository
+	Repo        port.CollectionReactionRepository
+	Collections port.CollectionPublicBatchReader
+	Limiter     port.RateLimiter
+}
+
+// CommentReactionServiceDeps contains the comment-like ledger plus the shared
+// reader-interaction limiter.
+type CommentReactionServiceDeps struct {
+	Repo    port.CommentReactionRepository
 	Limiter port.RateLimiter
 }
 
@@ -240,6 +248,16 @@ func (d ArticleReactionServiceDeps) validate() error {
 func (d CollectionReactionServiceDeps) validate() error {
 	if d.Repo == nil {
 		return missingServiceDependency("collection_reaction", "repository")
+	}
+	if d.Collections == nil {
+		return missingServiceDependency("collection_reaction", "collection repository")
+	}
+	return nil
+}
+
+func (d CommentReactionServiceDeps) validate() error {
+	if d.Repo == nil {
+		return missingServiceDependency("comment_reaction", "repository")
 	}
 	return nil
 }

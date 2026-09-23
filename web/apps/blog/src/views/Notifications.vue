@@ -111,11 +111,11 @@ export default defineComponent({
     const notificationPath = (item: NotificationItem) => {
       if (item.contentType === 'collection') {
         const base = `/collections/${item.slug || item.contentId}`
-        if ((item.type === 'comment' || item.type === 'reply') && item.commentId) return `${base}?comment=${item.commentId}#comment-${item.commentId}`
+        if (item.commentId) return `${base}?comment=${item.commentId}#comment-${item.commentId}`
         return `${base}${item.articleId ? `?article=${item.articleId}` : ''}`
       }
       const base = item.contentType === 'article' ? `/articles/${item.contentId}` : `/talks/${item.contentId}`
-      if ((item.type === 'comment' || item.type === 'reply') && item.commentId) {
+      if (item.commentId) {
         return `${base}?comment=${item.commentId}#comment-${item.commentId}`
       }
       return base

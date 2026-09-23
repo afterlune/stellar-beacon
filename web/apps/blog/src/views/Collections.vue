@@ -18,7 +18,7 @@
           <span v-else>{{ String(item.title || 'LIST').slice(0, 1) }}</span>
         </div>
         <div class="collection-card__body">
-          <small>{{ item.articleCount }} 篇文章 · {{ item.likeCount || 0 }} 赞 · {{ item.commentCount || 0 }} 评论 · 更新于 {{ formatDate(item.updatedAt) }}</small>
+          <small>{{ item.articleCount }} 篇文章 · {{ item.likeCount || 0 }} 赞 · {{ item.favoriteCount || 0 }} 收藏 · {{ item.commentCount || 0 }} 评论 · 更新于 {{ formatDate(item.updatedAt) }}</small>
           <h2>{{ item.title }}</h2>
           <p>{{ item.description || '这位读者还没有写书单简介。' }}</p>
           <div>

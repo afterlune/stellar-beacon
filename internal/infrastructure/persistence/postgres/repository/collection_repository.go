@@ -33,6 +33,7 @@ type collectionSummaryRow struct {
 	Cover            string    `xorm:"cover"`
 	ArticleCount     int       `xorm:"article_count"`
 	LikeCount        int       `xorm:"like_count"`
+	FavoriteCount    int       `xorm:"favorite_count"`
 	CommentCount     int       `xorm:"comment_count"`
 	HotScore         int       `xorm:"hot_score"`
 	ModerationStatus string    `xorm:"moderation_status"`
@@ -46,7 +47,8 @@ func (row collectionSummaryRow) toPort() *port.CollectionSummary {
 		ID: row.ID, Slug: row.Slug, Title: row.Title, Description: row.Description,
 		Visibility: row.Visibility,
 		Owner:      &port.PublicAuthor{Id: row.OwnerID, Handle: row.OwnerHandle, Nickname: row.OwnerNickname, Avatar: row.OwnerAvatar},
-		Cover:      row.Cover, ArticleCount: row.ArticleCount, LikeCount: row.LikeCount, CommentCount: row.CommentCount,
+		Cover:      row.Cover, ArticleCount: row.ArticleCount, LikeCount: row.LikeCount,
+		FavoriteCount: row.FavoriteCount, CommentCount: row.CommentCount,
 		HotScore:         row.HotScore,
 		ModerationStatus: row.ModerationStatus, ModerationReason: row.ModerationReason,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -72,6 +74,10 @@ const collectionSummarySelect = `
 	         SELECT count(1) FROM t_collection_reaction reaction
 	         WHERE reaction.collection_id = c.id AND reaction.reaction = 'like'
 	       ), 0) AS like_count,
+	       COALESCE((
+	         SELECT count(1) FROM t_collection_reaction reaction
+	         WHERE reaction.collection_id = c.id AND reaction.reaction = 'favorite'
+	       ), 0) AS favorite_count,
 	       COALESCE((
 	         SELECT count(1) FROM t_comment comment
 	         WHERE comment.type = 6 AND comment.topic_id = c.id AND comment.parent_id = 0
@@ -108,6 +114,8 @@ func (r *MyCollectionRepo) ListPublic(ctx context.Context, sort string, current,
 				        + 4 * (SELECT count(1) FROM t_comment comment
 				               WHERE comment.type = 6 AND comment.topic_id = i.collection_id
 				                 AND comment.parent_id = 0 AND comment.is_review = 1 AND comment.is_delete = 0)
+				        + 5 * (SELECT count(1) FROM t_collection_reaction reaction
+				               WHERE reaction.collection_id = i.collection_id AND reaction.reaction = 'favorite')
 				        + 3 * (SELECT count(1) FROM t_collection_reaction reaction
 				               WHERE reaction.collection_id = i.collection_id AND reaction.reaction = 'like'))::int AS hot_score
 				FROM t_collection_item i
@@ -119,7 +127,7 @@ func (r *MyCollectionRepo) ListPublic(ctx context.Context, sort string, current,
 			)
 			SELECT base.id, base.slug, base.title, base.description, base.visibility,
 			       base.owner_id, base.owner_handle, base.owner_nickname, base.owner_avatar,
-			       base.cover, base.article_count, base.like_count, base.comment_count,
+			       base.cover, base.article_count, base.like_count, base.favorite_count, base.comment_count,
 			       COALESCE(hot.hot_score, 0) AS hot_score,
 			       base.moderation_status, base.moderation_reason, base.created_at, base.updated_at
 			FROM (` + collectionSummarySelect + filter + `) base
@@ -242,6 +250,28 @@ func (r *MyCollectionRepo) GetPublicByID(ctx context.Context, collectionID int) 
 		return port.CollectionSummary{}, err
 	}
 	return *row.toPort(), nil
+}
+
+func (r *MyCollectionRepo) ListPublicByIDs(ctx context.Context, collectionIDs []int) ([]*port.CollectionSummary, error) {
+	if len(collectionIDs) == 0 {
+		return []*port.CollectionSummary{}, nil
+	}
+	session, err := repoSession(r.engine, ctx, "collection.public.batch")
+	if err != nil {
+		return nil, err
+	}
+	args := intArgs(collectionIDs)
+	var rows []collectionSummaryRow
+	query := collectionSummarySelect + ` WHERE c.id IN (` + placeholders(len(collectionIDs)) + `)
+		AND c.visibility IN ('public', 'unlisted') AND c.moderation_status = 'visible' AND c.is_delete = 0`
+	if err := session.SQL(query, args...).Find(&rows); err != nil {
+		return nil, apperrors.Unavailable("collection.public.batch", err)
+	}
+	items := make([]*port.CollectionSummary, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, row.toPort())
+	}
+	return items, nil
 }
 
 func (r *MyCollectionRepo) ListOwned(ctx context.Context, userID, current, size int) ([]*port.CollectionSummary, int, error) {
