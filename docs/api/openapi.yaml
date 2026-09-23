@@ -477,6 +477,59 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CommentPinInput' }
       responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments:
+    get:
+      tags: [auth]
+      summary: List comments of an owned reading list for governance
+      description: >-
+        Owner-only. Returns approved comments including soft-deleted ones, each
+        with isTop, isDelete, replyCount and the number of pending reports.
+      operationId: listOwnedCollectionComments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { name: current, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 12 } }
+        - { name: keywords, in: query, schema: { type: string } }
+        - { name: includeDeleted, in: query, schema: { type: string, enum: ['1', 'true'] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/batch:
+    post:
+      tags: [auth]
+      summary: Batch delete, pin or unpin reading-list comments
+      description: >-
+        Owner-only. Action must be delete, pin or unpin. When several root
+        comments are pinned in one request only the newest stays pinned; other
+        roots are unpinned automatically. Items that cannot be moderated are
+        returned per comment in failed[].message instead of failing the request.
+      operationId: batchModerateCollectionComments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentBatchInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/restore:
+    post:
+      tags: [auth]
+      summary: Restore soft-deleted reading-list comments
+      description: >-
+        Owner-only. Restores the selected comments. Restoring a root comment also
+        restores only the replies hidden by the same deletion, never replies the
+        owner deleted separately.
+      operationId: restoreOwnedCollectionComments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentRestoreInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /studio/collections/{collectionId}/comments/{commentId}:
     delete:
       tags: [auth]
@@ -751,6 +804,27 @@ components:
       required: [pinned]
       properties:
         pinned: { type: boolean, description: true pins the root comment and unpins any other pinned root comment on the same reading list }
+    CommentBatchInput:
+      type: object
+      required: [action, commentIds]
+      properties:
+        action: { type: string, enum: [delete, pin, unpin] }
+        commentIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          items: { type: integer, format: int64 }
+    CommentRestoreInput:
+      type: object
+      required: [commentIds]
+      properties:
+        commentIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          items: { type: integer, format: int64 }
     CollectionSubscriptionStatus:
       type: object
       required: [subscribed, muted]

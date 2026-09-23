@@ -379,6 +379,49 @@ test.describe('blog real backend main chain @integration', () => {
     }
   })
 
+  test('batch moderates reading-list comments from the studio governance panel', async ({ request, browser }) => {
+    const title = `integration batch moderation list ${runID}`
+    const firstText = `integration batch first ${runID}`
+    const secondText = `integration batch second ${runID}`
+    const created = await postAPI(request, '/api/v1/studio/collections', admin.token, { title, description: 'integration batch moderation collection', visibility: 'public' })
+    const collectionID = Number(created.id)
+    expect(collectionID).toBeGreaterThan(0)
+    await putAPI(request, `/api/v1/studio/collections/${collectionID}/items/${fixtureArticleID}`, admin.token, { note: 'integration batch item' })
+
+    const firstID = await seedApprovedCollectionComment(request, admin, collectionID, firstText)
+    const secondID = await seedApprovedCollectionComment(request, admin, collectionID, secondText)
+
+    const session = await createBrowserSession(browser, admin)
+    try {
+      await session.page.goto(`/studio/collections/${collectionID}/edit`, { waitUntil: 'domcontentloaded' })
+      const list = session.page.locator('.governance-list > article')
+      await expect(list).toHaveCount(2)
+
+      await list.filter({ hasText: secondText }).getByRole('checkbox').check()
+      await list.filter({ hasText: firstText }).getByRole('checkbox').check()
+      await session.page.getByRole('button', { name: '批量置顶', exact: true }).click()
+      await expect(session.page.getByTestId('governance-message')).toContainText('成功 2 条')
+
+      const pinned = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`, admin.token)
+      expect(Number(itemsOf(pinned)[0]?.id)).toBe(secondID)
+      expect(Number(itemsOf(pinned)[0]?.isTop)).toBe(1)
+      expect(itemsOf(pinned).filter((item: any) => Number(item.isTop) === 1).length).toBe(1)
+
+      await list.filter({ hasText: firstText }).getByRole('checkbox').check()
+      await session.page.getByRole('button', { name: '批量删除', exact: true }).click()
+      await expect(session.page.getByTestId('governance-message')).toContainText('成功 1 条')
+
+      const remaining = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`, admin.token)
+      expect(itemsOf(remaining).some((item: any) => Number(item.id) === firstID)).toBe(false)
+
+      await session.page.getByRole('checkbox').first().check()
+      await session.page.getByRole('button', { name: '恢复选中', exact: true }).click()
+      await expect(session.page.getByTestId('governance-message')).toContainText('成功 1 条')
+    } finally {
+      await session.context.close()
+    }
+  })
+
   test('personalizes recommendations and persists reader feedback', async ({ request, browser }) => {
     const topicKey = 'integration topic'
     const readerFixtureID = await findReaderFixtureArticleID(request)

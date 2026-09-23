@@ -30,6 +30,9 @@ type moderationRecordingCommentRepository struct {
 	DeletedUserID       int
 	DeletedCollectionID int
 	DeletedCommentID    int
+	BatchAction         string
+	BatchCommentIDs     []int
+	RestoredCommentIDs  []int
 }
 
 func (f *moderationRecordingCommentRepository) SetPinned(_ context.Context, userID, collectionID, commentID int, pinned bool) error {
@@ -45,6 +48,17 @@ func (f *moderationRecordingCommentRepository) SoftDeleteOwned(_ context.Context
 	f.DeletedCollectionID = collectionID
 	f.DeletedCommentID = commentID
 	return nil
+}
+
+func (f *moderationRecordingCommentRepository) BatchModerateOwned(_ context.Context, _, collectionID int, action string, commentIDs []int) (port.ModerationBatchResult, error) {
+	f.BatchAction = action
+	f.BatchCommentIDs = append([]int{}, commentIDs...)
+	return port.ModerationBatchResult{Succeeded: append([]int{}, commentIDs...), Failed: []port.ModerationFailure{}}, nil
+}
+
+func (f *moderationRecordingCommentRepository) RestoreOwned(_ context.Context, _, collectionID int, commentIDs []int) (port.ModerationBatchResult, error) {
+	f.RestoredCommentIDs = append([]int{}, commentIDs...)
+	return port.ModerationBatchResult{Succeeded: append([]int{}, commentIDs...), Failed: []port.ModerationFailure{}}, nil
 }
 
 func (f *targetRecordingCommentRepository) ValidateTarget(_ context.Context, commentType, topicID int) error {
@@ -90,6 +104,24 @@ func (f *fakeCommentRepository) Review(context.Context, []int, int) error       
 func (f *fakeCommentRepository) Delete(context.Context, []int) error                  { return nil }
 func (f *fakeCommentRepository) SetPinned(context.Context, int, int, int, bool) error { return nil }
 func (f *fakeCommentRepository) SoftDeleteOwned(context.Context, int, int, int) error { return nil }
+func (f *fakeCommentRepository) BatchModerateOwned(context.Context, int, int, string, []int) (port.ModerationBatchResult, error) {
+	return port.ModerationBatchResult{Succeeded: []int{}, Failed: []port.ModerationFailure{}}, nil
+}
+func (f *fakeCommentRepository) RestoreOwned(context.Context, int, int, []int) (port.ModerationBatchResult, error) {
+	return port.ModerationBatchResult{Succeeded: []int{}, Failed: []port.ModerationFailure{}}, nil
+}
+func (f *fakeCommentRepository) RestoreAsAdmin(context.Context, int, int, []int) (port.ModerationBatchResult, error) {
+	return port.ModerationBatchResult{Succeeded: []int{}, Failed: []port.ModerationFailure{}}, nil
+}
+func (f *fakeCommentRepository) ListOwnedCollectionComments(context.Context, int, int, int, int, string, bool) ([]*port.OwnedComment, int, error) {
+	return []*port.OwnedComment{{Id: 10}}, 1, nil
+}
+func (f *fakeCommentRepository) CountPendingReportsByCommentIDs(context.Context, []int) (map[int]int, error) {
+	return map[int]int{}, nil
+}
+func (f *fakeCommentRepository) WriteModerationAudit(context.Context, port.ModerationAuditEntry) error {
+	return nil
+}
 
 func TestCommentServiceAttachesRepliesUsingPortData(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -151,5 +183,59 @@ func TestCommentServicePinAndDeleteOwnedCollectionComment(t *testing.T) {
 	}
 	if repo.DeletedUserID != 5 || repo.DeletedCollectionID != 7 || repo.DeletedCommentID != 12 {
 		t.Fatalf("unexpected delete call: %+v", repo)
+	}
+}
+func TestCommentServiceBatchModerateCollectionComments(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &moderationRecordingCommentRepository{}
+	service := mustCommentService(t, repo)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Params = gin.Params{{Key: "collectionId", Value: "7"}}
+	c.Request = httptest.NewRequest(http.MethodPost, "/studio/collections/7/comments/batch", strings.NewReader(`{"action":"delete","commentIds":[3,1,2]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 5})
+	result := service.BatchModerateCollectionComments(c)
+	if !result.Flag {
+		t.Fatalf("unexpected batch result: %+v", result)
+	}
+	if repo.BatchAction != "delete" || len(repo.BatchCommentIDs) != 3 {
+		t.Fatalf("unexpected batch call: action=%q ids=%v", repo.BatchAction, repo.BatchCommentIDs)
+	}
+
+	restoreCtx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	restoreCtx.Params = gin.Params{{Key: "collectionId", Value: "7"}}
+	restoreCtx.Request = httptest.NewRequest(http.MethodPost, "/studio/collections/7/comments/restore", strings.NewReader(`{"commentIds":[9]}`))
+	restoreCtx.Request.Header.Set("Content-Type", "application/json")
+	restoreCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 5})
+	if restored := service.RestoreOwnedCollectionComments(restoreCtx); !restored.Flag {
+		t.Fatalf("unexpected restore result: %+v", restored)
+	}
+	if len(repo.RestoredCommentIDs) != 1 || repo.RestoredCommentIDs[0] != 9 {
+		t.Fatalf("unexpected restore call: %v", repo.RestoredCommentIDs)
+	}
+}
+
+func TestCommentServiceBatchModerateCollectionCommentsRequiresLogin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Params = gin.Params{{Key: "collectionId", Value: "7"}}
+	c.Request = httptest.NewRequest(http.MethodPost, "/studio/collections/7/comments/batch", strings.NewReader(`{"action":"delete","commentIds":[1]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	result := mustCommentService(t, &moderationRecordingCommentRepository{}).BatchModerateCollectionComments(c)
+	if result.Flag {
+		t.Fatalf("expected login requirement: %+v", result)
+	}
+}
+
+func TestCommentServiceListOwnedCollectionComments(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Params = gin.Params{{Key: "collectionId", Value: "7"}}
+	c.Request = httptest.NewRequest(http.MethodGet, "/studio/collections/7/comments?current=1&size=10&includeDeleted=1", nil)
+	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 5})
+	result := mustCommentService(t, &fakeCommentRepository{}).ListOwnedCollectionComments(c)
+	if !result.Flag || result.Data == nil {
+		t.Fatalf("unexpected governance list result: %+v", result)
 	}
 }

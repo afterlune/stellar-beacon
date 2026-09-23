@@ -227,6 +227,30 @@ type CommentAdmin struct {
 	CreateTime     time.Time `json:"createTime"`
 }
 
+type OwnedComment struct {
+	Id             int       `json:"id"`
+	UserId         int       `json:"userId"`
+	Nickname       string    `json:"nickname"`
+	Avatar         string    `json:"avatar"`
+	CommentContent string    `json:"commentContent"`
+	ParentId       int       `json:"parentId"`
+	IsTop          int       `json:"isTop"`
+	IsDelete       int       `json:"isDelete"`
+	IsReview       int       `json:"isReview"`
+	ReplyCount     int       `json:"replyCount"`
+	ReportCount    int       `json:"reportCount"`
+	CreateTime     time.Time `json:"createTime"`
+}
+
+type ModerationFailure struct {
+	CommentId int    `json:"commentId"`
+	Message   string `json:"message"`
+}
+
+type ModerationBatchResult struct {
+	Succeeded []int               `json:"succeeded"`
+	Failed    []ModerationFailure `json:"failed"`
+}
 type CommentCount struct {
 	Id           int `json:"id"`
 	CommentCount int `json:"commentCount"`

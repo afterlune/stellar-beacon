@@ -41,6 +41,44 @@
         </div>
         <p v-else class="editor-state">还没有文章，先搜索加入。</p>
       </section>
+
+      <section class="collection-builder governance">
+        <header>
+          <div><h2>评论治理</h2><span>勾选后可批量删除、置顶或恢复；批量置顶只保留最新的一条根评论，删除根评论会连带隐藏其回复。</span></div>
+          <small>{{ commentTotal }} 条</small>
+        </header>
+        <div class="collection-search">
+          <input v-model.trim="commentKeywords" placeholder="搜索评论内容…" @keyup.enter="loadComments" />
+          <button type="button" :disabled="commentLoading" @click="loadComments">{{ commentLoading ? '加载中…' : '搜索' }}</button>
+        </div>
+        <div class="governance-actions">
+          <span>已选 {{ selectedCommentIds.length }} 条</span>
+          <button type="button" class="danger" :disabled="!selectedCommentIds.length || commentBusy" @click="runBatch('delete')">批量删除</button>
+          <button type="button" :disabled="!selectedCommentIds.length || commentBusy" @click="runBatch('pin')">批量置顶</button>
+          <button type="button" :disabled="!selectedCommentIds.length || commentBusy" @click="runBatch('unpin')">取消置顶</button>
+          <button type="button" :disabled="!selectedCommentIds.length || commentBusy" @click="restoreSelected">恢复选中</button>
+        </div>
+        <p v-if="governanceMessage" class="governance-message" data-testid="governance-message">{{ governanceMessage }}</p>
+        <div v-if="comments.length" class="governance-list">
+          <article v-for="comment in comments" :key="comment.id" :class="{ 'is-deleted': Number(comment.isDelete) === 1 }">
+            <input v-model="selectedCommentIds" type="checkbox" :value="Number(comment.id)" />
+            <div class="governance-main">
+              <strong>{{ comment.commentContent }}</strong>
+              <small>{{ comment.nickname }} · {{ formatCommentTime(comment.createTime) }} · 回复 {{ comment.replyCount }} · 举报 {{ comment.reportCount }}</small>
+            </div>
+            <div class="governance-tags">
+              <span v-if="Number(comment.isDelete) === 1" class="tag tag--deleted">已删除</span>
+              <span v-if="Number(comment.isTop) === 1" class="tag tag--pinned">置顶</span>
+            </div>
+          </article>
+        </div>
+        <p v-else-if="!commentLoading" class="editor-state">还没有符合条件的评论。</p>
+        <div v-if="commentTotal > commentsPageSize" class="governance-pager">
+          <button type="button" :disabled="commentsPage <= 1" @click="changeCommentPage(-1)">上一页</button>
+          <span>第 {{ commentsPage }} 页</span>
+          <button type="button" :disabled="commentsPage * commentsPageSize >= commentTotal" @click="changeCommentPage(1)">下一页</button>
+        </div>
+      </section>
     </template>
   </section>
 </template>
@@ -64,7 +102,78 @@ export default defineComponent({
     const searchResults = ref<any[]>([])
     const dragIndex = ref(-1)
     const form = reactive({ title: '', description: '', visibility: 'private' })
+    const comments = ref<any[]>([])
+    const commentTotal = ref(0)
+    const commentLoading = ref(false)
+    const commentBusy = ref(false)
+    const commentKeywords = ref('')
+    const commentsPage = ref(1)
+    const commentsPageSize = 20
+    const selectedCommentIds = ref<number[]>([])
+    const governanceMessage = ref('')
     const publicSlug = computed(() => String(detail.value?.collection?.slug || ''))
+    const formatCommentTime = (value: string) => (value ? new Date(value).toLocaleString('zh-CN') : '')
+    const loadComments = async () => {
+      if (!collectionId.value) return
+      commentLoading.value = true
+      try {
+        const response = await api.listOwnedCollectionComments(collectionId.value, {
+          current: commentsPage.value,
+          size: commentsPageSize,
+          keywords: commentKeywords.value || undefined,
+          includeDeleted: '1'
+        })
+        const data = response?.data?.data || {}
+        comments.value = Array.isArray(data.items) ? data.items : Array.isArray(data.records) ? data.records : []
+        commentTotal.value = Number(data.total || 0)
+        selectedCommentIds.value = []
+      } catch {
+        comments.value = []
+        commentTotal.value = 0
+      } finally {
+        commentLoading.value = false
+      }
+    }
+    const changeCommentPage = async (delta: number) => {
+      const next = commentsPage.value + delta
+      if (next < 1) return
+      if (delta > 0 && commentsPage.value * commentsPageSize >= commentTotal.value) return
+      commentsPage.value = next
+      await loadComments()
+    }
+    const summarizeGovernance = (result: any) => {
+      const succeeded = Array.isArray(result?.succeeded) ? result.succeeded.length : 0
+      const failures = Array.isArray(result?.failed) ? result.failed : []
+      const reasons = Array.from(new Set(failures.map((row: any) => String(row?.message || '')).filter(Boolean)))
+      return `成功 ${succeeded} 条` + (failures.length ? `，失败 ${failures.length} 条：${reasons.join('、')}` : '')
+    }
+    const governanceRequest = async (send: () => Promise<any>) => {
+      commentBusy.value = true
+      try {
+        const response = await send()
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
+        governanceMessage.value = summarizeGovernance(response.data.data)
+        await loadComments()
+      } catch (reason: any) {
+        governanceMessage.value = reason?.response?.data?.message || reason?.message || '操作失败'
+      } finally {
+        commentBusy.value = false
+      }
+    }
+    const selectedIds = () => selectedCommentIds.value.map(Number).filter((id) => id > 0)
+    const runBatch = async (action: 'delete' | 'pin' | 'unpin') => {
+      const ids = selectedIds()
+      if (!ids.length) return
+      if (action === 'pin' && ids.length > 1) {
+        governanceMessage.value = '批量置顶只保留最新的一条根评论，其余会自动取消置顶。'
+      }
+      await governanceRequest(() => api.batchModerateCollectionComments(collectionId.value, action, ids))
+    }
+    const restoreSelected = async () => {
+      const ids = selectedIds()
+      if (!ids.length) return
+      await governanceRequest(() => api.restoreOwnedCollectionComments(collectionId.value, ids))
+    }
     const load = async () => {
       loading.value = true
       try {
@@ -74,7 +183,10 @@ export default defineComponent({
         form.title = String(detail.value?.collection?.title || '')
         form.description = String(detail.value?.collection?.description || '')
         form.visibility = String(detail.value?.collection?.visibility || 'private')
-      } finally { loading.value = false }
+        await loadComments()
+      } finally {
+        loading.value = false
+      }
     }
     const saveMetadata = async () => {
       if (!form.title.trim()) return
@@ -117,7 +229,12 @@ export default defineComponent({
       await saveOrder()
     }
     onMounted(() => void load())
-    return { detail, items, loading, saving, searching, keywords, searchResults, dragIndex, form, publicSlug, load, saveMetadata, searchArticles, addArticle, removeItem, saveNote, move, dropItem }
+    return {
+      detail, items, loading, saving, searching, keywords, searchResults, dragIndex, form, publicSlug,
+      comments, commentTotal, commentLoading, commentBusy, commentKeywords, commentsPage, commentsPageSize, selectedCommentIds, governanceMessage,
+      load, saveMetadata, searchArticles, addArticle, removeItem, saveNote, move, dropItem,
+      loadComments, changeCommentPage, formatCommentTime, runBatch, restoreSelected
+    }
   }
 })
 </script>
@@ -145,6 +262,26 @@ export default defineComponent({
 .drag-handle { color: var(--text-ob-dim); cursor: grab; }
 .collection-builder-main strong, .collection-builder-main small { display: block; } .collection-builder-main small { margin: 3px 0 8px; color: var(--text-ob-dim); font-size: 10px; }
 .collection-builder-actions { display: flex; gap: 5px; } .collection-builder-actions button { min-width: 30px; padding: 5px 8px; } .collection-builder-actions .danger { color: #ef8c7f; }
+.governance-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.governance-actions span { color: var(--text-ob-dim); font-size: 11px; }
+.governance-actions button { min-height: 30px; padding: 6px 12px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.governance-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.governance-actions .danger { color: #ef8c7f; border-color: rgba(239, 140, 127, .5); }
+.governance-message { margin: 12px 0 0; padding: 9px 12px; border: 1px solid var(--border-hairline); border-radius: 10px; color: var(--color-ob); font-size: 11px; }
+.governance-list { display: grid; gap: 8px; margin-top: 12px; }
+.governance-list > article { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--border-hairline); border-radius: 12px; background: color-mix(in srgb, var(--background-primary-alt) 80%, transparent); }
+.governance-list > article.is-deleted { opacity: .62; }
+.governance-main strong, .governance-main small { display: block; }
+.governance-main strong { font-size: 12px; font-weight: 500; word-break: break-word; }
+.governance-main small { margin-top: 4px; color: var(--text-ob-dim); font-size: 10px; }
+.governance-tags { display: flex; gap: 6px; }
+.governance-tags .tag { padding: 2px 8px; border-radius: 999px; font-size: 10px; }
+.governance-tags .tag--deleted { background: rgba(239, 140, 127, .18); color: #ef8c7f; }
+.governance-tags .tag--pinned { background: color-mix(in srgb, var(--color-ob) 22%, transparent); color: var(--color-ob); }
+.governance-pager { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.governance-pager span { color: var(--text-ob-dim); font-size: 11px; }
+.governance-pager button { min-height: 28px; padding: 5px 12px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.governance-pager button:disabled { opacity: .5; cursor: not-allowed; }
 .editor-state { padding: 50px 0; color: var(--text-ob-dim); text-align: center; }
 @media (max-width: 760px) { .collection-form { grid-template-columns: 1fr; } .collection-editor__head { align-items: flex-start; flex-direction: column; } .collection-builder-list > article { grid-template-columns: 20px minmax(0, 1fr); } .collection-builder-actions { grid-column: 2; } }
 </style>

@@ -678,6 +678,14 @@ type CommentReactionToggleDTO struct {
 	LikeCount int  `json:"likeCount"`
 }
 
+type CommentBatchVO struct {
+	Action     string `json:"action" form:"action"`
+	CommentIds []int  `json:"commentIds" form:"commentIds"`
+}
+
+type CommentRestoreVO struct {
+	CommentIds []int `json:"commentIds" form:"commentIds"`
+}
 type CommentPinVO struct {
 	Pinned *bool `json:"pinned" form:"pinned"`
 }

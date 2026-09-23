@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -92,7 +93,9 @@ CREATE TABLE t_user_role (id INTEGER PRIMARY KEY, user_id INTEGER, role_id INTEG
 CREATE TABLE t_category (id INTEGER PRIMARY KEY, category_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_tag (id INTEGER PRIMARY KEY, tag_name VARCHAR(50) NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_talk (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, content TEXT NOT NULL, images TEXT, is_top SMALLINT NOT NULL, status SMALLINT NOT NULL, moderation_status VARCHAR(16) NOT NULL DEFAULT 'visible', moderation_reason VARCHAR(255), moderated_by INTEGER DEFAULT 0, moderated_at TIMESTAMP, create_time TIMESTAMP, update_time TIMESTAMP);
-CREATE TABLE t_comment (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, is_top SMALLINT NOT NULL DEFAULT 0, notification_dispatched_at TIMESTAMPTZ NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_comment (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, topic_id INTEGER, comment_content TEXT NOT NULL, reply_user_id INTEGER, parent_id INTEGER, type SMALLINT NOT NULL, is_delete SMALLINT NOT NULL, is_review SMALLINT NOT NULL, is_top SMALLINT NOT NULL DEFAULT 0, notification_dispatched_at TIMESTAMPTZ NULL, create_time TIMESTAMP, update_time TIMESTAMP);CREATE TABLE t_comment_moderation_log (id BIGSERIAL PRIMARY KEY, comment_id BIGINT NOT NULL, collection_id INTEGER NOT NULL, actor_id INTEGER NOT NULL, actor_role VARCHAR(16) NOT NULL, action VARCHAR(32) NOT NULL, before_snapshot JSONB, after_snapshot JSONB, cascade_ids BIGINT[], batch_id UUID, reason VARCHAR(255) NOT NULL DEFAULT '', create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE t_comment_report (id BIGSERIAL PRIMARY KEY, comment_id BIGINT NOT NULL REFERENCES t_comment(id) ON DELETE CASCADE, collection_id INTEGER NOT NULL, reporter_id INTEGER NOT NULL, reason VARCHAR(32) NOT NULL, detail VARCHAR(200) NOT NULL DEFAULT '', status VARCHAR(16) NOT NULL DEFAULT 'pending', handled_by INTEGER NOT NULL DEFAULT 0, handled_at TIMESTAMPTZ, decision_reason VARCHAR(255) NOT NULL DEFAULT '', create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE t_comment_appeal (id BIGSERIAL PRIMARY KEY, comment_id BIGINT NOT NULL REFERENCES t_comment(id) ON DELETE CASCADE, collection_id INTEGER NOT NULL, appellant_id INTEGER NOT NULL, reason VARCHAR(500) NOT NULL, stage VARCHAR(16) NOT NULL DEFAULT 'owner', status VARCHAR(16) NOT NULL DEFAULT 'pending', handled_by INTEGER NOT NULL DEFAULT 0, handled_at TIMESTAMPTZ, decision_reason VARCHAR(255) NOT NULL DEFAULT '', escalated_at TIMESTAMPTZ, create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE t_unique_view (id INTEGER PRIMARY KEY, views_count INTEGER NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_website_config (id INTEGER PRIMARY KEY, config TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_about (id INTEGER PRIMARY KEY, content TEXT, create_time TIMESTAMP, update_time TIMESTAMP);
@@ -269,7 +272,7 @@ INSERT INTO t_article_tag (id, article_id, tag_id) VALUES
     (5, 4, 3),
     (6, 5, 1),
     (7, 6, 4);
-INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions) VALUES (1, CURRENT_DATE, 2, 1, 1, 5000, 1);
+INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions) VALUES (1, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date, 2, 1, 1, 5000, 1);
 SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_talk));`); err != nil {
 		t.Fatalf("insert repository fixtures: %v", err)
 	}
@@ -568,7 +571,7 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 
 	if _, err := db.ExecContext(ctx, `
 INSERT INTO t_article_daily_metric (article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions)
-    VALUES (2, CURRENT_DATE, 4, 4, 4, 20000, 2)
+    VALUES (2, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date, 4, 4, 4, 20000, 2)
     ON CONFLICT (article_id, metric_date) DO UPDATE SET unique_readers = 4, effective_sessions = 4;
 INSERT INTO t_article_reaction (article_id, user_info_id, reaction) VALUES (4, 1, 'like'), (4, 2, 'like'), (4, 1, 'favorite');
 INSERT INTO t_article_reaction (article_id, user_info_id, reaction, create_time) VALUES (6, 1, 'favorite', CURRENT_TIMESTAMP - INTERVAL '30 days');
@@ -1131,6 +1134,102 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 				t.Fatalf("moderated comment like must leave notifications: page=%+v", reactions)
 			}
 		}
+	}
+	batchCollection, err := collectionRepo.CreateOwned(ctx, 1, "integration-batch-moderation-list", port.CollectionSaveInput{
+		Title: "Integration batch moderation list", Visibility: port.CollectionVisibilityPublic,
+	})
+	if err != nil {
+		t.Fatalf("create batch moderation collection: %v", err)
+	}
+	batchFirstID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 2, TopicId: batchCollection.ID, CommentContent: "batch first", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create batch first comment: %v", err)
+	}
+	batchSecondID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 2, TopicId: batchCollection.ID, CommentContent: "batch second", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create batch second comment: %v", err)
+	}
+	batchResult, err := commentRepo.BatchModerateOwned(ctx, 1, batchCollection.ID, "pin", []int{batchFirstID, batchSecondID})
+	if err != nil || len(batchResult.Succeeded) != 2 || len(batchResult.Failed) != 0 {
+		t.Fatalf("batch pin must succeed for both roots: result=%+v err=%v", batchResult, err)
+	}
+	if ordered, _, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &batchCollection.ID, Current: 1, Size: 10, ViewerID: 1}); err != nil || len(ordered) != 2 || ordered[0].Id != batchSecondID || ordered[0].IsTop != 1 || ordered[1].IsTop != 0 {
+		t.Fatalf("batch pin must keep only the newest root pinned: comments=%+v err=%v", ordered, err)
+	}
+	batchRestore, err := commentRepo.RestoreOwned(ctx, 1, batchCollection.ID, []int{batchFirstID})
+	if err != nil || len(batchRestore.Failed) != 1 {
+		t.Fatalf("restoring a live comment must report a per-item failure: result=%+v err=%v", batchRestore, err)
+	}
+	batchDelete, err := commentRepo.BatchModerateOwned(ctx, 1, batchCollection.ID, "delete", []int{batchFirstID, batchSecondID})
+	if err != nil || len(batchDelete.Succeeded) != 2 {
+		t.Fatalf("batch delete must succeed: result=%+v err=%v", batchDelete, err)
+	}
+	if detail, err := collectionRepo.GetPublicBySlug(ctx, batchCollection.Slug); err != nil || detail.Collection.CommentCount != 0 {
+		t.Fatalf("batch delete must clear the public comment count: detail=%+v err=%v", detail.Collection, err)
+	}
+	if owned, total, err := commentRepo.ListOwnedCollectionComments(ctx, 1, batchCollection.ID, 1, 10, "", true); err != nil || total != 2 || len(owned) != 2 {
+		t.Fatalf("owner governance list must include soft-deleted comments: owned=%+v total=%d err=%v", owned, total, err)
+	} else if owned[0].IsDelete != 1 {
+		t.Fatalf("owner governance list must surface the deleted flag: %+v", owned[0])
+	}
+	if activeOnly, total, err := commentRepo.ListOwnedCollectionComments(ctx, 1, batchCollection.ID, 1, 10, "", false); err != nil || total != 0 || len(activeOnly) != 0 {
+		t.Fatalf("owner governance list must hide deleted comments by default: owned=%+v total=%d err=%v", activeOnly, total, err)
+	}
+	if _, _, err := commentRepo.ListOwnedCollectionComments(ctx, 2, batchCollection.ID, 1, 10, "", true); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("owner governance list must reject non owners: %v", err)
+	}
+
+	cascadeRootID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 2, TopicId: batchCollection.ID, CommentContent: "cascade root", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create cascade root: %v", err)
+	}
+	cascadeKeptReplyID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 3, ReplyUserId: 2, ParentId: cascadeRootID, TopicId: batchCollection.ID,
+		CommentContent: "cascade kept reply", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create cascade kept reply: %v", err)
+	}
+	cascadeDeletedReplyID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 3, ReplyUserId: 2, ParentId: cascadeRootID, TopicId: batchCollection.ID,
+		CommentContent: "cascade deleted reply", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create cascade deleted reply: %v", err)
+	}
+	if err := commentRepo.SoftDeleteOwned(ctx, 1, batchCollection.ID, cascadeDeletedReplyID); err != nil {
+		t.Fatalf("pre-delete one reply: %v", err)
+	}
+	if err := commentRepo.SoftDeleteOwned(ctx, 1, batchCollection.ID, cascadeRootID); err != nil {
+		t.Fatalf("delete cascade root: %v", err)
+	}
+	if replies, err := commentRepo.ListReplies(ctx, []int{cascadeRootID}, 1); err != nil || len(replies) != 0 {
+		t.Fatalf("root delete must hide every reply: replies=%+v err=%v", replies, err)
+	}
+	var cascadeRaw string
+	if _, err := xormEngine.SQL(`SELECT COALESCE(array_to_string(cascade_ids, ','), '') FROM t_comment_moderation_log
+		WHERE comment_id = ? AND action = 'delete' ORDER BY id DESC LIMIT 1`, cascadeRootID).Get(&cascadeRaw); err != nil {
+		t.Fatalf("read cascade audit ids: %v", err)
+	}
+	if cascadeRaw != strconv.Itoa(cascadeKeptReplyID) {
+		t.Fatalf("cascade audit must only capture replies hidden by that delete: raw=%q want=%d", cascadeRaw, cascadeKeptReplyID)
+	}
+	if restored, err := commentRepo.RestoreOwned(ctx, 1, batchCollection.ID, []int{cascadeRootID}); err != nil || len(restored.Succeeded) != 1 || len(restored.Failed) != 0 {
+		t.Fatalf("restore cascade root: result=%+v err=%v", restored, err)
+	}
+	restoredReplies, err := commentRepo.ListReplies(ctx, []int{cascadeRootID}, 1)
+	if err != nil || len(restoredReplies) != 1 || restoredReplies[0].Id != cascadeKeptReplyID {
+		t.Fatalf("restore must revive only the cascade-hidden reply: replies=%+v err=%v", restoredReplies, err)
+	}
+	var moderationAuditCount int
+	if _, err := xormEngine.SQL(`SELECT count(1) FROM t_comment_moderation_log WHERE collection_id = ?`, batchCollection.ID).Get(&moderationAuditCount); err != nil || moderationAuditCount < 7 {
+		t.Fatalf("moderation audit rows must be recorded: count=%d err=%v", moderationAuditCount, err)
 	}
 	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionLike, false); err != nil || active || counts.LikeCount != 0 || counts.FavoriteCount != 1 {
 		t.Fatalf("unlike collection: active=%v counts=%+v err=%v", active, counts, err)

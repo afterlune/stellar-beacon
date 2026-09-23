@@ -21,6 +21,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -188,13 +189,42 @@ func swaggerPathData(apis map[string]interface{}, reqURI string) (map[string]int
 	if value, ok := apis[reqURI].(map[string]interface{}); ok {
 		return value, true
 	}
+	// Static segments must win over parameterised ones: /comments/batch and
+	// /comments/{commentId} both match a batch request, and map iteration order
+	// would otherwise decide which metadata is used.
+	type candidate struct {
+		template string
+		data     map[string]interface{}
+		params   int
+	}
+	var matches []candidate
 	for template, value := range apis {
 		pathData, ok := value.(map[string]interface{})
-		if ok && swaggerPathMatches(template, reqURI) {
-			return pathData, true
+		if !ok || !swaggerPathMatches(template, reqURI) {
+			continue
+		}
+		matches = append(matches, candidate{template: template, data: pathData, params: swaggerPathParamCount(template)})
+	}
+	if len(matches) == 0 {
+		return nil, false
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].params != matches[j].params {
+			return matches[i].params < matches[j].params
+		}
+		return matches[i].template < matches[j].template
+	})
+	return matches[0].data, true
+}
+
+func swaggerPathParamCount(template string) int {
+	count := 0
+	for _, part := range splitSwaggerPath(template) {
+		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
+			count++
 		}
 	}
-	return nil, false
+	return count
 }
 
 func swaggerPathMatches(template, request string) bool {

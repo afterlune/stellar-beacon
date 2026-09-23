@@ -85,3 +85,30 @@ func PinCollectionComment(c *gin.Context) {
 func DeleteOwnedCollectionComment(c *gin.Context) {
 	c.JSON(http.StatusOK, commentService.DeleteOwnedCollectionComment(c))
 }
+
+// ListOwnedCollectionComments
+// @Summary		 书单评论治理
+// @Description  书单作者查看自己书单下的评论治理列表（含已删除）
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comments [GET]
+func ListOwnedCollectionComments(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ListOwnedCollectionComments(c))
+}
+
+// BatchModerateCollectionComments
+// @Summary		 书单评论治理
+// @Description  书单作者批量删除、置顶或取消置顶书单内评论
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comments/batch [POST]
+func BatchModerateCollectionComments(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.BatchModerateCollectionComments(c))
+}
+
+// RestoreOwnedCollectionComments
+// @Summary		 书单评论治理
+// @Description  书单作者恢复被软删除的评论，仅还原同一次删除级联隐藏的回复
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comments/restore [POST]
+func RestoreOwnedCollectionComments(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.RestoreOwnedCollectionComments(c))
+}

@@ -178,3 +178,23 @@ func TestRecommendationQueryOmitsSeedsFromOperationAndExceptionLogs(t *testing.T
 		t.Fatal("read-only recommendation queries must not create operation-log rows")
 	}
 }
+
+func TestSwaggerPathDataPrefersStaticSegments(t *testing.T) {
+	apis := map[string]interface{}{
+		"/v1/studio/collections/{collectionId}/comments/{commentId}": map[string]interface{}{
+			"delete": map[string]interface{}{"summary": "param"},
+		},
+		"/v1/studio/collections/{collectionId}/comments/batch": map[string]interface{}{
+			"post": map[string]interface{}{"summary": "static"},
+		},
+	}
+	for attempt := 0; attempt < 50; attempt++ {
+		data, ok := swaggerPathData(apis, "/v1/studio/collections/7/comments/batch")
+		if !ok {
+			t.Fatal("batch path must resolve")
+		}
+		if _, ok := data["post"]; !ok {
+			t.Fatalf("static batch path must win over the parameterised sibling: %+v", data)
+		}
+	}
+}

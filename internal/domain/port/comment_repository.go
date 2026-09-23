@@ -23,4 +23,22 @@ type CommentRepository interface {
 	Delete(ctx context.Context, ids []int) error
 	SetPinned(ctx context.Context, userID, collectionID, commentID int, pinned bool) error
 	SoftDeleteOwned(ctx context.Context, userID, collectionID, commentID int) error
+	BatchModerateOwned(ctx context.Context, userID, collectionID int, action string, commentIDs []int) (ModerationBatchResult, error)
+	RestoreOwned(ctx context.Context, userID, collectionID int, commentIDs []int) (ModerationBatchResult, error)
+	RestoreAsAdmin(ctx context.Context, adminID, collectionID int, commentIDs []int) (ModerationBatchResult, error)
+	ListOwnedCollectionComments(ctx context.Context, userID, collectionID, current, size int, keywords string, includeDeleted bool) ([]*OwnedComment, int, error)
+	CountPendingReportsByCommentIDs(ctx context.Context, commentIDs []int) (map[int]int, error)
+	WriteModerationAudit(ctx context.Context, entry ModerationAuditEntry) error
+}
+
+// ModerationAuditEntry describes one append-only governance event. It is used by
+// the report and appeal services, which own their own tables but still record
+// every state change in the shared moderation ledger.
+type ModerationAuditEntry struct {
+	CommentID    int
+	CollectionID int
+	ActorID      int
+	ActorRole    string
+	Action       string
+	Reason       string
 }

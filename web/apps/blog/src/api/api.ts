@@ -292,6 +292,15 @@ export default {
   deleteOwnedCollectionComment: (collectionId: number, commentId: number) => {
     return http.delete(`/studio/collections/${encodeURIComponent(collectionId)}/comments/${encodeURIComponent(commentId)}`)
   },
+  listOwnedCollectionComments: (collectionId: number, params: { current?: number; size?: number; keywords?: string; includeDeleted?: string }) => {
+    return http.get(`/studio/collections/${encodeURIComponent(collectionId)}/comments`, { params })
+  },
+  batchModerateCollectionComments: (collectionId: number, action: 'delete' | 'pin' | 'unpin', commentIds: number[]) => {
+    return http.post(`/studio/collections/${encodeURIComponent(collectionId)}/comments/batch`, { action, commentIds })
+  },
+  restoreOwnedCollectionComments: (collectionId: number, commentIds: number[]) => {
+    return http.post(`/studio/collections/${encodeURIComponent(collectionId)}/comments/restore`, { commentIds })
+  },
   getRecommendationFeedback: (params: { current?: number; size?: number }) => {
     return http.get('/auth/me/recommendation-feedback', { params })
   },

@@ -42,6 +42,9 @@ type CommentService interface {
 	DeleteComments(c *gin.Context) model.ResultVO
 	PinCollectionComment(c *gin.Context) model.ResultVO
 	DeleteOwnedCollectionComment(c *gin.Context) model.ResultVO
+	ListOwnedCollectionComments(c *gin.Context) model.ResultVO
+	BatchModerateCollectionComments(c *gin.Context) model.ResultVO
+	RestoreOwnedCollectionComments(c *gin.Context) model.ResultVO
 }
 
 type MyCommentService struct {
@@ -499,6 +502,67 @@ func (c *MyCommentService) DeleteOwnedCollectionComment(ctx *gin.Context) model.
 		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
+}
+
+func (c *MyCommentService) ListOwnedCollectionComments(ctx *gin.Context) model.ResultVO {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	collectionID, err := pathID(ctx, "collectionId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	current, size, err := pageParams(ctx)
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	includeDeleted := ctx.Query("includeDeleted") == "1" || strings.EqualFold(ctx.Query("includeDeleted"), "true")
+	records, total, err := c.commentRepository().ListOwnedCollectionComments(ctx.Request.Context(), user.UserInfoId, collectionID, current, size, ctx.Query("keywords"), includeDeleted)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(model.PageResultDTO{Records: records, Count: total, Page: current, PageSize: size})
+}
+
+func (c *MyCommentService) BatchModerateCollectionComments(ctx *gin.Context) model.ResultVO {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	collectionID, err := pathID(ctx, "collectionId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	var vo model.CommentBatchVO
+	if err := ctx.ShouldBindJSON(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	result, err := c.commentRepository().BatchModerateOwned(ctx.Request.Context(), user.UserInfoId, collectionID, strings.TrimSpace(vo.Action), vo.CommentIds)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(result)
+}
+
+func (c *MyCommentService) RestoreOwnedCollectionComments(ctx *gin.Context) model.ResultVO {
+	user, ok := currentUser(ctx)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	collectionID, err := pathID(ctx, "collectionId")
+	if err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	var vo model.CommentRestoreVO
+	if err := ctx.ShouldBindJSON(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	result, err := c.commentRepository().RestoreOwned(ctx.Request.Context(), user.UserInfoId, collectionID, vo.CommentIds)
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(result)
 }
 
 func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO) error {
