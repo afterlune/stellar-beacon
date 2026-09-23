@@ -571,6 +571,58 @@ export async function restoreComment(id: number): Promise<void> {
   responseData(response)
 }
 
+export interface CommentReportGroupRow extends Record<string, unknown> {
+  commentId: number
+  collectionId: number
+  collectionTitle?: string
+  commentContent?: string
+  commentNickname?: string
+  commentIsDelete?: number
+  reportCount?: number
+  reasons?: string
+  latestDetail?: string
+  latestCreateTime?: string
+}
+
+export interface CommentAppealRow extends Record<string, unknown> {
+  id: number
+  commentId: number
+  collectionId: number
+  collectionTitle?: string
+  commentContent?: string
+  appellantId?: number
+  appellantName?: string
+  reason?: string
+  stage?: string
+  status?: string
+  decisionReason?: string
+  createTime?: string
+}
+
+export async function listAdminCommentReports(
+  params: Record<string, string | number> = {},
+  config?: AxiosRequestConfig
+): Promise<Page<CommentReportGroupRow>> {
+  return listAdminPage<CommentReportGroupRow>('admin/comment-reports', params, config)
+}
+
+export async function resolveAdminCommentReports(commentId: number, decision: 'dismiss' | 'hide' | 'restore', reason = ''): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>(`admin/comment-reports/${encodeURIComponent(commentId)}`, { decision, reason })
+  responseData(response)
+}
+
+export async function listAdminCommentAppeals(
+  params: Record<string, string | number> = {},
+  config?: AxiosRequestConfig
+): Promise<Page<CommentAppealRow>> {
+  return listAdminPage<CommentAppealRow>('admin/comment-appeals', params, config)
+}
+
+export async function resolveAdminCommentAppeal(appealId: number, decision: 'restore' | 'reject', reason = ''): Promise<void> {
+  const response = await http.put<ResultVO<unknown>>(`admin/comment-appeals/${encodeURIComponent(appealId)}`, { decision, reason })
+  responseData(response)
+}
+
 export async function getWebsiteConfig(): Promise<Record<string, unknown>> {
   const response = await http.get<ResultVO<Record<string, unknown>>>('admin/site')
   return responseData(response)

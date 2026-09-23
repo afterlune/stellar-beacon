@@ -197,6 +197,7 @@ type Comment struct {
 	Liked          bool      `json:"liked"`
 	IsTop          int       `json:"isTop"`
 	ReplyDTOs      []Reply   `json:"replyDTOs"`
+	IsDelete       int       `json:"isDelete"`
 }
 
 type Reply struct {
@@ -213,6 +214,7 @@ type Reply struct {
 	CreateTime     time.Time `json:"createTime"`
 	LikeCount      int       `json:"likeCount"`
 	Liked          bool      `json:"liked"`
+	IsDelete       int       `json:"isDelete"`
 }
 
 type CommentAdmin struct {

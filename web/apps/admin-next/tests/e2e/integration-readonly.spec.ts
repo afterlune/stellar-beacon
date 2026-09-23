@@ -19,7 +19,7 @@ const visibleMenuContracts: MenuContract[] = [
   { path: '/content-moderation', marker: '内容审核', table: true },
   { path: '/categories', marker: '分类管理', table: true },
   { path: '/tags', marker: '标签管理', table: true },
-  { path: '/comments', marker: '评论管理', table: true },
+  { path: '/comments', marker: '评论管理', table: true, contentSelector: '.comment-governance-queues' },
   { path: '/users', marker: '用户管理', table: true },
   { path: '/online/users', marker: '在线用户', table: true },
   { path: '/roles', marker: '角色管理', table: true },

@@ -1,5 +1,5 @@
 <template>
-  <div :id="`comment-${comment.id}`" class="mt-5 max-w-full">
+  <div :id="`comment-${comment.id}`" class="mt-5 max-w-full" :class="{ 'is-hidden': isHidden }">
     <div class="flex space-x-3 xl:space-x-5">
       <Avatar :url="comment.avatar" />
       <div class="max-w-full-calc space-y-5">
@@ -9,13 +9,14 @@
             <span>{{ comment.nickname }} | {{ time }}</span>
             <div class="flex items-center gap-3">
               <span v-if="isPinned" class="pin-badge" data-testid="comment-pinned">置顶</span>
-              <CommentLikeButton
+              <CommentLikeButton v-if="!isHidden"
                 :comment-id="Number(comment.id)"
                 :like-count="Number(comment.likeCount || 0)"
                 :liked="Boolean(comment.liked)"
                 @changed="updateLike" />
-              <span @click="clickOnReply" class="cursor-pointer reply-button">Reply</span>
-              <template v-if="canModerate">
+              <span v-if="!isHidden" @click="clickOnReply" class="cursor-pointer reply-button">Reply</span>
+              <CommentGovernanceActions :comment="comment" />
+              <template v-if="canModerate && !isHidden">
                 <button type="button" class="reply-button" :disabled="busy" data-testid="comment-pin-action" @click="togglePin">{{ isPinned ? '取消置顶' : '置顶' }}</button>
                 <button type="button" class="reply-button" :disabled="busy" data-testid="comment-delete-action" @click="removeComment">删除</button>
               </template>
@@ -23,7 +24,7 @@
           </div>
         </div>
         <CommentReplyForm
-          v-show="show"
+          v-if="!isHidden && show"
           :replyUserId="comment.userId"
           :initialContent="replyContent"
           @changeShow="changeShow" />
@@ -46,6 +47,7 @@ import Avatar from '@/components/Avatar.vue'
 import CommentReplyItem from './CommentReplyItem.vue'
 import CommentReplyForm from './CommentReplyForm.vue'
 import CommentLikeButton from './CommentLikeButton.vue'
+import CommentGovernanceActions from './CommentGovernanceActions.vue'
 import api from '@/api/api'
 import emitter from '@/utils/mitt'
 
@@ -54,7 +56,8 @@ export default defineComponent({
     Avatar,
     CommentReplyItem,
     CommentReplyForm,
-    CommentLikeButton
+    CommentLikeButton,
+    CommentGovernanceActions
   },
   props: ['comment', 'index'],
   setup(props) {
@@ -102,6 +105,7 @@ export default defineComponent({
       comment.liked = payload.active
     }
     const isPinned = computed(() => Boolean(props.comment.isTop))
+    const isHidden = computed(() => Number(props.comment.isDelete || 0) === 1)
     const togglePin = () => moderate((collectionID) => api.pinCollectionComment(collectionID, Number(comment.id), !isPinned.value))
     const removeComment = () => moderate(async (collectionID) => {
       await ElMessageBox.confirm('删除后该评论及其回复将不再公开显示。', '删除评论', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
@@ -115,6 +119,7 @@ export default defineComponent({
       canModerate: computed(() => Boolean(canModerate())),
       busy,
       isPinned,
+      isHidden,
       togglePin,
       removeComment
     }
@@ -160,4 +165,5 @@ export default defineComponent({
   word-wrap: break-word;
   word-break: break-all;
 }
+.is-hidden { opacity: .78; }
 </style>

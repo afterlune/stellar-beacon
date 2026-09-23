@@ -79,6 +79,50 @@
           <button type="button" :disabled="commentsPage * commentsPageSize >= commentTotal" @click="changeCommentPage(1)">下一页</button>
         </div>
       </section>
+
+      <section class="collection-builder governance" data-testid="comment-report-queue">
+        <header>
+          <div><h2>举报队列</h2><span>按评论聚合待处理举报；忽略会关闭举报，隐藏会同步删除评论，恢复用于纠正误删。</span></div>
+          <small>{{ reportQueue.length }} 条</small>
+        </header>
+        <p v-if="queueLoading" class="editor-state">正在加载举报…</p>
+        <div v-else-if="reportQueue.length" class="governance-list">
+          <article v-for="item in reportQueue" :key="item.commentId" :class="{ 'is-deleted': Number(item.commentIsDelete) === 1 }">
+            <div class="governance-main">
+              <strong>{{ item.commentContent }}</strong>
+              <small>{{ item.commentNickname }} · 举报 {{ item.reportCount }} 次 · {{ reportReasonLabel(item.reasons) }}<template v-if="item.latestDetail"> · {{ item.latestDetail }}</template></small>
+            </div>
+            <div class="queue-actions">
+              <button type="button" :disabled="queueBusy" @click="resolveReport(item.commentId, 'dismiss')">忽略</button>
+              <button v-if="Number(item.commentIsDelete) === 0" type="button" class="danger" :disabled="queueBusy" @click="resolveReport(item.commentId, 'hide')">隐藏</button>
+              <button v-else type="button" :disabled="queueBusy" @click="resolveReport(item.commentId, 'restore')">恢复</button>
+            </div>
+          </article>
+        </div>
+        <p v-else class="editor-state">暂无待处理举报。</p>
+      </section>
+
+      <section class="collection-builder governance" data-testid="comment-appeal-queue">
+        <header>
+          <div><h2>申诉队列</h2><span>恢复会立即重新公开评论；驳回后作者可升级给管理员终审。</span></div>
+          <small>{{ appealQueue.length }} 条</small>
+        </header>
+        <p v-if="queueLoading" class="editor-state">正在加载申诉…</p>
+        <div v-else-if="appealQueue.length" class="governance-list">
+          <article v-for="item in appealQueue" :key="item.id">
+            <div class="governance-main">
+              <strong>{{ item.commentContent }}</strong>
+              <small>{{ item.appellantName }} 申诉：{{ item.reason }}</small>
+            </div>
+            <div class="queue-actions">
+              <button type="button" :disabled="queueBusy" @click="resolveAppeal(item.id, 'restore')">恢复</button>
+              <button type="button" class="danger" :disabled="queueBusy" @click="resolveAppeal(item.id, 'reject')">驳回</button>
+            </div>
+          </article>
+        </div>
+        <p v-else class="editor-state">暂无待处理申诉。</p>
+      </section>
+      <p v-if="queueMessage" class="governance-message" data-testid="governance-queue-message">{{ queueMessage }}</p>
     </template>
   </section>
 </template>
@@ -111,6 +155,11 @@ export default defineComponent({
     const commentsPageSize = 20
     const selectedCommentIds = ref<number[]>([])
     const governanceMessage = ref('')
+    const reportQueue = ref<any[]>([])
+    const appealQueue = ref<any[]>([])
+    const queueLoading = ref(false)
+    const queueBusy = ref(false)
+    const queueMessage = ref('')
     const publicSlug = computed(() => String(detail.value?.collection?.slug || ''))
     const formatCommentTime = (value: string) => (value ? new Date(value).toLocaleString('zh-CN') : '')
     const loadComments = async () => {
@@ -134,6 +183,49 @@ export default defineComponent({
         commentLoading.value = false
       }
     }
+    const reportReasonLabel = (reasons: string) => {
+      const labels: Record<string, string> = { spam: '垃圾信息', harassment: '骚扰攻击', porn: '色情低俗', illegal: '违法内容', privacy: '侵犯隐私', other: '其他' }
+      return String(reasons || '').split(',').filter(Boolean).map((reason) => labels[reason] || reason).join('、') || '未说明'
+    }
+    const loadQueues = async () => {
+      if (!collectionId.value) return
+      queueLoading.value = true
+      try {
+        const [reportsResponse, appealsResponse] = await Promise.all([
+          api.listOwnedCollectionCommentReports(collectionId.value, { current: 1, size: 50 }),
+          api.listOwnedCollectionCommentAppeals(collectionId.value, { current: 1, size: 50 })
+        ])
+        const reportsData = reportsResponse?.data?.data || {}
+        const appealsData = appealsResponse?.data?.data || {}
+        reportQueue.value = Array.isArray(reportsData.items) ? reportsData.items : Array.isArray(reportsData.records) ? reportsData.records : []
+        appealQueue.value = Array.isArray(appealsData.items) ? appealsData.items : Array.isArray(appealsData.records) ? appealsData.records : []
+      } catch {
+        reportQueue.value = []
+        appealQueue.value = []
+      } finally {
+        queueLoading.value = false
+      }
+    }
+    const queueRequest = async (send: () => Promise<any>, successMessage: string) => {
+      queueBusy.value = true
+      queueMessage.value = ''
+      try {
+        const response = await send()
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
+        queueMessage.value = successMessage
+        await Promise.all([loadComments(), loadQueues()])
+      } catch (reason: any) {
+        queueMessage.value = reason?.response?.data?.message || reason?.message || '操作失败'
+      } finally {
+        queueBusy.value = false
+      }
+    }
+    const resolveReport = async (commentId: number, decision: 'dismiss' | 'hide' | 'restore') => {
+      await queueRequest(() => api.resolveOwnedCollectionCommentReports(collectionId.value, commentId, decision), '举报已处理。')
+    }
+    const resolveAppeal = async (appealId: number, decision: 'restore' | 'reject') => {
+      await queueRequest(() => api.resolveOwnedCollectionCommentAppeal(collectionId.value, appealId, decision), decision === 'restore' ? '评论已恢复公开。' : '申诉已驳回。')
+    }
     const changeCommentPage = async (delta: number) => {
       const next = commentsPage.value + delta
       if (next < 1) return
@@ -153,7 +245,7 @@ export default defineComponent({
         const response = await send()
         if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
         governanceMessage.value = summarizeGovernance(response.data.data)
-        await loadComments()
+        await Promise.all([loadComments(), loadQueues()])
       } catch (reason: any) {
         governanceMessage.value = reason?.response?.data?.message || reason?.message || '操作失败'
       } finally {
@@ -183,7 +275,7 @@ export default defineComponent({
         form.title = String(detail.value?.collection?.title || '')
         form.description = String(detail.value?.collection?.description || '')
         form.visibility = String(detail.value?.collection?.visibility || 'private')
-        await loadComments()
+        await Promise.all([loadComments(), loadQueues()])
       } finally {
         loading.value = false
       }
@@ -233,7 +325,9 @@ export default defineComponent({
       detail, items, loading, saving, searching, keywords, searchResults, dragIndex, form, publicSlug,
       comments, commentTotal, commentLoading, commentBusy, commentKeywords, commentsPage, commentsPageSize, selectedCommentIds, governanceMessage,
       load, saveMetadata, searchArticles, addArticle, removeItem, saveNote, move, dropItem,
-      loadComments, changeCommentPage, formatCommentTime, runBatch, restoreSelected
+      loadComments, changeCommentPage, formatCommentTime, runBatch, restoreSelected,
+      reportQueue, appealQueue, queueLoading, queueBusy, queueMessage,
+      reportReasonLabel, resolveReport, resolveAppeal
     }
   }
 })
@@ -284,4 +378,8 @@ export default defineComponent({
 .governance-pager button:disabled { opacity: .5; cursor: not-allowed; }
 .editor-state { padding: 50px 0; color: var(--text-ob-dim); text-align: center; }
 @media (max-width: 760px) { .collection-form { grid-template-columns: 1fr; } .collection-editor__head { align-items: flex-start; flex-direction: column; } .collection-builder-list > article { grid-template-columns: 20px minmax(0, 1fr); } .collection-builder-actions { grid-column: 2; } }
+.queue-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.queue-actions button { padding: 5px 10px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.queue-actions button.danger { color: #ef8c7f; border-color: rgba(239, 140, 127, .5); }
+.queue-actions button:disabled { opacity: .5; cursor: wait; }
 </style>

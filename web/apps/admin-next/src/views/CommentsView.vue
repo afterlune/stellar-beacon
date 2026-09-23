@@ -107,6 +107,7 @@
         </a-table>
       </div>
     </a-card>
+    <CommentGovernanceQueues />
   </section>
 </template>
 
@@ -126,6 +127,7 @@ import {
   reviewComment,
   reviewComments
 } from '@/api/http'
+import CommentGovernanceQueues from '@/components/CommentGovernanceQueues.vue'
 import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'
 import AdminErrorState from '@/components/AdminErrorState.vue'

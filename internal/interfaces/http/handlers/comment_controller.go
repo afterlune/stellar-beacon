@@ -130,3 +130,107 @@ func ListCollectionCommentsAdmin(c *gin.Context) {
 func RestoreCommentsAdmin(c *gin.Context) {
 	c.JSON(http.StatusOK, commentService.RestoreCommentsAdmin(c))
 }
+
+// ReportComment
+// @Summary		 书单评论治理
+// @Description  登录读者举报书单内的评论或回复
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/auth/me/comment-reports [POST]
+func ReportComment(c *gin.Context) { c.JSON(http.StatusOK, commentService.ReportComment(c)) }
+
+// AppealComment
+// @Summary		 书单评论治理
+// @Description  被隐藏评论的作者提交申诉
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/auth/me/comment-appeals [POST]
+func AppealComment(c *gin.Context) { c.JSON(http.StatusOK, commentService.AppealComment(c)) }
+
+// EscalateCommentAppeal
+// @Summary		 书单评论治理
+// @Description  作者驳回后，申诉人升级给管理员终审
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/auth/me/comment-appeals/{appealId}/escalate [POST]
+func EscalateCommentAppeal(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.EscalateCommentAppeal(c))
+}
+
+// ListMyCommentAppeals
+// @Summary		 书单评论治理
+// @Description  当前账号的申诉记录
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/auth/me/comment-appeals [GET]
+func ListMyCommentAppeals(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ListMyCommentAppeals(c))
+}
+
+// ListOwnerCommentReports
+// @Summary		 书单评论治理
+// @Description  书单作者查看待处理举报（按评论聚合）
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comment-reports [GET]
+func ListOwnerCommentReports(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ListOwnerCommentReports(c))
+}
+
+// ResolveOwnerCommentReports
+// @Summary		 书单评论治理
+// @Description  书单作者处理某条评论的全部待处理举报
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comment-reports/{commentId} [PUT]
+func ResolveOwnerCommentReports(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ResolveOwnerCommentReports(c))
+}
+
+// ListOwnerCommentAppeals
+// @Summary		 书单评论治理
+// @Description  书单作者查看待处理申诉
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comment-appeals [GET]
+func ListOwnerCommentAppeals(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ListOwnerCommentAppeals(c))
+}
+
+// ResolveOwnerCommentAppeal
+// @Summary		 书单评论治理
+// @Description  书单作者恢复或驳回申诉
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/studio/collections/{collectionId}/comment-appeals/{appealId} [PUT]
+func ResolveOwnerCommentAppeal(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ResolveOwnerCommentAppeal(c))
+}
+
+// ListAdminCommentReports
+// @Summary		 书单评论治理
+// @Description  管理端查看全部待处理举报
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/admin/comment-reports [GET]
+func ListAdminCommentReports(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ListAdminCommentReports(c))
+}
+
+// ResolveAdminCommentReports
+// @Summary		 书单评论治理
+// @Description  管理端处理某条评论的全部待处理举报
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/admin/comment-reports/{commentId} [PUT]
+func ResolveAdminCommentReports(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ResolveAdminCommentReports(c))
+}
+
+// ListAdminCommentAppeals
+// @Summary		 书单评论治理
+// @Description  管理端查看待终审的申诉
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/admin/comment-appeals [GET]
+func ListAdminCommentAppeals(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ListAdminCommentAppeals(c))
+}
+
+// ResolveAdminCommentAppeal
+// @Summary		 书单评论治理
+// @Description  管理员终审申诉
+// @Success		 200	{object} model.ResultVO
+// @Router       /v1/admin/comment-appeals/{appealId} [PUT]
+func ResolveAdminCommentAppeal(c *gin.Context) {
+	c.JSON(http.StatusOK, commentService.ResolveAdminCommentAppeal(c))
+}

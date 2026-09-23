@@ -143,6 +143,39 @@ func (f *fakeCommentRepository) CountPendingReportsByCommentIDs(context.Context,
 func (f *fakeCommentRepository) WriteModerationAudit(context.Context, port.ModerationAuditEntry) error {
 	return nil
 }
+func (f *fakeCommentRepository) CreateCommentReport(context.Context, int, int, int, string, string) error {
+	return nil
+}
+func (f *fakeCommentRepository) ListOwnerCommentReports(context.Context, int, int, int, int) ([]*port.CommentReportGroup, int, error) {
+	return []*port.CommentReportGroup{{CommentId: 1, ReportCount: 1}}, 1, nil
+}
+func (f *fakeCommentRepository) ListAdminCommentReports(context.Context, int, int) ([]*port.CommentReportGroup, int, error) {
+	return []*port.CommentReportGroup{{CommentId: 1, ReportCount: 1}}, 1, nil
+}
+func (f *fakeCommentRepository) ResolveCommentReports(context.Context, int, string, int, int, string, string) ([]int, error) {
+	return []int{2}, nil
+}
+func (f *fakeCommentRepository) CreateCommentAppeal(context.Context, int, int, string) error {
+	return nil
+}
+func (f *fakeCommentRepository) ListOwnerCommentAppeals(context.Context, int, int, int, int) ([]*port.CommentAppealItem, int, error) {
+	return []*port.CommentAppealItem{{Id: 1}}, 1, nil
+}
+func (f *fakeCommentRepository) ListAdminCommentAppeals(context.Context, int, int) ([]*port.CommentAppealItem, int, error) {
+	return []*port.CommentAppealItem{{Id: 1}}, 1, nil
+}
+func (f *fakeCommentRepository) ListMyCommentAppeals(context.Context, int, int, int) ([]*port.CommentAppealItem, int, error) {
+	return []*port.CommentAppealItem{{Id: 1}}, 1, nil
+}
+func (f *fakeCommentRepository) ResolveCommentAppeal(context.Context, int, string, int, string, string) (port.CommentAppealOutcome, error) {
+	return port.CommentAppealOutcome{}, nil
+}
+func (f *fakeCommentRepository) EscalateCommentAppeal(context.Context, int, int) error {
+	return nil
+}
+func (f *fakeCommentRepository) CreateModerationNotification(context.Context, int, int, string, int, int, string) error {
+	return nil
+}
 
 func TestCommentServiceAttachesRepliesUsingPortData(t *testing.T) {
 	gin.SetMode(gin.TestMode)

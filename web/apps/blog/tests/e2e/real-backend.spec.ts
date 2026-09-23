@@ -7,6 +7,7 @@ const adminPassword = process.env.E2E_ADMIN_PASSWORD || ''
 const userEmail = process.env.E2E_USER_EMAIL || ''
 const userPassword = process.env.E2E_USER_PASSWORD || ''
 const mailpitBaseURL = 'http://127.0.0.1:18025'
+let e2eHeaders: Record<string, string> = {}
 
 interface LoginSession {
   token: string
@@ -33,6 +34,7 @@ test.describe('blog real backend main chain @integration', () => {
   let createdCollectionID = 0
   let createdSubscriptionCollectionID = 0
   let createdInteractionCollectionID = 0
+  let createdGovernanceCollectionID = 0
   let admin: LoginSession
   let user: LoginSession
   let authorSession: BrowserSession
@@ -80,10 +82,15 @@ test.describe('blog real backend main chain @integration', () => {
     if (createdInteractionCollectionID > 0) {
       await deleteAPI(request, `/api/v1/studio/collections/${createdInteractionCollectionID}`, admin.token).catch(() => undefined)
     }
+    if (createdGovernanceCollectionID > 0) {
+      await deleteAPI(request, `/api/v1/studio/collections/${createdGovernanceCollectionID}`, admin.token).catch(() => undefined)
+    }
+
   })
 
   test.beforeEach(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'real backend acceptance runs once on desktop Chrome')
+    e2eHeaders = { 'X-Real-IP': `198.51.100.${10 + Math.floor(Math.random() * 200)}` }
   })
 
   test('public routes load from the real API', async ({ page }) => {
@@ -359,14 +366,14 @@ test.describe('blog real backend main chain @integration', () => {
       await expect(replyItem.getByTestId('comment-reply-delete-action')).toBeVisible()
       await replyItem.getByTestId('comment-reply-delete-action').click()
       await session.page.getByRole('button', { name: '删除', exact: true }).last().click()
-      await expect(replyItem.getByText(replyText)).toHaveCount(0)
+      await expect(replyItem.getByText('已被书单作者删除')).toBeVisible()
       const replyNotifications = await getAPIData(request, '/api/v1/auth/me/notifications?group=comment&current=1&size=50', admin.token)
       expect(itemsOf(replyNotifications).some((item: any) => Number(item.commentId) === replyID)).toBe(false)
 
       await session.page.locator(`#comment-${deletedCommentID}`).getByTestId('comment-delete-action').click()
       await session.page.getByRole('button', { name: '删除', exact: true }).last().click()
-      await expect(session.page.locator(`#comment-${deletedCommentID}`)).toHaveCount(0)
-      const moderated = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`, admin.token)
+      await expect(session.page.locator(`#comment-${deletedCommentID}`).getByText('已被书单作者删除')).toBeVisible()
+      const moderated = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`)
       expect(itemsOf(moderated).some((item: any) => Number(item.id) === deletedCommentID)).toBe(false)
       expect(Number(itemsOf(moderated)[0]?.id)).toBe(pinnedCommentID)
       expect(Number(itemsOf(moderated)[0]?.isTop)).toBe(1)
@@ -411,14 +418,91 @@ test.describe('blog real backend main chain @integration', () => {
       await session.page.getByRole('button', { name: '批量删除', exact: true }).click()
       await expect(session.page.getByTestId('governance-message')).toContainText('成功 1 条')
 
-      const remaining = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`, admin.token)
+      const remaining = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=10`)
       expect(itemsOf(remaining).some((item: any) => Number(item.id) === firstID)).toBe(false)
 
-      await session.page.getByRole('checkbox').first().check()
+      await list.filter({ hasText: firstText }).getByRole('checkbox').check()
       await session.page.getByRole('button', { name: '恢复选中', exact: true }).click()
       await expect(session.page.getByTestId('governance-message')).toContainText('成功 1 条')
     } finally {
       await session.context.close()
+    }
+  })
+
+  test('closes the comment report and appeal loop across reader, owner and admin views', async ({ request, browser }) => {
+    const title = `integration governance loop ${runID}`
+    const commentText = `integration reported comment ${runID}`
+    const appealReason = `integration appeal reason ${runID}`
+    const isolatedHeaders = { 'X-Real-IP': '198.51.100.201' }
+    const created = await postAPI(request, '/api/v1/studio/collections', admin.token, {
+      title,
+      description: 'integration report and appeal collection',
+      visibility: 'public'
+    }, isolatedHeaders)
+    const collectionID = Number(created.id)
+    createdGovernanceCollectionID = collectionID
+    expect(collectionID).toBeGreaterThan(0)
+    await putAPI(request, `/api/v1/studio/collections/${collectionID}/items/${fixtureArticleID}`, admin.token, { note: 'integration governance item' }, isolatedHeaders)
+
+    await postAPI(request, '/api/v1/public/comments', user.token, { type: 6, topicId: String(collectionID), commentContent: commentText }, isolatedHeaders)
+    const commentID = await waitForPendingComment(request, admin.token, commentText)
+    await approveComments(request, admin.token, [commentID], isolatedHeaders)
+    createdCommentIDs.push(commentID)
+
+    await postAPI(request, '/api/v1/auth/me/comment-reports', admin.token, { commentId: commentID, reason: 'spam', detail: `integration report ${runID}` }, isolatedHeaders)
+
+    const ownerSession = await createBrowserSession(browser, admin, isolatedHeaders)
+    const readerSessionForGovernance = await createBrowserSession(browser, user, isolatedHeaders)
+    try {
+      await ownerSession.page.goto(`/studio/collections/${collectionID}/edit`, { waitUntil: 'domcontentloaded' })
+      const reportQueue = ownerSession.page.getByTestId('comment-report-queue')
+      await expect(reportQueue.getByText(commentText)).toBeVisible()
+      await reportQueue.getByRole('button', { name: '隐藏', exact: true }).click()
+      await expect(ownerSession.page.getByTestId('governance-queue-message')).toContainText('举报已处理')
+
+      const publicComments = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=20`)
+      expect(itemsOf(publicComments).some((item: any) => Number(item.id) === commentID)).toBe(false)
+      const authorComments = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=20`, user.token)
+      const hiddenComment = itemsOf(authorComments).find((item: any) => Number(item.id) === commentID)
+      expect(Number(hiddenComment?.isDelete)).toBe(1)
+
+      await readerSessionForGovernance.page.goto(`/collections/${created.slug}`, { waitUntil: 'domcontentloaded' })
+      const hiddenItem = readerSessionForGovernance.page.locator(`#comment-${commentID}`)
+      await expect(hiddenItem.getByText('已被书单作者删除')).toBeVisible()
+      await hiddenItem.getByTestId('comment-appeal-action').click()
+      await hiddenItem.getByTestId('comment-appeal-reason').fill(appealReason)
+      await hiddenItem.getByTestId('comment-appeal-submit').click()
+      await expect(hiddenItem.getByText('申诉待书单作者处理')).toBeVisible()
+
+      await ownerSession.page.goto(`/studio/collections/${collectionID}/edit`, { waitUntil: 'domcontentloaded' })
+      const appealQueue = ownerSession.page.getByTestId('comment-appeal-queue')
+      await expect(appealQueue.getByText(appealReason)).toBeVisible()
+      await appealQueue.getByRole('button', { name: '驳回', exact: true }).click()
+      await expect(ownerSession.page.getByTestId('governance-queue-message')).toContainText('申诉已驳回')
+
+      await readerSessionForGovernance.page.reload({ waitUntil: 'domcontentloaded' })
+      const rejectedItem = readerSessionForGovernance.page.locator(`#comment-${commentID}`)
+      await expect(rejectedItem.getByText('书单作者已驳回，可升级给管理员')).toBeVisible()
+      await rejectedItem.getByTestId('comment-appeal-escalate').click()
+      await expect(rejectedItem.getByText('申诉待管理员终审')).toBeVisible()
+
+      const adminAppeals = await getAPIData(request, '/api/v1/admin/comment-appeals?current=1&size=50', admin.token)
+      const appeal = itemsOf(adminAppeals).find((item: any) => Number(item.commentId) === commentID)
+      expect(Number(appeal?.id)).toBeGreaterThan(0)
+      await putAPI(request, `/api/v1/admin/comment-appeals/${Number(appeal.id)}`, admin.token, { decision: 'restore', reason: 'integration appeal upheld' }, isolatedHeaders)
+
+      await readerSessionForGovernance.page.reload({ waitUntil: 'domcontentloaded' })
+      const restoredItem = readerSessionForGovernance.page.locator(`#comment-${commentID}`)
+      await expect(restoredItem.getByText(commentText)).toBeVisible()
+      await expect(restoredItem.getByText('已被书单作者删除')).toHaveCount(0)
+      await expect(restoredItem.getByTestId('comment-like')).toBeVisible()
+
+      const restoredComments = await getAPIData(request, `/api/v1/public/comments?type=6&topicId=${collectionID}&current=1&size=20`)
+      const restoredComment = itemsOf(restoredComments).find((item: any) => Number(item.id) === commentID)
+      expect(Number(restoredComment?.isDelete || 0)).toBe(0)
+    } finally {
+      await ownerSession.context.close()
+      await readerSessionForGovernance.context.close()
     }
   })
 
@@ -744,8 +828,8 @@ async function loginByAPI(request: APIRequestContext, email: string, password: s
   return { token: String(payload.data?.token || ''), userInfo: payload.data || {} }
 }
 
-async function createBrowserSession(browser: Browser, session: LoginSession): Promise<BrowserSession> {
-  const context = await browser.newContext({ baseURL: blogBaseURL, locale: 'zh-CN' })
+async function createBrowserSession(browser: Browser, session: LoginSession, extraHTTPHeaders: Record<string, string> = {}): Promise<BrowserSession> {
+  const context = await browser.newContext({ baseURL: blogBaseURL, locale: 'zh-CN', extraHTTPHeaders: { ...e2eHeaders, ...extraHTTPHeaders } })
   const page = await context.newPage()
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.evaluate(({ token, userInfo }) => {
@@ -764,8 +848,8 @@ async function createBrowserSession(browser: Browser, session: LoginSession): Pr
   return { context, page }
 }
 
-async function getAPIData(request: APIRequestContext, path: string, token = ''): Promise<any> {
-  const response = await request.get(path, token ? { headers: authorization(token) } : undefined)
+async function getAPIData(request: APIRequestContext, path: string, token = '', extraHeaders: Record<string, string> = {}): Promise<any> {
+  const response = await request.get(path, { headers: { ...e2eHeaders, ...(token ? authorization(token) : {}), ...extraHeaders } })
   const body = await response.text()
   expect(response.status(), `${path}: ${body}`).toBe(200)
   const payload = JSON.parse(body)
@@ -773,18 +857,18 @@ async function getAPIData(request: APIRequestContext, path: string, token = ''):
   return payload.data
 }
 
-async function postAPI(request: APIRequestContext, path: string, token: string, data: unknown): Promise<any> {
-  const response = await request.post(path, { headers: authorization(token), data })
+async function postAPI(request: APIRequestContext, path: string, token: string, data: unknown, extraHeaders: Record<string, string> = {}): Promise<any> {
+  const response = await request.post(path, { headers: { ...e2eHeaders, ...authorization(token), ...extraHeaders }, data })
   return assertMutation(response, `POST ${path}`)
 }
 
-async function putAPI(request: APIRequestContext, path: string, token: string, data: unknown): Promise<any> {
-  const response = await request.put(path, { headers: authorization(token), data })
+async function putAPI(request: APIRequestContext, path: string, token: string, data: unknown, extraHeaders: Record<string, string> = {}): Promise<any> {
+  const response = await request.put(path, { headers: { ...e2eHeaders, ...authorization(token), ...extraHeaders }, data })
   return assertMutation(response, `PUT ${path}`)
 }
 
-async function deleteAPI(request: APIRequestContext, path: string, token: string, data?: unknown): Promise<any> {
-  const response = await request.delete(path, { headers: authorization(token), data })
+async function deleteAPI(request: APIRequestContext, path: string, token: string, data?: unknown, extraHeaders: Record<string, string> = {}): Promise<any> {
+  const response = await request.delete(path, { headers: { ...e2eHeaders, ...authorization(token), ...extraHeaders }, data })
   return assertMutation(response, `DELETE ${path}`)
 }
 
@@ -839,8 +923,8 @@ async function waitForPendingComment(request: APIRequestContext, token: string, 
   return found
 }
 
-async function approveComments(request: APIRequestContext, token: string, ids: number[]): Promise<void> {
-  await putAPI(request, '/api/v1/admin/comments/review', token, { ids, isReview: 1 })
+async function approveComments(request: APIRequestContext, token: string, ids: number[], extraHeaders: Record<string, string> = {}): Promise<void> {
+  await putAPI(request, '/api/v1/admin/comments/review', token, { ids, isReview: 1 }, extraHeaders)
 }
 
 async function findCommentIDsByRun(request: APIRequestContext, token: string, runID: string): Promise<number[]> {

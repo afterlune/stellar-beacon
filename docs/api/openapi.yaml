@@ -632,6 +632,126 @@ paths:
     delete: { tags: [admin], summary: Delete tags, operationId: deleteTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
   /admin/tags/search:
     get: { tags: [admin], summary: Search admin tags, operationId: searchAdminTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/comment-reports:
+    post:
+      tags: [auth]
+      summary: Report a reading-list comment
+      description: >-
+        Signed-in readers report a visible approved reading-list comment or reply.
+        One reader may hold a single pending report per comment; reporting your own
+        comment is rejected. Reasons are spam, harassment, porn, illegal, privacy
+        or other, with an optional 200-character detail.
+      operationId: reportComment
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentReportInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/comment-appeals:
+    post:
+      tags: [auth]
+      summary: Appeal a hidden reading-list comment
+      description: >-
+        Only the author of a hidden comment may appeal, and only while the comment
+        stays hidden. One pending appeal per comment and appellant is allowed.
+      operationId: appealComment
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentAppealInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    get: { tags: [auth], summary: List the current account's appeals, operationId: listMyCommentAppeals, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/comment-appeals/{appealId}/escalate:
+    post:
+      tags: [auth]
+      summary: Escalate a rejected appeal to an administrator
+      description: >-
+        Allowed only for the appellant, after the reading-list owner rejected an
+        owner-stage appeal. The appeal returns to the administrator queue.
+      operationId: escalateCommentAppeal
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: appealId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-reports:
+    get:
+      tags: [auth]
+      summary: List pending reports grouped by comment for an owned reading list
+      operationId: listOwnerCommentReports
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-reports/{commentId}:
+    put:
+      tags: [auth]
+      summary: Resolve every pending report on one comment as the reading-list owner
+      description: Decision is dismiss, hide or restore; hide soft-deletes the comment, restore revives it.
+      operationId: resolveOwnerCommentReports
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }, { $ref: '#/components/parameters/CommentId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-appeals:
+    get:
+      tags: [auth]
+      summary: List pending appeals for an owned reading list
+      operationId: listOwnerCommentAppeals
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-appeals/{appealId}:
+    put:
+      tags: [auth]
+      summary: Restore or reject an appeal as the reading-list owner
+      description: A rejection keeps the appeal at the owner stage so the reader can escalate it.
+      operationId: resolveOwnerCommentAppeal
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { name: appealId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/comment-reports:
+    get: { tags: [admin], summary: List every pending comment report, operationId: listAdminCommentReports, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/comment-reports/{commentId}:
+    put:
+      tags: [admin]
+      summary: Resolve every pending report on one comment as an administrator
+      operationId: resolveAdminCommentReports
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CommentId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/comment-appeals:
+    get: { tags: [admin], summary: List appeals escalated to administrators, operationId: listAdminCommentAppeals, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/comment-appeals/{appealId}:
+    put:
+      tags: [admin]
+      summary: Decide an escalated comment appeal
+      operationId: resolveAdminCommentAppeal
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: appealId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
   /admin/collections/{collectionId}/comments:
     get:
       tags: [admin]
@@ -834,6 +954,25 @@ components:
       required: [pinned]
       properties:
         pinned: { type: boolean, description: true pins the root comment and unpins any other pinned root comment on the same reading list }
+    CommentReportInput:
+      type: object
+      required: [commentId, reason]
+      properties:
+        commentId: { type: integer, format: int64, minimum: 1 }
+        reason: { type: string, enum: [spam, harassment, porn, illegal, privacy, other] }
+        detail: { type: string, maxLength: 200 }
+    CommentAppealInput:
+      type: object
+      required: [commentId, reason]
+      properties:
+        commentId: { type: integer, format: int64, minimum: 1 }
+        reason: { type: string, maxLength: 500 }
+    CommentModerationDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [dismiss, hide, restore, reject] }
+        reason: { type: string, maxLength: 255 }
     CommentBatchInput:
       type: object
       required: [action, commentIds]

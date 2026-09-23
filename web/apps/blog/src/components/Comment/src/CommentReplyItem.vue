@@ -1,5 +1,5 @@
 <template>
-  <div :id="`comment-${reply.id}`">
+  <div :id="`comment-${reply.id}`" :class="{ 'is-hidden': isHidden }">
     <div class="flex space-x-3 xl:space-x-5">
       <Avatar :url="reply.avatar" />
       <div class="reply comment-bubble flex flex-col p-3 rounded-md relative">
@@ -8,20 +8,21 @@
           <span> {{ reply.nickname }} | {{ time }}</span>
           <div class="flex items-center gap-3">
             <CommentLikeButton
+              v-if="!isHidden"
               :comment-id="Number(reply.id)"
               :like-count="Number(reply.likeCount || 0)"
               :liked="Boolean(reply.liked)"
               @changed="updateLike" />
-            <span @click="clickOnSonReply" class="cursor-pointer reply-button">Reply</span>
-            <button v-if="canModerate" type="button" class="reply-button" :disabled="busy" data-testid="comment-reply-delete-action" @click="removeReply">删除</button>
+            <span v-if="!isHidden" @click="clickOnSonReply" class="cursor-pointer reply-button">Reply</span>
+            <CommentGovernanceActions :comment="reply" />
+            <button v-if="canModerate && !isHidden" type="button" class="reply-button" :disabled="busy" data-testid="comment-reply-delete-action" @click="removeReply">删除</button>
           </div>
         </div>
       </div>
     </div>
-    <a href="" target="_blank"></a>
     <CommentReplyForm
+      v-if="!isHidden && show"
       class="mt-5"
-      v-show="show"
       :replyUserId="reply.userId"
       :initialContent="replyContent"
       @changeShow="changeShow" />
@@ -36,12 +37,14 @@ import emitter from '@/utils/mitt'
 import Avatar from '@/components/Avatar.vue'
 import CommentReplyForm from './CommentReplyForm.vue'
 import CommentLikeButton from './CommentLikeButton.vue'
+import CommentGovernanceActions from './CommentGovernanceActions.vue'
 
 export default defineComponent({
   components: {
     Avatar,
     CommentReplyForm,
-    CommentLikeButton
+    CommentLikeButton,
+    CommentGovernanceActions
   },
   props: ['reply', 'commentUserId'],
   setup(props) {
@@ -73,6 +76,7 @@ export default defineComponent({
       props.reply.likeCount = payload.likeCount
       props.reply.liked = payload.active
     }
+    const isHidden = computed(() => Number(props.reply.isDelete || 0) === 1)
     const commentContent = computed(() => {
       if (props.reply.replyUserId !== props.commentUserId) {
         return (
@@ -109,6 +113,7 @@ export default defineComponent({
       changeShow,
       updateLike,
       canModerate: computed(() => Boolean(canModerate())),
+      isHidden,
       busy,
       removeReply
     }
@@ -153,4 +158,5 @@ export default defineComponent({
 .reply-link {
   color: var(--text-accent);
 }
+.is-hidden { opacity: .78; }
 </style>

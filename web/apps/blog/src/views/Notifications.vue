@@ -97,14 +97,15 @@ export default defineComponent({
       reply: '新回复',
       like: '点赞',
       favorite: '收藏',
-      collection_update: '书单更新'
+      collection_update: '书单更新',
+      moderation: '治理结果',
     })[type] || '互动'
     const headline = (item: NotificationItem) => {
       if (item.group === 'topic') return `你订阅的话题有新文章：${item.title || item.excerpt || '查看文章'}`
       if (item.group === 'collection') return `书单「${item.title || '未命名'}」新增了：${item.excerpt || '查看更新'}`
       if (item.type === 'reply') return `回复了你的评论：${item.excerpt || '查看回复'}`
       if (item.type === 'comment') return `评论了你的内容：${item.title || item.excerpt || '查看评论'}`
-      if (item.type === 'like') return `赞了你的内容：${item.title || item.excerpt || '查看文章'}`
+      if (item.type === 'moderation') return '评论治理有新的处理结果：' + (item.excerpt || '查看评论')
       if (item.type === 'favorite') return `收藏了你的内容：${item.title || item.excerpt || '查看文章'}`
       return item.title || item.excerpt || '发布了新内容'
     }

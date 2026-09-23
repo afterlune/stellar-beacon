@@ -430,7 +430,7 @@ export interface FollowFeedItem {
 }
 
 export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction' | 'topic' | 'collection'
-export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite' | 'collection_update'
+export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite' | 'collection_update' | 'moderation'
 
 export interface NotificationItem {
   key: string

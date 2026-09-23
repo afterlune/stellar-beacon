@@ -47,6 +47,18 @@ type CommentService interface {
 	RestoreCommentsAdmin(c *gin.Context) model.ResultVO
 	BatchModerateCollectionComments(c *gin.Context) model.ResultVO
 	RestoreOwnedCollectionComments(c *gin.Context) model.ResultVO
+	ReportComment(c *gin.Context) model.ResultVO
+	AppealComment(c *gin.Context) model.ResultVO
+	EscalateCommentAppeal(c *gin.Context) model.ResultVO
+	ListMyCommentAppeals(c *gin.Context) model.ResultVO
+	ListOwnerCommentReports(c *gin.Context) model.ResultVO
+	ResolveOwnerCommentReports(c *gin.Context) model.ResultVO
+	ListOwnerCommentAppeals(c *gin.Context) model.ResultVO
+	ResolveOwnerCommentAppeal(c *gin.Context) model.ResultVO
+	ListAdminCommentReports(c *gin.Context) model.ResultVO
+	ResolveAdminCommentReports(c *gin.Context) model.ResultVO
+	ListAdminCommentAppeals(c *gin.Context) model.ResultVO
+	ResolveAdminCommentAppeal(c *gin.Context) model.ResultVO
 }
 
 type MyCommentService struct {

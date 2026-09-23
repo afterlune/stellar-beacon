@@ -79,6 +79,7 @@ export default defineComponent({
     const favorited = ref(false)
     const favoriteCount = ref(0)
     const favoriteBusy = ref(false)
+    const myAppeals = ref<Record<number, any>>({})
     const isOwner = computed(() => {
       const currentID = Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0)
       return currentID > 0 && currentID === Number(detail.value?.collection?.owner?.id || 0)
@@ -123,6 +124,26 @@ export default defineComponent({
       const response = await api.getRepliesByCommentId(comment.id)
       comment.replyDTOs = Array.isArray(response?.data?.data) ? response.data.data : []
     }
+    const currentUserID = () => Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0)
+    const fetchMyAppeals = async () => {
+      if (!userStore.token) {
+        myAppeals.value = {}
+        return
+      }
+      try {
+        const response = await api.listMyCommentAppeals({ current: 1, size: 100 })
+        const data = response?.data?.data || {}
+        const records = Array.isArray(data.items) ? data.items : Array.isArray(data.records) ? data.records : []
+        const next: Record<number, any> = {}
+        for (const record of records) {
+          const commentID = Number(record?.commentId || 0)
+          if (commentID > 0) next[commentID] = record
+        }
+        myAppeals.value = next
+      } catch {
+        myAppeals.value = {}
+      }
+    }
     const fetchReactionState = async () => {
       const collectionID = Number(detail.value?.collection?.id || 0)
       if (!collectionID || !userStore.token) return
@@ -148,7 +169,7 @@ export default defineComponent({
         pageInfo.current = 1
         isReload.value = true
         comments.value = []
-        await Promise.allSettled([fetchComments(), fetchReactionState()])
+        await Promise.allSettled([fetchComments(), fetchReactionState(), fetchMyAppeals()])
         highlightedArticleId.value = Number(route.query.article || 0)
         if (highlightedArticleId.value > 0) {
           await nextTick()
@@ -194,13 +215,18 @@ export default defineComponent({
     provide('haveMore', computed(() => haveMore.value))
     provide('collectionId', () => Number(detail.value?.collection?.id || 0))
     provide('canModerate', () => isOwner.value)
+    provide('isLoggedIn', () => Boolean(userStore.token))
+    provide('currentUserId', currentUserID)
+    provide('commentAppeal', (commentID: number) => myAppeals.value[Number(commentID)] || null)
     emitter.on('collectionFetchComment', () => { pageInfo.current = 1; isReload.value = true; void fetchComments() })
     emitter.on('collectionFetchReplies', (commentId: any) => { void fetchReplies(Number(commentId)) })
     emitter.on('collectionLoadMore', () => { if (haveMore.value) { pageInfo.current += 1; void fetchComments() } })
+    emitter.on('collectionAppealsRefresh', () => { void fetchMyAppeals() })
     onUnmounted(() => {
       emitter.off('collectionFetchComment')
       emitter.off('collectionFetchReplies')
       emitter.off('collectionLoadMore')
+      emitter.off('collectionAppealsRefresh')
     })
     watch(() => route.params.slug, () => void load())
     onMounted(() => void load())

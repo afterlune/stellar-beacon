@@ -1303,6 +1303,123 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	if _, err := xormEngine.SQL(`SELECT count(1) FROM t_comment_moderation_log WHERE collection_id = ?`, batchCollection.ID).Get(&moderationAuditCount); err != nil || moderationAuditCount < 7 {
 		t.Fatalf("moderation audit rows must be recorded: count=%d err=%v", moderationAuditCount, err)
 	}
+	govReportCollection, err := collectionRepo.CreateOwned(ctx, 1, "integration-report-list", port.CollectionSaveInput{
+		Title: "Integration report list", Visibility: port.CollectionVisibilityPublic,
+	})
+	if err != nil {
+		t.Fatalf("create report collection: %v", err)
+	}
+	reportCommentID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 3, TopicId: govReportCollection.ID, CommentContent: "reported comment", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create reported comment: %v", err)
+	}
+	otherCommentID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 3, TopicId: govReportCollection.ID, CommentContent: "clean comment", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create clean comment: %v", err)
+	}
+	replyCommentID, err := commentRepo.Create(ctx, entity.TComment{
+		UserId: 2, ReplyUserId: 3, ParentId: reportCommentID, TopicId: govReportCollection.ID, CommentContent: "reported reply", Type: 6, IsReview: 1,
+	})
+	if err != nil {
+		t.Fatalf("create reported reply: %v", err)
+	}
+	if err := commentRepo.CreateCommentReport(ctx, reportCommentID, govReportCollection.ID, 2, "spam", "looks like spam"); err != nil {
+		t.Fatalf("report comment: %v", err)
+	}
+	if err := commentRepo.CreateCommentReport(ctx, reportCommentID, govReportCollection.ID, 2, "spam", "duplicate"); !apperrors.IsKind(err, apperrors.KindConflict) {
+		t.Fatalf("duplicate pending report must be rejected: %v", err)
+	}
+	if err := commentRepo.CreateCommentReport(ctx, otherCommentID, govReportCollection.ID, 3, "spam", "own comment"); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("reporting your own comment must be rejected: %v", err)
+	}
+	if groups, total, err := commentRepo.ListOwnerCommentReports(ctx, 1, govReportCollection.ID, 1, 10); err != nil || total != 1 || len(groups) != 1 || groups[0].CommentId != reportCommentID || groups[0].ReportCount != 1 {
+		t.Fatalf("owner report queue mismatch: groups=%+v total=%d err=%v", groups, total, err)
+	}
+	if _, err := commentRepo.ResolveCommentReports(ctx, 2, "owner", govReportCollection.ID, reportCommentID, "hide", "abusive"); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("non owner report resolution must be rejected: %v", err)
+	}
+	reporters, err := commentRepo.ResolveCommentReports(ctx, 1, "owner", govReportCollection.ID, reportCommentID, "hide", "abusive")
+	if err != nil || len(reporters) != 1 || reporters[0] != 2 {
+		t.Fatalf("resolve reports with hide: reporters=%+v err=%v", reporters, err)
+	}
+	if publicComments, total, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govReportCollection.ID, Current: 1, Size: 10}); err != nil || total != 1 || len(publicComments) != 1 || publicComments[0].Id != otherCommentID {
+		t.Fatalf("hiding a reported comment must remove it publicly: comments=%+v total=%d err=%v", publicComments, total, err)
+	}
+	if ownComments, total, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govReportCollection.ID, Current: 1, Size: 10, ViewerID: 3}); err != nil || total != 2 || len(ownComments) != 2 {
+		t.Fatalf("comment author must still see their hidden comment: comments=%+v total=%d err=%v", ownComments, total, err)
+	} else {
+		hiddenFound := false
+		for _, item := range ownComments {
+			if item.Id == reportCommentID && item.IsDelete == 1 {
+				hiddenFound = true
+			}
+		}
+		if !hiddenFound {
+			t.Fatalf("hidden marker missing from the author-visible comment: comments=%+v", ownComments)
+		}
+	}
+	if replyAuthorComments, total, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govReportCollection.ID, Current: 1, Size: 10, ViewerID: 2}); err != nil || total != 2 || len(replyAuthorComments) != 2 {
+		t.Fatalf("reply author must see the hidden root needed to reach their reply: comments=%+v total=%d err=%v", replyAuthorComments, total, err)
+	}
+	if replies, err := commentRepo.ListReplies(ctx, []int{reportCommentID}, 2); err != nil || len(replies) != 1 || replies[0].Id != replyCommentID || replies[0].IsDelete != 1 {
+		t.Fatalf("reply author must see their hidden reply: replies=%+v err=%v", replies, err)
+	}
+	if otherComments, total, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govReportCollection.ID, Current: 1, Size: 10, ViewerID: 4}); err != nil || total != 1 || len(otherComments) != 1 {
+		t.Fatalf("other readers must not see the hidden comment: comments=%+v total=%d err=%v", otherComments, total, err)
+	}
+	if _, total, err := commentRepo.ListOwnerCommentReports(ctx, 1, govReportCollection.ID, 1, 10); err != nil || total != 0 {
+		t.Fatalf("resolved reports must leave the queue: total=%d err=%v", total, err)
+	}
+	if err := commentRepo.CreateCommentAppeal(ctx, 3, reportCommentID, "please reconsider"); err != nil {
+		t.Fatalf("create appeal: %v", err)
+	}
+	if err := commentRepo.CreateCommentAppeal(ctx, 3, reportCommentID, "again"); !apperrors.IsKind(err, apperrors.KindConflict) {
+		t.Fatalf("duplicate pending appeal must be rejected: %v", err)
+	}
+	if err := commentRepo.CreateCommentAppeal(ctx, 2, reportCommentID, "not mine"); !apperrors.IsKind(err, apperrors.KindNotFound) {
+		t.Fatalf("only the comment author may appeal: %v", err)
+	}
+	ownerAppeals, total, err := commentRepo.ListOwnerCommentAppeals(ctx, 1, govReportCollection.ID, 1, 10)
+	if err != nil || total != 1 || len(ownerAppeals) != 1 || ownerAppeals[0].Stage != "owner" {
+		t.Fatalf("owner appeal queue mismatch: appeals=%+v total=%d err=%v", ownerAppeals, total, err)
+	}
+	appealID := ownerAppeals[0].Id
+	if _, total, err := commentRepo.ListAdminCommentAppeals(ctx, 1, 10); err != nil || total != 0 {
+		t.Fatalf("admin queue must ignore owner-stage appeals: total=%d err=%v", total, err)
+	}
+	if _, err := commentRepo.ResolveCommentAppeal(ctx, 1, "owner", appealID, "reject", "stays hidden"); err != nil {
+		t.Fatalf("owner rejects appeal: %v", err)
+	}
+	mine, total, err := commentRepo.ListMyCommentAppeals(ctx, 3, 1, 10)
+	if err != nil || total != 1 || mine[0].Status != "rejected" {
+		t.Fatalf("appellant appeal history mismatch: appeals=%+v total=%d err=%v", mine, total, err)
+	}
+	if err := commentRepo.EscalateCommentAppeal(ctx, 3, appealID); err != nil {
+		t.Fatalf("escalate appeal: %v", err)
+	}
+	if _, err := commentRepo.ResolveCommentAppeal(ctx, 1, "owner", appealID, "reject", "cannot"); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("owner must not decide an escalated appeal: %v", err)
+	}
+	if _, total, err := commentRepo.ListOwnerCommentAppeals(ctx, 1, govReportCollection.ID, 1, 10); err != nil || total != 0 {
+		t.Fatalf("owner queue must ignore escalated appeals: total=%d err=%v", total, err)
+	}
+	adminAppeals, total, err := commentRepo.ListAdminCommentAppeals(ctx, 1, 10)
+	if err != nil || total != 1 || adminAppeals[0].Stage != "admin" {
+		t.Fatalf("admin appeal queue mismatch: appeals=%+v total=%d err=%v", adminAppeals, total, err)
+	}
+	if _, err := commentRepo.ResolveCommentAppeal(ctx, 10, "admin", appealID, "restore", "appeal upheld"); err != nil {
+		t.Fatalf("admin restores appeal: %v", err)
+	}
+	if visible, _, err := commentRepo.ListComments(ctx, port.CommentFilter{Type: 6, TopicID: &govReportCollection.ID, Current: 1, Size: 10, ViewerID: 3}); err != nil || len(visible) != 2 {
+		t.Fatalf("restored comment must be public again: comments=%+v err=%v", visible, err)
+	}
+	if _, total, err := commentRepo.ListAdminCommentAppeals(ctx, 1, 10); err != nil || total != 0 {
+		t.Fatalf("handled appeals must leave the queue: total=%d err=%v", total, err)
+	}
 	if active, counts, err = collectionReactions.Set(ctx, collection.ID, 2, port.ReactionLike, false); err != nil || active || counts.LikeCount != 0 || counts.FavoriteCount != 1 {
 		t.Fatalf("unlike collection: active=%v counts=%+v err=%v", active, counts, err)
 	}

@@ -420,7 +420,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 	SELECT
 		'interaction:' || notification.id::text AS notification_key,
 		notification.type AS notification_type,
-		CASE WHEN notification.type IN ('comment', 'reply') THEN 'comment' ELSE 'reaction' END AS notification_group,
+		CASE WHEN notification.type IN ('comment', 'reply', 'moderation') THEN 'comment' ELSE 'reaction' END AS notification_group,
 		notification.actor_id,
 		actor.handle AS actor_handle,
 		actor.nickname AS actor_name,
@@ -477,6 +477,10 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 			AND ((notification.content_type = 'article' AND article.id IS NOT NULL)
 				OR (notification.content_type = 'talk' AND talk.id IS NOT NULL)
 				OR (notification.content_type = 'collection' AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))
+		OR (notification.type = 'moderation' AND comment.id IS NOT NULL
+			AND ((notification.content_type = 'collection' AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)
+				OR (notification.content_type = 'article' AND article.id IS NOT NULL)
+				OR (notification.content_type = 'talk' AND talk.id IS NOT NULL)))
 		OR
 		(notification.type IN ('like', 'favorite')
 			AND (
@@ -489,7 +493,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 					OR (notification.content_type = 'collection' AND collection_reaction.id IS NOT NULL
 						AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))))
 	  )
-	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply')) OR (? = 'reaction' AND notification.type IN ('like', 'favorite')))
+	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply', 'moderation')) OR (? = 'reaction' AND notification.type IN ('like', 'favorite')))
 	UNION ALL
 	SELECT
 		'topic:' || event.id::text AS notification_key,

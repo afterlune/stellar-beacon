@@ -301,6 +301,30 @@ export default {
   restoreOwnedCollectionComments: (collectionId: number, commentIds: number[]) => {
     return http.post(`/studio/collections/${encodeURIComponent(collectionId)}/comments/restore`, { commentIds })
   },
+  reportComment: (params: { commentId: number; reason: string; detail?: string }) => {
+    return http.post('/auth/me/comment-reports', params)
+  },
+  appealComment: (params: { commentId: number; reason: string }) => {
+    return http.post('/auth/me/comment-appeals', params)
+  },
+  listMyCommentAppeals: (params: { current?: number; size?: number }) => {
+    return http.get('/auth/me/comment-appeals', { params })
+  },
+  escalateCommentAppeal: (appealId: number) => {
+    return http.post('/auth/me/comment-appeals/' + encodeURIComponent(appealId) + '/escalate')
+  },
+  listOwnedCollectionCommentReports: (collectionId: number, params: { current?: number; size?: number }) => {
+    return http.get(`/studio/collections/${encodeURIComponent(collectionId)}/comment-reports`, { params })
+  },
+  resolveOwnedCollectionCommentReports: (collectionId: number, commentId: number, decision: 'dismiss' | 'hide' | 'restore', reason = '') => {
+    return http.put(`/studio/collections/${encodeURIComponent(collectionId)}/comment-reports/${encodeURIComponent(commentId)}`, { decision, reason })
+  },
+  listOwnedCollectionCommentAppeals: (collectionId: number, params: { current?: number; size?: number }) => {
+    return http.get(`/studio/collections/${encodeURIComponent(collectionId)}/comment-appeals`, { params })
+  },
+  resolveOwnedCollectionCommentAppeal: (collectionId: number, appealId: number, decision: 'restore' | 'reject', reason = '') => {
+    return http.put(`/studio/collections/${encodeURIComponent(collectionId)}/comment-appeals/${encodeURIComponent(appealId)}`, { decision, reason })
+  },
   getRecommendationFeedback: (params: { current?: number; size?: number }) => {
     return http.get('/auth/me/recommendation-feedback', { params })
   },

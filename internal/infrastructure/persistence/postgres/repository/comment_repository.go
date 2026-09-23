@@ -60,15 +60,15 @@ func (c *MyCommentRepo) ListComments(ctx context.Context, filter port.CommentFil
 		return nil, 0, err
 	}
 	limit, offset := pgsql.Page(filter.Current, filter.Size)
-	query := `SELECT c.id, c.user_id, u.nickname, u.avatar, u.website, c.comment_content, c.create_time, c.is_top,
+	query := `SELECT c.id, c.user_id, u.nickname, u.avatar, u.website, c.comment_content, c.create_time, c.is_top, c.is_delete,
 		COALESCE((SELECT count(1) FROM t_comment_reaction reaction WHERE reaction.comment_id = c.id AND reaction.reaction = 'like'), 0) AS like_count,
 		EXISTS (SELECT 1 FROM t_comment_reaction reaction WHERE reaction.comment_id = c.id
 			AND reaction.user_info_id = ? AND reaction.reaction = 'like') AS liked
 		FROM t_comment c JOIN t_user_info u ON c.user_id = u.id
-		WHERE c.type = ? AND c.is_review = 1 AND c.is_delete = 0 AND c.parent_id = 0`
-	args := []interface{}{filter.ViewerID, filter.Type}
-	countQuery := "SELECT count(0) FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND c.is_delete = 0 AND c.parent_id = 0"
-	countArgs := []interface{}{filter.Type}
+		WHERE c.type = ? AND c.is_review = 1 AND (c.is_delete = 0 OR (c.type = 6 AND c.is_delete = 1 AND (c.user_id = ? OR EXISTS (SELECT 1 FROM t_comment child WHERE child.parent_id = c.id AND child.is_delete = 1 AND child.user_id = ?)))) AND c.parent_id = 0`
+	args := []interface{}{filter.ViewerID, filter.Type, filter.ViewerID, filter.ViewerID}
+	countQuery := "SELECT count(0) FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND (c.is_delete = 0 OR (c.type = 6 AND c.is_delete = 1 AND (c.user_id = ? OR EXISTS (SELECT 1 FROM t_comment child WHERE child.parent_id = c.id AND child.is_delete = 1 AND child.user_id = ?)))) AND c.parent_id = 0"
+	countArgs := []interface{}{filter.Type, filter.ViewerID, filter.ViewerID}
 	if filter.TopicID != nil {
 		query += " AND c.topic_id = ?"
 		args = append(args, *filter.TopicID)
@@ -150,16 +150,16 @@ func (c *MyCommentRepo) ListReplies(ctx context.Context, commentIDs []int, viewe
 		return nil, err
 	}
 	query := `SELECT * FROM (SELECT c.id, c.parent_id, c.user_id, u.nickname, u.avatar, u.website,
-			c.reply_user_id, r.nickname AS reply_nickname, r.website AS reply_website, c.comment_content, c.create_time,
+			c.reply_user_id, r.nickname AS reply_nickname, r.website AS reply_website, c.comment_content, c.create_time, c.is_delete,
 			COALESCE((SELECT count(1) FROM t_comment_reaction reaction WHERE reaction.comment_id = c.id AND reaction.reaction = 'like'), 0) AS like_count,
 			EXISTS (SELECT 1 FROM t_comment_reaction reaction WHERE reaction.comment_id = c.id
 				AND reaction.user_info_id = ? AND reaction.reaction = 'like') AS liked,
 			row_number() OVER (PARTITION BY parent_id ORDER BY c.create_time ASC) row_num
 		FROM t_comment c JOIN t_user_info u ON c.user_id = u.id JOIN t_user_info r ON c.reply_user_id = r.id
-		WHERE c.is_review = 1 AND c.is_delete = 0 AND parent_id IN (` + placeholders(len(commentIDs)) + `)
+		WHERE c.is_review = 1 AND (c.is_delete = 0 OR (c.type = 6 AND c.is_delete = 1 AND c.user_id = ?)) AND parent_id IN (` + placeholders(len(commentIDs)) + `)
 		ORDER BY c.create_time DESC) t`
 	var replies []*port.Reply
-	args := []interface{}{viewerID}
+	args := []interface{}{viewerID, viewerID}
 	args = append(args, intArgs(commentIDs)...)
 	if err := session.SQL(query, args...).Find(&replies); err != nil {
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "comment.replies", err)

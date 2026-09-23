@@ -678,6 +678,21 @@ type CommentReactionToggleDTO struct {
 	LikeCount int  `json:"likeCount"`
 }
 
+type CommentReportVO struct {
+	CommentId int    `json:"commentId" form:"commentId"`
+	Reason    string `json:"reason" form:"reason"`
+	Detail    string `json:"detail" form:"detail"`
+}
+
+type CommentAppealVO struct {
+	CommentId int    `json:"commentId" form:"commentId"`
+	Reason    string `json:"reason" form:"reason"`
+}
+
+type CommentModerationDecisionVO struct {
+	Decision string `json:"decision" form:"decision"`
+	Reason   string `json:"reason" form:"reason"`
+}
 type CommentBatchVO struct {
 	Action     string `json:"action" form:"action"`
 	CommentIds []int  `json:"commentIds" form:"commentIds"`

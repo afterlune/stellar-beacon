@@ -38,9 +38,13 @@
 - `PUT`/`DELETE /api/v1/auth/me/collection-subscriptions/{collectionId}`：订阅或退订公开、链接可见的他人书单；支持 `PUT .../mute` 单书单静音、`GET /api/v1/auth/me/collection-feed` 更新流。
 - `PUT /api/v1/auth/me/collection-reactions`、`GET ...` 与 `GET .../state`：公开、链接可见书单支持独立点赞与收藏、当前账号状态查询和私人收藏列表；收藏按书单全部时间加 `5 ×` 进入热门分，私有书单拒绝互动。书单评论复用 `/api/v1/public/comments`，`type=6`、`topicId` 为书单 ID，审核通过后才计入公开评论数并发送互动通知。
 - `PUT /api/v1/auth/me/comment-reactions`：所有已审核评论与回复支持幂等点赞/取消点赞；评论列表返回 `likeCount` 和当前账号 `liked`。评论点赞不参与文章或书单热度。
-- `PUT /api/v1/studio/collections/{collectionId}/comments/{commentId}/pin` 与 `DELETE /api/v1/studio/collections/{collectionId}/comments/{commentId}`：仅书单作者可治理自己书单下的评论。置顶只接受已审核、未删除的根评论，每个书单最多一条，置顶新评论会自动取消原置顶；删除为软删除，删根评论会级联隐藏其全部回复，删回复只隐藏该条，均不提供恢复入口。私有书单与未审核评论仍不可见、不计入公开评论数。
+- `PUT `/api/v1/studio/collections/{collectionId}/comments/{commentId}/pin` 与 `DELETE /api/v1/studio/collections/{collectionId}/comments/{commentId}`：仅书单作者可治理自己书单下的评论。置顶只接受已审核、未删除的根评论，每个书单最多一条，置顶新评论会自动取消原置顶；删除为软删除，删根评论会级联隐藏其全部回复，删回复只隐藏该条，作者可通过批量恢复或申诉队列恢复对应评论。私有书单与未审核评论仍不可见、不计入公开评论数。
 - `GET`/`POST /api/v1/studio/collections/{collectionId}/comments*`：书单作者的评论治理面。`GET .../comments` 返回含已删除项、置顶标记、回复数与待处理举报数的治理列表；`POST .../comments/batch` 支持 `delete`/`pin`/`unpin` 批量操作，一次批量置顶只保留最新的一条根评论，未通过的单条以 `failed[].message` 返回；`POST .../comments/restore` 恢复软删除评论，仅还原同一次根评论删除级联隐藏的回复。所有治理动作写入 `t_comment_moderation_log`（含 before/after 快照与批量 `batch_id`），通用 `t_operation_log` 亦记录请求。
 - `GET /api/v1/admin/collections/{collectionId}/comments` 与 `PUT /api/v1/admin/comments/{commentId}/restore`：管理端书单评论治理面。评论列表在原有字段上增加 `isTop`、`isDelete`、`collectionId` 与待处理举报数，软删除评论仍可见并可恢复；管理员只有审核、隐藏与恢复权限，置顶仍归书单作者。
+- `POST /api/v1/auth/me/comment-reports`：登录读者可举报书单内已审核评论或回复，原因限定为垃圾、骚扰、色情、违法、隐私或其他，同一读者对同一评论只能保留一条待处理举报。
+- `GET`/`PUT /api/v1/studio/collections/{collectionId}/comment-reports*` 与 `/api/v1/admin/comment-reports*`：作者与管理端按评论聚合查看举报队列，并执行忽略、隐藏或恢复；所有处理结果写入治理审计并向举报者发送站内通知。
+- `POST`/`GET /api/v1/auth/me/comment-appeals*`：被作者删除的评论仅评论作者本人登录时仍可见并带 `isDelete=1` 标记；作者可提交申诉，书单作者驳回后可升级给管理员终审。
+- `GET`/`PUT /api/v1/studio/collections/{collectionId}/comment-appeals*` 与 `/api/v1/admin/comment-appeals*`：书单作者处理一级申诉，管理员处理升级后的终审；恢复会重新公开评论，作者、申诉人与相关管理方收到站内治理结果通知。
 - `GET`/`PUT`/`DELETE /api/v1/auth/me/topic-subscriptions*`：读者按**归一化话题名**（分类或标签，跨作者）订阅、静音与取消订阅；`GET /api/v1/auth/me/topic-feed` 返回订阅话题下的新文章，通知中心新增 `topic` 分组（受账号级 `notifyTopic` 开关与单订阅静音控制）。
 - `POST /api/v1/auth/me/recommendations/query`：登录态“为你推荐”；组合关注、话题订阅、点赞收藏与请求体内的本机阅读种子，排除本人和已关注作者，结果带可解释理由与游标。
 - `GET`/`PUT`/`DELETE /api/v1/auth/me/recommendation-feedback*`：管理隐藏文章、减少作者或主题的推荐偏好并恢复。
