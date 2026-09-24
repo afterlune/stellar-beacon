@@ -283,7 +283,130 @@ func (r *MyPlatformRepo) StudioDashboard(ctx context.Context, userID int) (port.
 			return port.StudioDashboard{}, apperrors.Unavailable("platform.studio.dashboard", err)
 		}
 	}
+	activation, err := loadStudioActivation(session, userID)
+	if err != nil {
+		return port.StudioDashboard{}, err
+	}
+	dashboard.Activation = activation
 	return dashboard, nil
+}
+
+type studioActivationRow struct {
+	UserId              int        `xorm:"user_id"`
+	Collapsed           int        `xorm:"collapsed"`
+	StartedAt           *time.Time `xorm:"started_at"`
+	IdentityCompletedAt *time.Time `xorm:"identity_completed_at"`
+	ContentCompletedAt  *time.Time `xorm:"content_completed_at"`
+	ProfileVisitedAt    *time.Time `xorm:"profile_visited_at"`
+	CompletedAt         *time.Time `xorm:"completed_at"`
+}
+
+func emptyStudioActivation() port.StudioActivation {
+	return port.StudioActivation{}
+}
+
+func activationTime(value *time.Time) string {
+	if value == nil || value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
+}
+
+func studioActivationFromRow(row studioActivationRow) port.StudioActivation {
+	return port.StudioActivation{
+		StartedAt:           activationTime(row.StartedAt),
+		Collapsed:           row.Collapsed != 0,
+		IdentityCompletedAt: activationTime(row.IdentityCompletedAt),
+		ContentCompletedAt:  activationTime(row.ContentCompletedAt),
+		ProfileVisitedAt:    activationTime(row.ProfileVisitedAt),
+		CompletedAt:         activationTime(row.CompletedAt),
+	}
+}
+
+func activationTimeValue(value *time.Time) any {
+	if value == nil || value.IsZero() {
+		return nil
+	}
+	return *value
+}
+
+func loadStudioActivation(session *xorm.Session, userID int) (port.StudioActivation, error) {
+	var row studioActivationRow
+	found, err := session.SQL(`
+		SELECT user_id, collapsed, started_at, identity_completed_at,
+		       content_completed_at, profile_visited_at, completed_at
+		FROM t_studio_activation
+		WHERE user_id = ?
+	`, userID).Get(&row)
+	if err != nil {
+		return emptyStudioActivation(), apperrors.Unavailable("platform.studio.activation.get", err)
+	}
+	if !found {
+		return emptyStudioActivation(), nil
+	}
+	return studioActivationFromRow(row), nil
+}
+
+func (r *MyPlatformRepo) SyncStudioActivation(ctx context.Context, userID int, update port.StudioActivationUpdate) (port.StudioActivation, error) {
+	var result port.StudioActivation
+	err := repoTx(r.engine, ctx, "platform.studio.activation.sync", func(session *xorm.Session) error {
+		collapsed := 0
+		if update.Collapsed {
+			collapsed = 1
+		}
+		if _, err := session.Exec(`
+			INSERT INTO t_studio_activation (user_id, collapsed)
+			VALUES (?, ?)
+			ON CONFLICT (user_id) DO NOTHING
+		`, userID, collapsed); err != nil {
+			return apperrors.Unavailable("platform.studio.activation.sync", err)
+		}
+		var row studioActivationRow
+		found, err := session.SQL(`
+			SELECT user_id, collapsed, started_at, identity_completed_at,
+			       content_completed_at, profile_visited_at, completed_at
+			FROM t_studio_activation
+			WHERE user_id = ?
+			FOR UPDATE
+		`, userID).Get(&row)
+		if err != nil {
+			return apperrors.Unavailable("platform.studio.activation.sync", err)
+		}
+		if !found {
+			return apperrors.Unavailable("platform.studio.activation.sync", nil)
+		}
+		now := time.Now().UTC()
+		if update.Started && row.StartedAt == nil {
+			row.StartedAt = &now
+		}
+		if update.IdentityComplete && row.IdentityCompletedAt == nil {
+			row.IdentityCompletedAt = &now
+		}
+		if update.ContentComplete && row.ContentCompletedAt == nil {
+			row.ContentCompletedAt = &now
+		}
+		if update.ProfileVisited && row.ProfileVisitedAt == nil {
+			row.ProfileVisitedAt = &now
+		}
+		if (update.Completed || (update.IdentityComplete && update.ContentComplete && update.ProfileVisited)) && row.CompletedAt == nil {
+			row.CompletedAt = &now
+		}
+		row.Collapsed = collapsed
+		if _, err := session.Exec(`
+			UPDATE t_studio_activation
+			SET collapsed = ?, started_at = ?, identity_completed_at = ?,
+			    content_completed_at = ?, profile_visited_at = ?, completed_at = ?,
+			    update_time = CURRENT_TIMESTAMP
+			WHERE user_id = ?
+		`, row.Collapsed, activationTimeValue(row.StartedAt), activationTimeValue(row.IdentityCompletedAt),
+			activationTimeValue(row.ContentCompletedAt), activationTimeValue(row.ProfileVisitedAt),
+			activationTimeValue(row.CompletedAt), userID); err != nil {
+			return apperrors.Unavailable("platform.studio.activation.sync", err)
+		}
+		result = studioActivationFromRow(row)
+		return nil
+	})
+	return result, err
 }
 
 func (r *MyPlatformRepo) GetStudioProfile(ctx context.Context, userID int) (port.StudioProfile, error) {

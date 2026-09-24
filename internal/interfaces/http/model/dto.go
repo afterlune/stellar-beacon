@@ -212,9 +212,19 @@ type DashboardGrowthTrendDTO struct {
 	DeliveryFailed    int64  `json:"deliveryFailed"`
 }
 
+type StudioActivationFunnelDTO struct {
+	Started           int64   `json:"started"`
+	IdentityCompleted int64   `json:"identityCompleted"`
+	ContentCompleted  int64   `json:"contentCompleted"`
+	ProfileVisited    int64   `json:"profileVisited"`
+	Completed         int64   `json:"completed"`
+	CompletionRate    float64 `json:"completionRate"`
+}
+
 type DashboardGrowthDTO struct {
 	Subscribers GrowthSubscriberStatsDTO  `json:"subscribers"`
 	Deliveries  GrowthDeliveryStatsDTO    `json:"deliveries"`
+	Activation  StudioActivationFunnelDTO `json:"activation"`
 	Trend       []DashboardGrowthTrendDTO `json:"trend"`
 }
 

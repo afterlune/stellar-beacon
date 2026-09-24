@@ -396,7 +396,11 @@ func (b *MyStellarBeaconInfoService) GetDashboardAnalytics(ctx context.Context, 
 		if deliveryErr != nil {
 			return model.ResultFromError(deliveryErr)
 		}
-		growth = dashboardGrowthDTO(newsletterStats, growthRows, deliveryRows, start, now, unit)
+		activation, activationErr := b.growth.StudioActivationFunnel(ctx, start)
+		if activationErr != nil {
+			return model.ResultFromError(activationErr)
+		}
+		growth = dashboardGrowthDTO(newsletterStats, growthRows, deliveryRows, activation, start, now, unit)
 	}
 	return model.ResultOkWithData(model.DashboardAnalyticsDTO{
 		Range: rangeValue,

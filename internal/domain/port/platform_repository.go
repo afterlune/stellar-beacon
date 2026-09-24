@@ -70,14 +70,39 @@ type StudioBatchMutation struct {
 }
 
 type StudioDashboard struct {
-	ArticleCount   int `json:"articleCount"`
-	DraftCount     int `json:"draftCount"`
-	PrivateCount   int `json:"privateCount"`
-	TalkCount      int `json:"talkCount"`
-	SeriesCount    int `json:"seriesCount"`
-	FavoriteCount  int `json:"favoriteCount"`
-	FollowerCount  int `json:"followerCount"`
-	FollowingCount int `json:"followingCount"`
+	ArticleCount   int              `json:"articleCount"`
+	DraftCount     int              `json:"draftCount"`
+	PrivateCount   int              `json:"privateCount"`
+	TalkCount      int              `json:"talkCount"`
+	SeriesCount    int              `json:"seriesCount"`
+	FavoriteCount  int              `json:"favoriteCount"`
+	FollowerCount  int              `json:"followerCount"`
+	FollowingCount int              `json:"followingCount"`
+	Activation     StudioActivation `json:"activation"`
+}
+
+// StudioActivation is the account-scoped onboarding state shown on the Studio
+// dashboard. Timestamps are RFC3339 strings so clients can distinguish "not
+// achieved yet" from an actual event without treating a zero time as valid.
+type StudioActivation struct {
+	StartedAt           string `json:"startedAt"`
+	Collapsed           bool   `json:"collapsed"`
+	IdentityCompletedAt string `json:"identityCompletedAt"`
+	ContentCompletedAt  string `json:"contentCompletedAt"`
+	ProfileVisitedAt    string `json:"profileVisitedAt"`
+	CompletedAt         string `json:"completedAt"`
+}
+
+// StudioActivationUpdate is a full client snapshot. Milestone fields are
+// monotonic and cannot clear an earlier achievement; collapsed is last-write-
+// wins because it represents the user's current display preference.
+type StudioActivationUpdate struct {
+	Started          bool `json:"started"`
+	Collapsed        bool `json:"collapsed"`
+	IdentityComplete bool `json:"identityComplete"`
+	ContentComplete  bool `json:"contentComplete"`
+	ProfileVisited   bool `json:"profileVisited"`
+	Completed        bool `json:"completed"`
 }
 
 type StudioProfile struct {
@@ -141,6 +166,7 @@ type PlatformRepository interface {
 	GetAuthorByHandle(ctx context.Context, handle string, viewerID int) (AuthorCard, error)
 	ListAuthors(ctx context.Context, current, size, viewerID int, sort string) ([]*AuthorCard, int, error)
 	StudioDashboard(ctx context.Context, userID int) (StudioDashboard, error)
+	SyncStudioActivation(ctx context.Context, userID int, update StudioActivationUpdate) (StudioActivation, error)
 	GetStudioProfile(ctx context.Context, userID int) (StudioProfile, error)
 	UpdateAuthorProfile(ctx context.Context, userID int, handle, nickname, intro, website string) error
 

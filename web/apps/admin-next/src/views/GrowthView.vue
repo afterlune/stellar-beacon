@@ -116,6 +116,19 @@
                 <a-radio value="12m">{{ t('dashboard.range.months12') }}</a-radio>
               </a-radio-group>
             </div>
+            <div class="growth-activation-panel">
+              <header>
+                <strong>{{ t('growth.activation.title') }}</strong>
+                <span>{{ t('growth.activation.description') }}</span>
+              </header>
+              <div class="growth-activation-grid">
+                <article v-for="stage in activationStages" :key="stage.key">
+                  <span>{{ stage.label }}</span>
+                  <strong>{{ formatNumber(stage.value) }}</strong>
+                  <small>{{ formatPercent(stage.rate) }}</small>
+                </article>
+              </div>
+            </div>
             <AdminEChart v-if="growthDashboard.trend.length" :option="growthTrendOption" height="320px" />
             <AdminEmptyState v-else :icon="IconBarChart" :title="t('growth.emptyAnalyticsTitle')" :description="t('growth.emptyAnalyticsHint')" />
             <a-table :data="growthItems" :columns="growthColumns" :loading="loading" row-key="eventName-day">
@@ -185,6 +198,20 @@ const deliveryColumns = computed(() => [
 ])
 const subscriberPagination = computed(() => tablePagination(current.value, pageSize.value, subscriberTotal.value))
 const deliveryPagination = computed(() => tablePagination(current.value, pageSize.value, deliveryTotal.value))
+
+const activationStages = computed(() => {
+  const activation = growthDashboard.value.activation || {
+    started: 0, identityCompleted: 0, contentCompleted: 0, profileVisited: 0, completed: 0, completionRate: 0
+  }
+  const rate = (value: number) => activation.started > 0 ? value / activation.started * 100 : 0
+  return [
+    { key: 'started', label: t('growth.activation.started'), value: activation.started, rate: activation.started > 0 ? 100 : 0 },
+    { key: 'identity', label: t('growth.activation.identity'), value: activation.identityCompleted, rate: rate(activation.identityCompleted) },
+    { key: 'content', label: t('growth.activation.content'), value: activation.contentCompleted, rate: rate(activation.contentCompleted) },
+    { key: 'profile', label: t('growth.activation.profile'), value: activation.profileVisited, rate: rate(activation.profileVisited) },
+    { key: 'completed', label: t('growth.activation.completed'), value: activation.completed, rate: activation.completionRate }
+  ]
+})
 
 const growthTrendOption = computed(() => {
   const colors = [0, 1, 2, 3].map((index) => chartSeriesColor(themeStore.theme, index))
@@ -334,6 +361,7 @@ function emptyGrowth(): DashboardGrowth {
   return {
     subscribers: { total: 0, active: 0, pending: 0, unsubscribed: 0, confirmationRate: 0 },
     deliveries: { queued: 0, sending: 0, sent: 0, failed: 0, successRate: 0 },
+    activation: { started: 0, identityCompleted: 0, contentCompleted: 0, profileVisited: 0, completed: 0, completionRate: 0 },
     trend: []
   }
 }
@@ -414,8 +442,64 @@ function emptyHealth(): NewsletterHealth {
   margin-bottom: 8px;
 }
 
+.growth-activation-panel {
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface-soft);
+}
+
+.growth-activation-panel header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.growth-activation-panel header span {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.growth-activation-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.growth-activation-grid article {
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: var(--admin-surface);
+}
+
+.growth-activation-grid span,
+.growth-activation-grid strong,
+.growth-activation-grid small {
+  display: block;
+}
+
+.growth-activation-grid span,
+.growth-activation-grid small {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.growth-activation-grid strong {
+  margin: 6px 0 3px;
+  color: var(--admin-ink-strong);
+  font-size: 22px;
+}
+
 @media (max-width: 1050px) {
   .growth-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .growth-activation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

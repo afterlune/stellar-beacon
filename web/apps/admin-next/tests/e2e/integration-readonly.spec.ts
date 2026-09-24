@@ -134,6 +134,10 @@ test.describe('admin-next real read-only integration', () => {
       if (menu.contentSelector) {
         await expect(page.locator(menu.contentSelector), `content ${menu.path}`).toBeVisible()
       }
+      if (menu.path === '/growth') {
+        await page.getByText('增长分析', { exact: true }).click()
+        await expect(page.locator('.growth-activation-panel'), 'creator activation funnel').toContainText('创作者激活')
+      }
       await page.waitForLoadState('networkidle')
       const refreshed = await page.reload({ waitUntil: 'domcontentloaded' })
       await assertRenderedRoute(page, `${menu.path} refresh`, menu.marker, refreshed?.status(), menu.path)

@@ -80,6 +80,17 @@ CREATE TABLE t_user_info (
     notify_collection SMALLINT NOT NULL DEFAULT 1,
     is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
 );
+CREATE TABLE t_studio_activation (
+    user_id INTEGER PRIMARY KEY REFERENCES t_user_info(id) ON DELETE CASCADE,
+    collapsed SMALLINT NOT NULL DEFAULT 0,
+    started_at TIMESTAMPTZ NULL,
+    identity_completed_at TIMESTAMPTZ NULL,
+    content_completed_at TIMESTAMPTZ NULL,
+    profile_visited_at TIMESTAMPTZ NULL,
+    completed_at TIMESTAMPTZ NULL,
+    create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE t_user_auth (
     id INTEGER PRIMARY KEY, user_info_id INTEGER NOT NULL, username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(100) NOT NULL, login_type SMALLINT NOT NULL, ip_address VARCHAR(50),
@@ -375,6 +386,26 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 		t.Fatalf("unexpected article content analytics metrics: metrics=%v err=%v", articleMetrics, err)
 	}
 	platformRepo := NewPlatformRepo(xormEngine)
+	activation, err := platformRepo.SyncStudioActivation(ctx, 1, port.StudioActivationUpdate{
+		Started: true, Collapsed: true, IdentityComplete: true,
+	})
+	if err != nil || activation.StartedAt == "" || !activation.Collapsed || activation.IdentityCompletedAt == "" {
+		t.Fatalf("sync studio activation: activation=%+v err=%v", activation, err)
+	}
+	activation, err = platformRepo.SyncStudioActivation(ctx, 1, port.StudioActivationUpdate{
+		Started: false, Collapsed: false, ContentComplete: true, ProfileVisited: true, Completed: true,
+	})
+	if err != nil || activation.IdentityCompletedAt == "" || activation.ContentCompletedAt == "" || activation.ProfileVisitedAt == "" || activation.CompletedAt == "" || activation.Collapsed {
+		t.Fatalf("merge studio activation milestones: activation=%+v err=%v", activation, err)
+	}
+	dashboard, err := platformRepo.StudioDashboard(ctx, 1)
+	if err != nil || dashboard.Activation.CompletedAt == "" {
+		t.Fatalf("studio dashboard must include activation: dashboard=%+v err=%v", dashboard, err)
+	}
+	funnel, err := NewGrowthRepo(xormEngine).StudioActivationFunnel(ctx, time.Now().Add(-time.Hour))
+	if err != nil || funnel.Started != 1 || funnel.IdentityCompleted != 1 || funnel.ContentCompleted != 1 || funnel.ProfileVisited != 1 || funnel.Completed != 1 {
+		t.Fatalf("studio activation funnel: funnel=%+v err=%v", funnel, err)
+	}
 	followRepo := NewFollowRepo(xormEngine)
 	if err := followRepo.Follow(ctx, 2, 1); err != nil {
 		t.Fatalf("follow author: %v", err)

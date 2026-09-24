@@ -85,6 +85,7 @@ func RouterSetup(router *gin.Engine) {
 
 	studio := v1.Group("/studio")
 	studio.GET("/dashboard", api.StudioDashboard)
+	studio.PUT("/activation", api.SyncStudioActivation)
 	studio.GET("/analytics", api.GetStudioAnalytics)
 	studio.GET("/calendar", api.GetStudioCalendar)
 	studio.GET("/profile", api.GetStudioProfile)

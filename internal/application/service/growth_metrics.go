@@ -7,7 +7,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 )
 
-func dashboardGrowthDTO(stats port.NewsletterStats, events []port.GrowthTrend, deliveries []port.NewsletterDeliveryTrend, start, now time.Time, unit string) model.DashboardGrowthDTO {
+func dashboardGrowthDTO(stats port.NewsletterStats, events []port.GrowthTrend, deliveries []port.NewsletterDeliveryTrend, activation port.StudioActivationFunnel, start, now time.Time, unit string) model.DashboardGrowthDTO {
 	confirmedDenominator := stats.Active + stats.Pending
 	deliveryDenominator := stats.Sent + stats.Failed
 	result := model.DashboardGrowthDTO{
@@ -18,6 +18,11 @@ func dashboardGrowthDTO(stats port.NewsletterStats, events []port.GrowthTrend, d
 		Deliveries: model.GrowthDeliveryStatsDTO{
 			Queued: stats.Queued, Sending: stats.Sending, Sent: stats.Sent, Failed: stats.Failed,
 			SuccessRate: ratio(stats.Sent, deliveryDenominator),
+		},
+		Activation: model.StudioActivationFunnelDTO{
+			Started: activation.Started, IdentityCompleted: activation.IdentityCompleted,
+			ContentCompleted: activation.ContentCompleted, ProfileVisited: activation.ProfileVisited,
+			Completed: activation.Completed, CompletionRate: ratio(activation.Completed, activation.Started),
 		},
 		Trend: make([]model.DashboardGrowthTrendDTO, 0),
 	}

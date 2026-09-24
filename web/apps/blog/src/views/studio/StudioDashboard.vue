@@ -175,6 +175,7 @@
 import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api/api'
+import type { StudioActivation, StudioActivationSync } from '@stellar-beacon/api-contract'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import {
@@ -189,6 +190,13 @@ import {
 } from '@/utils/studioProfile'
 
 type CalendarEvent = { articleId: number; title: string; scheduledAt: string; publishedAt?: string; state: string; lastError?: string }
+
+function emptyStudioActivation(): StudioActivation {
+  return {
+    startedAt: '', collapsed: false, identityCompletedAt: '',
+    contentCompletedAt: '', profileVisitedAt: '', completedAt: ''
+  }
+}
 
 export default defineComponent({
   name: 'StudioDashboard',
@@ -231,30 +239,74 @@ export default defineComponent({
     const validHandle = computed(() => isValidStudioHandle(normalizedHandle.value))
     const activationUserID = Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0) || 'current'
     const activationState = reactive<StudioActivationState>(readStudioActivationState(activationUserID))
+    const serverActivation = ref<StudioActivation>(emptyStudioActivation())
     const dashboardLoaded = ref(false)
     const profileLoaded = ref(false)
     const activationProgress = computed(() => studioActivationProgress(profile, dashboard.value, activationState.profileVisited))
     const activationReady = computed(() => dashboardLoaded.value && profileLoaded.value)
     const showActivation = computed(() => activationReady.value && !activationState.completedAt && !activationProgress.value.isComplete)
     const persistActivation = () => saveStudioActivationState(activationUserID, activationState)
-    const collapseActivation = () => { activationState.collapsed = true; persistActivation() }
-    const expandActivation = () => { activationState.collapsed = false; persistActivation() }
-    const markProfileVisited = () => { activationState.profileVisited = true; persistActivation() }
+    const hasServerActivation = (value: StudioActivation) => Boolean(
+      value.startedAt || value.identityCompletedAt || value.contentCompletedAt || value.profileVisitedAt || value.completedAt
+    )
+    const applyServerActivation = (value: StudioActivation) => {
+      if (!hasServerActivation(value)) return
+      serverActivation.value = value
+      activationState.collapsed = value.collapsed
+      activationState.profileVisited = Boolean(value.profileVisitedAt) || activationState.profileVisited
+      activationState.startedAt = value.startedAt || activationState.startedAt
+      activationState.completedAt = value.completedAt || activationState.completedAt
+      persistActivation()
+    }
+    const activationSyncPayload = (): StudioActivationSync => {
+      const progress = activationProgress.value
+      const serverStarted = hasServerActivation(serverActivation.value)
+      return {
+        started: Boolean(activationState.startedAt || serverActivation.value.startedAt)
+          || (!serverStarted && !activationState.completedAt && !progress.isComplete),
+        collapsed: activationState.collapsed,
+        identityComplete: Boolean(progress.steps.find((step) => step.key === 'identity')?.done),
+        contentComplete: Boolean(progress.steps.find((step) => step.key === 'content')?.done),
+        profileVisited: activationState.profileVisited,
+        completed: Boolean(activationState.completedAt || progress.isComplete)
+      }
+    }
+    let activationSyncQueue = Promise.resolve()
+    let activationSyncVersion = 0
+    const queueActivationSync = () => {
+      if (!activationReady.value) return
+      const version = ++activationSyncVersion
+      const payload = activationSyncPayload()
+      activationSyncQueue = activationSyncQueue.then(() => undefined, () => undefined).then(async () => {
+        try {
+          const response = await api.syncStudioActivation(payload)
+          if (!response?.data?.flag || version !== activationSyncVersion) return
+          applyServerActivation(response.data.data)
+        } catch {
+          // Local state remains usable while the next dashboard load retries sync.
+        }
+      })
+    }
+    const collapseActivation = () => { activationState.collapsed = true; persistActivation(); queueActivationSync() }
+    const expandActivation = () => { activationState.collapsed = false; persistActivation(); queueActivationSync() }
+    const markProfileVisited = () => { activationState.profileVisited = true; persistActivation(); queueActivationSync() }
     watch(activationProgress, (progress) => {
       if (!progress.isComplete || activationState.completedAt) return
       activationState.completedAt = new Date().toISOString()
       persistActivation()
+      queueActivationSync()
     }, { immediate: true })
     watch(activationReady, (ready) => {
-      if (!ready || activationState.completedAt || activationState.startedAt) return
+      if (!ready) return
       const progress = activationProgress.value
-      if (progress.profileComplete && progress.contentCount > 0) {
+      if (!hasServerActivation(serverActivation.value) && !activationState.startedAt && !activationState.completedAt &&
+        progress.profileComplete && progress.contentCount > 0) {
         activationState.completedAt = new Date().toISOString()
-      } else {
-        activationState.startedAt = new Date().toISOString()
+        persistActivation()
       }
-      persistActivation()
+      queueActivationSync()
     }, { immediate: true })
+
     const operations = computed(() => analytics.value.operations || {})
     const performance = computed(() => analytics.value.performance || {})
     const trend = computed<any[]>(() => Array.isArray(analytics.value.trend) ? analytics.value.trend : [])
@@ -295,7 +347,9 @@ export default defineComponent({
     const loadDashboard = async () => {
       try {
         const response = await api.getStudioDashboard()
-        dashboard.value = response?.data?.data || {}
+        const data = response?.data?.data || {}
+        dashboard.value = data
+        if (data.activation) applyServerActivation(data.activation)
         dashboardLoaded.value = true
       } catch {
         ElMessage.error('创作数据加载失败')

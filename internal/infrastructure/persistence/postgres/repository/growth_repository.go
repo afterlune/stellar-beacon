@@ -104,6 +104,26 @@ func (r *MyGrowthRepo) SummaryByPeriod(ctx context.Context, since time.Time, uni
 	return result, nil
 }
 
+func (r *MyGrowthRepo) StudioActivationFunnel(ctx context.Context, since time.Time) (port.StudioActivationFunnel, error) {
+	session, err := repoSession(r.engine, ctx, "growth.studio_activation_funnel")
+	if err != nil {
+		return port.StudioActivationFunnel{}, err
+	}
+	var result port.StudioActivationFunnel
+	if _, err := session.SQL(`
+		SELECT COUNT(*) AS started,
+		       COUNT(identity_completed_at) AS identity_completed,
+		       COUNT(content_completed_at) AS content_completed,
+		       COUNT(profile_visited_at) AS profile_visited,
+		       COUNT(completed_at) AS completed
+		FROM t_studio_activation
+		WHERE started_at IS NOT NULL AND started_at >= ?
+	`, since).Get(&result); err != nil {
+		return port.StudioActivationFunnel{}, apperrors.Unavailable("growth.studio_activation_funnel", err)
+	}
+	return result, nil
+}
+
 func (r *MyGrowthRepo) Cleanup(ctx context.Context, before time.Time) error {
 	session, err := repoSession(r.engine, ctx, "growth.cleanup")
 	if err != nil {

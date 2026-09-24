@@ -1040,6 +1040,7 @@ async function mockStudioApi(page: Page, options: {
   analytics?: any
   calendarEvents?: any[]
   dashboard?: Record<string, number>
+  activation?: any
 } = {}) {
   const saved = {
     article: null as any,
@@ -1056,6 +1057,10 @@ async function mockStudioApi(page: Page, options: {
     seriesDetail: options.seriesDetail || null,
     analytics: options.analytics || null,
     calendarEvents: options.calendarEvents || [],
+    activation: options.activation || {
+      startedAt: '', collapsed: false, identityCompletedAt: '',
+      contentCompletedAt: '', profileVisitedAt: '', completedAt: ''
+    },
     dashboard: {
       articleCount: 3,
       draftCount: 1,
@@ -1102,7 +1107,21 @@ async function mockStudioApi(page: Page, options: {
       body: JSON.stringify({ code: 'OK', message: '操作成功', flag: true, data })
     })
     if (url.pathname === '/api/v1/studio/dashboard' && method === 'GET') {
-      await respond(saved.dashboard)
+      await respond({ ...saved.dashboard, activation: saved.activation })
+      return
+    }
+    if (url.pathname === '/api/v1/studio/activation' && method === 'PUT') {
+      const payload = route.request().postDataJSON() || {}
+      const now = '2026-09-24T10:00:00.000Z'
+      saved.activation = {
+        startedAt: saved.activation.startedAt || (payload.started ? now : ''),
+        collapsed: Boolean(payload.collapsed),
+        identityCompletedAt: saved.activation.identityCompletedAt || (payload.identityComplete ? now : ''),
+        contentCompletedAt: saved.activation.contentCompletedAt || (payload.contentComplete ? now : ''),
+        profileVisitedAt: saved.activation.profileVisitedAt || (payload.profileVisited ? now : ''),
+        completedAt: saved.activation.completedAt || (payload.completed ? now : '')
+      }
+      await respond(saved.activation)
       return
     }
     if (url.pathname === '/api/v1/studio/analytics' && method === 'GET') {
@@ -1298,6 +1317,23 @@ test.describe('studio workspace', () => {
 
     await activation.getByRole('button', { name: '稍后' }).click()
     await expect(activation.getByRole('button', { name: /继续空间设置/ })).toBeVisible()
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('studio-activation').getByRole('button', { name: /继续空间设置/ })).toBeVisible()
+  })
+
+  test('restores activation collapse from the account when local state is cleared', async ({ page }) => {
+    await mockStudioApi(page, {
+      profile: { handle: '', nickname: '', avatar: '', intro: '', website: '' },
+      dashboard: { articleCount: 0, draftCount: 0, privateCount: 0, talkCount: 0, seriesCount: 0, favoriteCount: 0 },
+      activation: {
+        startedAt: '2026-09-20T10:00:00.000Z', collapsed: true, identityCompletedAt: '',
+        contentCompletedAt: '', profileVisitedAt: '', completedAt: ''
+      }
+    })
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByTestId('studio-activation').getByRole('button', { name: /继续空间设置/ })).toBeVisible()
+    await page.evaluate(() => localStorage.removeItem('stellar-beacon:studio-activation:v1:7'))
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('studio-activation').getByRole('button', { name: /继续空间设置/ })).toBeVisible()
   })

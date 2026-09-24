@@ -63,6 +63,16 @@ type StudioProfileVO struct {
 	Intro    string `json:"intro"`
 	Website  string `json:"website"`
 }
+
+type StudioActivationVO struct {
+	Started          bool `json:"started"`
+	Collapsed        bool `json:"collapsed"`
+	IdentityComplete bool `json:"identityComplete"`
+	ContentComplete  bool `json:"contentComplete"`
+	ProfileVisited   bool `json:"profileVisited"`
+	Completed        bool `json:"completed"`
+}
+
 type StudioArticleVO struct {
 	Id                 int    `json:"id"`
 	CategoryId         int    `json:"categoryId"`

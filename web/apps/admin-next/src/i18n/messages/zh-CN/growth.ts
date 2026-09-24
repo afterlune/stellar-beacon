@@ -50,5 +50,12 @@ export default {
   'growth.emptyDeliveriesTitle': '暂无投递记录',
   'growth.emptyDeliveriesHint': '发布文章并存在已确认订阅者后，通知投递会显示在这里。',
   'growth.emptyAnalyticsTitle': '暂无增长分析数据',
-  'growth.emptyAnalyticsHint': '订阅、分享或文章通知产生后，这里会显示趋势。'
+  'growth.emptyAnalyticsHint': '订阅、分享或文章通知产生后，这里会显示趋势。',
+  'growth.activation.title': '创作者激活',
+  'growth.activation.description': '按区间内首次进入 Studio 的新用户计算',
+  'growth.activation.started': '开始激活',
+  'growth.activation.identity': '完善身份',
+  'growth.activation.content': '创建内容',
+  'growth.activation.profile': '预览主页',
+  'growth.activation.completed': '完成激活'
 }

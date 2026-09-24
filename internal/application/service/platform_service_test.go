@@ -34,6 +34,9 @@ type fakePlatformRepository struct {
 	profileIntro        string
 	profileWebsite      string
 	profileUpdateErr    error
+	activationUpdate    port.StudioActivationUpdate
+	activationResult    port.StudioActivation
+	activationErr       error
 	batchStatusCalls    int
 	batchStatusKind     port.StudioContentType
 	batchStatusScope    port.StudioBatchScope
@@ -134,6 +137,11 @@ func (f *fakePlatformRepository) GetStudioProfile(context.Context, int) (port.St
 		Handle: f.profileHandle, Nickname: f.profileNickname, Avatar: "https://cdn.example.test/avatar.png",
 		Intro: f.profileIntro, Website: f.profileWebsite,
 	}, nil
+}
+
+func (f *fakePlatformRepository) SyncStudioActivation(_ context.Context, _ int, update port.StudioActivationUpdate) (port.StudioActivation, error) {
+	f.activationUpdate = update
+	return f.activationResult, f.activationErr
 }
 
 func (f *fakePlatformRepository) UpdateAuthorProfile(_ context.Context, _ int, handle, nickname, intro, website string) error {
@@ -446,6 +454,17 @@ func TestPlatformBatchDeleteUsesOwnedContentType(t *testing.T) {
 	}
 	if len(repo.batchDeleteScope.IDs) != 2 || repo.batchDeleteScope.IDs[0] != 7 || repo.batchDeleteScope.IDs[1] != 8 {
 		t.Fatalf("unexpected delete ids: %v", repo.batchDeleteScope.IDs)
+	}
+}
+
+func TestPlatformSyncActivationUsesAuthenticatedAccount(t *testing.T) {
+	repo := &fakePlatformRepository{activationResult: port.StudioActivation{StartedAt: "2026-09-24T10:00:00Z", Collapsed: true}}
+	service := mustPlatformService(t, repo, &fakeArticleRepository{}, nil)
+	ctx := platformTestContext(http.MethodPut, "/v1/studio/activation", "{\"started\":true,\"collapsed\":true,\"identityComplete\":true,\"contentComplete\":false,\"profileVisited\":false,\"completed\":false}")
+	ctx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
+	result := service.SyncActivation(ctx)
+	if !result.Flag || !repo.activationUpdate.Started || !repo.activationUpdate.Collapsed || !repo.activationUpdate.IdentityComplete || repo.activationUpdate.ContentComplete {
+		t.Fatalf("activation sync was not forwarded: result=%+v update=%+v", result, repo.activationUpdate)
 	}
 }
 

@@ -244,7 +244,7 @@ func (s *MyNewsletterService) Health(c *gin.Context) model.ResultVO {
 	if checker, ok := s.mailer.(port.MailerHealthChecker); ok {
 		status = checker.Check(c.Request.Context())
 	}
-	metrics := dashboardGrowthDTO(stats, nil, nil, time.Now(), time.Now(), "day")
+	metrics := dashboardGrowthDTO(stats, nil, nil, port.StudioActivationFunnel{}, time.Now(), time.Now(), "day")
 	return model.ResultOkWithData(model.NewsletterHealthDTO{
 		Subscribers: metrics.Subscribers,
 		Deliveries:  metrics.Deliveries,

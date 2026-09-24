@@ -15,12 +15,13 @@ func ListAuthorSeries(c *gin.Context)    { c.JSON(http.StatusOK, platformService
 func ListTopicArticles(c *gin.Context)   { c.JSON(http.StatusOK, platformService.TopicArticles(c)) }
 func ListTopicOverview(c *gin.Context)   { c.JSON(http.StatusOK, platformService.Topics(c)) }
 
-func StudioDashboard(c *gin.Context)     { c.JSON(http.StatusOK, platformService.Dashboard(c)) }
-func GetStudioProfile(c *gin.Context)    { c.JSON(http.StatusOK, platformService.GetProfile(c)) }
-func UpdateStudioProfile(c *gin.Context) { c.JSON(http.StatusOK, platformService.UpdateProfile(c)) }
-func ListStudioArticles(c *gin.Context)  { c.JSON(http.StatusOK, platformService.ListOwnedArticles(c)) }
-func GetStudioArticle(c *gin.Context)    { c.JSON(http.StatusOK, platformService.GetOwnedArticle(c)) }
-func SaveStudioArticle(c *gin.Context)   { c.JSON(http.StatusOK, platformService.SaveOwnedArticle(c)) }
+func StudioDashboard(c *gin.Context)      { c.JSON(http.StatusOK, platformService.Dashboard(c)) }
+func SyncStudioActivation(c *gin.Context) { c.JSON(http.StatusOK, platformService.SyncActivation(c)) }
+func GetStudioProfile(c *gin.Context)     { c.JSON(http.StatusOK, platformService.GetProfile(c)) }
+func UpdateStudioProfile(c *gin.Context)  { c.JSON(http.StatusOK, platformService.UpdateProfile(c)) }
+func ListStudioArticles(c *gin.Context)   { c.JSON(http.StatusOK, platformService.ListOwnedArticles(c)) }
+func GetStudioArticle(c *gin.Context)     { c.JSON(http.StatusOK, platformService.GetOwnedArticle(c)) }
+func SaveStudioArticle(c *gin.Context)    { c.JSON(http.StatusOK, platformService.SaveOwnedArticle(c)) }
 func DeleteStudioArticles(c *gin.Context) {
 	c.JSON(http.StatusOK, platformService.DeleteOwnedArticles(c))
 }

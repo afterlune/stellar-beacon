@@ -122,6 +122,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyCommentGovernanceSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyStudioActivationSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1826,6 +1829,55 @@ func applyCommentGovernanceSchema(ctx context.Context, engine *xorm.Engine) erro
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit comment governance migration: %w", err)
+	}
+	return nil
+}
+
+// applyStudioActivationSchema makes the Studio onboarding checklist account
+// scoped while preserving pre-existing complete creators outside the new-user
+// funnel by allowing started_at to remain null.
+func applyStudioActivationSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 29)").Get(&applied); err != nil {
+		return fmt.Errorf("check studio activation migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin studio activation migration: %w", err)
+	}
+	defer session.Rollback()
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS t_studio_activation (
+			user_id INTEGER PRIMARY KEY REFERENCES t_user_info(id) ON DELETE CASCADE,
+			collapsed SMALLINT NOT NULL DEFAULT 0,
+			started_at TIMESTAMPTZ NULL,
+			identity_completed_at TIMESTAMPTZ NULL,
+			content_completed_at TIMESTAMPTZ NULL,
+			profile_visited_at TIMESTAMPTZ NULL,
+			completed_at TIMESTAMPTZ NULL,
+			create_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK (collapsed IN (0, 1))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_studio_activation_started ON t_studio_activation(started_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_studio_activation_completed ON t_studio_activation(completed_at)`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply studio activation schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 29, "studio-activation"); err != nil {
+		return fmt.Errorf("record studio activation migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit studio activation migration: %w", err)
 	}
 	return nil
 }

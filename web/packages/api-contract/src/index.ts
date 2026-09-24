@@ -388,6 +388,23 @@ export interface StudioProfile {
   intro: string
   website: string
 }
+
+export interface StudioActivation {
+  startedAt: string
+  collapsed: boolean
+  identityCompletedAt: string
+  contentCompletedAt: string
+  profileVisitedAt: string
+  completedAt: string
+}
+
+export interface StudioActivationSync extends Omit<StudioActivation, 'startedAt' | 'identityCompletedAt' | 'contentCompletedAt' | 'profileVisitedAt' | 'completedAt'> {
+  started: boolean
+  identityComplete: boolean
+  contentComplete: boolean
+  profileVisited: boolean
+  completed: boolean
+}
 export interface PublicAuthorSummary {
   id: number
   handle: string
@@ -581,9 +598,19 @@ export interface DashboardGrowthTrend {
   deliveryFailed: number
 }
 
+export interface StudioActivationFunnel {
+  started: number
+  identityCompleted: number
+  contentCompleted: number
+  profileVisited: number
+  completed: number
+  completionRate: number
+}
+
 export interface DashboardGrowth {
   subscribers: GrowthSubscriberStats
   deliveries: GrowthDeliveryStats
+  activation: StudioActivationFunnel
   trend: DashboardGrowthTrend[]
 }
 

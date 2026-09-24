@@ -1,4 +1,4 @@
-import type { FollowContentType, NotificationCursor, NotificationGroup, RecommendationTargetType, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
+import type { FollowContentType, NotificationCursor, NotificationGroup, RecommendationTargetType, StudioActivationSync, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
 import { createApiClient } from '@stellar-beacon/api-client'
 
 // The presentation layer still reads `flag` while the shared client is being
@@ -354,6 +354,9 @@ export default {
   },
   getStudioDashboard: () => {
     return http.get('/studio/dashboard')
+  },
+  syncStudioActivation: (params: StudioActivationSync) => {
+    return http.put('/studio/activation', params)
   },
   getStudioAnalytics: (range: string) => {
     return http.get('/studio/analytics', { params: { range } })

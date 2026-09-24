@@ -113,6 +113,25 @@ test.describe('blog real backend main chain @integration', () => {
     }
   })
 
+  test('persists studio activation state per account', async ({ request }) => {
+    const first = await putAPI(request, '/api/v1/studio/activation', admin.token, {
+      started: true, collapsed: true, identityComplete: false, contentComplete: false, profileVisited: false, completed: false
+    })
+    expect(first.startedAt).toBeTruthy()
+    expect(first.collapsed).toBe(true)
+
+    const dashboard = await getAPIData(request, '/api/v1/studio/dashboard', admin.token)
+    expect(dashboard.activation).toMatchObject({ startedAt: first.startedAt, collapsed: true })
+
+    const completed = await putAPI(request, '/api/v1/studio/activation', admin.token, {
+      started: false, collapsed: false, identityComplete: true, contentComplete: true, profileVisited: true, completed: true
+    })
+    expect(completed.startedAt).toBe(first.startedAt)
+    expect(completed.identityCompletedAt).toBeTruthy()
+    expect(completed.completedAt).toBeTruthy()
+    expect(completed.collapsed).toBe(false)
+  })
+
   test('creates, discovers and moderates a public reading list', async ({ request, browser }) => {
     const title = `integration reading list ${runID}`
     const created = await postAPI(request, '/api/v1/studio/collections', user.token, {

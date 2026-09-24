@@ -82,9 +82,18 @@ type GrowthTrend struct {
 	Unsubscribes      int64  `json:"unsubscribes"`
 }
 
+type StudioActivationFunnel struct {
+	Started           int64 `json:"started"`
+	IdentityCompleted int64 `json:"identityCompleted"`
+	ContentCompleted  int64 `json:"contentCompleted"`
+	ProfileVisited    int64 `json:"profileVisited"`
+	Completed         int64 `json:"completed"`
+}
+
 type GrowthRepository interface {
 	RecordEvent(ctx context.Context, event entity.TGrowthEvent) error
 	Summary(ctx context.Context, since time.Time) ([]GrowthSummary, error)
 	SummaryByPeriod(ctx context.Context, since time.Time, unit string) ([]GrowthTrend, error)
+	StudioActivationFunnel(ctx context.Context, since time.Time) (StudioActivationFunnel, error)
 	Cleanup(ctx context.Context, before time.Time) error
 }

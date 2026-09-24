@@ -27,6 +27,7 @@ type PlatformService interface {
 	TopicArticles(c *gin.Context) model.ResultVO
 	Topics(c *gin.Context) model.ResultVO
 	Dashboard(c *gin.Context) model.ResultVO
+	SyncActivation(c *gin.Context) model.ResultVO
 	GetProfile(c *gin.Context) model.ResultVO
 	UpdateProfile(c *gin.Context) model.ResultVO
 
@@ -362,6 +363,25 @@ func (s *MyPlatformService) Dashboard(c *gin.Context) model.ResultVO {
 		return model.ResultFromError(err)
 	}
 	return model.ResultOkWithData(dashboard)
+}
+
+func (s *MyPlatformService) SyncActivation(c *gin.Context) model.ResultVO {
+	user, ok := currentUser(c)
+	if !ok {
+		return model.ResultFailWithStatus(model.NO_LOGIN)
+	}
+	var vo model.StudioActivationVO
+	if err := c.ShouldBindJSON(&vo); err != nil {
+		return model.ResultFailWithMessage("参数格式不正确")
+	}
+	activation, err := s.platformRepo().SyncStudioActivation(c.Request.Context(), user.UserInfoId, port.StudioActivationUpdate{
+		Started: vo.Started, Collapsed: vo.Collapsed, IdentityComplete: vo.IdentityComplete,
+		ContentComplete: vo.ContentComplete, ProfileVisited: vo.ProfileVisited, Completed: vo.Completed,
+	})
+	if err != nil {
+		return model.ResultFromError(err)
+	}
+	return model.ResultOkWithData(activation)
 }
 
 func (s *MyPlatformService) GetProfile(c *gin.Context) model.ResultVO {

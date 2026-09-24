@@ -50,5 +50,12 @@ export default {
   'growth.emptyDeliveriesTitle': 'No deliveries yet',
   'growth.emptyDeliveriesHint': 'Notifications appear here after a published article reaches confirmed subscribers.',
   'growth.emptyAnalyticsTitle': 'No growth data yet',
-  'growth.emptyAnalyticsHint': 'Subscription, sharing, and notification activity will appear here over time.'
+  'growth.emptyAnalyticsHint': 'Subscription, sharing, and notification activity will appear here over time.',
+  'growth.activation.title': 'Creator activation',
+  'growth.activation.description': 'New Studio users whose activation started in the selected range',
+  'growth.activation.started': 'Started',
+  'growth.activation.identity': 'Identity complete',
+  'growth.activation.content': 'First content',
+  'growth.activation.profile': 'Profile preview',
+  'growth.activation.completed': 'Activated'
 }
