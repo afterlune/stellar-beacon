@@ -66,7 +66,7 @@ https://example.com {
 		}
 	}
 
-	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot)
+	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|applebot)
 	handle @seoCrawler {
 		reverse_proxy https://172.17.0.1:7777 {
 			transport http {
@@ -135,7 +135,7 @@ https://example.com:8008 {
 		}
 	}
 
-	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot)
+	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|applebot)
 	handle @seoCrawler {
 		reverse_proxy https://172.17.0.1:7777 {
 			transport http {

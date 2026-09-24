@@ -17,6 +17,7 @@
               <router-link to="/studio/dashboard" class="author-hero__action">进入我的空间</router-link>
             </template>
             <FollowButton v-else :author-id="author.id" :following="Boolean(author.isFollowing)" @changed="followChanged" />
+            <button type="button" class="author-hero__action author-hero__share" data-testid="author-share" @click="shareProfile">分享主页</button>
           </div>
         </div>
         <dl class="author-hero__stats">
@@ -135,8 +136,10 @@
 <script lang="ts">
 import { computed, defineComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import api from '@/api/api'
 import FollowButton from '@/components/FollowButton.vue'
+import { useSeoMeta } from '@/composables/useSeoMeta'
 import { useUserStore } from '@/stores/user'
 
 const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="120" height="120"%3E%3Crect width="120" height="120" rx="60" fill="%23172554"/%3E%3Ccircle cx="60" cy="44" r="21" fill="%239bb8ff"/%3E%3Cpath d="M20 108c4-27 21-41 40-41s36 14 40 41" fill="%239bb8ff"/%3E%3C/svg%3E'
@@ -263,6 +266,81 @@ export default defineComponent({
     }
     const formatDate = (value: string) => value ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value)) : ''
 
+    const profileURL = computed(() => {
+      const currentHandle = String(author.value?.handle || handle).trim()
+      return currentHandle ? new URL(`/u/${encodeURIComponent(currentHandle)}`, window.location.origin).toString() : ''
+    })
+    const authorSeoDescription = computed(() => {
+      const current = author.value
+      if (!current) return ''
+      const intro = String(current.intro || '').trim()
+      const fallback = `收录 ${Number(current.articleCount || 0)} 篇文章、${Number(current.talkCount || 0)} 条随想和 ${Number(current.seriesCount || 0)} 个系列。`
+      const description = intro || fallback
+      return description.length > 180 ? description.slice(0, 180) + '…' : description
+    })
+    useSeoMeta(computed(() => {
+      const current = author.value
+      if (!current || !profileURL.value) return null
+      const name = String(current.nickname || current.handle || handle).trim()
+      const handleName = String(current.handle || handle).trim()
+      const image = String(current.avatar || '').trim()
+      const person: Record<string, unknown> = {
+        '@type': 'Person',
+        name,
+        alternateName: `@${handleName}`,
+        description: authorSeoDescription.value,
+        url: profileURL.value
+      }
+      if (image) person.image = image
+      return {
+        title: `${name} (@${handleName}) · Stellar Beacon`,
+        description: authorSeoDescription.value,
+        canonical: profileURL.value,
+        image: image || undefined,
+        type: 'profile',
+        jsonLd: {
+          '@context': 'https://schema.org',
+          '@type': 'ProfilePage',
+          url: profileURL.value,
+          mainEntity: person
+        }
+      }
+    }))
+
+    const shareProfile = async () => {
+      const current = author.value
+      const url = profileURL.value
+      if (!current || !url) return
+      const name = String(current.nickname || current.handle || handle).trim()
+      const payload = {
+        title: `${name} · Stellar Beacon`,
+        text: String(current.intro || '').trim() || `发现 ${name} 的公开主页`,
+        url
+      }
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share(payload)
+          return
+        } catch (reason: any) {
+          if (reason?.name === 'AbortError') return
+        }
+      }
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url)
+        } else {
+          const input = document.createElement('input')
+          input.value = url
+          document.body.appendChild(input)
+          input.select()
+          document.execCommand('copy')
+          input.remove()
+        }
+        ElMessage.success('公开主页链接已复制')
+      } catch {
+        ElMessage.error('分享失败，请手动复制浏览器地址')
+      }
+    }
     onMounted(async () => {
       await loadAuthor()
       await Promise.allSettled([loadHighlights(), loadContent(true)])
@@ -271,7 +349,7 @@ export default defineComponent({
     return {
       author, records, highlights, highlightSeries, highlightCollections, highlightTalks,
       hasCuratedContent, tab, loading, loadingAuthor, error, total,
-      defaultAvatar, switchTab, loadMore, excerpt, formatDate, isSelf, followChanged
+      defaultAvatar, switchTab, loadMore, excerpt, formatDate, isSelf, followChanged, shareProfile
     }
   }
 })
@@ -320,8 +398,8 @@ export default defineComponent({
 .author-hero__intro { max-width: 620px; margin: 18px 0 8px; color: var(--text-ob-dim); line-height: 1.75; }
 .author-hero__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .author-hero__copy a { display: inline-flex; align-items: center; min-height: 24px; color: var(--color-ob); font-size: 12px; text-decoration: none; }
-.author-hero__action { min-height: 36px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--color-ob) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-ob) 16%, transparent); }
-.author-hero__action + .author-hero__action { background: transparent; }
+.author-hero__action { min-height: 36px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--color-ob) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-ob) 16%, transparent); color: var(--color-ob); font: inherit; font-size: 12px; cursor: pointer; }
+.author-hero__action + .author-hero__action, .author-hero__share { background: transparent; }
 .author-hero__stats { display: grid; grid-template-columns: repeat(5, auto); gap: 20px; margin: 0; }
 .author-hero__stats div { text-align: center; }
 .author-hero__stats dt { font-size: 1.7rem; font-weight: 800; }

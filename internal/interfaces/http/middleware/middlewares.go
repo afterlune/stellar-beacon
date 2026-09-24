@@ -385,7 +385,7 @@ func SpiderReject() gin.HandlerFunc {
 
 func isSeoRoute(path string) bool {
 	return path == "/sitemap.xml" || path == "/robots.txt" || path == "/feed.xml" ||
-		strings.HasPrefix(path, "/articles/")
+		strings.HasPrefix(path, "/articles/") || strings.HasPrefix(path, "/u/")
 }
 
 func Cors() gin.HandlerFunc {

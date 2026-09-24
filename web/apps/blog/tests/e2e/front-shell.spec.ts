@@ -462,7 +462,7 @@ async function mockContentDiscovery(page: Page, options: {
     }
     if (path === '/api/v1/public/authors') {
       await fulfill({
-        items: [{ id: 1, handle: 'test-author', nickname: '测试作者', avatar: '', intro: '公共空间作者', articleCount: 1, talkCount: 0, seriesCount: 0 }],
+        items: [{ id: 1, handle: 'test-author', nickname: '测试作者', avatar: 'https://cdn.example.test/author-avatar.png', intro: '公共空间作者', articleCount: 1, talkCount: 0, seriesCount: 0 }],
         total: 1,
         page: 1,
         pageSize: 12
@@ -470,7 +470,7 @@ async function mockContentDiscovery(page: Page, options: {
       return
     }
     if (path === '/api/v1/public/authors/test-author') {
-      await fulfill({ id: 1, handle: 'test-author', nickname: '测试作者', avatar: '', intro: '公共空间作者', website: 'https://example.com', articleCount: 1, talkCount: 1, seriesCount: 1, collectionCount: 1 })
+      await fulfill({ id: 1, handle: 'test-author', nickname: '测试作者', avatar: 'https://cdn.example.test/author-avatar.png', intro: '公共空间作者', website: 'https://example.com', articleCount: 1, talkCount: 1, seriesCount: 1, collectionCount: 1 })
       return
     }
     if (path === '/api/v1/public/authors/test-author/articles') {
@@ -666,6 +666,13 @@ test.describe('content discovery', () => {
     await expect(page.getByRole('heading', { name: '测试作者' })).toBeVisible()
     await expect(page.getByText('@test-author')).toBeVisible()
     await expect(page.getByRole('button', { name: '关注' })).toBeVisible()
+    await expect(page).toHaveTitle('测试作者 (@test-author) · Stellar Beacon')
+    await expect(page.locator('meta[name="description"][data-stellar-seo]').last()).toHaveAttribute('content', '公共空间作者')
+    await expect(page.locator('link[rel="canonical"][data-stellar-seo]').last()).toHaveAttribute('href', 'http://127.0.0.1:8080/u/test-author')
+    await expect(page.locator('meta[property="og:type"][data-stellar-seo]').last()).toHaveAttribute('content', 'profile')
+    await expect(page.locator('meta[property="og:image"][data-stellar-seo]').last()).toHaveAttribute('content', 'https://cdn.example.test/author-avatar.png')
+    await expect.poll(() => page.locator('script[type="application/ld+json"][data-stellar-seo]').textContent()).toContain('ProfilePage')
+    await expect(page.locator('link[rel="canonical"]')).toHaveCount(1)
 
     const curated = page.locator('.author-curated')
     await expect(curated.getByRole('heading', { name: '公开内容精选' })).toBeVisible()
@@ -694,6 +701,37 @@ test.describe('content discovery', () => {
     await expect(page.locator('.follow-button')).toHaveCount(0)
   })
 
+  test('author page shares its canonical URL with the native share API', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: async (data: any) => { (window as any).__sharedAuthor = data }
+      })
+    })
+    await mockContentDiscovery(page)
+    await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
+
+    await page.getByTestId('author-share').click()
+
+    await expect.poll(() => page.evaluate(() => (window as any).__sharedAuthor?.url)).toBe('http://127.0.0.1:8080/u/test-author')
+  })
+
+  test('author page copies the canonical URL when native sharing is unavailable', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async (value: string) => { (window as any).__copiedAuthor = value } }
+      })
+    })
+    await mockContentDiscovery(page)
+    await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
+
+    await page.getByTestId('author-share').click()
+
+    await expect.poll(() => page.evaluate(() => (window as any).__copiedAuthor)).toBe('http://127.0.0.1:8080/u/test-author')
+    await expect(page.getByText('公开主页链接已复制')).toBeVisible()
+  })
   test('author curation falls back to latest when hot articles are empty', async ({ page }) => {
     await mockContentDiscovery(page, { hotArticlesEmpty: true })
     await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })

@@ -15,7 +15,7 @@ export function useSeoMeta(source?: WatchSource<SeoMetaInput | null | undefined>
   let activeNodes: HTMLElement[] = []
 
   const setSeo = (value: SeoMetaInput): void => {
-    activeNodes.forEach((node) => node.remove())
+    document.querySelectorAll(`[${MANAGED_ATTR}]`).forEach((node) => node.remove())
     activeNodes = []
     document.title = value.title
     setMeta('description', value.description || '', 'name', activeNodes)

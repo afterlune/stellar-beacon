@@ -49,6 +49,16 @@ foreach ($item in $publicApi) {
     $response = Invoke-IntegrationRequest -Uri $item.Uri
     [void](Assert-IntegrationApiSuccess -Response $response -Name $item.Name)
 }
+$authorSeoResponse = Invoke-IntegrationRequest -Uri "$blogBase/u/e2e-user" -Headers @{ 'User-Agent' = 'facebookexternalhit/1.1' }
+Assert-IntegrationStatus -Response $authorSeoResponse -Expected 200 -Name 'author SEO HTML'
+if ($authorSeoResponse.Content -notmatch '<meta property="og:type" content="profile">' -or $authorSeoResponse.Content -notmatch '/u/e2e-user') {
+    throw 'author SEO HTML is missing profile metadata or canonical URL'
+}
+$sitemapResponse = Invoke-IntegrationRequest -Uri "$blogBase/sitemap.xml"
+Assert-IntegrationStatus -Response $sitemapResponse -Expected 200 -Name 'sitemap'
+if ($sitemapResponse.Content -notmatch '/u/e2e-user') {
+    throw 'sitemap does not include the public author profile'
+}
 
 $publicArticleListResponse = Invoke-IntegrationRequest -Uri "$blogBase/api/v1/public/articles?current=1&size=10"
 $publicArticleList = Assert-IntegrationApiSuccess -Response $publicArticleListResponse -Name 'public article list for content analytics'

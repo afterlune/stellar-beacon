@@ -23,6 +23,7 @@ func RouterSetup(router *gin.Engine) {
 		c.JSON(http.StatusOK, state)
 	})
 	router.GET("/articles/:articleId", api.RenderArticleSEO)
+	router.GET("/u/:handle", api.RenderAuthorSEO)
 	router.GET("/sitemap.xml", api.RenderSitemap)
 	router.GET("/robots.txt", api.RenderRobots)
 	router.GET("/feed.xml", api.RenderFeed)

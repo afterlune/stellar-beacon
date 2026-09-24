@@ -55,6 +55,10 @@ func GetNewsletterHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, newsletterService.Health(c))
 }
 
+func RenderAuthorSEO(c *gin.Context) {
+	seoService.RenderAuthorHTML(c)
+}
+
 func RenderArticleSEO(c *gin.Context) {
 	seoService.RenderArticleHTML(c)
 }

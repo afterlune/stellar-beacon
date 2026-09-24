@@ -47,7 +47,7 @@
 		reverse_proxy minio:9000
 	}
 
-	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot)
+	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|applebot)
 	handle @seoCrawler {
 		reverse_proxy https://backend:7777 {
 			transport http {

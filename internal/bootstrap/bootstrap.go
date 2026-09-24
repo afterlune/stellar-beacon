@@ -131,7 +131,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.service.content_analytics", err)
 	}
-	seoService, err := service.NewSeoService(article)
+	seoService, err := service.NewSeoService(article, platform)
 	if err != nil {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.service.seo", err)
