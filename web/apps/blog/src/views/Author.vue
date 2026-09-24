@@ -12,7 +12,11 @@
           <p class="author-hero__intro">{{ author.intro || '这位作者还没有写下简介。' }}</p>
           <a v-if="author.website" :href="author.website" target="_blank" rel="noopener noreferrer">{{ author.website }}</a>
           <div class="author-hero__actions">
-            <FollowButton v-if="!isSelf" :author-id="author.id" :following="Boolean(author.isFollowing)" @changed="followChanged" />
+            <template v-if="isSelf">
+              <router-link to="/studio/profile" class="author-hero__action">编辑公开资料</router-link>
+              <router-link to="/studio/dashboard" class="author-hero__action">进入我的空间</router-link>
+            </template>
+            <FollowButton v-else :author-id="author.id" :following="Boolean(author.isFollowing)" @changed="followChanged" />
           </div>
         </div>
         <dl class="author-hero__stats">
@@ -24,28 +28,53 @@
         </dl>
       </section>
 
-      <section v-if="highlights.length || highlightSeries.length" class="author-highlights" aria-labelledby="author-highlights-title">
+      <section v-if="hasCuratedContent" class="author-curated" aria-labelledby="author-curated-title">
         <header>
           <div>
-            <p>SPOTLIGHT</p>
-            <h2 id="author-highlights-title">作者概览</h2>
+            <p>CURATED SIGNALS</p>
+            <h2 id="author-curated-title">公开内容精选</h2>
           </div>
-          <span>近期被收藏、评论与阅读最多的内容</span>
+          <span>根据近期热度与更新时间自动整理</span>
         </header>
-        <div class="author-highlights__grid">
-          <ol v-if="highlights.length" class="author-highlights__list">
-            <li v-for="(item, index) in highlights" :key="item.id">
-              <span>{{ String(index + 1).padStart(2, '0') }}</span>
-              <router-link :to="`/articles/${item.id}`">{{ item.articleTitle }}</router-link>
-            </li>
-          </ol>
-          <div v-if="highlightSeries.length" class="author-highlights__series">
-            <router-link v-for="item in highlightSeries" :key="item.id" :to="`/series/${item.id}`">
-              <small>{{ item.articleCount }} 篇文章 · {{ item.favoriteCount || 0 }} 收藏</small>
-              <strong>{{ item.seriesName }}</strong>
-              <em>{{ item.seriesDesc || '暂无系列说明' }}</em>
+        <div class="author-curated__grid">
+          <section v-if="highlights.length" class="author-curated__panel author-curated__panel--wide">
+            <header><div><small>REPRESENTATIVE</small><h3>代表作</h3></div><button type="button" @click="switchTab('articles')">查看全部</button></header>
+            <ol class="author-curated__articles">
+              <li v-for="(item, index) in highlights" :key="item.id">
+                <span>{{ String(index + 1).padStart(2, '0') }}</span>
+                <router-link :to="`/articles/${item.id}`">
+                  <strong>{{ item.articleTitle }}</strong>
+                  <small>{{ item.categoryName || '未分类' }} · {{ formatDate(item.createTime) }}</small>
+                </router-link>
+              </li>
+            </ol>
+          </section>
+
+          <section v-if="highlightSeries.length" class="author-curated__panel">
+            <header><div><small>SERIES</small><h3>主题系列</h3></div><button type="button" @click="switchTab('series')">查看全部</button></header>
+            <router-link v-for="item in highlightSeries" :key="item.id" :to="`/series/${item.id}`" class="author-curated__row">
+              <span><strong>{{ item.seriesName }}</strong><small>{{ item.articleCount }} 篇文章</small></span>
+              <em>{{ item.seriesDesc || '持续更新的主题合集' }}</em>
             </router-link>
-          </div>
+          </section>
+
+          <section v-if="highlightCollections.length" class="author-curated__panel">
+            <header><div><small>READING LISTS</small><h3>公开书单</h3></div><button type="button" @click="switchTab('collections')">查看全部</button></header>
+            <router-link v-for="item in highlightCollections" :key="item.slug" :to="`/collections/${item.slug}`" class="author-curated__row">
+              <span><strong>{{ item.title }}</strong><small>{{ item.articleCount }} 篇文章</small></span>
+              <em>{{ item.description || '按主题组织的阅读路径' }}</em>
+            </router-link>
+          </section>
+
+          <section v-if="highlightTalks.length" class="author-curated__panel author-curated__panel--wide">
+            <header><div><small>TALKS</small><h3>最近随想</h3></div><button type="button" @click="switchTab('talks')">查看全部</button></header>
+            <div class="author-curated__talks">
+              <router-link v-for="item in highlightTalks" :key="item.id" :to="`/talks/${item.id}`">
+                <p>{{ excerpt(item.content, 90) }}</p>
+                <small>{{ formatDate(item.createTime) }} · {{ item.commentCount || 0 }} 条回应</small>
+              </router-link>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -123,6 +152,8 @@ export default defineComponent({
     const tab = ref<'articles' | 'talks' | 'series' | 'collections'>('articles')
     const highlights = ref<any[]>([])
     const highlightSeries = ref<any[]>([])
+    const highlightCollections = ref<any[]>([])
+    const highlightTalks = ref<any[]>([])
     const loading = ref(false)
     const loadingAuthor = ref(true)
     const error = ref('')
@@ -142,6 +173,13 @@ export default defineComponent({
       author.value.followerCount = Math.max(0, Number(author.value.followerCount || 0) + (following ? 1 : -1))
     }
 
+    const hasCuratedContent = computed(() =>
+      highlights.value.length > 0 ||
+      highlightSeries.value.length > 0 ||
+      highlightCollections.value.length > 0 ||
+      highlightTalks.value.length > 0
+    )
+
     const loadAuthor = async () => {
       loadingAuthor.value = true
       error.value = ''
@@ -155,19 +193,34 @@ export default defineComponent({
       }
     }
 
-    // The overview is a best-effort glance: either half may be missing, and a
-    // failure must never block the author's own tabs.
+    const recordsFrom = (response: any) => {
+      const data = responseData(response)
+      const records = Array.isArray(data.records) ? data.records : Array.isArray(data.items) ? data.items : []
+      return records.slice(0, 3)
+    }
+    const settledRecords = (result: PromiseSettledResult<any>) =>
+      result.status === 'fulfilled' ? recordsFrom(result.value) : []
+
+    // The overview is a best-effort glance: a missing module is hidden and must
+    // never block the author's own tabs.
     const loadHighlights = async () => {
-      const [hot, series] = await Promise.allSettled([
+      const [hot, series, collections, talks] = await Promise.allSettled([
         api.getAuthorArticles(handle, { sort: 'hot', current: 1, size: 3 }),
-        api.getAuthorSeries(handle, { current: 1, size: 3 })
+        api.getAuthorSeries(handle, { current: 1, size: 3 }),
+        api.getAuthorCollections(handle, { current: 1, size: 3 }),
+        api.getAuthorTalks(handle, { current: 1, size: 3 })
       ])
-      highlights.value = hot.status === 'fulfilled'
-        ? (Array.isArray(responseData(hot.value).records) ? responseData(hot.value).records : [])
-        : []
-      highlightSeries.value = series.status === 'fulfilled'
-        ? (Array.isArray(responseData(series.value).records) ? responseData(series.value).records : [])
-        : []
+      highlights.value = settledRecords(hot)
+      highlightSeries.value = settledRecords(series)
+      highlightCollections.value = settledRecords(collections)
+      highlightTalks.value = settledRecords(talks)
+      if (!highlights.value.length) {
+        try {
+          highlights.value = recordsFrom(await api.getAuthorArticles(handle, { sort: 'latest', current: 1, size: 3 }))
+        } catch {
+          highlights.value = []
+        }
+      }
     }
     const loadContent = async (reset = false) => {
       if (!author.value) return
@@ -216,7 +269,8 @@ export default defineComponent({
     })
 
     return {
-      author, records, highlights, highlightSeries, tab, loading, loadingAuthor, error, total,
+      author, records, highlights, highlightSeries, highlightCollections, highlightTalks,
+      hasCuratedContent, tab, loading, loadingAuthor, error, total,
       defaultAvatar, switchTab, loadMore, excerpt, formatDate, isSelf, followChanged
     }
   }
@@ -225,24 +279,38 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .author-page { max-width: 1120px; margin: 0 auto; padding: 28px 0 96px; }
-.author-highlights { margin-top: 26px; padding: clamp(22px, 4vw, 34px); border: 1px solid var(--border-hairline); border-radius: 24px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
-.author-highlights header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
-.author-highlights header p { margin: 0 0 8px; color: var(--color-ob); font-size: 10px; letter-spacing: .2em; }
-.author-highlights header h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.9rem); }
-.author-highlights header span { color: var(--text-ob-dim); font-size: 11px; }
-.author-highlights__grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; }
-.author-highlights__list { margin: 0; padding: 0; list-style: none; }
-.author-highlights__list li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-hairline); }
-.author-highlights__list li:last-child { border-bottom: none; }
-.author-highlights__list span { color: var(--color-ob); font-size: 12px; letter-spacing: .12em; }
-.author-highlights__list a { display: flex; align-items: center; overflow: hidden; min-height: 24px; padding: 2px 0; color: inherit; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
-.author-highlights__list a:hover { color: var(--color-ob); }
-.author-highlights__series { display: grid; gap: 12px; }
-.author-highlights__series a { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border-hairline); border-radius: 15px; color: inherit; text-decoration: none; }
-.author-highlights__series small, .author-highlights__series em { color: var(--text-ob-dim); font-size: 11px; font-style: normal; }
-.author-highlights__series em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.author-curated { margin-top: 26px; padding: clamp(22px, 4vw, 34px); border: 1px solid var(--border-hairline); border-radius: 24px; background: radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--color-ob) 10%, transparent), transparent 32%), color-mix(in srgb, var(--background-primary-alt) 94%, transparent); }
+.author-curated > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+.author-curated > header p { margin: 0 0 8px; color: var(--color-ob); font-size: 10px; letter-spacing: .2em; }
+.author-curated > header h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.9rem); }
+.author-curated > header span { color: var(--text-ob-dim); font-size: 11px; }
+.author-curated__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.author-curated__panel { padding: 22px; border: 1px solid var(--border-hairline); border-radius: 18px; background: color-mix(in srgb, var(--background-primary) 76%, transparent); }
+.author-curated__panel--wide { grid-column: 1 / -1; }
+.author-curated__panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.author-curated__panel header small { display: block; margin-bottom: 4px; color: var(--color-ob); font-size: 9px; letter-spacing: .17em; }
+.author-curated__panel h3 { margin: 0; font-size: 1.15rem; }
+.author-curated__panel header button { min-height: 32px; padding: 0 4px; border: 0; background: transparent; color: var(--text-ob-dim); font-size: 11px; cursor: pointer; }
+.author-curated__panel header button:hover { color: var(--color-ob); }
+.author-curated__articles { margin: 0; padding: 0; list-style: none; }
+.author-curated__articles li { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--border-hairline); }
+.author-curated__articles li:last-child { border-bottom: 0; padding-bottom: 0; }
+.author-curated__articles > li > span { color: var(--color-ob); font-size: 11px; letter-spacing: .14em; }
+.author-curated__articles a { display: grid; gap: 5px; min-width: 0; color: inherit; text-decoration: none; }
+.author-curated__articles a:hover strong, .author-curated__row:hover strong { color: var(--color-ob); }
+.author-curated__articles strong { overflow: hidden; font-size: 1rem; text-overflow: ellipsis; white-space: nowrap; }
+.author-curated__articles small, .author-curated__row small, .author-curated__talks small { color: var(--text-ob-dim); font-size: 11px; }
+.author-curated__row { display: grid; grid-template-columns: minmax(0, .9fr) minmax(120px, 1.1fr); gap: 18px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border-hairline); color: inherit; text-decoration: none; }
+.author-curated__row:last-child { border-bottom: 0; padding-bottom: 0; }
+.author-curated__row > span { display: grid; gap: 5px; min-width: 0; }
+.author-curated__row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.author-curated__row em { overflow: hidden; color: var(--text-ob-dim); font-size: 11px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.author-curated__talks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.author-curated__talks a { display: flex; min-height: 132px; flex-direction: column; justify-content: space-between; padding: 16px; border: 1px solid var(--border-hairline); border-radius: 14px; color: inherit; text-decoration: none; background: color-mix(in srgb, var(--background-primary-alt) 70%, transparent); transition: border-color .2s ease, transform .2s ease; }
+.author-curated__talks a:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--color-ob) 45%, transparent); }
+.author-curated__talks p { display: -webkit-box; overflow: hidden; margin: 0 0 16px; line-height: 1.65; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .author-state { padding: 60px 0; color: var(--text-ob-dim); text-align: center; }
-@media (max-width: 760px) { .author-highlights__grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .author-curated__grid, .author-curated__talks { grid-template-columns: 1fr; } .author-curated__panel--wide { grid-column: auto; } }
 .author-state.is-error { color: #e2776c; }
 .author-hero { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; gap: 28px; align-items: center; padding: clamp(28px, 5vw, 54px); border: 1px solid var(--border-hairline); border-radius: 26px; background: radial-gradient(circle at 88% 12%, rgba(103, 72, 188, .2), transparent 34%), linear-gradient(135deg, color-mix(in srgb, var(--background-primary-alt) 94%, #3159c7 6%), var(--background-primary)); }
 .author-hero > img { width: 132px; height: 132px; border: 1px solid color-mix(in srgb, var(--color-ob) 45%, transparent); border-radius: 50%; object-fit: cover; box-shadow: 0 18px 55px rgba(7, 13, 38, .34); }
@@ -250,8 +318,10 @@ export default defineComponent({
 .author-hero h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.6rem); letter-spacing: -.05em; }
 .author-hero__handle { display: inline-block; margin-top: 6px; color: var(--text-ob-dim); font-size: 13px; }
 .author-hero__intro { max-width: 620px; margin: 18px 0 8px; color: var(--text-ob-dim); line-height: 1.75; }
-.author-hero__actions { margin-top: 16px; }
+.author-hero__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .author-hero__copy a { display: inline-flex; align-items: center; min-height: 24px; color: var(--color-ob); font-size: 12px; text-decoration: none; }
+.author-hero__action { min-height: 36px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--color-ob) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-ob) 16%, transparent); }
+.author-hero__action + .author-hero__action { background: transparent; }
 .author-hero__stats { display: grid; grid-template-columns: repeat(5, auto); gap: 20px; margin: 0; }
 .author-hero__stats div { text-align: center; }
 .author-hero__stats dt { font-size: 1.7rem; font-weight: 800; }

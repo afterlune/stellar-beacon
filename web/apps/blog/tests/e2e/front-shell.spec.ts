@@ -424,7 +424,13 @@ function searchHitFixture(id: number, title: string, content: string) {
   return { id, articleTitle: title, articleContent: content, status: 1, isDelete: 0 }
 }
 
-async function mockContentDiscovery(page: Page, options: { searchFails?: boolean } = {}): Promise<void> {
+async function mockContentDiscovery(page: Page, options: {
+  searchFails?: boolean
+  collectionsFail?: boolean
+  talksFail?: boolean
+  hotArticlesEmpty?: boolean
+  emptyCurated?: boolean
+} = {}): Promise<void> {
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url())
     const path = url.pathname
@@ -464,19 +470,38 @@ async function mockContentDiscovery(page: Page, options: { searchFails?: boolean
       return
     }
     if (path === '/api/v1/public/authors/test-author') {
-      await fulfill({ id: 1, handle: 'test-author', nickname: '测试作者', avatar: '', intro: '公共空间作者', website: 'https://example.com', articleCount: 1, talkCount: 1, seriesCount: 1 })
+      await fulfill({ id: 1, handle: 'test-author', nickname: '测试作者', avatar: '', intro: '公共空间作者', website: 'https://example.com', articleCount: 1, talkCount: 1, seriesCount: 1, collectionCount: 1 })
       return
     }
     if (path === '/api/v1/public/authors/test-author/articles') {
-      await fulfill({ items: [{ id: 101, articleTitle: '公共空间的第一篇文章', articleContent: '由社区作者共同发布的公开内容。', categoryName: '工程实践', createTime: '2026-09-18T10:00:00+08:00' }], total: 1, page: 1, pageSize: 12 })
+      const sort = url.searchParams.get('sort') || 'latest'
+      const items = options.emptyCurated || (options.hotArticlesEmpty && sort === 'hot')
+        ? []
+        : [{ id: 101, articleTitle: '公共空间的第一篇文章', articleContent: '由社区作者共同发布的公开内容。', categoryName: '工程实践', createTime: '2026-09-18T10:00:00+08:00' }]
+      await fulfill({ items, total: items.length, page: 1, pageSize: 12 })
       return
     }
     if (path === '/api/v1/public/authors/test-author/talks') {
-      await fulfill({ items: [{ id: 51, content: '作者的一条公开随想', createTime: '2026-09-18T10:00:00+08:00', commentCount: 0 }], total: 1, page: 1, pageSize: 12 })
+      if (options.talksFail) {
+        await fulfill(null, 500)
+        return
+      }
+      const items = options.emptyCurated ? [] : [{ id: 51, content: '作者的一条公开随想', createTime: '2026-09-18T10:00:00+08:00', commentCount: 0 }]
+      await fulfill({ items, total: items.length, page: 1, pageSize: 12 })
       return
     }
     if (path === '/api/v1/public/authors/test-author/series') {
-      await fulfill({ items: [{ id: 3, seriesName: '阅读系列', seriesDesc: '从零搭建阅读体验', articleCount: 3 }], total: 1, page: 1, pageSize: 12 })
+      const items = options.emptyCurated ? [] : [{ id: 3, seriesName: '阅读系列', seriesDesc: '从零搭建阅读体验', articleCount: 3 }]
+      await fulfill({ items, total: items.length, page: 1, pageSize: 12 })
+      return
+    }
+    if (path === '/api/v1/public/authors/test-author/collections') {
+      if (options.collectionsFail) {
+        await fulfill(null, 500)
+        return
+      }
+      const items = options.emptyCurated ? [] : [{ slug: 'public-reading-path', title: '公开阅读路径', description: '从实践到复盘', articleCount: 2 }]
+      await fulfill({ items, total: items.length, page: 1, pageSize: 12 })
       return
     }
     if (path === '/api/v1/public/feed') {
@@ -634,16 +659,69 @@ test.describe('content discovery', () => {
     await expect(page.getByRole('link', { name: '公共空间的第一篇文章' })).toHaveAttribute('href', '/articles/101')
   })
 
-  test('author page presents identity and switches content channels', async ({ page }) => {
+  test('author page presents identity, curated modules, and content channels', async ({ page }) => {
     await mockContentDiscovery(page)
     await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: '测试作者' })).toBeVisible()
     await expect(page.getByText('@test-author')).toBeVisible()
-    await expect(page.getByRole('link', { name: '公共空间的第一篇文章' })).toHaveAttribute('href', '/articles/101')
+    await expect(page.getByRole('button', { name: '关注' })).toBeVisible()
+
+    const curated = page.locator('.author-curated')
+    await expect(curated.getByRole('heading', { name: '公开内容精选' })).toBeVisible()
+    await expect(curated.getByRole('heading', { name: '代表作' })).toBeVisible()
+    await expect(curated.getByRole('link', { name: /公共空间的第一篇文章/ })).toHaveAttribute('href', '/articles/101')
+    await expect(curated.getByRole('link', { name: /阅读系列/ })).toHaveAttribute('href', '/series/3')
+    await expect(curated.getByRole('link', { name: /公开阅读路径/ })).toHaveAttribute('href', '/collections/public-reading-path')
+    await expect(curated.getByRole('heading', { name: '最近随想' })).toBeVisible()
 
     await page.getByRole('button', { name: '随想' }).click()
-    await expect(page.getByText('作者的一条公开随想')).toBeVisible()
+    await expect(page.locator('.author-talks')).toContainText('作者的一条公开随想')
+  })
+
+  test('author page offers studio entry to the owner', async ({ page }) => {
+    await page.addInitScript(() => {
+      sessionStorage.setItem('userStore', JSON.stringify({
+        userInfo: { userInfoId: 1, id: 1, nickname: '测试作者', handle: 'test-author' },
+        token: 'e2e-reading-token'
+      }))
+    })
+    await mockContentDiscovery(page)
+    await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('link', { name: '编辑公开资料' })).toHaveAttribute('href', '/studio/profile')
+    await expect(page.getByRole('link', { name: '进入我的空间' })).toHaveAttribute('href', '/studio/dashboard')
+    await expect(page.locator('.follow-button')).toHaveCount(0)
+  })
+
+  test('author curation falls back to latest when hot articles are empty', async ({ page }) => {
+    await mockContentDiscovery(page, { hotArticlesEmpty: true })
+    await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.locator('.author-curated').getByRole('link', { name: /公共空间的第一篇文章/ })).toHaveAttribute('href', '/articles/101')
+  })
+
+  test('author curation hides only failed modules and keeps channels usable', async ({ page }) => {
+    await mockContentDiscovery(page, { collectionsFail: true, talksFail: true })
+    await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
+
+    const curated = page.locator('.author-curated')
+    await expect(curated.getByRole('heading', { name: '代表作' })).toBeVisible()
+    await expect(curated.getByRole('heading', { name: '主题系列' })).toBeVisible()
+    await expect(curated.getByRole('heading', { name: '公开书单' })).toHaveCount(0)
+    await expect(curated.getByRole('heading', { name: '最近随想' })).toHaveCount(0)
+
+    await page.getByRole('button', { name: '系列' }).click()
+    await expect(page.locator('.author-series')).toContainText('阅读系列')
+  })
+
+  test('author page keeps the content channels when there is no curated content', async ({ page }) => {
+    await mockContentDiscovery(page, { emptyCurated: true })
+    await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.locator('.author-curated')).toHaveCount(0)
+    await expect(page.locator('.author-content')).toBeVisible()
+    await expect(page.getByText('这里还没有公开内容。')).toBeVisible()
   })
 
   test('category overview links into a category article list', async ({ page }) => {    await mockContentDiscovery(page)
@@ -1127,6 +1205,30 @@ test.describe('studio workspace', () => {
   test('redirects anonymous visitors through login', async ({ page }) => {
     await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(/login=1/)
+  })
+
+  test('switches directly between public and private spaces', async ({ page }) => {
+    await mockStudioApi(page)
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('heading', { name: '创作总览' })).toBeVisible()
+    const desktopSwitcher = page.locator('[data-dia="space-switcher"]')
+    if (await desktopSwitcher.isVisible()) {
+      await desktopSwitcher.locator('[data-space="public"]').click()
+    } else {
+      await page.locator('[data-dia="space-switcher-mobile"]').click()
+      await page.getByText('公共空间', { exact: true }).last().click()
+    }
+    await expect(page).toHaveURL(/\/$/)
+
+    const publicMobileSwitcher = page.locator('[data-dia="space-switcher-mobile"]')
+    if (await publicMobileSwitcher.isVisible()) {
+      await publicMobileSwitcher.click()
+      await page.getByText('我的空间', { exact: true }).last().click()
+    } else {
+      await page.locator('[data-dia="space-switcher"] [data-space="private"]').click()
+    }
+    await expect(page).toHaveURL(/\/studio\/dashboard$/)
   })
 
   test('shows non-blocking public identity guidance on the studio dashboard', async ({ page }) => {

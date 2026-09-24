@@ -3,7 +3,7 @@
     <header class="studio-shell__top">
       <router-link to="/" class="studio-shell__brand">
         <span>SB</span>
-        <div><strong>Stellar Studio</strong><small>私有创作空间</small></div>
+        <div><strong>Stellar Studio</strong><small>我的私有空间</small></div>
       </router-link>
       <div class="studio-shell__user">
         <router-link v-if="userInfo?.handle" :to="`/u/${userInfo.handle}`">查看公开主页</router-link>

@@ -28,6 +28,7 @@
         <DropdownItem name="cn">中文</DropdownItem>
       </DropdownMenu>
     </Dropdown>
+    <SpaceSwitcher />
     <span
       v-if="userInfo !== ''"
       class="ob-drop-shadow header-notification"
@@ -52,7 +53,7 @@
         <DropdownMenu>
           <template v-if="!isMobile">
             <DropdownItem @click="openForYou">{{ $i18n.locale === 'cn' ? '为你推荐' : 'For you' }}</DropdownItem>
-            <DropdownItem @click="openStudio">{{ $i18n.locale === 'cn' ? '创作台' : 'Studio' }}</DropdownItem>
+            <DropdownItem @click="openPublicProfile" :disabled="!publicHandle">{{ $i18n.locale === 'cn' ? '我的公开主页' : 'My public profile' }}</DropdownItem>
             <DropdownItem @click="openFollowing">{{ $i18n.locale === 'cn' ? '关注动态' : 'Following' }}</DropdownItem>
             <DropdownItem @click="openNotifications">{{ $i18n.locale === 'cn' ? '发布提醒' : 'Notifications' }}</DropdownItem>
             <DropdownItem @click="openStudioProfile">{{ $i18n.locale === 'cn' ? '公开资料' : 'Public profile' }}</DropdownItem>
@@ -149,6 +150,7 @@ import { useCommonStore } from '@/stores/common'
 import { useUserStore } from '@/stores/user'
 import { useSocialStore } from '@/stores/social'
 import { useRoute, useRouter } from 'vue-router'
+import SpaceSwitcher from './SpaceSwitcher.vue'
 import ThemeToggle from '@/components/ToggleSwitch/ThemeToggle.vue'
 import api from '@/api/api'
 import SearchModel from '@/components/SearchModel.vue'
@@ -164,7 +166,8 @@ export default defineComponent({
     DropdownMenu,
     DropdownItem,
     ThemeToggle,
-    SearchModel
+    SearchModel,
+    SpaceSwitcher
   },
   setup() {
     const { t } = useI18n()
@@ -176,6 +179,7 @@ export default defineComponent({
     const searchStore = useSearchStore()
     const navigatorStore = useNavigatorStore()
     const router = useRouter()
+    const publicHandle = computed(() => String(userStore.userInfo?.handle || '').trim())
     const route = useRoute()
     const loginInfo = reactive({
       username: '' as any,
@@ -293,6 +297,7 @@ export default defineComponent({
     const openForYou = () => {
       router.push({ path: '/for-you' })
     }
+    const openPublicProfile = () => { if (publicHandle.value) router.push({ path: `/u/${publicHandle.value}` }) }
     const openStudioProfile = () => {
       router.push({ path: '/studio/profile' })
     }
@@ -428,6 +433,8 @@ export default defineComponent({
       openUserCenter,
       openFavorites,
       openStudio,
+      openPublicProfile,
+      publicHandle,
       openNotifications,
       openFollowing,
       openForYou,
