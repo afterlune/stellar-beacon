@@ -1039,6 +1039,7 @@ async function mockStudioApi(page: Page, options: {
   seriesDetail?: any
   analytics?: any
   calendarEvents?: any[]
+  dashboard?: Record<string, number>
 } = {}) {
   const saved = {
     article: null as any,
@@ -1055,6 +1056,15 @@ async function mockStudioApi(page: Page, options: {
     seriesDetail: options.seriesDetail || null,
     analytics: options.analytics || null,
     calendarEvents: options.calendarEvents || [],
+    dashboard: {
+      articleCount: 3,
+      draftCount: 1,
+      privateCount: 1,
+      talkCount: 2,
+      seriesCount: 1,
+      favoriteCount: 4,
+      ...(options.dashboard || {})
+    },
     profile: {
       handle: 'test-author',
       nickname: '测试作者',
@@ -1092,7 +1102,7 @@ async function mockStudioApi(page: Page, options: {
       body: JSON.stringify({ code: 'OK', message: '操作成功', flag: true, data })
     })
     if (url.pathname === '/api/v1/studio/dashboard' && method === 'GET') {
-      await respond({ articleCount: 3, draftCount: 1, privateCount: 1, talkCount: 2, seriesCount: 1, favoriteCount: 4 })
+      await respond(saved.dashboard)
       return
     }
     if (url.pathname === '/api/v1/studio/analytics' && method === 'GET') {
@@ -1269,6 +1279,66 @@ test.describe('studio workspace', () => {
     await expect(page).toHaveURL(/\/studio\/dashboard$/)
   })
 
+  test('guides a new creator through studio activation and remembers collapse', async ({ page }) => {
+    await mockStudioApi(page, {
+      profile: { handle: '', nickname: '', avatar: '', intro: '', website: '' },
+      dashboard: { articleCount: 0, draftCount: 0, privateCount: 0, talkCount: 0, seriesCount: 0, favoriteCount: 0 }
+    })
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    const activation = page.getByTestId('studio-activation')
+    await expect(activation).toBeVisible()
+    await expect(activation.getByRole('heading', { name: '完成你的空间设置' })).toBeVisible()
+    await expect(activation.locator('.studio-activation__progress strong')).toHaveText('0/3')
+    await expect(activation.locator('[data-step="identity"]')).toContainText('完成公开身份')
+    await expect(activation.locator('[data-step="content"]')).toContainText('写下第一条内容')
+    await expect(activation.locator('[data-step="profile"]')).toContainText('预览公开主页')
+    await expect(activation.getByRole('link', { name: '写文章' })).toHaveAttribute('href', '/studio/articles/new')
+    await expect(activation.getByRole('link', { name: '发随想' })).toHaveAttribute('href', '/studio/talks/new')
+
+    await activation.getByRole('button', { name: '稍后' }).click()
+    await expect(activation.getByRole('button', { name: /继续空间设置/ })).toBeVisible()
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('studio-activation').getByRole('button', { name: /继续空间设置/ })).toBeVisible()
+  })
+
+  test('does not onboard an established complete creator', async ({ page }) => {
+    await mockStudioApi(page, {
+      profile: { handle: 'test-author', nickname: '测试作者', avatar: 'https://cdn.example.test/avatar.png', intro: '持续写作。', website: '' },
+      dashboard: { articleCount: 1, draftCount: 0, privateCount: 0, talkCount: 0, seriesCount: 0, favoriteCount: 0 }
+    })
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByTestId('studio-activation')).toHaveCount(0)
+  })
+  test('completes studio activation after identity content and profile preview', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (localStorage.getItem('stellar-beacon:studio-activation:v1:7')) return
+      localStorage.setItem('stellar-beacon:studio-activation:v1:7', JSON.stringify({
+        collapsed: false, profileVisited: false, startedAt: '2026-09-20T10:00:00+08:00', completedAt: ''
+      }))
+    })
+    await mockStudioApi(page, {
+      profile: {
+        handle: 'test-author', nickname: '测试作者', avatar: 'https://cdn.example.test/avatar.png',
+        intro: '关注系统设计与长期写作。', website: ''
+      },
+      dashboard: { articleCount: 1, draftCount: 0, privateCount: 0, talkCount: 0, seriesCount: 0, favoriteCount: 0 }
+    })
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    const activation = page.getByTestId('studio-activation')
+    await expect(activation.locator('.studio-activation__progress strong')).toHaveText('2/3')
+    await activation.locator('[data-step="profile"]').getByRole('link', { name: '预览主页' }).click()
+    await expect(page).toHaveURL(/\/u\/test-author$/)
+
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('studio-activation')).toHaveCount(0)
+    await expect.poll(() => page.evaluate(() => {
+      const raw = localStorage.getItem('stellar-beacon:studio-activation:v1:7')
+      return raw ? JSON.parse(raw) : null
+    })).toMatchObject({ profileVisited: true })
+  })
   test('shows non-blocking public identity guidance on the studio dashboard', async ({ page }) => {
     await mockStudioApi(page)
     await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })

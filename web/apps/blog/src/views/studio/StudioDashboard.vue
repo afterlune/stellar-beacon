@@ -5,6 +5,44 @@
       <router-link to="/studio/articles/new">写一篇文章 →</router-link>
     </header>
 
+    <section v-if="showActivation" class="studio-activation" :class="{ 'is-collapsed': activationState.collapsed }" data-testid="studio-activation">
+      <template v-if="!activationState.collapsed">
+        <header>
+          <div><p>ACTIVATION</p><h2>完成你的空间设置</h2><span>三步建立公开身份、写下第一条内容，并检查公开主页。</span></div>
+          <div class="studio-activation__progress">
+            <strong>{{ activationProgress.completed }}/{{ activationProgress.total }}</strong>
+            <button type="button" @click="collapseActivation">稍后</button>
+          </div>
+        </header>
+        <div class="studio-activation__steps">
+          <article v-for="(step, index) in activationProgress.steps" :key="step.key" :class="{ done: step.done }" :data-step="step.key">
+            <span class="studio-activation__index">{{ step.done ? '✓' : index + 1 }}</span>
+            <div class="studio-activation__copy">
+              <strong>{{ step.label }}</strong>
+              <p>{{ step.description }}</p>
+            </div>
+            <div class="studio-activation__actions">
+              <template v-if="step.key === 'identity'">
+                <router-link to="/studio/profile">{{ step.done ? '查看资料' : '完善资料' }}</router-link>
+              </template>
+              <template v-else-if="step.key === 'content'">
+                <router-link to="/studio/articles/new">写文章</router-link>
+                <router-link to="/studio/talks/new">发随想</router-link>
+              </template>
+              <template v-else>
+                <router-link v-if="validHandle" :to="`/u/${normalizedHandle}`" @click="markProfileVisited">预览主页</router-link>
+                <router-link v-else to="/studio/profile">先设置 Handle</router-link>
+              </template>
+            </div>
+          </article>
+        </div>
+      </template>
+      <button v-else type="button" class="studio-activation__collapsed" @click="expandActivation">
+        <span>继续空间设置</span>
+        <strong>{{ activationProgress.completed }}/{{ activationProgress.total }}</strong>
+      </button>
+    </section>
+
     <section class="studio-stats">
       <article v-for="stat in stats" :key="stat.key">
         <span>{{ stat.index }}</span>
@@ -134,12 +172,21 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api/api'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
-import { isValidStudioHandle, normalizeStudioHandle, studioProfileCompletion, type StudioProfile } from '@/utils/studioProfile'
+import {
+  isValidStudioHandle,
+  normalizeStudioHandle,
+  readStudioActivationState,
+  saveStudioActivationState,
+  studioActivationProgress,
+  studioProfileCompletion,
+  type StudioActivationState,
+  type StudioProfile
+} from '@/utils/studioProfile'
 
 type CalendarEvent = { articleId: number; title: string; scheduledAt: string; publishedAt?: string; state: string; lastError?: string }
 
@@ -182,6 +229,32 @@ export default defineComponent({
     const completion = computed(() => studioProfileCompletion(profile))
     const normalizedHandle = computed(() => normalizeStudioHandle(profile.handle))
     const validHandle = computed(() => isValidStudioHandle(normalizedHandle.value))
+    const activationUserID = Number(userStore.userInfo?.userInfoId || userStore.userInfo?.id || 0) || 'current'
+    const activationState = reactive<StudioActivationState>(readStudioActivationState(activationUserID))
+    const dashboardLoaded = ref(false)
+    const profileLoaded = ref(false)
+    const activationProgress = computed(() => studioActivationProgress(profile, dashboard.value, activationState.profileVisited))
+    const activationReady = computed(() => dashboardLoaded.value && profileLoaded.value)
+    const showActivation = computed(() => activationReady.value && !activationState.completedAt && !activationProgress.value.isComplete)
+    const persistActivation = () => saveStudioActivationState(activationUserID, activationState)
+    const collapseActivation = () => { activationState.collapsed = true; persistActivation() }
+    const expandActivation = () => { activationState.collapsed = false; persistActivation() }
+    const markProfileVisited = () => { activationState.profileVisited = true; persistActivation() }
+    watch(activationProgress, (progress) => {
+      if (!progress.isComplete || activationState.completedAt) return
+      activationState.completedAt = new Date().toISOString()
+      persistActivation()
+    }, { immediate: true })
+    watch(activationReady, (ready) => {
+      if (!ready || activationState.completedAt || activationState.startedAt) return
+      const progress = activationProgress.value
+      if (progress.profileComplete && progress.contentCount > 0) {
+        activationState.completedAt = new Date().toISOString()
+      } else {
+        activationState.startedAt = new Date().toISOString()
+      }
+      persistActivation()
+    }, { immediate: true })
     const operations = computed(() => analytics.value.operations || {})
     const performance = computed(() => analytics.value.performance || {})
     const trend = computed<any[]>(() => Array.isArray(analytics.value.trend) ? analytics.value.trend : [])
@@ -223,6 +296,7 @@ export default defineComponent({
       try {
         const response = await api.getStudioDashboard()
         dashboard.value = response?.data?.data || {}
+        dashboardLoaded.value = true
       } catch {
         ElMessage.error('创作数据加载失败')
       }
@@ -266,6 +340,7 @@ export default defineComponent({
         if (!response?.data?.flag) return
         Object.assign(profile, response.data.data || {})
         userStore.userInfo = { ...(userStore.userInfo || {}), ...response.data.data }
+        profileLoaded.value = true
       } catch {
         // Keep the cached identity visible when the profile request is unavailable.
       }
@@ -297,7 +372,7 @@ export default defineComponent({
       operations, performance, trend, topArticles, trendPolyline, trendAreaPoints,
       calendarEvents, calendarError, monthCursor, monthLabel, calendarCells, weekdays, moveMonth, resetMonth, retryPublish,
       formatDateTime, formatPercent, eventStateLabel, changeRange,
-      profile, stats, defaultAvatar, completion, normalizedHandle, validHandle
+      profile, stats, defaultAvatar, completion, normalizedHandle, validHandle, activationState, activationProgress, showActivation, collapseActivation, expandActivation, markProfileVisited
     }
   }
 })
@@ -310,7 +385,26 @@ export default defineComponent({
 .studio-page-head h1 { margin: 0 0 8px; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -.05em; }
 .studio-page-head span, .studio-panel header > span { color: var(--text-ob-dim); font-size: 12px; }
 .studio-page-head > a { padding: 10px 16px; border-radius: 999px; background: var(--color-ob); color: #081127; font-weight: 700; text-decoration: none; }
-.studio-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+.studio-activation { margin-top: 18px; padding: clamp(20px, 3vw, 30px); border: 1px solid color-mix(in srgb, var(--color-ob) 32%, var(--border-hairline)); border-radius: 20px; background: radial-gradient(circle at 90% 0, color-mix(in srgb, var(--color-ob) 17%, transparent), transparent 36%), color-mix(in srgb, var(--background-primary-alt) 94%, transparent); }
+.studio-activation > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.studio-activation h2 { margin: 0 0 7px; font-size: clamp(1.35rem, 2.5vw, 1.9rem); }
+.studio-activation p { margin: 0; color: var(--text-ob-dim); font-size: 12px; line-height: 1.7; }
+.studio-activation__progress { display: flex; align-items: center; gap: 12px; }
+.studio-activation__progress strong { font-size: 1.5rem; }
+.studio-activation__progress button { min-height: 34px; padding: 0 13px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.studio-activation__steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.studio-activation__steps article { position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 11px; padding: 16px; border: 1px solid var(--border-hairline); border-radius: 15px; background: color-mix(in srgb, var(--background-primary) 72%, transparent); }
+.studio-activation__steps article.done { border-color: color-mix(in srgb, #78d0bb 48%, var(--border-hairline)); }
+.studio-activation__index { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--color-ob) 15%, transparent); color: var(--color-ob); font-weight: 800; }
+.studio-activation__steps article.done .studio-activation__index { background: color-mix(in srgb, #78d0bb 20%, transparent); color: #78d0bb; }
+.studio-activation__copy strong { display: block; margin: 5px 0 6px; }
+.studio-activation__actions { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.studio-activation__actions a { display: inline-flex; min-height: 34px; align-items: center; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--color-ob) 42%, transparent); border-radius: 999px; color: var(--color-ob); font-size: 11px; text-decoration: none; }
+.studio-activation__actions a + a { border-color: var(--border-hairline); color: inherit; }
+.studio-activation__collapsed { display: flex; width: 100%; min-height: 54px; align-items: center; justify-content: space-between; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.studio-activation__collapsed span { color: var(--text-ob-dim); }
+.studio-activation__collapsed strong { color: var(--color-ob); }
+@media (max-width: 900px) { .studio-activation__steps { grid-template-columns: 1fr; } }.studio-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
 .studio-stats article { padding: 16px; border: 1px solid var(--border-hairline); border-radius: 14px; background: color-mix(in srgb, var(--background-primary-alt) 90%, transparent); }
 .studio-stats span, .studio-stats small { display: block; color: var(--text-ob-dim); font-size: 10px; }
 .studio-stats strong { display: block; margin: 8px 0 4px; font-size: 1.45rem; }
@@ -381,6 +475,44 @@ export default defineComponent({
 .studio-quick strong, .studio-quick span { display: block; }
 .studio-quick span { grid-column: 1; color: var(--text-ob-dim); font-size: 11px; }
 .studio-quick em { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--color-ob); font-style: normal; }
-@media (max-width: 980px) { .studio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .studio-operation-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-analytics-grid, .studio-dashboard__grid { grid-template-columns: 1fr; } }
-@media (max-width: 720px) { .studio-page-head { align-items: stretch; flex-direction: column; } .studio-calendar-day { min-height: 86px; padding: 5px; } .studio-calendar-event { padding: 4px; } .studio-calendar-event span { display: none; } .studio-operation-cards { grid-template-columns: 1fr 1fr; } .studio-schedule-list a { grid-template-columns: 1fr; } .studio-schedule-list span { display: none; } .studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-profile-summary { grid-template-columns: 1fr; } .studio-profile-summary > img { width: 72px; height: 72px; } .studio-profile-progress, .studio-profile-actions { grid-column: auto; } }
+@media (max-width: 980px) { .studio-activation { margin-top: 18px; padding: clamp(20px, 3vw, 30px); border: 1px solid color-mix(in srgb, var(--color-ob) 32%, var(--border-hairline)); border-radius: 20px; background: radial-gradient(circle at 90% 0, color-mix(in srgb, var(--color-ob) 17%, transparent), transparent 36%), color-mix(in srgb, var(--background-primary-alt) 94%, transparent); }
+.studio-activation > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.studio-activation h2 { margin: 0 0 7px; font-size: clamp(1.35rem, 2.5vw, 1.9rem); }
+.studio-activation p { margin: 0; color: var(--text-ob-dim); font-size: 12px; line-height: 1.7; }
+.studio-activation__progress { display: flex; align-items: center; gap: 12px; }
+.studio-activation__progress strong { font-size: 1.5rem; }
+.studio-activation__progress button { min-height: 34px; padding: 0 13px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.studio-activation__steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.studio-activation__steps article { position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 11px; padding: 16px; border: 1px solid var(--border-hairline); border-radius: 15px; background: color-mix(in srgb, var(--background-primary) 72%, transparent); }
+.studio-activation__steps article.done { border-color: color-mix(in srgb, #78d0bb 48%, var(--border-hairline)); }
+.studio-activation__index { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--color-ob) 15%, transparent); color: var(--color-ob); font-weight: 800; }
+.studio-activation__steps article.done .studio-activation__index { background: color-mix(in srgb, #78d0bb 20%, transparent); color: #78d0bb; }
+.studio-activation__copy strong { display: block; margin: 5px 0 6px; }
+.studio-activation__actions { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.studio-activation__actions a { display: inline-flex; min-height: 34px; align-items: center; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--color-ob) 42%, transparent); border-radius: 999px; color: var(--color-ob); font-size: 11px; text-decoration: none; }
+.studio-activation__actions a + a { border-color: var(--border-hairline); color: inherit; }
+.studio-activation__collapsed { display: flex; width: 100%; min-height: 54px; align-items: center; justify-content: space-between; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.studio-activation__collapsed span { color: var(--text-ob-dim); }
+.studio-activation__collapsed strong { color: var(--color-ob); }
+@media (max-width: 900px) { .studio-activation__steps { grid-template-columns: 1fr; } }.studio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .studio-operation-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-analytics-grid, .studio-dashboard__grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .studio-page-head { align-items: stretch; flex-direction: column; } .studio-calendar-day { min-height: 86px; padding: 5px; } .studio-calendar-event { padding: 4px; } .studio-calendar-event span { display: none; } .studio-operation-cards { grid-template-columns: 1fr 1fr; } .studio-schedule-list a { grid-template-columns: 1fr; } .studio-schedule-list span { display: none; } .studio-activation { margin-top: 18px; padding: clamp(20px, 3vw, 30px); border: 1px solid color-mix(in srgb, var(--color-ob) 32%, var(--border-hairline)); border-radius: 20px; background: radial-gradient(circle at 90% 0, color-mix(in srgb, var(--color-ob) 17%, transparent), transparent 36%), color-mix(in srgb, var(--background-primary-alt) 94%, transparent); }
+.studio-activation > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.studio-activation h2 { margin: 0 0 7px; font-size: clamp(1.35rem, 2.5vw, 1.9rem); }
+.studio-activation p { margin: 0; color: var(--text-ob-dim); font-size: 12px; line-height: 1.7; }
+.studio-activation__progress { display: flex; align-items: center; gap: 12px; }
+.studio-activation__progress strong { font-size: 1.5rem; }
+.studio-activation__progress button { min-height: 34px; padding: 0 13px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.studio-activation__steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.studio-activation__steps article { position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 11px; padding: 16px; border: 1px solid var(--border-hairline); border-radius: 15px; background: color-mix(in srgb, var(--background-primary) 72%, transparent); }
+.studio-activation__steps article.done { border-color: color-mix(in srgb, #78d0bb 48%, var(--border-hairline)); }
+.studio-activation__index { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--color-ob) 15%, transparent); color: var(--color-ob); font-weight: 800; }
+.studio-activation__steps article.done .studio-activation__index { background: color-mix(in srgb, #78d0bb 20%, transparent); color: #78d0bb; }
+.studio-activation__copy strong { display: block; margin: 5px 0 6px; }
+.studio-activation__actions { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.studio-activation__actions a { display: inline-flex; min-height: 34px; align-items: center; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--color-ob) 42%, transparent); border-radius: 999px; color: var(--color-ob); font-size: 11px; text-decoration: none; }
+.studio-activation__actions a + a { border-color: var(--border-hairline); color: inherit; }
+.studio-activation__collapsed { display: flex; width: 100%; min-height: 54px; align-items: center; justify-content: space-between; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.studio-activation__collapsed span { color: var(--text-ob-dim); }
+.studio-activation__collapsed strong { color: var(--color-ob); }
+@media (max-width: 900px) { .studio-activation__steps { grid-template-columns: 1fr; } }.studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .studio-profile-summary { grid-template-columns: 1fr; } .studio-profile-summary > img { width: 72px; height: 72px; } .studio-profile-progress, .studio-profile-actions { grid-column: auto; } }
 </style>
