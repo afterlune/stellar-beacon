@@ -40,6 +40,18 @@ test.describe('blog real backend main chain @integration', () => {
   let authorSession: BrowserSession
   let readerSession: BrowserSession
   const createdCommentIDs: number[] = []
+  let browserContexts: BrowserContext[] = []
+
+  const openBrowserSession = async (
+    browser: Browser,
+    session: LoginSession,
+    extraHTTPHeaders: Record<string, string> = {}
+  ): Promise<BrowserSession> => createBrowserSession(
+    browser,
+    session,
+    extraHTTPHeaders,
+    (context) => browserContexts.push(context)
+  )
 
   test.beforeAll(async ({ request }, testInfo) => {
     if (testInfo.project.name !== 'desktop') return
@@ -53,8 +65,6 @@ test.describe('blog real backend main chain @integration', () => {
   })
 
   test.afterAll(async ({ request }) => {
-    await authorSession?.context.close()
-    await readerSession?.context.close()
     if (!admin?.token || !user?.token) return
 
     await putAPI(request, '/api/v1/auth/me/notification-preferences', admin.token, { notifyInteraction: 1 }).catch(() => undefined)
@@ -91,6 +101,12 @@ test.describe('blog real backend main chain @integration', () => {
   test.beforeEach(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'real backend acceptance runs once on desktop Chrome')
     e2eHeaders = { 'X-Real-IP': `198.51.100.${10 + Math.floor(Math.random() * 200)}` }
+  })
+
+  test.afterEach(async () => {
+    const contexts = browserContexts
+    browserContexts = []
+    await Promise.allSettled(contexts.map((context) => context.close()))
   })
 
   test('public routes load from the real API', async ({ page }) => {
@@ -167,7 +183,7 @@ test.describe('blog real backend main chain @integration', () => {
     const discovered = await getAPIData(request, '/api/v1/public/collections?sort=latest&current=1&size=100')
     expect(itemsOf(discovered).some((item: any) => item.slug === created.slug)).toBe(true)
 
-    const session = await createBrowserSession(browser, user)
+    const session = await openBrowserSession(browser, user)
     try {
       await session.page.goto(`/collections/${created.slug}`, { waitUntil: 'domcontentloaded' })
       await expect(session.page.getByRole('heading', { name: title })).toBeVisible()
@@ -242,7 +258,7 @@ test.describe('blog real backend main chain @integration', () => {
     expect(notification?.articleId).toBe(readerFixtureID)
     expect(notification?.slug).toBe(created.slug)
 
-    const session = await createBrowserSession(browser, user)
+    const session = await openBrowserSession(browser, user)
     try {
       await session.page.goto('/following', { waitUntil: 'domcontentloaded' })
       await session.page.getByRole('button', { name: '书单', exact: true }).click()
@@ -332,7 +348,7 @@ test.describe('blog real backend main chain @integration', () => {
     expect(commentLike.active).toBe(true)
     expect(commentLike.likeCount).toBe(1)
 
-    const session = await createBrowserSession(browser, user)
+    const session = await openBrowserSession(browser, user)
     try {
       await session.page.goto('/studio/library/favorites?tab=collections', { waitUntil: 'domcontentloaded' })
       await expect(session.page.getByText(title).first()).toBeVisible()
@@ -375,7 +391,7 @@ test.describe('blog real backend main chain @integration', () => {
 
     await expect(deleteAPI(request, `/api/v1/studio/collections/${collectionID}/comments/${replyID}`, user.token)).rejects.toThrow()
 
-    const session = await createBrowserSession(browser, admin)
+    const session = await openBrowserSession(browser, admin)
     try {
       await session.page.goto(`/collections/${created.slug}`, { waitUntil: 'domcontentloaded' })
       const pinnedItem = session.page.locator(`#comment-${pinnedCommentID}`)
@@ -426,7 +442,7 @@ test.describe('blog real backend main chain @integration', () => {
     const firstID = await seedApprovedCollectionComment(request, admin, collectionID, firstText)
     const secondID = await seedApprovedCollectionComment(request, admin, collectionID, secondText)
 
-    const session = await createBrowserSession(browser, admin)
+    const session = await openBrowserSession(browser, admin)
     try {
       await session.page.goto(`/studio/collections/${collectionID}/edit`, { waitUntil: 'domcontentloaded' })
       const list = session.page.locator('.governance-list > article')
@@ -479,8 +495,8 @@ test.describe('blog real backend main chain @integration', () => {
 
     await postAPI(request, '/api/v1/auth/me/comment-reports', admin.token, { commentId: commentID, reason: 'spam', detail: `integration report ${runID}` }, isolatedHeaders)
 
-    const ownerSession = await createBrowserSession(browser, admin, isolatedHeaders)
-    const readerSessionForGovernance = await createBrowserSession(browser, user, isolatedHeaders)
+    const ownerSession = await openBrowserSession(browser, admin, isolatedHeaders)
+    const readerSessionForGovernance = await openBrowserSession(browser, user, isolatedHeaders)
     try {
       await ownerSession.page.goto(`/studio/collections/${collectionID}/edit`, { waitUntil: 'domcontentloaded' })
       const reportQueue = ownerSession.page.getByTestId('comment-report-queue')
@@ -579,7 +595,7 @@ test.describe('blog real backend main chain @integration', () => {
       await deleteAPI(request, `/api/v1/auth/me/recommendation-feedback/${Number(authorFeedback.id)}`, user.token)
       await deleteAPI(request, `/api/v1/auth/me/recommendation-feedback/${Number(topicFeedback.id)}`, user.token)
 
-      readerSession = await createBrowserSession(browser, user)
+      readerSession = await openBrowserSession(browser, user)
       await readerSession.page.goto('/for-you', { waitUntil: 'domcontentloaded' })
       await expect(readerSession.page.getByTestId('recommendation-panel')).toBeVisible()
       await expect(readerSession.page.getByTestId('recommendation-card').first()).toBeVisible()
@@ -588,8 +604,8 @@ test.describe('blog real backend main chain @integration', () => {
     }
   })
   test('publishes content and completes interaction notification flows', async ({ request, browser }) => {
-    authorSession = await createBrowserSession(browser, admin)
-    readerSession = await createBrowserSession(browser, user)
+    authorSession = await openBrowserSession(browser, admin)
+    readerSession = await openBrowserSession(browser, user)
     const talkText = `integration e2e talk ${runID}`
     const rootComment = `integration e2e root ${runID}`
     const replyComment = `integration e2e reply ${runID}`
@@ -763,8 +779,8 @@ test.describe('blog real backend main chain @integration', () => {
   test('subscribes to a cross-author topic and receives the feed and notification', async ({ request, browser }) => {
     const topicName = 'Integration Topic'
     const topicKey = 'integration topic'
-    readerSession = await createBrowserSession(browser, user)
-    authorSession = await createBrowserSession(browser, admin)
+    readerSession = await openBrowserSession(browser, user)
+    authorSession = await openBrowserSession(browser, admin)
 
     // Start from a clean slate: an earlier run must never leave the reader
     // already subscribed, which would hide the subscribe control.
@@ -856,8 +872,9 @@ async function loginByAPI(request: APIRequestContext, email: string, password: s
   return { token: String(payload.data?.token || ''), userInfo: payload.data || {} }
 }
 
-async function createBrowserSession(browser: Browser, session: LoginSession, extraHTTPHeaders: Record<string, string> = {}): Promise<BrowserSession> {
+async function createBrowserSession(browser: Browser, session: LoginSession, extraHTTPHeaders: Record<string, string> = {}, registerContext?: (context: BrowserContext) => void): Promise<BrowserSession> {
   const context = await browser.newContext({ baseURL: blogBaseURL, locale: 'zh-CN', extraHTTPHeaders: { ...e2eHeaders, ...extraHTTPHeaders } })
+  registerContext?.(context)
   const page = await context.newPage()
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.evaluate(({ token, userInfo }) => {
