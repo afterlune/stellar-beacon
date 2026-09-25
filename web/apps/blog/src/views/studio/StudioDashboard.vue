@@ -38,7 +38,7 @@
         </div>
       </template>
       <button v-else type="button" class="studio-activation__collapsed" @click="expandActivation">
-        <span>继续空间设置</span>
+        <span>继续空间设置 · {{ activationProgress.nextStep?.label || '完成最后一步' }}</span>
         <strong>{{ activationProgress.completed }}/{{ activationProgress.total }}</strong>
       </button>
     </section>

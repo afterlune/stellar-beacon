@@ -202,7 +202,7 @@ export default {
   markFollowNotificationsRead: (cursor: NotificationCursor) => {
     return http.post('/auth/me/notifications/read', cursor)
   },
-  updateNotificationPreferences: (params: { notifyInteraction: number; notifyTopic?: number; notifyCollection?: number }) => {
+  updateNotificationPreferences: (params: { notifyInteraction: number; notifyTopic?: number; notifyCollection?: number; notifyStudioActivation?: number }) => {
     return http.put('/auth/me/notification-preferences', params)
   },
   subscribeTopic: (topicType: string, topicKey: string) => {

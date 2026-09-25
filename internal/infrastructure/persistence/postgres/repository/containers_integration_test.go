@@ -77,7 +77,7 @@ CREATE TABLE t_user_info (
     email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
     intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
     notify_comment SMALLINT NOT NULL DEFAULT 1, notify_interaction SMALLINT NOT NULL DEFAULT 1, notify_topic SMALLINT NOT NULL DEFAULT 1,
-    notify_collection SMALLINT NOT NULL DEFAULT 1,
+    notify_collection SMALLINT NOT NULL DEFAULT 1, notify_studio_activation SMALLINT NOT NULL DEFAULT 1,
     is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
 );
 CREATE TABLE t_studio_activation (
@@ -186,9 +186,9 @@ CREATE TABLE t_author_publish_event (
 );
 CREATE TABLE t_user_notification (
     id BIGSERIAL PRIMARY KEY, recipient_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
-    actor_id INTEGER NOT NULL REFERENCES t_user_info(id) ON DELETE CASCADE,
-    type VARCHAR(16) NOT NULL, content_type VARCHAR(16) NOT NULL, content_id BIGINT NOT NULL,
-    comment_id BIGINT NOT NULL DEFAULT 0, dedupe_key VARCHAR(191) NOT NULL,
+    actor_id INTEGER REFERENCES t_user_info(id) ON DELETE CASCADE,
+    type VARCHAR(32) NOT NULL, content_type VARCHAR(16) NOT NULL, content_id BIGINT NOT NULL,
+    comment_id BIGINT NOT NULL DEFAULT 0, title VARCHAR(120) NOT NULL DEFAULT '', excerpt VARCHAR(240) NOT NULL DEFAULT '', action_url VARCHAR(255) NOT NULL DEFAULT '', dedupe_key VARCHAR(191) NOT NULL,
     read_at TIMESTAMPTZ NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (recipient_id, dedupe_key), CHECK (recipient_id <> actor_id)
 );
@@ -391,6 +391,26 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	})
 	if err != nil || activation.StartedAt == "" || !activation.Collapsed || activation.IdentityCompletedAt == "" {
 		t.Fatalf("sync studio activation: activation=%+v err=%v", activation, err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE t_studio_activation SET started_at = $1 WHERE user_id = 1", time.Now().Add(-25*time.Hour)); err != nil {
+		t.Fatalf("age studio activation for reminder: %v", err)
+	}
+	created, err := platformRepo.CreateDueStudioActivationReminders(ctx, time.Now(), 10)
+	if err != nil || created != 1 {
+		t.Fatalf("create 24h activation reminder: created=%d err=%v", created, err)
+	}
+	if created, err = platformRepo.CreateDueStudioActivationReminders(ctx, time.Now(), 10); err != nil || created != 0 {
+		t.Fatalf("activation reminder must be idempotent: created=%d err=%v", created, err)
+	}
+	studioNotifications, err := NewFollowRepo(xormEngine).ListNotifications(ctx, 1, port.NotificationGroupStudio, 1, 10)
+	if err != nil || studioNotifications.Count != 1 || len(studioNotifications.Records) != 1 || studioNotifications.Records[0].ActionUrl != "/studio/dashboard#activation" {
+		t.Fatalf("studio reminder inbox item: page=%+v err=%v", studioNotifications, err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE t_studio_activation SET started_at = $1 WHERE user_id = 1", time.Now().Add(-73*time.Hour)); err != nil {
+		t.Fatalf("age studio activation for 72h reminder: %v", err)
+	}
+	if created, err = platformRepo.CreateDueStudioActivationReminders(ctx, time.Now(), 10); err != nil || created != 1 {
+		t.Fatalf("create 72h activation reminder: created=%d err=%v", created, err)
 	}
 	activation, err = platformRepo.SyncStudioActivation(ctx, 1, port.StudioActivationUpdate{
 		Started: false, Collapsed: false, ContentComplete: true, ProfileVisited: true, Completed: true,

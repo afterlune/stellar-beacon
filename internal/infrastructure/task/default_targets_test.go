@@ -83,6 +83,28 @@ func TestRunScheduledPublishQueuesRetriesAndSuppressesHiddenContent(t *testing.T
 	}
 }
 
+type fakeStudioActivationReminders struct {
+	created int
+	err     error
+}
+
+func (f *fakeStudioActivationReminders) CreateDueStudioActivationReminders(context.Context, time.Time, int) (int, error) {
+	return f.created, f.err
+}
+
+func TestRunStudioActivationRemindersReportsProcessedCount(t *testing.T) {
+	repo := &fakeStudioActivationReminders{created: 3}
+	result, err := runStudioActivationReminders(context.Background(), repo)
+	if err != nil || !result.Processed || result.Message != "studio activation reminders=3" {
+		t.Fatalf("unexpected activation reminder result: result=%+v err=%v", result, err)
+	}
+	repo.created = 0
+	result, err = runStudioActivationReminders(context.Background(), repo)
+	if err != nil || result.Processed || result.Message != "studio activation reminders=0" {
+		t.Fatalf("empty activation reminder run should not process: result=%+v err=%v", result, err)
+	}
+}
+
 func TestRunScheduledPublishUsesTerminalFailureAfterFinalRetryGap(t *testing.T) {
 	repo := &fakeScheduledPublishRepo{due: []port.ScheduledPublish{{RecordID: 4, ArticleID: 14, NotificationAttempts: len(scheduledPublishRetryDelays)}}}
 	newsletter := &flakyNewsletter{failArticleID: 14}

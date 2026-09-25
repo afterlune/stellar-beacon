@@ -409,6 +409,66 @@ func (r *MyPlatformRepo) SyncStudioActivation(ctx context.Context, userID int, u
 	return result, err
 }
 
+func (r *MyPlatformRepo) CreateDueStudioActivationReminders(ctx context.Context, now time.Time, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	session, err := repoSession(r.engine, ctx, "platform.studio.activation_reminders")
+	if err != nil {
+		return 0, err
+	}
+	result, err := session.Exec(`
+		INSERT INTO t_user_notification (
+			recipient_id, actor_id, type, content_type, content_id, comment_id,
+			dedupe_key, title, excerpt, action_url
+		)
+		SELECT
+			activation.user_id,
+			NULL,
+			'studio_activation',
+			'studio',
+			0,
+			0,
+			'studio-activation:' || CASE WHEN activation.started_at <= ? THEN '72h' ELSE '24h' END,
+			CASE
+				WHEN activation.identity_completed_at IS NULL THEN '完成公开身份'
+				WHEN activation.content_completed_at IS NULL THEN '写下第一条内容'
+				ELSE '预览你的公开主页'
+			END,
+			CASE
+				WHEN activation.identity_completed_at IS NULL THEN '补齐 Handle、头像、昵称和简介，让公开主页可以访问。'
+				WHEN activation.content_completed_at IS NULL THEN '写一篇文章或发布一条随想，完成你的第一次表达。'
+				ELSE '检查主页在公共空间里的最终呈现，完成创作者激活。'
+			END,
+			CASE
+				WHEN activation.identity_completed_at IS NULL THEN '/studio/profile'
+				WHEN activation.content_completed_at IS NULL THEN '/studio/dashboard#activation'
+				WHEN recipient.handle <> '' THEN '/u/' || recipient.handle
+				ELSE '/studio/profile'
+			END
+		FROM t_studio_activation activation
+		JOIN t_user_info recipient ON recipient.id = activation.user_id
+			AND recipient.is_disable = 0 AND recipient.notify_studio_activation = 1
+		WHERE activation.started_at IS NOT NULL
+		  AND activation.completed_at IS NULL
+		  AND activation.started_at <= ?
+		  AND (activation.identity_completed_at IS NULL
+		       OR activation.content_completed_at IS NULL
+		       OR activation.profile_visited_at IS NULL)
+		ORDER BY activation.started_at ASC
+		LIMIT ?
+		ON CONFLICT (recipient_id, dedupe_key) DO NOTHING
+	`, now.Add(-72*time.Hour), now.Add(-24*time.Hour), limit)
+	if err != nil {
+		return 0, apperrors.Unavailable("platform.studio.activation_reminders", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, apperrors.Unavailable("platform.studio.activation_reminders", err)
+	}
+	return int(affected), nil
+}
+
 func (r *MyPlatformRepo) GetStudioProfile(ctx context.Context, userID int) (port.StudioProfile, error) {
 	session, err := repoSession(r.engine, ctx, "platform.profile.get")
 	if err != nil {

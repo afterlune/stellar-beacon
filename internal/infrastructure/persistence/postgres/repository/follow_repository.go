@@ -274,6 +274,7 @@ func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group 
 		Excerpt     string    `xorm:"excerpt"`
 		Cover       string    `xorm:"cover"`
 		Images      string    `xorm:"images"`
+		ActionUrl   string    `xorm:"action_url"`
 		CreatedAt   time.Time `xorm:"created_at"`
 		IsRead      bool      `xorm:"is_read"`
 	}
@@ -288,7 +289,7 @@ func (r *MyFollowRepo) ListNotifications(ctx context.Context, userID int, group 
 			Actor:       port.PublicAuthor{Id: row.ActorId, Handle: row.ActorHandle, Nickname: row.ActorName, Avatar: row.ActorAvatar},
 			ContentType: row.ContentType, ContentId: row.ContentId, CommentId: row.CommentId,
 			ArticleId: row.ArticleId, Slug: row.Slug,
-			Title: row.Title, Excerpt: row.Excerpt, Cover: row.Cover, Images: decodeTalkImages(row.Images),
+			Title: row.Title, Excerpt: row.Excerpt, ActionUrl: row.ActionUrl, Cover: row.Cover, Images: decodeTalkImages(row.Images),
 			CreatedAt: row.CreatedAt, Read: row.IsRead,
 		})
 	}
@@ -404,6 +405,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		CASE WHEN event.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '') ELSE COALESCE(SUBSTR(talk.content, 1, 240), '') END AS excerpt,
 		COALESCE(article.article_cover, '') AS cover,
 		COALESCE(talk.images, '') AS images,
+		'' AS action_url,
 		event.published_at AS created_at,
 		(event.id <= follow.last_read_event_id) AS is_read,
 		event.id AS sort_id
@@ -420,11 +422,12 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 	SELECT
 		'interaction:' || notification.id::text AS notification_key,
 		notification.type AS notification_type,
-		CASE WHEN notification.type IN ('comment', 'reply', 'moderation') THEN 'comment' ELSE 'reaction' END AS notification_group,
-		notification.actor_id,
-		actor.handle AS actor_handle,
-		actor.nickname AS actor_name,
-		actor.avatar AS actor_avatar,
+		CASE WHEN notification.type = 'studio_activation' THEN 'studio'
+			WHEN notification.type IN ('comment', 'reply', 'moderation') THEN 'comment' ELSE 'reaction' END AS notification_group,
+		COALESCE(notification.actor_id, 0) AS actor_id,
+		COALESCE(actor.handle, '') AS actor_handle,
+		COALESCE(actor.nickname, '') AS actor_name,
+		COALESCE(actor.avatar, '') AS actor_avatar,
 		notification.content_type,
 		notification.content_id,
 		notification.comment_id,
@@ -433,9 +436,11 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		CASE
 			WHEN notification.content_type = 'article' THEN COALESCE(article.article_title, '')
 			WHEN notification.content_type = 'collection' THEN COALESCE(collection.title, '')
+			WHEN notification.type = 'studio_activation' THEN notification.title
 			ELSE ''
 		END AS title,
 		CASE
+			WHEN notification.type = 'studio_activation' THEN notification.excerpt
 			WHEN notification.comment_id > 0 THEN COALESCE(SUBSTR(comment.comment_content, 1, 240), '')
 			WHEN notification.content_type = 'article' THEN COALESCE(SUBSTR(article.article_content, 1, 240), '')
 			WHEN notification.content_type = 'collection' THEN COALESCE(SUBSTR(collection.description, 1, 240), '')
@@ -443,11 +448,12 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		END AS excerpt,
 		COALESCE(article.article_cover, '') AS cover,
 		COALESCE(talk.images, '') AS images,
+		notification.action_url,
 		notification.created_at,
 		(notification.read_at IS NOT NULL) AS is_read,
 		notification.id AS sort_id
 	FROM t_user_notification notification
-	JOIN t_user_info actor ON actor.id = notification.actor_id AND actor.is_disable = 0
+	LEFT JOIN t_user_info actor ON actor.id = notification.actor_id AND actor.is_disable = 0
 	LEFT JOIN t_comment comment ON notification.comment_id > 0 AND comment.id = notification.comment_id
 	LEFT JOIN t_article article ON notification.content_type = 'article' AND article.id = notification.content_id
 		AND article.is_delete = 0 AND article.status = 1 AND article.moderation_status = 'visible'
@@ -481,6 +487,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 			AND ((notification.content_type = 'collection' AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)
 				OR (notification.content_type = 'article' AND article.id IS NOT NULL)
 				OR (notification.content_type = 'talk' AND talk.id IS NOT NULL)))
+		OR (notification.type = 'studio_activation' AND notification.content_type = 'studio')
 		OR
 		(notification.type IN ('like', 'favorite')
 			AND (
@@ -493,7 +500,9 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 					OR (notification.content_type = 'collection' AND collection_reaction.id IS NOT NULL
 						AND collection.id IS NOT NULL AND collection_owner.id IS NOT NULL)))))
 	  )
-	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply', 'moderation')) OR (? = 'reaction' AND notification.type IN ('like', 'favorite')))
+	  AND (? = '' OR (? = 'comment' AND notification.type IN ('comment', 'reply', 'moderation'))
+	       OR (? = 'reaction' AND notification.type IN ('like', 'favorite'))
+	       OR (? = 'studio' AND notification.type = 'studio_activation'))
 	UNION ALL
 	SELECT
 		'topic:' || event.id::text AS notification_key,
@@ -512,6 +521,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		COALESCE(SUBSTR(article.article_content, 1, 240), '') AS excerpt,
 		COALESCE(article.article_cover, '') AS cover,
 		'' AS images,
+		'' AS action_url,
 		event.published_at AS created_at,
 		bool_and(event.id <= subscription.last_read_event_id) AS is_read,
 		event.id AS sort_id
@@ -546,6 +556,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 		article.article_title AS excerpt,
 		COALESCE(article.article_cover, '') AS cover,
 		'' AS images,
+		'' AS action_url,
 		event.created_at AS created_at,
 		(event.id <= subscription.last_read_event_id) AS is_read,
 		event.id AS sort_id
@@ -563,7 +574,7 @@ const notificationFeedSQL = "WITH " + taxonomyMembershipCTE + `
 `
 
 func notificationFeedArgs(userID int, group string) []interface{} {
-	return []interface{}{userID, group, group, userID, group, group, group, userID, userID, group, group, userID, group, group}
+	return []interface{}{userID, group, group, userID, group, group, group, group, userID, userID, group, group, userID, group, group}
 }
 func decodeTalkImages(value string) []string {
 	value = strings.TrimSpace(value)

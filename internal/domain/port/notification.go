@@ -9,6 +9,7 @@ const (
 	NotificationGroupReaction   = "reaction"
 	NotificationGroupTopic      = "topic"
 	NotificationGroupCollection = "collection"
+	NotificationGroupStudio     = "studio"
 )
 
 const (
@@ -18,11 +19,12 @@ const (
 	NotificationTypeLike             = "like"
 	NotificationTypeFavorite         = "favorite"
 	NotificationTypeCollectionUpdate = "collection_update"
+	NotificationTypeStudioActivation = "studio_activation"
 )
 
 func ValidNotificationGroup(value string) bool {
 	switch value {
-	case NotificationGroupAll, NotificationGroupPublish, NotificationGroupComment, NotificationGroupReaction, NotificationGroupTopic, NotificationGroupCollection:
+	case NotificationGroupAll, NotificationGroupPublish, NotificationGroupComment, NotificationGroupReaction, NotificationGroupTopic, NotificationGroupCollection, NotificationGroupStudio:
 		return true
 	default:
 		return false
@@ -41,6 +43,7 @@ type NotificationItem struct {
 	Slug        string       `json:"slug,omitempty"`
 	Title       string       `json:"title"`
 	Excerpt     string       `json:"excerpt"`
+	ActionUrl   string       `json:"actionUrl,omitempty"`
 	Cover       string       `json:"cover,omitempty"`
 	Images      []string     `json:"images,omitempty"`
 	CreatedAt   time.Time    `json:"createdAt"`

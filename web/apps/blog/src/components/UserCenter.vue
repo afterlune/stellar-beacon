@@ -41,6 +41,13 @@
             @change="changeInteractionNotice" />
         </div>
         <div class="account-row">
+          <div><strong>创作进度提醒</strong><small>激活停滞时发送低频站内提醒，最多两次</small></div>
+          <el-switch
+            :model-value="Number(userInfo.notifyStudioActivation ?? 1) === 1"
+            :disabled="loading"
+            @change="changeStudioActivationNotice" />
+        </div>
+        <div class="account-row">
           <div><strong>话题订阅提醒</strong><small>订阅的话题有新文章时进入通知中心</small></div>
           <el-switch
             :model-value="Number(userInfo.notifyTopic ?? 1) === 1"
@@ -184,6 +191,25 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
+    const changeStudioActivationNotice = async (value: boolean) => {
+      reactiveData.loading = true
+      try {
+        const notifyStudioActivation = value ? 1 : 0
+        const response = await api.updateNotificationPreferences({
+          notifyInteraction: Number(userStore.userInfo?.notifyInteraction ?? 1),
+          notifyTopic: Number(userStore.userInfo?.notifyTopic ?? 1),
+          notifyCollection: Number(userStore.userInfo?.notifyCollection ?? 1),
+          notifyStudioActivation
+        })
+        if (!response?.data?.flag) throw new Error(response?.data?.message || '通知设置保存失败')
+        userStore.userInfo = { ...(userStore.userInfo || {}), notifyStudioActivation }
+        proxy.$notify({ title: '成功', message: '创作进度提醒设置已更新', type: 'success' })
+      } catch (reason: any) {
+        proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '通知设置保存失败', type: 'error' })
+      } finally {
+        reactiveData.loading = false
+      }
+    }
     const changeTopicNotice = async (value: boolean) => {
       reactiveData.loading = true
       try {
@@ -262,7 +288,7 @@ export default defineComponent({
 
     return {
       userInfo, visible, defaultAvatar, ...toRefs(reactiveData), handleClose, openStudioProfile,
-      bindingEmail, changeSubscribe, changeInteractionNotice, changeTopicNotice, changeCollectionNotice, changeCommentNotice, sendCode,
+      bindingEmail, changeSubscribe, changeInteractionNotice, changeStudioActivationNotice, changeTopicNotice, changeCollectionNotice, changeCommentNotice, sendCode,
       feedbackTypeLabel, restoreRecommendation
     }
   }

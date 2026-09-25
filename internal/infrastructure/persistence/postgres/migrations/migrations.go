@@ -125,6 +125,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyStudioActivationSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyStudioActivationReminderSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -693,10 +696,11 @@ func applyJobSchedulerSchema(ctx context.Context, engine *xorm.Engine) error {
 		"auroraQuartz.clearJobLogs":        "jobLogs.cleanup",
 	}
 	registered := map[string]bool{
-		"article.publishScheduled": true,
-		"growth.cleanup":           true,
-		"jobLogs.cleanup":          true,
-		"userArea.refresh":         true,
+		"article.publishScheduled":   true,
+		"growth.cleanup":             true,
+		"jobLogs.cleanup":            true,
+		"userArea.refresh":           true,
+		"studio.activationReminders": true,
 	}
 	for _, job := range jobs {
 		target := strings.TrimSpace(job.InvokeTarget)
@@ -727,6 +731,7 @@ func applyJobSchedulerSchema(ctx context.Context, engine *xorm.Engine) error {
 		{"清理增长事件", "系统", "growth.cleanup", "20 3 * * *", "每天删除 180 天前的增长事件"},
 		{"清理任务日志", "系统", "jobLogs.cleanup", "0 4 * * *", "每天清理任务执行日志"},
 		{"刷新用户地域统计", "系统", "userArea.refresh", "*/30 * * * *", "每 30 分钟刷新用户地域分布"},
+		{"提醒创作者完成激活", "系统", "studio.activationReminders", "15 * * * *", "每小时提醒停滞的新创作者完成激活"},
 	}
 	for _, seed := range seedJobs {
 		var exists bool
@@ -1878,6 +1883,53 @@ func applyStudioActivationSchema(ctx context.Context, engine *xorm.Engine) error
 	}
 	if err := session.Commit(); err != nil {
 		return fmt.Errorf("commit studio activation migration: %w", err)
+	}
+	return nil
+}
+
+// applyStudioActivationReminderSchema adds the dedicated creator-progress
+// preference, arbitrary system-notification copy, and the hourly reminder job.
+func applyStudioActivationReminderSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 30)").Get(&applied); err != nil {
+		return fmt.Errorf("check studio activation reminder migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin studio activation reminder migration: %w", err)
+	}
+	defer session.Rollback()
+	statements := []string{
+		`ALTER TABLE t_user_info ADD COLUMN IF NOT EXISTS notify_studio_activation SMALLINT NOT NULL DEFAULT 1`,
+		`ALTER TABLE t_user_notification ADD COLUMN IF NOT EXISTS title VARCHAR(120) NOT NULL DEFAULT ''`,
+		`ALTER TABLE t_user_notification ADD COLUMN IF NOT EXISTS excerpt VARCHAR(240) NOT NULL DEFAULT ''`,
+		`ALTER TABLE t_user_notification ADD COLUMN IF NOT EXISTS action_url VARCHAR(255) NOT NULL DEFAULT ''`,
+		`ALTER TABLE t_user_notification ALTER COLUMN type TYPE VARCHAR(32)`,
+		`ALTER TABLE t_user_notification ALTER COLUMN actor_id DROP NOT NULL`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply studio activation reminder schema: %w", err)
+		}
+	}
+	if _, err := session.Exec(`
+		INSERT INTO t_job (job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, remark, create_time, update_time)
+		SELECT ?, ?, ?, ?, 3, 0, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+		WHERE NOT EXISTS (SELECT 1 FROM t_job WHERE invoke_target = ?)
+	`, "提醒创作者完成激活", "系统", "studio.activationReminders", "15 * * * *", "每小时提醒停滞的新创作者完成激活", "studio.activationReminders"); err != nil {
+		return fmt.Errorf("seed studio activation reminder job: %w", err)
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 30, "studio-activation-reminders"); err != nil {
+		return fmt.Errorf("record studio activation reminder migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit studio activation reminder migration: %w", err)
 	}
 	return nil
 }

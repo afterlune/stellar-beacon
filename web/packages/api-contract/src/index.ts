@@ -423,7 +423,7 @@ export interface PublicAuthorProfile extends PublicAuthorSummary {
 }
 
 export type FollowContentType = 'article' | 'talk'
-export type NotificationContentType = FollowContentType | 'collection'
+export type NotificationContentType = FollowContentType | 'collection' | 'studio'
 
 export interface FollowUser {
   id: number
@@ -446,8 +446,8 @@ export interface FollowFeedItem {
   publishedAt: string
 }
 
-export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction' | 'topic' | 'collection'
-export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite' | 'collection_update' | 'moderation'
+export type NotificationGroup = 'all' | 'publish' | 'comment' | 'reaction' | 'topic' | 'collection' | 'studio'
+export type NotificationType = 'publish' | 'comment' | 'reply' | 'like' | 'favorite' | 'collection_update' | 'moderation' | 'studio_activation'
 
 export interface NotificationItem {
   key: string
@@ -461,6 +461,7 @@ export interface NotificationItem {
   slug?: string
   title: string
   excerpt: string
+  actionUrl?: string
   cover?: string
   images?: string[]
   createdAt: string

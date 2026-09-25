@@ -11,18 +11,19 @@ import (
 )
 
 type DefaultTargetsDeps struct {
-	Publishes  port.ScheduledPublishRepository
-	Newsletter port.NewsletterEnqueuer
-	Growth     port.GrowthRepository
-	JobLogs    port.JobLogRepository
-	UserAreas  port.UserAreaRefresher
+	Publishes        port.ScheduledPublishRepository
+	Newsletter       port.NewsletterEnqueuer
+	Growth           port.GrowthRepository
+	JobLogs          port.JobLogRepository
+	UserAreas        port.UserAreaRefresher
+	StudioActivation port.StudioActivationReminderRepository
 }
 
 func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error {
 	if scheduler == nil {
 		return errors.New("scheduler is nil")
 	}
-	if deps.Publishes == nil || deps.Growth == nil || deps.JobLogs == nil || deps.UserAreas == nil {
+	if deps.Publishes == nil || deps.Growth == nil || deps.JobLogs == nil || deps.UserAreas == nil || deps.StudioActivation == nil {
 		return errors.New("default job dependencies are incomplete")
 	}
 	targets := []struct {
@@ -54,6 +55,12 @@ func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error
 			},
 		},
 		{
+			meta: port.JobTarget{Target: "studio.activationReminders", Name: "Send Studio activation reminders", Description: "Create low-frequency reminders for creators who have not completed activation.", CronExample: "15 * * * *"},
+			handler: func(ctx context.Context) (port.JobRunResult, error) {
+				return runStudioActivationReminders(ctx, deps.StudioActivation)
+			},
+		},
+		{
 			meta: port.JobTarget{Target: "userArea.refresh", Name: "Refresh user areas", Description: "Recompute user distribution from login metadata.", CronExample: "*/30 * * * *"},
 			handler: func(ctx context.Context) (port.JobRunResult, error) {
 				processed, err := deps.UserAreas.RefreshUserAreas(ctx)
@@ -67,6 +74,11 @@ func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error
 		}
 	}
 	return nil
+}
+
+func runStudioActivationReminders(ctx context.Context, repo port.StudioActivationReminderRepository) (port.JobRunResult, error) {
+	count, err := repo.CreateDueStudioActivationReminders(ctx, time.Now(), 200)
+	return port.JobRunResult{Processed: count > 0, Message: fmt.Sprintf("studio activation reminders=%d", count)}, err
 }
 
 var scheduledPublishRetryDelays = [...]time.Duration{

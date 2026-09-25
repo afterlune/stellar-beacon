@@ -101,7 +101,7 @@ async function mockArticleReading(page: Page, onContinuationEvent?: (event: { ar
 }
 
 async function mockSocialApi(page: Page) {
-  const saved = { following: false, unread: 2, readCalls: 0, notifyInteraction: 1 }
+  const saved = { following: false, unread: 2, readCalls: 0, notifyInteraction: 1, notifyStudioActivation: 1 }
   const author = {
     id: 1,
     handle: 'integration',
@@ -119,7 +119,7 @@ async function mockSocialApi(page: Page) {
     document.cookie = 'locale=cn; path=/'
     sessionStorage.setItem('token', 'e2e-social-token')
     sessionStorage.setItem('userStore', JSON.stringify({
-      userInfo: { userInfoId: 2, id: 2, nickname: '读者', handle: 'reader' },
+      userInfo: { userInfoId: 2, id: 2, nickname: '读者', handle: 'reader', notifyInteraction: 1, notifyStudioActivation: 1 },
       token: 'e2e-social-token'
     }))
   })
@@ -181,7 +181,21 @@ async function mockSocialApi(page: Page) {
     }
     if (path === '/api/v1/auth/me/notifications' && method === 'GET') {
       const group = url.searchParams.get('group') || 'all'
-      const all = saved.following ? [
+      const all = [
+        ...(saved.notifyStudioActivation ? [{
+          key: 'notification:99',
+          type: 'studio_activation',
+          group: 'studio',
+          actor: { id: 0, handle: '', nickname: '', avatar: '' },
+          contentType: 'studio',
+          contentId: 0,
+          title: '完成公开身份',
+          excerpt: '补齐 Handle、头像、昵称和简介，让公开主页可以访问。',
+          actionUrl: '/studio/dashboard#activation',
+          createdAt: '2026-09-20T09:00:00+08:00',
+          read: saved.unread === 0
+        }] : []),
+        ...(saved.following ? [
         {
           key: 'publish:11',
           type: 'publish',
@@ -207,7 +221,8 @@ async function mockSocialApi(page: Page) {
           createdAt: '2026-09-20T10:05:00+08:00',
           read: saved.unread === 0
         }
-      ] : []
+      ] : [])
+      ]
       const records = all.filter((item) => group === 'all' || item.group === group)
       await respond({
         records,
@@ -227,9 +242,10 @@ async function mockSocialApi(page: Page) {
       return
     }
     if (path === '/api/v1/auth/me/notification-preferences' && method === 'PUT') {
-      const body = route.request().postDataJSON() as { notifyInteraction?: number }
+      const body = route.request().postDataJSON() as { notifyInteraction?: number; notifyStudioActivation?: number }
       saved.notifyInteraction = Number(body.notifyInteraction || 0)
-      await respond({ notifyInteraction: saved.notifyInteraction })
+      if (body.notifyStudioActivation !== undefined) saved.notifyStudioActivation = Number(body.notifyStudioActivation || 0)
+      await respond({ notifyInteraction: saved.notifyInteraction, notifyStudioActivation: saved.notifyStudioActivation })
       return
     }
     if (path === '/api/v1/public/reports/visit') {
@@ -320,7 +336,17 @@ test.describe('author following', () => {
     await expect(page.getByText('新发布')).toHaveCount(0)
   })
 })
-test.describe('article reading experience', () => {
+test('shows a studio activation reminder and follows its action URL', async ({ page }) => {
+    await mockSocialApi(page)
+    await page.goto('/notifications', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByText('完成公开身份')).toBeVisible()
+    await expect(page.getByText('系统提醒')).toBeVisible()
+    await page.getByRole('link', { name: /完成公开身份/ }).click()
+    await expect(page).toHaveURL(/\/studio\/dashboard#activation$/)
+  })
+
+  test.describe('article reading experience', () => {
   test('tracks visible continuation impressions and clicks', async ({ page }) => {
     test.setTimeout(60_000)
     const events: Array<{ articleId: number; eventType: string; targetType?: string; targetId?: number; placement?: string; position?: number }> = []

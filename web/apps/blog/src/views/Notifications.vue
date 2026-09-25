@@ -1,7 +1,7 @@
 <template>
   <div class="notifications-page">
     <header class="notifications-head">
-      <div><p>SIGNAL INBOX</p><h1>互动通知</h1><span>发布、评论回复、文章互动和书单更新都会汇流到这里。</span></div>
+      <div><p>SIGNAL INBOX</p><h1>通知中心</h1><span>发布、评论回复、文章互动、创作提醒和书单更新都会汇流到这里。</span></div>
       <router-link to="/following">关注动态 →</router-link>
     </header>
     <nav class="notification-filters" aria-label="通知筛选">
@@ -15,9 +15,9 @@
         <div>
           <h2>{{ headline(item) }}</h2>
           <p>{{ excerpt(item.excerpt) }}</p>
-          <small>{{ item.actor.nickname || item.actor.handle }} · {{ formatDateTime(item.createdAt) }}</small>
+          <small>{{ item.actor.nickname || item.actor.handle || '系统提醒' }} · {{ formatDateTime(item.createdAt) }}</small>
         </div>
-        <img :src="item.actor.avatar || defaultAvatar" :alt="item.actor.nickname || item.actor.handle" />
+        <img :src="item.actor.avatar || defaultAvatar" :alt="item.actor.nickname || item.actor.handle || '系统提醒'" />
       </router-link>
     </div>
     <p v-else class="notifications-state">当前筛选下没有通知。</p>
@@ -43,7 +43,8 @@ export default defineComponent({
       { value: 'comment', label: '评论与回复' },
       { value: 'reaction', label: '赞与收藏' },
       { value: 'topic', label: '话题订阅' },
-      { value: 'collection', label: '书单更新' }
+      { value: 'collection', label: '书单更新' },
+      { value: 'studio', label: '创作提醒' }
     ]
     const activeGroup = ref<NotificationGroup>('all')
     const records = ref<NotificationItem[]>([])
@@ -99,8 +100,10 @@ export default defineComponent({
       favorite: '收藏',
       collection_update: '书单更新',
       moderation: '治理结果',
+      studio_activation: '创作提醒',
     })[type] || '互动'
     const headline = (item: NotificationItem) => {
+      if (item.type === 'studio_activation') return item.title || '继续完成创作者激活'
       if (item.group === 'topic') return `你订阅的话题有新文章：${item.title || item.excerpt || '查看文章'}`
       if (item.group === 'collection') return `书单「${item.title || '未命名'}」新增了：${item.excerpt || '查看更新'}`
       if (item.type === 'reply') return `回复了你的评论：${item.excerpt || '查看回复'}`
@@ -110,6 +113,7 @@ export default defineComponent({
       return item.title || item.excerpt || '发布了新内容'
     }
     const notificationPath = (item: NotificationItem) => {
+      if (item.actionUrl) return item.actionUrl
       if (item.contentType === 'collection') {
         const base = `/collections/${item.slug || item.contentId}`
         if (item.commentId) return `${base}?comment=${item.commentId}#comment-${item.commentId}`

@@ -123,6 +123,15 @@ test.describe('blog real backend main chain @integration', () => {
     const dashboard = await getAPIData(request, '/api/v1/studio/dashboard', admin.token)
     expect(dashboard.activation).toMatchObject({ startedAt: first.startedAt, collapsed: true })
 
+    const paused = await putAPI(request, '/api/v1/auth/me/notification-preferences', admin.token, {
+      notifyInteraction: Number(admin.userInfo.notifyInteraction ?? 1), notifyStudioActivation: 0
+    })
+    expect(Number(paused.notifyStudioActivation)).toBe(0)
+    const resumed = await putAPI(request, '/api/v1/auth/me/notification-preferences', admin.token, {
+      notifyInteraction: Number(admin.userInfo.notifyInteraction ?? 1), notifyStudioActivation: 1
+    })
+    expect(Number(resumed.notifyStudioActivation)).toBe(1)
+
     const completed = await putAPI(request, '/api/v1/studio/activation', admin.token, {
       started: false, collapsed: false, identityComplete: true, contentComplete: true, profileVisited: true, completed: true
     })

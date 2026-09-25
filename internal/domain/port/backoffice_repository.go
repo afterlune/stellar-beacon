@@ -183,6 +183,7 @@ type UserInfoRepository interface {
 	UpdateNotifyInteraction(ctx context.Context, id, notify int) error
 	UpdateNotifyTopic(ctx context.Context, id, notify int) error
 	UpdateNotifyCollection(ctx context.Context, id, notify int) error
+	UpdateNotifyStudioActivation(ctx context.Context, id, notify int) error
 	UpdateRole(ctx context.Context, userInfoID int, nickname string, roleIDs []int) error
 	UpdateDisable(ctx context.Context, id, disabled int) error
 	FindAuthByUserInfoID(ctx context.Context, id int) (entity.TUserAuth, error)

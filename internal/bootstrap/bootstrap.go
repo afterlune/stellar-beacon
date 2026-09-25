@@ -265,7 +265,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	scheduler := task.NewScheduler(job, jobLog, redisCache)
 	if err := task.RegisterDefaultTargets(scheduler, task.DefaultTargetsDeps{
 		Publishes: article, Newsletter: newsletterService, Growth: growthRepo,
-		JobLogs: jobLog, UserAreas: userAuthService,
+		JobLogs: jobLog, UserAreas: userAuthService, StudioActivation: platform,
 	}); err != nil {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.scheduler.targets", err)

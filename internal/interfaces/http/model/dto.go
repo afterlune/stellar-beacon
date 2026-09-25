@@ -527,30 +527,31 @@ type UserAreaDTO struct {
 }
 
 type UserDetailsDTO struct {
-	Id                int       `json:"id"`
-	UserInfoId        int       `json:"userInfoId"`
-	Email             string    `json:"email"`
-	LoginType         int       `json:"loginType"`
-	Username          string    `json:"username"`
-	Password          string    `json:"password"`
-	Roles             []string  `json:"roles"`
-	Handle            string    `json:"handle"`
-	Nickname          string    `json:"nickname"`
-	Avatar            string    `json:"avatar"`
-	Intro             string    `json:"intro"`
-	Website           string    `json:"website"`
-	IsDisable         int       `json:"isDisable"`
-	IpAddress         string    `json:"ipAddress"`
-	IpSource          string    `json:"ipSource"`
-	IsSubscribe       int       `json:"isSubscribe"`
-	NotifyComment     int       `json:"notifyComment"`
-	NotifyInteraction int       `json:"notifyInteraction"`
-	NotifyTopic       int       `json:"notifyTopic"`
-	NotifyCollection  int       `json:"notifyCollection"`
-	Browser           string    `json:"browser"`
-	Os                string    `json:"os"`
-	ExpireTime        time.Time `json:"expireTime"`
-	LastLoginTime     time.Time `json:"lastLoginTime"`
+	Id                     int       `json:"id"`
+	UserInfoId             int       `json:"userInfoId"`
+	Email                  string    `json:"email"`
+	LoginType              int       `json:"loginType"`
+	Username               string    `json:"username"`
+	Password               string    `json:"password"`
+	Roles                  []string  `json:"roles"`
+	Handle                 string    `json:"handle"`
+	Nickname               string    `json:"nickname"`
+	Avatar                 string    `json:"avatar"`
+	Intro                  string    `json:"intro"`
+	Website                string    `json:"website"`
+	IsDisable              int       `json:"isDisable"`
+	IpAddress              string    `json:"ipAddress"`
+	IpSource               string    `json:"ipSource"`
+	IsSubscribe            int       `json:"isSubscribe"`
+	NotifyComment          int       `json:"notifyComment"`
+	NotifyInteraction      int       `json:"notifyInteraction"`
+	NotifyTopic            int       `json:"notifyTopic"`
+	NotifyCollection       int       `json:"notifyCollection"`
+	NotifyStudioActivation int       `json:"notifyStudioActivation"`
+	Browser                string    `json:"browser"`
+	Os                     string    `json:"os"`
+	ExpireTime             time.Time `json:"expireTime"`
+	LastLoginTime          time.Time `json:"lastLoginTime"`
 }
 
 type UserInfoDTO struct {
@@ -719,9 +720,10 @@ type CommentPinVO struct {
 // authenticated account. NotifyTopic is optional: a request that omits it keeps
 // the stored topic preference untouched.
 type NotificationPreferenceVO struct {
-	NotifyInteraction int  `json:"notifyInteraction" form:"notifyInteraction"`
-	NotifyTopic       *int `json:"notifyTopic" form:"notifyTopic"`
-	NotifyCollection  *int `json:"notifyCollection" form:"notifyCollection"`
+	NotifyInteraction      int  `json:"notifyInteraction" form:"notifyInteraction"`
+	NotifyTopic            *int `json:"notifyTopic" form:"notifyTopic"`
+	NotifyCollection       *int `json:"notifyCollection" form:"notifyCollection"`
+	NotifyStudioActivation *int `json:"notifyStudioActivation" form:"notifyStudioActivation"`
 }
 
 // CommentNoticeVO toggles the comment email notification preference of the

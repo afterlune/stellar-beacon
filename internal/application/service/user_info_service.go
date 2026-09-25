@@ -214,6 +214,16 @@ func (u *MyUserInfoService) UpdateUserNotificationPreferences(c *gin.Context) mo
 		}
 		data["notifyCollection"] = collectionNotify
 	}
+	if vo.NotifyStudioActivation != nil {
+		studioNotify := 0
+		if *vo.NotifyStudioActivation == 1 {
+			studioNotify = 1
+		}
+		if err := u.userInfoRepository().UpdateNotifyStudioActivation(c.Request.Context(), dto.UserInfoId, studioNotify); err != nil {
+			return model.ResultFromError(err)
+		}
+		data["notifyStudioActivation"] = studioNotify
+	}
 	return model.ResultOkWithData(data)
 }
 

@@ -113,10 +113,13 @@ type TUserNotification struct {
 	Id          int        `xorm:"autoincr not null pk unique BIGINT" json:"id"`
 	RecipientId int        `xorm:"recipient_id not null index INTEGER" json:"recipientId"`
 	ActorId     int        `xorm:"actor_id not null index INTEGER" json:"actorId"`
-	Type        string     `xorm:"type not null VARCHAR(16)" json:"type"`
+	Type        string     `xorm:"type not null VARCHAR(32)" json:"type"`
 	ContentType string     `xorm:"content_type not null VARCHAR(16)" json:"contentType"`
 	ContentId   int        `xorm:"content_id not null BIGINT" json:"contentId"`
 	CommentId   int        `xorm:"comment_id not null default 0 BIGINT" json:"commentId"`
+	Title       string     `xorm:"title not null default '' VARCHAR(120)" json:"title"`
+	Excerpt     string     `xorm:"excerpt not null default '' VARCHAR(240)" json:"excerpt"`
+	ActionUrl   string     `xorm:"action_url not null default '' VARCHAR(255)" json:"actionUrl"`
 	DedupeKey   string     `xorm:"dedupe_key not null unique(recipient_dedupe) VARCHAR(191)" json:"dedupeKey"`
 	ReadAt      *time.Time `xorm:"read_at DATETIME" json:"readAt,omitempty"`
 	CreateTime  time.Time  `xorm:"created not null created_at DATETIME" json:"createTime"`
@@ -386,21 +389,22 @@ type TUserAuth struct {
 }
 
 type TUserInfo struct {
-	Id                int       `xorm:"autoincr not null pk comment('用户ID') unique INTEGER" json:"id"`
-	Handle            string    `xorm:"handle not null unique comment('公开唯一标识') VARCHAR(40)" json:"handle"`
-	Email             string    `xorm:"comment('邮箱号') VARCHAR(50)" json:"email"`
-	Nickname          string    `xorm:"not null comment('用户昵称') VARCHAR(50)" json:"nickname"`
-	Avatar            string    `xorm:"not null comment('用户头像') VARCHAR(1024)" json:"avatar"`
-	Intro             string    `xorm:"comment('用户简介') VARCHAR(255)" json:"intro"`
-	Website           string    `xorm:"comment('个人网站') VARCHAR(255)" json:"website"`
-	IsSubscribe       int       `xorm:"comment('是否订阅') SMALLINT" json:"isSubscribe"`
-	NotifyComment     int       `xorm:"notify_comment not null default 1 comment('是否接收评论邮件通知') SMALLINT" json:"notifyComment"`
-	NotifyInteraction int       `xorm:"notify_interaction not null default 1 comment('是否接收站内互动通知') SMALLINT" json:"notifyInteraction"`
-	NotifyTopic       int       `xorm:"notify_topic not null default 1 comment('是否接收话题订阅通知') SMALLINT" json:"notifyTopic"`
-	NotifyCollection  int       `xorm:"notify_collection not null default 1 comment('是否接收书单更新通知') SMALLINT" json:"notifyCollection"`
-	IsDisable         int       `xorm:"not null comment('是否禁用') SMALLINT" json:"isDisable"`
-	CreateTime        time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
-	UpdateTime        time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
+	Id                     int       `xorm:"autoincr not null pk comment('用户ID') unique INTEGER" json:"id"`
+	Handle                 string    `xorm:"handle not null unique comment('公开唯一标识') VARCHAR(40)" json:"handle"`
+	Email                  string    `xorm:"comment('邮箱号') VARCHAR(50)" json:"email"`
+	Nickname               string    `xorm:"not null comment('用户昵称') VARCHAR(50)" json:"nickname"`
+	Avatar                 string    `xorm:"not null comment('用户头像') VARCHAR(1024)" json:"avatar"`
+	Intro                  string    `xorm:"comment('用户简介') VARCHAR(255)" json:"intro"`
+	Website                string    `xorm:"comment('个人网站') VARCHAR(255)" json:"website"`
+	IsSubscribe            int       `xorm:"comment('是否订阅') SMALLINT" json:"isSubscribe"`
+	NotifyComment          int       `xorm:"notify_comment not null default 1 comment('是否接收评论邮件通知') SMALLINT" json:"notifyComment"`
+	NotifyInteraction      int       `xorm:"notify_interaction not null default 1 comment('是否接收站内互动通知') SMALLINT" json:"notifyInteraction"`
+	NotifyTopic            int       `xorm:"notify_topic not null default 1 comment('是否接收话题订阅通知') SMALLINT" json:"notifyTopic"`
+	NotifyCollection       int       `xorm:"notify_collection not null default 1 comment('是否接收书单更新通知') SMALLINT" json:"notifyCollection"`
+	NotifyStudioActivation int       `xorm:"notify_studio_activation not null default 1 comment('是否接收创作进度提醒') SMALLINT" json:"notifyStudioActivation"`
+	IsDisable              int       `xorm:"not null comment('是否禁用') SMALLINT" json:"isDisable"`
+	CreateTime             time.Time `xorm:"created not null comment('创建时间') DATETIME" json:"createTime"`
+	UpdateTime             time.Time `xorm:"updated comment('更新时间') DATETIME" json:"updateTime"`
 }
 
 // TTopicSubscription records one reader following one normalised topic. The key
