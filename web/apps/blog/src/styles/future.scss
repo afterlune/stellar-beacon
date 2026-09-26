@@ -306,6 +306,15 @@ textarea {
   outline-offset: 3px;
 }
 
+#App-Wrapper .app-content:focus {
+  outline: none;
+}
+
+#App-Wrapper .app-content.keyboard-route-focus:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 /* Header */
 #App-Wrapper .header-container {
   z-index: 40;
@@ -325,6 +334,33 @@ textarea {
   max-width: var(--page-max);
   margin: 0 auto;
   padding: 14px clamp(20px, 4vw, 64px);
+}
+
+#App-Wrapper .site-header > a {
+  flex: 0 1 280px;
+  min-width: 0;
+  max-width: 280px;
+}
+
+#App-Wrapper .site-header > a .logo-mark,
+#App-Wrapper .site-header > a .logo-copy {
+  width: 100%;
+  min-width: 0;
+}
+
+#App-Wrapper .site-header > a .logo-copy {
+  overflow: hidden;
+}
+
+#App-Wrapper .site-header > a .logo-name,
+#App-Wrapper .site-header > a .logo-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#App-Wrapper .site-header > nav {
+  min-width: 0;
 }
 
 #App-Wrapper .header-container.is-stuck {
@@ -391,9 +427,12 @@ textarea {
 
 #App-Wrapper .nav-list {
   gap: 6px;
+  min-width: 0;
   padding-inline: 0;
   color: var(--header-fg);
   text-shadow: none;
+  overflow: visible;
+  list-style: none;
 }
 
 #App-Wrapper .nav-list > li {
@@ -401,13 +440,22 @@ textarea {
 }
 
 #App-Wrapper .nav-link {
-  padding: 9px 10px;
-  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--header-fg) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--header-fg) 6%, transparent);
   color: var(--header-fg);
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
-  transition: background 160ms ease, color 160ms ease;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  backdrop-filter: blur(12px);
 }
 
 #App-Wrapper .nav-link::before {
@@ -415,44 +463,65 @@ textarea {
   left: 0;
   width: 100%;
   height: 100%;
-  border-radius: 2px;
-  background: var(--surface-hover);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--header-fg) 9%, transparent);
 }
 
 #App-Wrapper .nav-link-active {
-  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--header-fg) 8%, transparent));
+  color: var(--header-fg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 0 20px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 #App-Wrapper .nav-link-active::after {
-  right: 10px;
-  bottom: 3px;
-  left: 10px;
-  height: 2px;
-  border-radius: 0;
-  background: var(--accent);
+  right: 12px;
+  bottom: 1px;
+  left: 12px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+
+#App-Wrapper .nav-index {
+  color: color-mix(in srgb, var(--header-fg) 52%, transparent);
+  font-size: 8px;
+  letter-spacing: .08em;
+}
+
+#App-Wrapper .nav-icon {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
+
+#App-Wrapper .nav-label { position: relative; z-index: 1; }
+
+@media (min-width: 1024px) and (max-width: 1535px) {
+  #App-Wrapper .nav-label { display: none; }
+  #App-Wrapper .nav-link { padding-inline: 9px; }
 }
 
 #App-Wrapper .header-controls {
   position: static;
   flex: 0 0 auto;
-  gap: 2px;
+  gap: 6px;
   margin-left: auto;
 }
 
-#App-Wrapper .header-controls > span,
 #App-Wrapper .header-controls > .ob-dropdown {
-  min-width: 34px;
-  height: 34px;
-  padding: 0 9px;
-  border: 1px solid transparent;
-  border-radius: 2px;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--header-fg);
 }
 
-#App-Wrapper .header-controls > span:hover,
 #App-Wrapper .header-controls > .ob-dropdown:hover {
-  border-color: var(--border-hairline);
-  background: var(--surface-hover);
+  border-color: transparent;
+  background: transparent;
 }
 
 #App-Wrapper .header-controls .svg-icon {
@@ -462,6 +531,20 @@ textarea {
 
 #App-Wrapper .header-controls .header-control-menu {
   display: none;
+}
+
+.article-feed-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 1024px) {
+  .article-feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .article-feed-grid { grid-template-columns: 1fr; gap: 14px; }
 }
 
 #App-Wrapper ~ .App-Mobile-sidebar,
@@ -1318,99 +1401,6 @@ textarea {
   box-shadow: var(--search-modal-key-shadow);
 }
 
-/* Element Plus is still used for the existing login/profile workflows, but it
-   inherits the blog surface system so it no longer reads like a second app. */
-#App-Wrapper ~ .el-overlay .el-dialog,
-#App-Wrapper ~ .el-overlay .el-drawer,
-.el-overlay .el-dialog,
-.el-overlay .el-drawer {
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  background: var(--surface-solid) !important;
-  color: var(--text-normal);
-}
-
-.el-overlay .el-input__wrapper,
-.el-overlay .el-textarea__inner,
-.el-overlay .el-input-group__append {
-  border: 1px solid var(--border-hairline);
-  border-radius: 2px;
-  background: var(--background-primary-alt) !important;
-  box-shadow: none !important;
-  color: var(--text-normal);
-}
-
-.el-overlay .el-input__wrapper.is-focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) !important;
-}
-
-.el-overlay .el-form-item__label,
-.el-overlay .el-drawer__body,
-.el-overlay .el-dialog__body {
-  color: var(--text-normal) !important;
-}
-
-.el-overlay .el-button--primary {
-  border-color: var(--accent);
-  border-radius: 2px;
-  background: var(--accent);
-  color: #09100a;
-}
-
-.el-overlay .user-center-header {
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border-hairline);
-}
-
-.el-overlay .user-center-kicker,
-.el-overlay .user-center-note {
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-}
-
-.el-overlay .user-center-header h2 {
-  margin: 10px 0 8px;
-  color: var(--text-bright);
-  font-family: var(--font-display);
-  font-size: 28px;
-}
-
-.el-overlay .user-center-header p {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.el-overlay .user-center-note {
-  display: block;
-  margin-top: 18px;
-  color: var(--signal);
-  letter-spacing: 0;
-}
-
-.el-overlay #pick-avatar {
-  display: block;
-  margin: 0 auto 24px;
-  padding: 4px;
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  background: transparent;
-}
-
-.el-overlay .user-center-avatar {
-  display: block;
-  border-radius: 0;
-}
-
-.el-overlay .el-button--primary,
-.el-overlay #submit-button {
-  width: auto !important;
-}
-
 #App-Wrapper .post-html {
   max-width: var(--read-max);
   margin-inline: auto;
@@ -1529,7 +1519,7 @@ textarea {
   border-radius: 2px;
 }
 
-#App-Wrapper .talk-image .el-image__inner {
+#App-Wrapper .images-talks {
   height: auto;
   max-height: 280px;
   object-fit: contain;
@@ -1575,14 +1565,14 @@ textarea {
   transform: scale(1.015);
 }
 
-#App-Wrapper .el-card {
+#App-Wrapper .friend-link-card {
   border: 1px solid var(--border-hairline);
   border-radius: 2px;
   background: var(--surface-2);
   box-shadow: none;
 }
 
-#App-Wrapper .el-card:hover {
+#App-Wrapper .friend-link-card:hover {
   border-color: var(--accent);
 }
 

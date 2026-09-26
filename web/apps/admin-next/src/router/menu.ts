@@ -37,19 +37,14 @@ const VIEWS = {
   exceptionLog: () => import('@/views/ExceptionLogsView.vue'),
   quartzLog: () => import('@/views/JobLogsView.vue'),
   quartz: () => import('@/views/JobsView.vue'),
-  album: () => import('@/views/AlbumsView.vue'),
   talkList: () => import('@/views/TalksView.vue'),
   talk: () => import('@/views/TalkEditorView.vue'),
-  photo: () => import('@/views/PhotoView.vue'),
-  photoTrash: () => import('@/views/PhotoTrashView.vue'),
   menu: () => import('@/views/MenuView.vue'),
   resource: () => import('@/views/ResourceView.vue'),
-  friendLink: () => import('@/views/FriendLinksView.vue'),
   series: () => import('@/views/SeriesView.vue'),
   contentPerformance: () => import('@/views/ContentPerformanceView.vue'),
   contentModeration: () => import('@/views/ContentModerationView.vue'),
   website: () => import('@/views/WebsiteView.vue'),
-  about: () => import('@/views/AboutView.vue'),
   setting: () => import('@/views/SettingView.vue')
 }
 
@@ -73,19 +68,14 @@ const componentRegistry: Record<string, MenuViewComponent> = {
   '/log/ExceptionLog.vue': VIEWS.exceptionLog,
   '/log/QuartzLog.vue': VIEWS.quartzLog,
   '/quartz/Quartz.vue': VIEWS.quartz,
-  '/album/Album.vue': VIEWS.album,
   '/talk/TalkList.vue': VIEWS.talkList,
   '/talk/Talk.vue': VIEWS.talk,
-  '/album/Photo.vue': VIEWS.photo,
-  '/album/Delete.vue': VIEWS.photoTrash,
   '/menu/Menu.vue': VIEWS.menu,
   '/resource/Resource.vue': VIEWS.resource,
-  '/friendLink/FriendLink.vue': VIEWS.friendLink,
   '/series/Series.vue': VIEWS.series,
   '/content/ContentPerformance.vue': VIEWS.contentPerformance,
   '/content/ContentModeration.vue': VIEWS.contentModeration,
   '/website/Website.vue': VIEWS.website,
-  '/about/About.vue': VIEWS.about,
   '/setting/Setting.vue': VIEWS.setting
 }
 

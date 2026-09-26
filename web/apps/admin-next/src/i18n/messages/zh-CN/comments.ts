@@ -38,6 +38,8 @@ export default {
   'comments.comments.emptySearch': '没有匹配的评论',
   'comments.comments.emptyHint': '当读者留下第一条评论时，它会出现在这里。',
   'comments.comments.collection': '书单',
+  'comments.comments.reviewFilterLabel': '评论审核筛选',
+  'comments.comments.collectionFilterLabel': '筛选书单',
   'comments.comments.collectionAll': '全部评论',
   'comments.comments.status': '状态',
   'comments.comments.pinned': '已置顶',

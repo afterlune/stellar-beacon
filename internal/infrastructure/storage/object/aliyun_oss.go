@@ -34,6 +34,18 @@ func NewAliyunStorage(conf *config.Oss) *AliyunStorage {
 	}
 }
 
+// CheckHealth verifies bucket access using a one-item, read-only listing.
+func (s *AliyunStorage) CheckHealth(ctx context.Context) error {
+	if s == nil || s.client == nil || strings.TrimSpace(s.bucket) == "" {
+		return fmt.Errorf("object storage is not configured")
+	}
+	_, err := s.client.ListObjects(ctx, &aliyunoss.ListObjectsRequest{
+		Bucket:  aliyunoss.Ptr(s.bucket),
+		MaxKeys: 1,
+	})
+	return err
+}
+
 func (s *AliyunStorage) Put(ctx context.Context, key string, body io.Reader) (port.ObjectRef, error) {
 	if s == nil || s.client == nil {
 		return port.ObjectRef{}, errors.Unavailable("oss.put", fmt.Errorf("OSS client is not configured"))

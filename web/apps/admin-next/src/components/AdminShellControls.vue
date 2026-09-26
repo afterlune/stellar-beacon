@@ -4,7 +4,7 @@
       <button
         class="admin-icon-button admin-lang-button"
         type="button"
-        :aria-label="t('login.language')"
+        :aria-label="`${t('login.language')} ${locale === 'zh-CN' ? 'EN' : '中'}${labelled ? ' ' + (locale === 'zh-CN' ? 'English' : '中文') : ''}`"
         data-testid="shell-locale-toggle"
         @click="toggleLocale">
         <span class="admin-lang-label">{{ locale === 'zh-CN' ? 'EN' : '中' }}</span>

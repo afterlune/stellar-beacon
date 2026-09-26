@@ -29,6 +29,8 @@ type ArticleRepository interface {
 	CountArticleAdmins(ctx context.Context, filter ArticleFilter) (int, error)
 	ListArticlesAdmin(ctx context.Context, filter ArticleFilter) ([]*ArticleAdmin, error)
 	ListArticleStatistics(ctx context.Context) ([]ArticleStatistics, error)
+	GetArticleSearchDocument(ctx context.Context, articleID int) (ArticleSearch, bool, error)
+	ListPublicArticleSearchDocuments(ctx context.Context) ([]ArticleSearch, error)
 	GetArticleRecord(ctx context.Context, articleID int) (entity.TArticle, error)
 	SaveOrUpdate(ctx context.Context, article entity.TArticle, categoryName string, tagNames []string) (entity.TArticle, error)
 	UpdateTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) (entity.TArticle, error)

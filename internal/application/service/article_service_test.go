@@ -138,6 +138,23 @@ func (f *fakeArticleRepository) ListArticlesAdmin(context.Context, port.ArticleF
 func (f *fakeArticleRepository) ListArticleStatistics(context.Context) ([]port.ArticleStatistics, error) {
 	return nil, nil
 }
+func (f *fakeArticleRepository) GetArticleSearchDocument(context.Context, int) (port.ArticleSearch, bool, error) {
+	if f.record.Id == 0 || f.record.IsDelete != 0 || f.record.Status != 1 || f.record.ModerationStatus != "visible" {
+		return port.ArticleSearch{}, false, f.recordErr
+	}
+	return port.ArticleSearch{
+		Id: f.record.Id, UserId: f.record.UserId, ArticleCover: f.record.ArticleCover,
+		ArticleTitle: f.record.ArticleTitle, ArticleContent: f.record.ArticleContent,
+		IsDelete: f.record.IsDelete, Status: f.record.Status, ModerationStatus: f.record.ModerationStatus,
+	}, true, nil
+}
+func (f *fakeArticleRepository) ListPublicArticleSearchDocuments(context.Context) ([]port.ArticleSearch, error) {
+	document, public, err := f.GetArticleSearchDocument(context.Background(), f.record.Id)
+	if err != nil || !public {
+		return []port.ArticleSearch{}, err
+	}
+	return []port.ArticleSearch{document}, nil
+}
 func (f *fakeArticleRepository) GetArticleRecord(context.Context, int) (entity.TArticle, error) {
 	return f.record, f.recordErr
 }
@@ -255,8 +272,9 @@ func TestArticleServiceUsesTypedSearchPort(t *testing.T) {
 	if !ok || len(hits) != 1 {
 		t.Fatalf("unexpected search result: %#v", page.Records)
 	}
-	if hits[0].ArticleTitle != "<mark>title</mark>" || hits[0].ArticleContent != "<mark>content</mark>" {
-		t.Fatalf("highlighted fields were not applied: %#v", hits[0])
+	if hits[0].ArticleTitle != "raw title" || hits[0].ArticleContent != "raw content" ||
+		hits[0].HighlightedTitle != "<mark>title</mark>" || hits[0].HighlightedContent != "<mark>content</mark>" {
+		t.Fatalf("raw and highlighted fields were not preserved: %#v", hits[0])
 	}
 	if searcher.gotOffset != 3 || searcher.gotLimit != 3 {
 		t.Fatalf("pagination was not forwarded: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)

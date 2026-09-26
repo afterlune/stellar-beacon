@@ -52,6 +52,7 @@ type MyArticleService struct {
 	cache            port.Cache
 	storage          port.ObjectStorage
 	search           port.ArticleSearcher
+	searchIndex      ArticleSearchMaintainer
 	newsletter       port.NewsletterEnqueuer
 }
 
@@ -66,8 +67,18 @@ func NewArticleService(deps ArticleServiceDeps) (*MyArticleService, error) {
 		cache:            deps.Cache,
 		storage:          deps.Storage,
 		search:           deps.Search,
+		searchIndex:      deps.SearchIndex,
 		newsletter:       deps.Newsletter,
 	}, nil
+}
+
+func (a *MyArticleService) syncArticleSearch(ctx context.Context, articleIDs ...int) {
+	if a.searchIndex == nil || len(articleIDs) == 0 {
+		return
+	}
+	if err := a.searchIndex.Sync(ctx, articleIDs...); err != nil {
+		slog.WarnContext(ctx, "sync article search index failed", "articleIds", articleIDs, "error", err)
+	}
 }
 
 // isPubliclyCacheable reports whether an article body may live in the shared
@@ -671,6 +682,7 @@ func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
 			}
 		}
 		a.cacheArticle(c.Request.Context(), articlebase.Id, articlebase.Status, articlebase.IsDelete, articlebase)
+		a.syncArticleSearch(c.Request.Context(), articlebase.Id)
 	}
 	return model.ResultOk()
 }
@@ -698,6 +710,7 @@ func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.Res
 	}
 	if articlebase.Id != 0 {
 		a.cacheArticle(c.Request.Context(), articlebase.Id, articlebase.Status, articlebase.IsDelete, articlebase)
+		a.syncArticleSearch(c.Request.Context(), articlebase.Id)
 	}
 	return model.ResultOk()
 }
@@ -721,6 +734,7 @@ func (a *MyArticleService) UpdateArticleDelete(c *gin.Context) model.ResultVO {
 	for _, id := range deleteVO.Ids {
 		a.evictArticleCache(c.Request.Context(), strconv.Itoa(id))
 	}
+	a.syncArticleSearch(c.Request.Context(), deleteVO.Ids...)
 	return model.ResultOk()
 }
 
@@ -739,6 +753,7 @@ func (a *MyArticleService) DeleteArticles(c *gin.Context) model.ResultVO {
 	if err := a.articleRepository().Delete(c.Request.Context(), ids); err != nil {
 		return model.ResultFromError(err)
 	}
+	a.syncArticleSearch(c.Request.Context(), ids...)
 	return model.ResultOk()
 }
 
@@ -912,14 +927,11 @@ func (a *MyArticleService) ListArticlesBySearch(c *gin.Context) model.ResultVO {
 	}
 	articleSearchDTOs := make([]model.ArticleSearchDTO, 0, len(page.Hits))
 	for _, hit := range page.Hits {
-		dto := model.ArticleSearchDTO(hit.ArticleSearch)
-		if hit.HighlightedTitle != "" {
-			dto.ArticleTitle = hit.HighlightedTitle
-		}
-		if hit.HighlightedContent != "" {
-			dto.ArticleContent = hit.HighlightedContent
-		}
-		articleSearchDTOs = append(articleSearchDTOs, dto)
+		articleSearchDTOs = append(articleSearchDTOs, model.ArticleSearchDTO{
+			ArticleSearch:      hit.ArticleSearch,
+			HighlightedTitle:   hit.HighlightedTitle,
+			HighlightedContent: hit.HighlightedContent,
+		})
 	}
 
 	return model.ResultOkWithData(model.PageResultDTO{

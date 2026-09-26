@@ -12,7 +12,7 @@
 <script lang="ts">
 import { computed, defineComponent, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { notify } from '@/services/notifications'
 import api from '@/api/api'
 import { useUserStore } from '@/stores/user'
 
@@ -44,9 +44,9 @@ export default defineComponent({
         if (!response?.data?.flag) throw new Error(response?.data?.message || '关注操作失败')
         followingState.value = !followingState.value
         emit('changed', followingState.value)
-        ElMessage.success(followingState.value ? '已关注' : '已取消关注')
+        notify.success(followingState.value ? '已关注' : '已取消关注')
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '关注操作失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '关注操作失败')
       } finally {
         busy.value = false
       }

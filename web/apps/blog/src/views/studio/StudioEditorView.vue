@@ -14,7 +14,7 @@
 
     <form v-else class="studio-editor-form" @submit.prevent="save">
       <div class="studio-editor-layout">
-        <main class="studio-editor-main">
+        <section class="studio-editor-main">
           <template v-if="kind === 'article'">
             <label class="studio-field studio-field--title">
               <span>标题</span>
@@ -87,7 +87,7 @@
               <small>{{ form.seriesDesc.length }}/255</small>
             </label>
           </template>
-        </main>
+        </section>
 
         <aside class="studio-editor-sidebar">
           <section v-if="kind === 'article'">
@@ -211,7 +211,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notify } from '@/services/notifications'
+import { confirm } from '@/services/confirm'
 import { Editor, Toolbar } from '@wangeditor-next/editor-for-vue'
 import type { IDomEditor, IEditorConfig, IToolbarConfig } from '@wangeditor-next/editor'
 import '@wangeditor-next/editor/dist/css/style.css'
@@ -307,7 +308,7 @@ const editorConfig: Partial<IEditorConfig> = {
       customUpload(file: File, insertFn: (url: string, alt?: string, href?: string) => void) {
         void uploadStudioImage(file, 'article-inline')
           .then((url) => insertFn(url, file.name))
-          .catch((reason) => ElMessage.error(reason?.message || '图片上传失败'))
+          .catch((reason) => notify.error(reason?.message || '图片上传失败'))
       }
     }
   }
@@ -424,14 +425,11 @@ async function load(): Promise<void> {
     markFormClean()
     const draft = readStudioDraft<Record<string, any>>(draftKey.value)
     if (draft) {
-      try {
-        await ElMessageBox.confirm('发现这个内容在本机自动保存的草稿，是否恢复？', '恢复本地草稿', {
-          confirmButtonText: '恢复草稿', cancelButtonText: '丢弃草稿', distinguishCancelAndClose: true, type: 'info'
-        })
+      if (await confirm({ title: '恢复本地草稿', message: '发现这个内容在本机自动保存的草稿，是否恢复？', confirmText: '恢复草稿', cancelText: '丢弃草稿', tone: 'info' })) {
         Object.assign(form, draft.data)
         if (props.kind === 'article' && !form.articleContentHtml) contentMode.value = 'source'
         saveState.value = `已恢复 ${new Date(draft.savedAt).toLocaleString('zh-CN')} 的本地草稿`
-      } catch {
+      } else {
         clearStudioDraft(draftKey.value)
       }
     }
@@ -499,7 +497,7 @@ function articlePayload(): Record<string, unknown> {
 async function save(): Promise<void> {
   const validation = props.kind === 'article' ? validateArticle() : ''
   if (validation) {
-    ElMessage.warning(validation)
+    notify.warning(validation)
     return
   }
   saving.value = true
@@ -537,7 +535,7 @@ async function save(): Promise<void> {
     markFormClean()
     draftStatus.value = '内容已保存'
     saveState.value = `已保存 · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
-    ElMessage.success(`${kindLabel.value}已保存`)
+    notify.success(`${kindLabel.value}已保存`)
     if (wasNew && savedID > 0) {
       routeReloadSkipped = true
       await router.replace(`/studio/${kindPath.value}/${savedID}/edit`)
@@ -548,7 +546,7 @@ async function save(): Promise<void> {
   } catch (reason: any) {
     suppressDraftAutosave = false
     saveState.value = '保存失败'
-    ElMessage.error(reason?.response?.data?.message || reason?.message || '保存失败')
+    notify.error(reason?.response?.data?.message || reason?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -562,9 +560,9 @@ async function handleArticleCover(event: Event): Promise<void> {
   uploadingCover.value = true
   try {
     form.articleCover = await uploadStudioImage(file, 'article-cover')
-    ElMessage.success('封面已上传')
+    notify.success('封面已上传')
   } catch (reason: any) {
-    ElMessage.error(reason?.message || '封面上传失败')
+    notify.error(reason?.message || '封面上传失败')
   } finally {
     uploadingCover.value = false
   }
@@ -578,9 +576,9 @@ async function handleSeriesCover(event: Event): Promise<void> {
   uploadingCover.value = true
   try {
     form.cover = await uploadStudioImage(file, 'series-cover')
-    ElMessage.success('封面已上传')
+    notify.success('封面已上传')
   } catch (reason: any) {
-    ElMessage.error(reason?.message || '封面上传失败')
+    notify.error(reason?.message || '封面上传失败')
   } finally {
     uploadingCover.value = false
   }
@@ -593,7 +591,7 @@ async function handleTalkImages(event: Event): Promise<void> {
   if (!files.length) return
   const available = 9 - form.talkImages.length
   if (available <= 0) {
-    ElMessage.warning('最多只能添加 9 张图片')
+    notify.warning('最多只能添加 9 张图片')
     return
   }
   uploadingTalkImages.value = true
@@ -601,9 +599,9 @@ async function handleTalkImages(event: Event): Promise<void> {
     for (const file of files.slice(0, available)) {
       form.talkImages.push(await uploadStudioImage(file, 'talk-image'))
     }
-    if (files.length > available) ElMessage.warning('超出数量的图片已忽略')
+    if (files.length > available) notify.warning('超出数量的图片已忽略')
   } catch (reason: any) {
-    ElMessage.error(reason?.message || '图片上传失败')
+    notify.error(reason?.message || '图片上传失败')
   } finally {
     uploadingTalkImages.value = false
   }

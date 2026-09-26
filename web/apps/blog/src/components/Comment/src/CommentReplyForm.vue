@@ -107,20 +107,14 @@ export default defineComponent({
         case 1:
           emitter.emit('articleFetchReplies', index)
           break
-        case 2:
-          emitter.emit('messageFetchReplies', index)
-          break
-        case 3:
-          emitter.emit('aboutFetchReplies', index)
-          break
-        case 4:
-          emitter.emit('friendLinkFetchReplies', index)
-          break
         case 5:
           emitter.emit('talkFetchReplies', index)
           break
         case 6:
           emitter.emit('collectionFetchReplies', index)
+          break
+        case 7:
+          emitter.emit('profileFetchReplies', index)
           break
       }
     }

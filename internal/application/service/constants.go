@@ -55,6 +55,8 @@ const (
 	Collection
 )
 
+const ProfileWall = 7
+
 const (
 	TwentyMinutes     = 20 * time.Minute
 	ExpireTime        = 7 * 24 * time.Hour
@@ -63,9 +65,7 @@ const (
 
 var TypeHM = map[int]map[string]string{
 	Article:    {"desc": "文章", "path": "/articles/"},
-	Message:    {"desc": "留言", "path": "/message/"},
-	Abouts:     {"desc": "关于我", "path": "/about/"},
-	Link:       {"desc": "友链", "path": "/friends/"},
 	Talk:       {"desc": "说说", "path": "/talks/"},
 	Collection: {"desc": "书单", "path": "/collections/"},
+	ProfileWall: {"desc": "作者主页", "path": "/u/"},
 }

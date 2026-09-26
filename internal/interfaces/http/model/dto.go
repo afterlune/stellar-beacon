@@ -26,7 +26,11 @@ type ArticleRankDTO struct {
 	ViewsCount   int    `json:"viewsCount"`
 }
 
-type ArticleSearchDTO = port.ArticleSearch
+type ArticleSearchDTO struct {
+	port.ArticleSearch
+	HighlightedTitle   string `json:"highlightedTitle,omitempty"`
+	HighlightedContent string `json:"highlightedContent,omitempty"`
+}
 type ArticleStatisticsDTO = port.ArticleStatistics
 
 type StellarBeaconAdminInfoDTO struct {
@@ -473,6 +477,18 @@ type PhotoDTO struct {
 	Photos          any    `json:"photos"`
 }
 
+type StudioPhotoDTO struct {
+	Id        int    `json:"id"`
+	PhotoName string `json:"photoName"`
+	PhotoDesc string `json:"photoDesc"`
+	PhotoSrc  string `json:"photoSrc"`
+}
+
+type StudioAlbumPhotosDTO struct {
+	Album  PhotoAlbumDTO    `json:"album"`
+	Photos []StudioPhotoDTO `json:"photos"`
+}
+
 type ReplyDTO = port.Reply
 
 type ResourceDTO struct {
@@ -573,11 +589,13 @@ type UserInfoDTO struct {
 }
 
 type StudioProfileDTO struct {
-	Handle   string `json:"handle"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Intro    string `json:"intro"`
-	Website  string `json:"website"`
+	Handle   string             `json:"handle"`
+	Nickname string             `json:"nickname"`
+	Avatar   string             `json:"avatar"`
+	Intro    string             `json:"intro"`
+	Website  string             `json:"website"`
+	About    string             `json:"about"`
+	Links    []port.ProfileLink `json:"links"`
 }
 
 type UserLogoutStatusDTO struct {
@@ -610,31 +628,15 @@ type UserMenuDTO struct {
 type WebsiteConfigDTO struct {
 	Name              string `json:"name"`
 	EnglishName       string `json:"englishName"`
-	Author            string `json:"author"`
-	AuthorAvatar      string `json:"authorAvatar"`
-	AuthorIntro       string `json:"authorIntro"`
 	Logo              string `json:"logo"`
 	MultiLanguage     int    `json:"multiLanguage"`
 	Notice            string `json:"notice"`
 	WebsiteCreateTime string `json:"websiteCreateTime"`
 	BeianNumber       string `json:"beianNumber"`
-	Github            string `json:"github"`
-	Gitee             string `json:"gitee"`
-	QQ                string `json:"qq"`
-	WeChat            string `json:"weChat"`
-	Weibo             string `json:"weibo"`
-	Csdn              string `json:"csdn"`
-	Zhihu             string `json:"zhihu"`
-	Juejin            string `json:"juejin"`
-	Twitter           string `json:"twitter"`
-	Stackoverflow     string `json:"stackoverflow"`
 	TouristAvatar     string `json:"touristAvatar"`
 	UserAvatar        string `json:"userAvatar"`
 	IsCommentReview   int    `json:"isCommentReview"`
 	IsEmailNotice     int    `json:"isEmailNotice"`
-	IsReward          int    `json:"isReward"`
-	WeiXinQRCode      string `json:"weiXinQRCode"`
-	AlipayQRCode      string `json:"alipayQRCode"`
 }
 
 // ReactionToggleVO is the reader-interaction write payload. Active carries the

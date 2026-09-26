@@ -12,7 +12,7 @@
 <script lang="ts">
 import { defineComponent, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { notify } from '@/services/notifications'
 import api from '@/api/api'
 import { useUserStore } from '@/stores/user'
 
@@ -46,9 +46,9 @@ export default defineComponent({
         if (!response?.data?.flag) throw new Error(response?.data?.message || '订阅操作失败')
         subscribedState.value = !subscribedState.value
         emit('changed', subscribedState.value)
-        ElMessage.success(subscribedState.value ? '已订阅话题' : '已取消订阅')
+        notify.success(subscribedState.value ? '已订阅话题' : '已取消订阅')
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '订阅操作失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '订阅操作失败')
       } finally {
         busy.value = false
       }

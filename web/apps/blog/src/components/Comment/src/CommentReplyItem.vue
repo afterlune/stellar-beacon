@@ -31,7 +31,8 @@
 
 <script lang="ts">
 import { computed, defineComponent, inject, reactive, ref, toRefs } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notify } from '@/services/notifications'
+import { confirm } from '@/services/confirm'
 import api from '@/api/api'
 import emitter from '@/utils/mitt'
 import Avatar from '@/components/Avatar.vue'
@@ -90,18 +91,14 @@ export default defineComponent({
     const removeReply = async () => {
       const collectionID = Number(readCollectionID())
       if (!collectionID) return
-      try {
-        await ElMessageBox.confirm('删除后该回复将不再公开显示。', '删除回复', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
-      } catch {
-        return
-      }
+      if (!await confirm({ title: '删除回复', message: '删除后该回复将不再公开显示。', confirmText: '删除' })) return
       busy.value = true
       try {
         const response = await api.deleteOwnedCollectionComment(collectionID, Number(reply.value.id))
         if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
         emitter.emit('collectionFetchReplies', Number(rootCommentId))
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '操作失败')
       } finally {
         busy.value = false
       }

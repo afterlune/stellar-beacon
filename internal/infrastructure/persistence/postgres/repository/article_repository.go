@@ -636,6 +636,87 @@ func (a *MyArticleRepo) ListArticleStatistics(ctx context.Context) ([]port.Artic
 	return statistics, nil
 }
 
+type articleSearchRow struct {
+	Id               int       `xorm:"id"`
+	UserId           int       `xorm:"user_id"`
+	ArticleCover     string    `xorm:"article_cover"`
+	ArticleTitle     string    `xorm:"article_title"`
+	ArticleContent   string    `xorm:"article_content"`
+	CategoryName     string    `xorm:"category_name"`
+	CreateTime       time.Time `xorm:"create_time"`
+	UpdateTime       time.Time `xorm:"update_time"`
+	IsDelete         int       `xorm:"is_delete"`
+	Status           int       `xorm:"status"`
+	ModerationStatus string    `xorm:"moderation_status"`
+	AuthorId         int       `xorm:"author_id"`
+	AuthorHandle     string    `xorm:"author_handle"`
+	AuthorNickname   string    `xorm:"author_nickname"`
+	AuthorAvatar     string    `xorm:"author_avatar"`
+	AuthorIntro      string    `xorm:"author_intro"`
+	AuthorWebsite    string    `xorm:"author_website"`
+}
+
+const articleSearchDocumentSelect = `
+	SELECT a.id, a.user_id, a.article_cover, a.article_title, a.article_content,
+	       COALESCE(c.category_name, '') AS category_name,
+	       a.create_time, a.update_time, a.is_delete, a.status, a.moderation_status,
+	       COALESCE(u.id, 0) AS author_id,
+	       COALESCE(u.handle, '') AS author_handle,
+	       COALESCE(u.nickname, '') AS author_nickname,
+	       COALESCE(u.avatar, '') AS author_avatar,
+	       COALESCE(u.intro, '') AS author_intro,
+	       COALESCE(u.website, '') AS author_website
+	FROM t_article a
+	LEFT JOIN t_category c ON c.id = a.category_id
+	LEFT JOIN t_user_info u ON u.id = a.user_id`
+
+func articleSearchDocument(row articleSearchRow) port.ArticleSearch {
+	return port.ArticleSearch{
+		Id: row.Id, UserId: row.UserId, ArticleCover: row.ArticleCover,
+		ArticleTitle: row.ArticleTitle, ArticleContent: row.ArticleContent,
+		CategoryName: row.CategoryName, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
+		Author: port.PublicAuthor{
+			Id: row.AuthorId, Handle: row.AuthorHandle, Nickname: row.AuthorNickname,
+			Avatar: row.AuthorAvatar, Intro: row.AuthorIntro, Website: row.AuthorWebsite,
+		},
+		IsDelete: row.IsDelete, Status: row.Status, ModerationStatus: row.ModerationStatus,
+	}
+}
+
+func (a *MyArticleRepo) GetArticleSearchDocument(ctx context.Context, articleID int) (port.ArticleSearch, bool, error) {
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return port.ArticleSearch{}, false, err
+	}
+	var row articleSearchRow
+	found, err := session.SQL(articleSearchDocumentSelect+" WHERE a.id = ?", articleID).Get(&row)
+	if err != nil {
+		return port.ArticleSearch{}, false, apperrors.Wrap(apperrors.KindUnavailable, "article.search_document", err)
+	}
+	if !found || row.IsDelete != 0 || row.Status != 1 || row.ModerationStatus != "visible" {
+		return port.ArticleSearch{}, false, nil
+	}
+	return articleSearchDocument(row), true, nil
+}
+
+func (a *MyArticleRepo) ListPublicArticleSearchDocuments(ctx context.Context) ([]port.ArticleSearch, error) {
+	session, err := a.articleSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var rows []articleSearchRow
+	if err := session.SQL(articleSearchDocumentSelect + `
+		WHERE a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible'
+		ORDER BY a.id ASC`).Find(&rows); err != nil {
+		return nil, apperrors.Wrap(apperrors.KindUnavailable, "article.search_documents", err)
+	}
+	documents := make([]port.ArticleSearch, 0, len(rows))
+	for _, row := range rows {
+		documents = append(documents, articleSearchDocument(row))
+	}
+	return documents, nil
+}
+
 func (a *MyArticleRepo) GetArticleRecord(ctx context.Context, articleID int) (entity.TArticle, error) {
 	session, err := a.articleSession(ctx)
 	if err != nil {

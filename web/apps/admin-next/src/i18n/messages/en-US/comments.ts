@@ -38,6 +38,8 @@ export default {
   'comments.comments.emptySearch': 'No matching comments',
   'comments.comments.emptyHint': 'The first comment a reader leaves will show up here.',
   'comments.comments.collection': 'Reading list',
+  'comments.comments.reviewFilterLabel': 'Review filter',
+  'comments.comments.collectionFilterLabel': 'Reading list filter',
   'comments.comments.collectionAll': 'All comments',
   'comments.comments.status': 'Status',
   'comments.comments.pinned': 'Pinned',

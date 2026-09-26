@@ -97,20 +97,14 @@ export default defineComponent({
         case 1:
           emitter.emit('articleFetchComment')
           break
-        case 2:
-          emitter.emit('messageFetchComment')
-          break
-        case 3:
-          emitter.emit('aboutFetchComment')
-          break
-        case 4:
-          emitter.emit('friendLinkFetchComment')
-          break
         case 5:
           emitter.emit('talkFetchComment')
           break
         case 6:
           emitter.emit('collectionFetchComment')
+          break
+        case 7:
+          emitter.emit('profileFetchComment')
           break
       }
     }

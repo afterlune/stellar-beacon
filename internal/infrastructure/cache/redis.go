@@ -37,6 +37,14 @@ func (r *RedisCache) Close() error {
 	return r.client.Close()
 }
 
+// Ping checks Redis connectivity without changing server state.
+func (r *RedisCache) Ping(ctx context.Context) error {
+	if r == nil || r.client == nil {
+		return fmt.Errorf("redis client is not configured")
+	}
+	return r.client.Ping(cacheContext(ctx)).Err()
+}
+
 func cacheContext(ctx context.Context) context.Context {
 	if ctx == nil {
 		return context.Background()

@@ -13,8 +13,8 @@
       <p v-if="loading" class="favorites-hint">{{ t('reactions.loading') }}</p>
       <template v-else-if="tab === 'articles'">
         <p v-if="articles.length === 0" class="favorites-hint">{{ t('reactions.favoritesEmpty') }}</p>
-        <div v-else class="favorites-list">
-          <ArticleCard v-for="article in articles" :key="article.id" :data="article" />
+        <div v-else class="article-feed-grid favorites-list">
+          <ArticleFeedCard v-for="article in articles" :key="article.id" :data="article" />
         </div>
       </template>
       <template v-else>
@@ -45,7 +45,7 @@ import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
-import { ArticleCard } from '@/components/ArticleCard'
+import { ArticleFeedCard } from '@/components/ArticleCard'
 import { PageHeader } from '@/components/PageHeader'
 import api from '@/api/api'
 
@@ -53,7 +53,7 @@ type FavoriteTab = 'articles' | 'collections'
 
 export default defineComponent({
   name: 'Favorites',
-  components: { ArticleCard, PageHeader },
+  components: { ArticleFeedCard, PageHeader },
   setup() {
     const { t } = useI18n()
     const route = useRoute()

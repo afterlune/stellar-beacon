@@ -88,6 +88,7 @@ func runServer() error {
 		return fmt.Errorf("application initialization failed: %w", err)
 	}
 	repository.StartLogQueue(context.Background())
+	appruntime.SetComponent("logQueue", "ready")
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -99,6 +100,7 @@ func runServer() error {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
+	router.Use(middlewares.RequestMetrics())
 	router.Use(gin.Recovery())
 	router.Use(middlewares.Cors())
 	router.Use(middlewares.SpiderReject())
@@ -140,9 +142,11 @@ func runServer() error {
 	if err := runtime.Stop(shutdownCtx); err != nil {
 		slog.Error("stop application runtime failed", "error", err)
 	}
+	appruntime.SetComponent("logQueue", "stopping")
 	if err := repository.StopLogQueue(shutdownCtx); err != nil {
 		slog.Error("stop log queue failed", "error", err)
 	}
+	appruntime.SetComponent("logQueue", "stopped")
 	appruntime.SetComponent("http", "stopped")
 	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 		return serveErr

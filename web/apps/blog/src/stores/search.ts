@@ -8,9 +8,12 @@ export const useSearchStore = defineStore('searchStore', {
   actions: {
     setOpenModal(status: boolean) {
       this.openModal = status
-      if (status === true) document.body.classList.add('modal--active')
-      else document.body.classList.remove('modal--active')
-      document.getElementById('App-Container')?.focus()
+      if (status === true) {
+        document.body.classList.add('modal--active')
+      } else {
+        document.body.classList.remove('modal--active')
+        window.requestAnimationFrame(() => document.getElementById('main-content')?.focus())
+      }
     }
   }
 })

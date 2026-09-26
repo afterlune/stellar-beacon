@@ -9,6 +9,7 @@ const (
 	FollowContentArticle    = "article"
 	FollowContentTalk       = "talk"
 	FollowContentCollection = "collection"
+	FollowContentProfile    = "profile"
 )
 
 type FollowUser struct {

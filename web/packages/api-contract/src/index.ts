@@ -387,6 +387,14 @@ export interface StudioProfile {
   avatar: string
   intro: string
   website: string
+  about: string
+  links: ProfileLink[]
+}
+
+export interface ProfileLink {
+  label: string
+  url: string
+  description?: string
 }
 
 export interface StudioActivation {
@@ -412,6 +420,8 @@ export interface PublicAuthorSummary {
   avatar: string
   intro?: string
   website?: string
+  about?: string
+  links?: ProfileLink[]
 }
 
 export interface PublicAuthorProfile extends PublicAuthorSummary {
@@ -527,10 +537,19 @@ export interface NewsletterDelivery {
 
 export interface ArticleSearchResult {
   id: number
+  userId?: number
+  articleCover?: string
   articleTitle: string
   articleContent: string
+  categoryName?: string
+  createTime?: string
+  updateTime?: string
+  author?: PublicAuthorSummary
+  moderationStatus?: string
   status: number
   isDelete: number
+  highlightedTitle?: string
+  highlightedContent?: string
 }
 export interface GrowthSummaryItem {
   eventName: string
@@ -631,6 +650,132 @@ export interface NewsletterHealth {
   deliveries: GrowthDeliveryStats
   smtp: SMTPHealth
   generatedAt?: string
+}
+
+export type MonitorStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown' | 'stale' | 'not_configured'
+
+export interface MonitorComponent {
+  name: string
+  status: MonitorStatus
+  required: boolean
+  latencyMs: number
+  checkedAt: string
+  message: string
+}
+
+export interface MonitorResources {
+  uptimeSeconds: number
+  cpuPercent: number
+  heapAllocBytes: number
+  heapSysBytes: number
+  goroutines: number
+  gcTotal: number
+}
+
+export interface MonitorHTTPMetrics {
+  requests: number
+  status2xx: number
+  status3xx: number
+  status4xx: number
+  status5xx: number
+  avgLatencyMs: number
+  p95LatencyMs: number
+  sampleSeconds: number
+}
+
+export interface MonitorWorker {
+  name: string
+  status: MonitorStatus
+  queued: number
+  capacity: number
+  failed: number
+  running: number
+  updatedAt: string
+}
+
+export interface MonitorInstance {
+  instanceId: string
+  replicaId: string
+  status: MonitorStatus
+  capturedAt: string
+  components: MonitorComponent[]
+  resources: MonitorResources
+  http: MonitorHTTPMetrics
+  workers: MonitorWorker[]
+}
+
+export interface SystemHealthSnapshot {
+  status: MonitorStatus
+  generatedAt: string
+  historyAvailable: boolean
+  historyMessage?: string
+  instances: MonitorInstance[]
+}
+
+export type SystemMonitorRange = '1h' | '24h' | '7d'
+export type SystemMonitorHistoryRange = '24h' | '7d' | '30d' | '90d'
+
+export interface SystemMonitorStatusPeriod {
+  replicaId: string
+  instanceId: string
+  scope: string
+  status: MonitorStatus | 'monitoring_gap'
+  startedAt: string
+  endedAt?: string
+  message: string
+  latencyMs: number
+  incidentId?: number
+}
+
+export interface SystemMonitorTimeline {
+  range: SystemMonitorHistoryRange
+  from: string
+  to: string
+  available: boolean
+  message?: string
+  periods: SystemMonitorStatusPeriod[]
+}
+
+export interface SystemMonitorIncidentUpdate {
+  id: number
+  incidentId: number
+  authorId: number
+  authorName: string
+  content: string
+  createdAt: string
+}
+
+export interface SystemMonitorIncident {
+  id: number
+  replicaId: string
+  instanceId: string
+  scope: string
+  severity: 'warning' | 'outage'
+  state: 'open' | 'resolved'
+  startedAt: string
+  resolvedAt?: string
+  lastSeenAt: string
+  message: string
+  updates: SystemMonitorIncidentUpdate[]
+}
+
+export interface SystemMonitorTrendPoint {
+  period: string
+  requests: number
+  redirects: number
+  clientErrors: number
+  serverErrors: number
+  avgLatencyMs: number
+  p95LatencyMs: number
+  cpuPercent: number
+  heapAllocBytes: number
+}
+
+export interface SystemMonitorTrends {
+  range: SystemMonitorRange
+  available: boolean
+  message?: string
+  points: SystemMonitorTrendPoint[]
 }
 
 export interface AdminDashboardAnalytics {

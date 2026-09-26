@@ -168,21 +168,18 @@
         <section v-if="article.relatedArticles && article.relatedArticles.length" ref="relatedArticlesRef" class="related-articles" data-testid="related-articles" data-continuation-event="related_impression" :aria-labelledby="'related-title-' + articleId">
           <h2 :id="'related-title-' + articleId">{{ t('newsletter.related') }}</h2>
           <div class="related-articles__grid">
-            <router-link v-for="(related, index) in article.relatedArticles" :key="related.id" :to="'/articles/' + related.id" class="related-article" @click="trackContinuationClick('related_click', 'article', related.id, 'related', Number(index) + 1)">
-              <span>{{ related.categoryName || t('settings.default-category') }}</span>
-              <strong>{{ related.articleTitle }}</strong>
-            </router-link>
+            <ArticleFeedCard v-for="(related, index) in article.relatedArticles" :key="related.id" :data="related" compact @click="trackContinuationClick('related_click', 'article', related.id, 'related', Number(index) + 1)" />
           </div>
         </section>
         <NewsletterSubscribe />
         <div class="flex flex-col lg:flex-row justify-start items-end my-8 my-gap">
           <div class="w-full h-full self-stretch mr-0 lg:mr-4" v-if="preArticleCard">
             <SubTitle title="settings.paginator.pre" icon="arrow-left-circle" />
-            <ArticleCard class="pre-and-next-article" :data="preArticleCard" />
+            <ArticleFeedCard class="pre-and-next-article" :data="preArticleCard" compact />
           </div>
           <div class="w-full h-full self-stretch mt-0" v-if="nextArticleCard">
             <SubTitle title="settings.paginator.next" :side="!isMobile ? 'right' : 'left'" icon="arrow-right-circle" />
-            <ArticleCard class="pre-and-next-article" :data="nextArticleCard" />
+            <ArticleFeedCard class="pre-and-next-article" :data="nextArticleCard" compact />
           </div>
         </div>
         <Comment />
@@ -226,7 +223,7 @@ import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Comment } from '@/components/Comment'
 import { SubTitle } from '@/components/Title'
-import { ArticleCard } from '@/components/ArticleCard'
+import { ArticleCard, ArticleFeedCard } from '@/components/ArticleCard'
 import '@/styles/prism-aurora-future.css'
 import { useCommonStore } from '@/stores/common'
 import { useCommentStore } from '@/stores/comment'
@@ -262,7 +259,7 @@ function createReadingSessionId(): string {
 
 export default defineComponent({
   name: 'Article',
-  components: { Sidebar, Comment, SubTitle, ArticleCard, Profile, Sticky, Navigator, NewsletterSubscribe, AddToCollectionButton },
+  components: { Sidebar, Comment, SubTitle, ArticleCard, ArticleFeedCard, Profile, Sticky, Navigator, NewsletterSubscribe, AddToCollectionButton },
   setup() {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
     const commonStore = useCommonStore()

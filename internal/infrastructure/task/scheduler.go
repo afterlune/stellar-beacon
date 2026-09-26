@@ -139,6 +139,15 @@ func (s *Scheduler) Start(ctx context.Context) error {
 
 func (s *Scheduler) Ready() bool { return s.ready.Load() }
 
+func (s *Scheduler) RunningCount() int {
+	if s == nil {
+		return 0
+	}
+	s.runningMu.Lock()
+	defer s.runningMu.Unlock()
+	return len(s.running)
+}
+
 func (s *Scheduler) Reload(ctx context.Context) error {
 	if s.repo == nil {
 		return apperrors.Unavailable("job.reload", errors.New("job repository is not configured"))

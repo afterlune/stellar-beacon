@@ -34,6 +34,8 @@ test.describe('blog real backend main chain @integration', () => {
   let createdCollectionID = 0
   let createdSubscriptionCollectionID = 0
   let createdInteractionCollectionID = 0
+  let createdModerationCollectionID = 0
+  let createdBatchModerationCollectionID = 0
   let createdGovernanceCollectionID = 0
   let admin: LoginSession
   let user: LoginSession
@@ -91,6 +93,12 @@ test.describe('blog real backend main chain @integration', () => {
     }
     if (createdInteractionCollectionID > 0) {
       await deleteAPI(request, `/api/v1/studio/collections/${createdInteractionCollectionID}`, admin.token).catch(() => undefined)
+    }
+    if (createdModerationCollectionID > 0) {
+      await deleteAPI(request, `/api/v1/studio/collections/${createdModerationCollectionID}`, admin.token).catch(() => undefined)
+    }
+    if (createdBatchModerationCollectionID > 0) {
+      await deleteAPI(request, `/api/v1/studio/collections/${createdBatchModerationCollectionID}`, admin.token).catch(() => undefined)
     }
     if (createdGovernanceCollectionID > 0) {
       await deleteAPI(request, `/api/v1/studio/collections/${createdGovernanceCollectionID}`, admin.token).catch(() => undefined)
@@ -381,6 +389,7 @@ test.describe('blog real backend main chain @integration', () => {
     const replyText = `integration moderation reply ${runID}`
     const created = await postAPI(request, '/api/v1/studio/collections', admin.token, { title, description: 'integration moderation collection', visibility: 'public' })
     const collectionID = Number(created.id)
+    createdModerationCollectionID = collectionID
     expect(collectionID).toBeGreaterThan(0)
     await putAPI(request, `/api/v1/studio/collections/${collectionID}/items/${fixtureArticleID}`, admin.token, { note: 'integration moderation item' })
 
@@ -436,6 +445,7 @@ test.describe('blog real backend main chain @integration', () => {
     const secondText = `integration batch second ${runID}`
     const created = await postAPI(request, '/api/v1/studio/collections', admin.token, { title, description: 'integration batch moderation collection', visibility: 'public' })
     const collectionID = Number(created.id)
+    createdBatchModerationCollectionID = collectionID
     expect(collectionID).toBeGreaterThan(0)
     await putAPI(request, `/api/v1/studio/collections/${collectionID}/items/${fixtureArticleID}`, admin.token, { note: 'integration batch item' })
 
@@ -984,8 +994,11 @@ async function setInteractionPreference(request: APIRequestContext, token: strin
 }
 
 async function waitForMailpitMessage(request: APIRequestContext, text: string): Promise<void> {
+  // Mailpit treats `-term` as negation. Its tokenizer splits generated
+  // `<timestamp>-<suffix>` run IDs into that form, so quote the full phrase.
+  const query = `"${text.replace(/"/g, '\\"')}"`
   await expect.poll(async () => {
-    const response = await request.get(`${mailpitBaseURL}/api/v1/search?query=${encodeURIComponent(text)}`)
+    const response = await request.get(`${mailpitBaseURL}/api/v1/search?query=${encodeURIComponent(query)}`)
     if (!response.ok()) return false
     const body = await response.text()
     return body.includes(text)

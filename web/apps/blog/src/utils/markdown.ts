@@ -1,6 +1,12 @@
 import MarkdownIt from 'markdown-it'
 import markdownEmoji from 'markdown-it-emoji'
 import markdownKatexExternal from 'markdown-it-katex-external'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
+
+// Keep the existing markdown-it plugin, but provide its KaTeX renderer from the
+// local bundle instead of an external global script.
+;(window as Window & { katex?: typeof katex }).katex = katex
 
 export default function markdownToHtml(content: string) {
   const md = new MarkdownIt({

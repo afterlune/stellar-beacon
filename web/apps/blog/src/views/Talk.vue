@@ -21,15 +21,11 @@
                   }}
                 </div>
                 <div class="talk-content" v-html="talk.content" />
-                <el-row class="talk-images" v-if="talk.imgs">
-                  <el-col :md="4" v-for="(img, index) of talk.imgs" :key="index">
-                    <el-image
-                      class="images-talks"
-                      :src="safeTalkImageUrl(img)"
-                      fit="contain"
-                      @click.prevent="handlePreview(img)" />
-                  </el-col>
-                </el-row>
+                <div class="talk-images" v-if="talk.imgs">
+                  <button v-for="(img, index) of talk.imgs" :key="index" class="talk-image-button" type="button" :aria-label="`预览第 ${Number(index) + 1} 张图片`" @click="handlePreview(img)">
+                    <img class="images-talks" :src="safeTalkImageUrl(img)" alt="" loading="lazy" />
+                  </button>
+                </div>
               </div>
             </div>
             <Comment />
@@ -196,11 +192,6 @@ export default defineComponent({
   margin-left: 5px;
   font-size: 15px;
 }
-.el-card {
-  background: var(--background-primary);
-  border-radius: 10px;
-  border: 0;
-}
 .talk-user-avatar {
   flex: 1;
 }
@@ -227,8 +218,12 @@ export default defineComponent({
   word-break: break-all;
 }
 .talk-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
   margin-top: 8px;
 }
+.talk-image-button { display: grid; min-width: 0; place-items: center; overflow: hidden; padding: 0; border: 0; border-radius: 8px; background: var(--background-primary-alt); cursor: zoom-in; }
 .images-items {
   cursor: pointer;
   border-radius: 3px;
@@ -237,12 +232,7 @@ export default defineComponent({
 .images-talks {
   display: block;
   width: 100%;
-  height: auto;
-}
-.images-talks :deep(.el-image__inner) {
-  display: block;
-  width: 100%;
-  height: auto;
+  height: 120px;
   object-fit: contain;
   object-position: center;
 }

@@ -26,17 +26,10 @@
         </div>
         <aside><strong>{{ detail.items.length }}</strong><small>篇文章</small><small>{{ likeCount }} 赞 · {{ favoriteCount }} 收藏 · {{ detail.collection.commentCount || 0 }} 评论</small><em>{{ detail.collection.visibility === 'unlisted' ? '链接可见' : '公开书单' }}</em></aside>
       </header>
-      <ol class="collection-items">
+      <ol class="collection-items article-feed-grid">
         <li v-for="(item, index) in detail.items" :key="item.articleId" :class="{ 'is-highlighted': Number(item.articleId) === highlightedArticleId }" :data-article-id="item.articleId">
-          <span class="collection-items__index">{{ String(Number(index) + 1).padStart(2, '0') }}</span>
-          <router-link v-if="item.article" :to="`/articles/${item.article.id}`" class="collection-items__main">
-            <img v-if="item.article.articleCover" :src="item.article.articleCover" :alt="item.article.articleTitle" loading="lazy" />
-            <div>
-              <small>{{ item.article.categoryName || '未分类' }} · {{ formatDate(item.article.createTime) }}</small>
-              <h2>{{ item.article.articleTitle }}</h2>
-              <p>{{ item.note || excerpt(item.article.articleContent) }}</p>
-            </div>
-          </router-link>
+          <ArticleFeedCard v-if="item.article" :data="articleCardData(item)" />
+          <span v-else class="collection-items__index">{{ String(Number(index) + 1).padStart(2, '0') }}</span>
         </li>
       </ol>
       <Comment />
@@ -47,18 +40,19 @@
 <script lang="ts">
 import { computed, defineComponent, nextTick, onMounted, onUnmounted, provide, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { notify } from '@/services/notifications'
 import api from '@/api/api'
 import { useUserStore } from '@/stores/user'
 import { useCommentStore } from '@/stores/comment'
 import { Comment } from '@/components/Comment'
 import CollectionSubscribeButton from '@/components/CollectionSubscribeButton.vue'
+import { ArticleFeedCard } from '@/components/ArticleCard'
 import emitter from '@/utils/mitt'
 import { pageCount, pageRecords } from '@/utils/page'
 
 export default defineComponent({
   name: 'CollectionDetail',
-  components: { Comment, CollectionSubscribeButton },
+  components: { Comment, CollectionSubscribeButton, ArticleFeedCard },
   setup() {
     const route = useRoute()
     const router = useRouter()
@@ -195,7 +189,7 @@ export default defineComponent({
         likeCount.value = Number(response.data.data?.likeCount || 0)
         favoriteCount.value = Number(response.data.data?.favoriteCount || 0)
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '操作失败')
       } finally {
         busy.value = false
       }
@@ -230,7 +224,11 @@ export default defineComponent({
     })
     watch(() => route.params.slug, () => void load())
     onMounted(() => void load())
-    return { detail, loading, error, copied, highlightedArticleId, isOwner, defaultAvatar, liked, likeCount, likeBusy, favorited, favoriteCount, favoriteBusy, toggleLike, toggleFavorite, share, excerpt, formatDate }
+    const articleCardData = (item: any) => ({
+      ...(item.article || {}),
+      articleContent: item.note || item.article?.articleContent || ''
+    })
+    return { detail, loading, error, copied, highlightedArticleId, isOwner, defaultAvatar, liked, likeCount, likeBusy, favorited, favoriteCount, favoriteBusy, toggleLike, toggleFavorite, share, excerpt, formatDate, articleCardData }
   }
 })
 </script>
@@ -251,9 +249,9 @@ export default defineComponent({
 .collection-hero aside small, .collection-hero aside em { color: var(--text-ob-dim); font-size: 11px; font-style: normal; }
 .collection-hero aside small + small { margin-top: 6px; }
 .collection-hero aside em { margin-top: 8px; color: var(--color-ob); }
-.collection-items { display: grid; gap: 12px; margin: 22px 0 0; padding: 0; list-style: none; }
-.collection-items li { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; align-items: start; padding: 15px; border: 1px solid var(--border-hairline); border-radius: 17px; background: color-mix(in srgb, var(--background-primary-alt) 92%, transparent); }
-.collection-items li.is-highlighted { border-color: var(--color-ob); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ob) 12%, transparent); }
+.collection-items { margin: 22px 0 0; padding: 0; list-style: none; }
+.collection-items li { min-width: 0; }
+.collection-items li.is-highlighted :deep(.feed-card) { border-color: var(--color-ob); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ob) 12%, transparent); }
 .collection-items__index { padding-top: 7px; color: var(--color-ob); font-family: ui-monospace, monospace; font-size: 11px; }
 .collection-items__main { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 18px; color: inherit; text-decoration: none; }
 .collection-items__main img { grid-column: 2; grid-row: 1; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; object-fit: cover; }

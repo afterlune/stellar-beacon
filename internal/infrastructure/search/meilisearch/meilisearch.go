@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -42,6 +43,30 @@ func NewMeiliSearcher(conf *config.MeiliSearch) *MeiliSearcher {
 
 func NewMeiliSearcherWithClient(client meilisearch.ServiceManager) *MeiliSearcher {
 	return &MeiliSearcher{client: client}
+}
+
+// CheckHealth performs a read-only Meilisearch health request.
+func (s *MeiliSearcher) CheckHealth(ctx context.Context) error {
+	if s == nil || s.baseURL == "" {
+		return fmt.Errorf("Meilisearch health endpoint is not configured")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, s.baseURL+"/health", nil)
+	if err != nil {
+		return err
+	}
+	client := s.httpClient
+	if client == nil {
+		client = &http.Client{Timeout: 3 * time.Second}
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("Meilisearch health returned status %d", response.StatusCode)
+	}
+	return nil
 }
 
 func (s *MeiliSearcher) Search(ctx context.Context, keywords string, offset, limit int) (port.ArticleSearchPage, error) {
@@ -185,27 +210,299 @@ func decodeSearchHits(hits []json.RawMessage) ([]port.ArticleSearchHit, error) {
 
 func decodeSearchHit(hit json.RawMessage) (port.ArticleSearchHit, error) {
 	var decoded struct {
-		ID             int               `json:"id"`
-		ArticleTitle   string            `json:"articleTitle"`
-		ArticleContent string            `json:"articleContent"`
-		IsDelete       int               `json:"isDelete"`
-		Status         int               `json:"status"`
-		Formatted      map[string]string `json:"_formatted"`
+		ID               int               `json:"id"`
+		UserID           int               `json:"userId"`
+		ArticleCover     string            `json:"articleCover"`
+		ArticleTitle     string            `json:"articleTitle"`
+		ArticleContent   string            `json:"articleContent"`
+		CategoryName     string            `json:"categoryName"`
+		CreateTime       time.Time         `json:"createTime"`
+		UpdateTime       time.Time         `json:"updateTime"`
+		Author           port.PublicAuthor `json:"author"`
+		IsDelete         int               `json:"isDelete"`
+		Status           int               `json:"status"`
+		ModerationStatus string            `json:"moderationStatus"`
+		Formatted        struct {
+			ArticleTitle   string `json:"articleTitle"`
+			ArticleContent string `json:"articleContent"`
+		} `json:"_formatted"`
 	}
 	if err := json.Unmarshal(hit, &decoded); err != nil {
 		return port.ArticleSearchHit{}, errors.Unavailable("search.decode", err)
 	}
 	return port.ArticleSearchHit{
 		ArticleSearch: port.ArticleSearch{
-			Id:             decoded.ID,
-			ArticleTitle:   decoded.ArticleTitle,
-			ArticleContent: decoded.ArticleContent,
-			IsDelete:       decoded.IsDelete,
-			Status:         decoded.Status,
+			Id: decoded.ID, UserId: decoded.UserID, ArticleCover: decoded.ArticleCover,
+			ArticleTitle: decoded.ArticleTitle, ArticleContent: decoded.ArticleContent,
+			CategoryName: decoded.CategoryName, CreateTime: decoded.CreateTime, UpdateTime: decoded.UpdateTime,
+			Author: decoded.Author, IsDelete: decoded.IsDelete, Status: decoded.Status,
+			ModerationStatus: decoded.ModerationStatus,
 		},
-		HighlightedTitle:   decoded.Formatted["articleTitle"],
-		HighlightedContent: decoded.Formatted["articleContent"],
+		HighlightedTitle:   decoded.Formatted.ArticleTitle,
+		HighlightedContent: decoded.Formatted.ArticleContent,
 	}, nil
 }
 
+func (s *MeiliSearcher) Upsert(ctx context.Context, documents []port.ArticleSearch) error {
+	if len(documents) == 0 {
+		return nil
+	}
+	if s == nil {
+		return errors.Unavailable("search.index", fmt.Errorf("search client is not configured"))
+	}
+	if s.baseURL != "" {
+		if err := s.ensureHTTPIndex(ctx); err != nil {
+			return err
+		}
+		return s.writeHTTPDocuments(ctx, http.MethodPost, "/indexes/articles/documents", documents)
+	}
+	if s.client == nil {
+		return errors.Unavailable("search.index", fmt.Errorf("search client is not configured"))
+	}
+	if _, err := s.client.Index("articles").AddDocumentsWithContext(ctx, documents, nil); err != nil {
+		return errors.Unavailable("search.index", err)
+	}
+	return nil
+}
+
+func (s *MeiliSearcher) Delete(ctx context.Context, articleIDs []int) error {
+	if len(articleIDs) == 0 {
+		return nil
+	}
+	if s == nil {
+		return errors.Unavailable("search.index", fmt.Errorf("search client is not configured"))
+	}
+	identifiers := make([]string, 0, len(articleIDs))
+	for _, id := range articleIDs {
+		if id > 0 {
+			identifiers = append(identifiers, fmt.Sprint(id))
+		}
+	}
+	if len(identifiers) == 0 {
+		return nil
+	}
+	if s.baseURL != "" {
+		if err := s.ensureHTTPIndex(ctx); err != nil {
+			return err
+		}
+		return s.writeHTTPDocuments(ctx, http.MethodPost, "/indexes/articles/documents/delete-batch", identifiers)
+	}
+	if s.client == nil {
+		return errors.Unavailable("search.index", fmt.Errorf("search client is not configured"))
+	}
+	if _, err := s.client.Index("articles").DeleteDocumentsWithContext(ctx, identifiers, nil); err != nil {
+		return errors.Unavailable("search.index", err)
+	}
+	return nil
+}
+
+// Reconcile makes the public document set match the database snapshot. It
+// deletes stale identifiers first and then upserts the authoritative rows.
+func (s *MeiliSearcher) Reconcile(ctx context.Context, documents []port.ArticleSearch) error {
+	if s == nil {
+		return errors.Unavailable("search.reconcile", fmt.Errorf("search client is not configured"))
+	}
+	if s.baseURL != "" {
+		if err := s.ensureHTTPIndex(ctx); err != nil {
+			return err
+		}
+		if err := s.configureHTTPIndex(ctx); err != nil {
+			return err
+		}
+		currentIDs, err := s.listHTTPDocumentIDs(ctx)
+		if err != nil {
+			return err
+		}
+		wanted := make(map[int]struct{}, len(documents))
+		for _, document := range documents {
+			if document.Id > 0 {
+				wanted[document.Id] = struct{}{}
+			}
+		}
+		stale := make([]int, 0)
+		for id := range currentIDs {
+			if _, ok := wanted[id]; !ok {
+				stale = append(stale, id)
+			}
+		}
+		if err := s.Delete(ctx, stale); err != nil {
+			return err
+		}
+		return s.Upsert(ctx, documents)
+	}
+	if s.client == nil {
+		return errors.Unavailable("search.reconcile", fmt.Errorf("search client is not configured"))
+	}
+	currentIDs, err := s.listSDKDocumentIDs(ctx)
+	if err != nil {
+		return err
+	}
+	wanted := make(map[int]struct{}, len(documents))
+	for _, document := range documents {
+		if document.Id > 0 {
+			wanted[document.Id] = struct{}{}
+		}
+	}
+	stale := make([]int, 0)
+	for id := range currentIDs {
+		if _, ok := wanted[id]; !ok {
+			stale = append(stale, id)
+		}
+	}
+	if err := s.Delete(ctx, stale); err != nil {
+		return err
+	}
+	return s.Upsert(ctx, documents)
+}
+
+func (s *MeiliSearcher) ensureHTTPIndex(ctx context.Context) error {
+	payload := map[string]string{"uid": "articles", "primaryKey": "id"}
+	response, err := s.doHTTP(ctx, http.MethodPost, "/indexes", payload)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode == http.StatusConflict {
+		response.Body.Close()
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		return errors.Unavailable("search.index", fmt.Errorf("meilisearch returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body))))
+	}
+	return nil
+}
+
+func (s *MeiliSearcher) configureHTTPIndex(ctx context.Context) error {
+	settings := []struct {
+		path    string
+		payload []string
+	}{
+		{"/indexes/articles/settings/searchable-attributes", []string{"articleTitle", "articleContent"}},
+		{"/indexes/articles/settings/filterable-attributes", []string{"isDelete", "status", "moderationStatus"}},
+		{"/indexes/articles/settings/sortable-attributes", []string{"createTime"}},
+	}
+	for _, setting := range settings {
+		response, err := s.doHTTP(ctx, http.MethodPut, setting.path, setting.payload)
+		if err != nil {
+			return err
+		}
+		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			body, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+			response.Body.Close()
+			return errors.Unavailable("search.settings", fmt.Errorf("meilisearch returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body))))
+		}
+		response.Body.Close()
+	}
+	return nil
+}
+
+func (s *MeiliSearcher) writeHTTPDocuments(ctx context.Context, method, path string, payload any) error {
+	response, err := s.doHTTP(ctx, method, path, payload)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		return errors.Unavailable("search.index", fmt.Errorf("meilisearch returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body))))
+	}
+	return nil
+}
+
+func (s *MeiliSearcher) doHTTP(ctx context.Context, method, path string, payload any) (*http.Response, error) {
+	var body io.Reader
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return nil, errors.Unavailable("search.encode", err)
+		}
+		body = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, s.baseURL+path, body)
+	if err != nil {
+		return nil, errors.Unavailable("search.request", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if s.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	}
+	client := s.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	response, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Unavailable("search.request", err)
+	}
+	return response, nil
+}
+
+func (s *MeiliSearcher) listHTTPDocumentIDs(ctx context.Context) (map[int]struct{}, error) {
+	ids := make(map[int]struct{})
+	const pageSize = 1000
+	for offset := 0; ; offset += pageSize {
+		query := url.Values{}
+		query.Set("limit", fmt.Sprint(pageSize))
+		query.Set("offset", fmt.Sprint(offset))
+		query.Set("fields", "id")
+		response, err := s.doHTTP(ctx, http.MethodGet, "/indexes/articles/documents?"+query.Encode(), nil)
+		if err != nil {
+			return nil, err
+		}
+		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			body, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+			response.Body.Close()
+			return nil, errors.Unavailable("search.documents", fmt.Errorf("meilisearch returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body))))
+		}
+		var decoded struct {
+			Results []struct {
+				ID int `json:"id"`
+			} `json:"results"`
+			Total int `json:"total"`
+		}
+		decodeErr := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(&decoded)
+		response.Body.Close()
+		if decodeErr != nil {
+			return nil, errors.Unavailable("search.decode", decodeErr)
+		}
+		for _, row := range decoded.Results {
+			if row.ID > 0 {
+				ids[row.ID] = struct{}{}
+			}
+		}
+		if len(decoded.Results) < pageSize || (decoded.Total > 0 && offset+len(decoded.Results) >= decoded.Total) {
+			return ids, nil
+		}
+	}
+}
+
+func (s *MeiliSearcher) listSDKDocumentIDs(ctx context.Context) (map[int]struct{}, error) {
+	ids := make(map[int]struct{})
+	const pageSize = 1000
+	for offset := int64(0); ; offset += pageSize {
+		var result meilisearch.DocumentsResult
+		if err := s.client.Index("articles").GetDocumentsWithContext(ctx, &meilisearch.DocumentsQuery{
+			Limit: pageSize, Offset: offset, Fields: []string{"id"},
+		}, &result); err != nil {
+			return nil, errors.Unavailable("search.documents", err)
+		}
+		for _, hit := range result.Results {
+			var row struct {
+				ID int `json:"id"`
+			}
+			if err := hit.Decode(&row); err != nil {
+				return nil, errors.Unavailable("search.decode", err)
+			}
+			if row.ID > 0 {
+				ids[row.ID] = struct{}{}
+			}
+		}
+		if len(result.Results) < pageSize || offset+int64(len(result.Results)) >= result.Total {
+			return ids, nil
+		}
+	}
+}
+
 var _ port.ArticleSearcher = (*MeiliSearcher)(nil)
+var _ port.ArticleSearchIndexer = (*MeiliSearcher)(nil)

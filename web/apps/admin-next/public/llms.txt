@@ -1,0 +1,7 @@
+# Stellar Beacon Admin
+
+> The Stellar Beacon editorial console is a private administration surface and is not intended for indexing.
+
+## Entry
+
+- [Administrator login](/login)

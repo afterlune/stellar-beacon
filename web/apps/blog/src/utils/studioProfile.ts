@@ -4,6 +4,8 @@ export interface StudioProfile {
   avatar: string
   intro: string
   website: string
+  about: string
+  links: Array<{ label: string; url: string; description?: string }>
 }
 
 export interface StudioProfileCheck {

@@ -65,10 +65,15 @@ func (c *MyCommentRepo) ListComments(ctx context.Context, filter port.CommentFil
 		EXISTS (SELECT 1 FROM t_comment_reaction reaction WHERE reaction.comment_id = c.id
 			AND reaction.user_info_id = ? AND reaction.reaction = 'like') AS liked
 		FROM t_comment c JOIN t_user_info u ON c.user_id = u.id
-		WHERE c.type = ? AND c.is_review = 1 AND (c.is_delete = 0 OR (c.type = 6 AND c.is_delete = 1 AND (c.user_id = ? OR EXISTS (SELECT 1 FROM t_comment child WHERE child.parent_id = c.id AND child.is_delete = 1 AND child.user_id = ?)))) AND c.parent_id = 0`
+		WHERE c.type = ? AND c.is_review = 1 AND (c.is_delete = 0 OR
+			(c.type = 6 AND c.is_delete = 1 AND (c.user_id = ? OR EXISTS (SELECT 1 FROM t_comment child WHERE child.parent_id = c.id AND child.is_delete = 1 AND child.user_id = ?))) OR
+			(c.type = 7 AND c.is_delete = 1 AND (c.user_id = ? OR c.topic_id = ?))) AND c.parent_id = 0`
 	args := []interface{}{filter.ViewerID, filter.Type, filter.ViewerID, filter.ViewerID}
-	countQuery := "SELECT count(0) FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND (c.is_delete = 0 OR (c.type = 6 AND c.is_delete = 1 AND (c.user_id = ? OR EXISTS (SELECT 1 FROM t_comment child WHERE child.parent_id = c.id AND child.is_delete = 1 AND child.user_id = ?)))) AND c.parent_id = 0"
-	countArgs := []interface{}{filter.Type, filter.ViewerID, filter.ViewerID}
+	args = append(args, filter.ViewerID, filter.ViewerID)
+	countQuery := `SELECT count(0) FROM t_comment c WHERE c.type = ? AND c.is_review = 1 AND (c.is_delete = 0 OR
+		(c.type = 6 AND c.is_delete = 1 AND (c.user_id = ? OR EXISTS (SELECT 1 FROM t_comment child WHERE child.parent_id = c.id AND child.is_delete = 1 AND child.user_id = ?))) OR
+		(c.type = 7 AND c.is_delete = 1 AND (c.user_id = ? OR c.topic_id = ?))) AND c.parent_id = 0`
+	countArgs := []interface{}{filter.Type, filter.ViewerID, filter.ViewerID, filter.ViewerID, filter.ViewerID}
 	if filter.TopicID != nil {
 		query += " AND c.topic_id = ?"
 		args = append(args, *filter.TopicID)
@@ -156,10 +161,12 @@ func (c *MyCommentRepo) ListReplies(ctx context.Context, commentIDs []int, viewe
 				AND reaction.user_info_id = ? AND reaction.reaction = 'like') AS liked,
 			row_number() OVER (PARTITION BY parent_id ORDER BY c.create_time ASC) row_num
 		FROM t_comment c JOIN t_user_info u ON c.user_id = u.id JOIN t_user_info r ON c.reply_user_id = r.id
-		WHERE c.is_review = 1 AND (c.is_delete = 0 OR (c.type = 6 AND c.is_delete = 1 AND c.user_id = ?)) AND parent_id IN (` + placeholders(len(commentIDs)) + `)
+		WHERE c.is_review = 1 AND (c.is_delete = 0 OR (c.type = 6 AND c.is_delete = 1 AND c.user_id = ?) OR
+			(c.type = 7 AND c.is_delete = 1 AND (c.user_id = ? OR c.topic_id = ?))) AND parent_id IN (` + placeholders(len(commentIDs)) + `)
 		ORDER BY c.create_time DESC) t`
 	var replies []*port.Reply
 	args := []interface{}{viewerID, viewerID}
+	args = append(args, viewerID, viewerID)
 	args = append(args, intArgs(commentIDs)...)
 	if err := session.SQL(query, args...).Find(&replies); err != nil {
 		return nil, apperrors.Wrap(apperrors.KindUnavailable, "comment.replies", err)
@@ -281,6 +288,8 @@ func (c *MyCommentRepo) ValidateTarget(ctx context.Context, commentType, topicID
 			JOIN t_user_info owner ON owner.id = c.user_id AND owner.is_disable = 0
 			WHERE c.id = ? AND c.is_delete = 0 AND c.moderation_status = 'visible'
 			  AND c.visibility IN ('public', 'unlisted')`
+	case 7:
+		query = "SELECT id FROM t_user_info WHERE id = ? AND is_disable = 0 AND trim(handle) <> ''"
 	default:
 		return nil
 	}

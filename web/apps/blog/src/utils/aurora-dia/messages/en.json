@@ -45,19 +45,10 @@
       ]
     },
     {
-      "selector": "[data-menu='About']",
-      "text": [
-        "You want to know more about my <span>master</span>?",
-        "Here hides all the <span>secrets of my master</span>, want to take a look?",
-        "Found my master's <span>secret hideout</span>!"
-      ]
-    },
-    {
       "selector": "[data-menu='Archives']",
       "text": [
-        "Here stores all the <span>works</span> my master had done！",
-        "Wanna see my master's <span>library?</span>",
-        "Yes, my masters' <span>ancient histories</span> are all here!"
+        "Browse the community's <span>public articles and thoughts</span> here.",
+        "Revisit recent community posts by date."
       ]
     },
     {
@@ -69,17 +60,17 @@
     },
     {
       "selector": "[data-dia='language']",
-      "text": "Master's blog supports multiple <span>languages.</span>"
+      "text": "Choose your preferred interface <span>language</span> here."
     },
     {
       "selector": "[data-dia='light-switch']",
       "text": "You can switch between <span>light</span> and <span>dark</span> mode, click the switch to see the magic!"
     },
     {
-      "selector": "[data-dia='author']",
+      "selector": "[data-dia='platform']",
       "text": [
-        "Here is a short profile of my master.",
-        "Click any of these links can teleport to my master's other worlds."
+        "This panel summarizes the platform's public content.",
+        "Every author can introduce themselves on their own profile."
       ]
     },
     {
@@ -148,7 +139,7 @@
     },
     {
       "date": "12/20-12/30",
-      "text": "These few days is <span>Christmas</span>，my master must being shopping like crazy!"
+      "text": "It's <span>Christmas</span>—wishing everyone a warm holiday season!"
     },
     {
       "date": "12/31",

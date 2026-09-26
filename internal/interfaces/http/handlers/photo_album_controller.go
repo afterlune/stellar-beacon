@@ -67,3 +67,35 @@ func DeletePhotoAlbumById(c *gin.Context) {
 func ListPhotoAlbums(c *gin.Context) {
 	c.JSON(http.StatusOK, photoAlbumService.ListPhotoAlbums())
 }
+
+func ListAuthorPhotoAlbums(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.ListAuthorAlbums(c))
+}
+
+func ListAuthorPhotoAlbumPhotos(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.ListAuthorPhotos(c))
+}
+
+func ListStudioPhotoAlbums(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.ListStudioAlbums(c))
+}
+
+func SaveStudioPhotoAlbum(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.SaveStudioAlbum(c))
+}
+
+func DeleteStudioPhotoAlbum(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.DeleteStudioAlbum(c))
+}
+
+func ListStudioPhotoAlbumPhotos(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.ListStudioPhotos(c))
+}
+
+func SaveStudioPhotoAlbumPhotos(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.SaveStudioPhotos(c))
+}
+
+func DeleteStudioPhotoAlbumPhotos(c *gin.Context) {
+	c.JSON(http.StatusOK, photoAlbumService.DeleteStudioPhotos(c))
+}

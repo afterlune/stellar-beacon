@@ -1,5 +1,26 @@
 import type { FollowContentType, NotificationCursor, NotificationGroup, RecommendationTargetType, StudioActivationSync, StudioContentBatchDelete, StudioContentBatchPreview, StudioContentBatchStatus } from '@stellar-beacon/api-contract'
 import { createApiClient } from '@stellar-beacon/api-client'
+import router from '@/router'
+import { useUserStore } from '@/stores/user'
+
+let redirectingAfterUnauthorized = false
+
+const handleUnauthorized = () => {
+  sessionStorage.removeItem('token')
+  useUserStore().clearSession()
+
+  const currentRoute = router.currentRoute.value
+  const requiresAuth = currentRoute.matched.some((record) => record.meta.requiresAuth === true)
+  if (!requiresAuth || redirectingAfterUnauthorized) return
+
+  redirectingAfterUnauthorized = true
+  void router.replace({
+    path: '/',
+    query: { login: '1', redirect: currentRoute.fullPath }
+  }).finally(() => {
+    redirectingAfterUnauthorized = false
+  })
+}
 
 // The presentation layer still reads `flag` while the shared client is being
 // adopted. The client converts the canonical server envelope at this one
@@ -8,10 +29,7 @@ const http = createApiClient({
   legacyResponse: true,
   rejectBusinessErrors: false,
   getToken: () => sessionStorage.getItem('token'),
-  onUnauthorized: () => {
-    sessionStorage.removeItem('token')
-    if (window.location.pathname !== '/') window.location.href = '/'
-  }
+  onUnauthorized: handleUnauthorized
 })
 
 // Transient platform failures (rate limits, restarts, upstream hiccups) are
@@ -71,12 +89,6 @@ export default {
   getTopSixComments: () => {
     return http.get('/public/comments/top')
   },
-  getAbout: () => {
-    return http.get('/public/about')
-  },
-  getFriendLink: () => {
-    return http.get('/public/links')
-  },
   submitUserInfo: (params: any) => {
     return http.put('/auth/me', params)
   },
@@ -97,14 +109,8 @@ export default {
   register: (params: any) => {
     return http.post('/auth/register', params)
   },
-  searchArticles: (params: any) => {
-    return http.get('/public/articles/search', { params })
-  },
-  getAlbums: () => {
-    return http.get('/public/albums')
-  },
-  getPhotosBuAlbumId: (albumId: any, params: any) => {
-    return http.get('/public/albums/' + encodeURIComponent(albumId) + '/photos', { params })
+  searchArticles: (params: any, signal?: AbortSignal) => {
+    return http.get('/public/articles/search', { params, signal })
   },
   getWebsiteConfig: () => {
     return http.get('/public/')
@@ -153,9 +159,6 @@ export default {
   },
   updateCommentNotice: (params: { notifyComment: number }) => {
     return http.put('/auth/me/notifications', params)
-  },
-  applyFriendLink: (params: any) => {
-    return http.post('/public/links/applications', params)
   },
   getSeriesList: () => {
     return http.get('/public/series')
@@ -349,6 +352,12 @@ export default {
   getAuthorSeries: (handle: string, params: any) => {
     return http.get('/public/authors/' + encodeURIComponent(handle) + '/series', { params })
   },
+  getAuthorAlbums: (handle: string) => {
+    return http.get('/public/authors/' + encodeURIComponent(handle) + '/albums')
+  },
+  getAuthorAlbumPhotos: (handle: string, albumId: number, params: any = {}) => {
+    return http.get('/public/authors/' + encodeURIComponent(handle) + '/albums/' + encodeURIComponent(albumId) + '/photos', { params })
+  },
   getTopicArticles: (topic: string, slug: string, params: any) => {
     return http.get('/public/topics/' + encodeURIComponent(topic) + '/' + encodeURIComponent(slug) + '/articles', { params })
   },
@@ -370,6 +379,14 @@ export default {
   saveStudioProfile: (params: any) => {
     return http.put('/studio/profile', params)
   },
+  getStudioAlbums: () => http.get('/studio/albums'),
+  saveStudioAlbum: (params: any, albumId?: number) => albumId
+    ? http.put('/studio/albums/' + encodeURIComponent(albumId), { ...params, id: albumId })
+    : http.post('/studio/albums', params),
+  deleteStudioAlbum: (albumId: number) => http.delete('/studio/albums/' + encodeURIComponent(albumId)),
+  getStudioAlbumPhotos: (albumId: number) => http.get('/studio/albums/' + encodeURIComponent(albumId) + '/photos'),
+  saveStudioAlbumPhotos: (albumId: number, photoUrls: string[]) => http.post('/studio/albums/' + encodeURIComponent(albumId) + '/photos', { albumId, photoUrls }),
+  deleteStudioAlbumPhotos: (ids: number[]) => http.delete('/studio/photos', { data: { ids } }),
   uploadUserAvatar: (file: File) => {
     const form = new FormData()
     form.append('file', file)

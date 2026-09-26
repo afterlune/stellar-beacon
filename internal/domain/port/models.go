@@ -7,12 +7,14 @@ import (
 // ArticleCard is the application-facing read model for article cards. It is
 // deliberately independent of the HTTP facade package.
 type PublicAuthor struct {
-	Id       int    `json:"id"`
-	Handle   string `json:"handle"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Intro    string `json:"intro"`
-	Website  string `json:"website"`
+	Id       int           `json:"id"`
+	Handle   string        `json:"handle"`
+	Nickname string        `json:"nickname"`
+	Avatar   string        `json:"avatar"`
+	Intro    string        `json:"intro"`
+	Website  string        `json:"website"`
+	About    string        `json:"about,omitempty"`
+	Links    []ProfileLink `json:"links,omitempty"`
 }
 type ArticleCard struct {
 	Id                 int          `json:"id"`
@@ -117,11 +119,18 @@ type ArticleAdminView struct {
 }
 
 type ArticleSearch struct {
-	Id             int    `json:"id"`
-	ArticleTitle   string `json:"articleTitle"`
-	ArticleContent string `json:"articleContent"`
-	IsDelete       int    `json:"isDelete"`
-	Status         int    `json:"status"`
+	Id               int          `json:"id"`
+	UserId           int          `json:"userId"`
+	ArticleCover     string       `json:"articleCover"`
+	ArticleTitle     string       `json:"articleTitle"`
+	ArticleContent   string       `json:"articleContent"`
+	CategoryName     string       `json:"categoryName"`
+	CreateTime       time.Time    `json:"createTime"`
+	UpdateTime       time.Time    `json:"updateTime"`
+	Author           PublicAuthor `json:"author"`
+	IsDelete         int          `json:"isDelete"`
+	Status           int          `json:"status"`
+	ModerationStatus string       `json:"moderationStatus"`
 }
 
 type ArticleStatistics struct {

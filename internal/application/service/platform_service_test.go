@@ -33,6 +33,8 @@ type fakePlatformRepository struct {
 	profileNickname     string
 	profileIntro        string
 	profileWebsite      string
+	profileAbout        string
+	profileLinks        []port.ProfileLink
 	profileUpdateErr    error
 	activationUpdate    port.StudioActivationUpdate
 	activationResult    port.StudioActivation
@@ -135,7 +137,7 @@ func (f *fakePlatformRepository) GetStudioProfile(context.Context, int) (port.St
 	}
 	return port.StudioProfile{
 		Handle: f.profileHandle, Nickname: f.profileNickname, Avatar: "https://cdn.example.test/avatar.png",
-		Intro: f.profileIntro, Website: f.profileWebsite,
+		Intro: f.profileIntro, Website: f.profileWebsite, About: f.profileAbout, Links: f.profileLinks,
 	}, nil
 }
 
@@ -144,12 +146,14 @@ func (f *fakePlatformRepository) SyncStudioActivation(_ context.Context, _ int, 
 	return f.activationResult, f.activationErr
 }
 
-func (f *fakePlatformRepository) UpdateAuthorProfile(_ context.Context, _ int, handle, nickname, intro, website string) error {
+func (f *fakePlatformRepository) UpdateAuthorProfile(_ context.Context, _ int, profile port.StudioProfile) error {
 	f.profileUpdateCalls++
-	f.profileHandle = handle
-	f.profileNickname = nickname
-	f.profileIntro = intro
-	f.profileWebsite = website
+	f.profileHandle = profile.Handle
+	f.profileNickname = profile.Nickname
+	f.profileIntro = profile.Intro
+	f.profileWebsite = profile.Website
+	f.profileAbout = profile.About
+	f.profileLinks = profile.Links
 	return f.profileUpdateErr
 }
 

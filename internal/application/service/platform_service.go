@@ -74,13 +74,14 @@ type commentCounter interface {
 }
 
 type PlatformServiceDeps struct {
-	Repo       port.PlatformRepository
-	Articles   port.ArticleRepository
-	Newsletter articleDistributor
-	Storage    port.ObjectStorage
-	Cache      port.Cache
-	Reactions  reactionCounter
-	Comments   commentCounter
+	Repo        port.PlatformRepository
+	Articles    port.ArticleRepository
+	Newsletter  articleDistributor
+	Storage     port.ObjectStorage
+	Cache       port.Cache
+	Reactions   reactionCounter
+	Comments    commentCounter
+	SearchIndex ArticleSearchMaintainer
 }
 
 type articleDistributor interface {
@@ -88,13 +89,14 @@ type articleDistributor interface {
 }
 
 type MyPlatformService struct {
-	repo       port.PlatformRepository
-	articles   port.ArticleRepository
-	newsletter articleDistributor
-	storage    port.ObjectStorage
-	cache      port.Cache
-	reactions  reactionCounter
-	comments   commentCounter
+	repo        port.PlatformRepository
+	articles    port.ArticleRepository
+	newsletter  articleDistributor
+	storage     port.ObjectStorage
+	cache       port.Cache
+	reactions   reactionCounter
+	comments    commentCounter
+	searchIndex ArticleSearchMaintainer
 }
 
 func NewPlatformService(deps PlatformServiceDeps) (*MyPlatformService, error) {
@@ -104,7 +106,17 @@ func NewPlatformService(deps PlatformServiceDeps) (*MyPlatformService, error) {
 	return &MyPlatformService{
 		repo: deps.Repo, articles: deps.Articles, newsletter: deps.Newsletter,
 		storage: deps.Storage, cache: deps.Cache, reactions: deps.Reactions, comments: deps.Comments,
+		searchIndex: deps.SearchIndex,
 	}, nil
+}
+
+func (s *MyPlatformService) syncArticleSearch(ctx context.Context, articleIDs ...int) {
+	if s.searchIndex == nil || len(articleIDs) == 0 {
+		return
+	}
+	if err := s.searchIndex.Sync(ctx, articleIDs...); err != nil {
+		slog.WarnContext(ctx, "sync platform article search index failed", "articleIds", articleIDs, "error", err)
+	}
 }
 
 func (s *MyPlatformService) platformRepo() port.PlatformRepository { return s.repo }
@@ -409,7 +421,10 @@ func (s *MyPlatformService) UpdateProfile(c *gin.Context) model.ResultVO {
 	if message != "" {
 		return model.ResultFailWithMessage(message)
 	}
-	if err := s.platformRepo().UpdateAuthorProfile(c.Request.Context(), user.UserInfoId, profile.Handle, profile.Nickname, profile.Intro, profile.Website); err != nil {
+	if err := s.platformRepo().UpdateAuthorProfile(c.Request.Context(), user.UserInfoId, port.StudioProfile{
+		Handle: profile.Handle, Nickname: profile.Nickname, Intro: profile.Intro,
+		Website: profile.Website, About: profile.About, Links: profile.Links,
+	}); err != nil {
 		if apperrors.KindOf(err) == apperrors.KindConflict {
 			return model.ResultFailWithMessage("该 Handle 已被占用")
 		}
@@ -427,6 +442,7 @@ func normalizeStudioProfile(vo model.StudioProfileVO) (model.StudioProfileVO, st
 	vo.Nickname = strings.TrimSpace(vo.Nickname)
 	vo.Intro = strings.TrimSpace(vo.Intro)
 	vo.Website = strings.TrimSpace(vo.Website)
+	vo.About = strings.TrimSpace(vo.About)
 	if !validStudioHandle(vo.Handle) {
 		return vo, "Handle 需为 3-40 位小写字母、数字或连字符，且必须以字母或数字开头"
 	}
@@ -442,9 +458,35 @@ func normalizeStudioProfile(vo model.StudioProfileVO) (model.StudioProfileVO, st
 	if len([]rune(vo.Website)) > 255 {
 		return vo, "个人网站不能超过 255 个字"
 	}
+	if len([]rune(vo.About)) > 20000 {
+		return vo, "主页介绍不能超过 20000 个字"
+	}
 	if vo.Website != "" && !validStudioWebsite(vo.Website) {
 		return vo, "个人网站必须是有效的 HTTP(S) 地址"
 	}
+	links := make([]port.ProfileLink, 0, len(vo.Links))
+	for _, link := range vo.Links {
+		link.Label = strings.TrimSpace(link.Label)
+		link.URL = strings.TrimSpace(link.URL)
+		link.Description = strings.TrimSpace(link.Description)
+		if link.Label == "" && link.URL == "" && link.Description == "" {
+			continue
+		}
+		if link.Label == "" || len([]rune(link.Label)) > 40 {
+			return vo, "每条外链都需要填写不超过 40 个字的名称"
+		}
+		if !validStudioWebsite(link.URL) {
+			return vo, "个人外链必须是有效的 HTTP(S) 地址"
+		}
+		if len([]rune(link.Description)) > 160 {
+			return vo, "外链说明不能超过 160 个字"
+		}
+		links = append(links, link)
+	}
+	if len(links) > 100 {
+		return vo, "个人外链不能超过 100 条"
+	}
+	vo.Links = links
 	return vo, ""
 }
 
@@ -474,7 +516,8 @@ func validStudioWebsite(value string) bool {
 func studioProfileDTO(profile port.StudioProfile) model.StudioProfileDTO {
 	return model.StudioProfileDTO{
 		Handle: profile.Handle, Nickname: profile.Nickname, Avatar: profile.Avatar,
-		Intro: profile.Intro, Website: profile.Website,
+		Intro: profile.Intro, Website: profile.Website, About: profile.About,
+		Links: profile.Links,
 	}
 }
 func (s *MyPlatformService) ListOwnedArticles(c *gin.Context) model.ResultVO {
@@ -617,6 +660,10 @@ func (s *MyPlatformService) Upload(c *gin.Context) model.ResultVO {
 		prefix = "talks/"
 	case "series-cover":
 		prefix = "series/covers/"
+	case "photo":
+		prefix = "photos/"
+	case "album-cover":
+		prefix = "photos/albums/"
 	case "avatar":
 		prefix = "avatar/"
 	}
@@ -850,6 +897,9 @@ func (s *MyPlatformService) BatchUpdateContentStatus(c *gin.Context) model.Resul
 			_ = s.cache.Delete(c.Request.Context(), strconv.Itoa(id))
 		}
 	}
+	if contentType == port.StudioContentArticle {
+		s.syncArticleSearch(c.Request.Context(), mutation.ContentIDs...)
+	}
 	return model.ResultOkWithData(mutation)
 }
 
@@ -878,6 +928,9 @@ func (s *MyPlatformService) BatchDeleteContent(c *gin.Context) model.ResultVO {
 		for _, id := range mutation.ContentIDs {
 			_ = s.cache.Delete(c.Request.Context(), strconv.Itoa(id))
 		}
+	}
+	if contentType == port.StudioContentArticle {
+		s.syncArticleSearch(c.Request.Context(), mutation.ContentIDs...)
 	}
 	return model.ResultOkWithData(mutation)
 }
@@ -1107,11 +1160,15 @@ func (s *MyPlatformService) Moderate(c *gin.Context) model.ResultVO {
 	if len([]rune(reason)) > 255 {
 		return model.ResultFailWithMessage("审核理由不能超过 255 字")
 	}
-	if err := s.platformRepo().ModerateContent(c.Request.Context(), strings.TrimSpace(vo.ContentType), vo.Id, user.UserInfoId, vo.Hidden, reason); err != nil {
+	contentType := strings.TrimSpace(vo.ContentType)
+	if err := s.platformRepo().ModerateContent(c.Request.Context(), contentType, vo.Id, user.UserInfoId, vo.Hidden, reason); err != nil {
 		return model.ResultFromError(err)
 	}
 	if s.cache != nil {
 		_ = s.cache.Delete(c.Request.Context(), strconv.Itoa(vo.Id))
+	}
+	if contentType == "article" {
+		s.syncArticleSearch(c.Request.Context(), vo.Id)
 	}
 	return model.ResultOk()
 }

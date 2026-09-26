@@ -105,12 +105,20 @@ type StudioActivationUpdate struct {
 	Completed        bool `json:"completed"`
 }
 
+type ProfileLink struct {
+	Label       string `json:"label"`
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+}
+
 type StudioProfile struct {
 	Handle   string
 	Nickname string
 	Avatar   string
 	Intro    string
 	Website  string
+	About    string
+	Links    []ProfileLink
 }
 
 // Public discovery sort keys. The service layer validates query parameters
@@ -168,7 +176,7 @@ type PlatformRepository interface {
 	StudioDashboard(ctx context.Context, userID int) (StudioDashboard, error)
 	SyncStudioActivation(ctx context.Context, userID int, update StudioActivationUpdate) (StudioActivation, error)
 	GetStudioProfile(ctx context.Context, userID int) (StudioProfile, error)
-	UpdateAuthorProfile(ctx context.Context, userID int, handle, nickname, intro, website string) error
+	UpdateAuthorProfile(ctx context.Context, userID int, profile StudioProfile) error
 
 	ListFeedArticles(ctx context.Context, current, size int, featuredOnly bool) ([]*ArticleCard, int, error)
 	ListFeedArticlesHot(ctx context.Context, current, size int) ([]*ArticleCard, int, error)

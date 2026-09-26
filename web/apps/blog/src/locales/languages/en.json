@@ -18,6 +18,9 @@
   "home": {
     "recommended": "Feature Articles"
   },
+  "platform": {
+    "description": "Discover authors and public work, then create your own space."
+  },
   "titles": {
     "articles": "Articles",
     "talks":"talks",
@@ -49,7 +52,6 @@
       "next": "Next"
     },
     "more-tags": "View more",
-    "admin-user": "Owner",
     "shared-on": "shared on",
     "recently-search": "Recently searched",
     "search-result": "Found [total] records",

@@ -1,25 +1,10 @@
 <template>
-  <div class="sidebar-box profile-card" data-dia="author">
+  <div class="sidebar-box profile-card" data-dia="platform">
     <div class="profile flex flex-col justify-center items-center">
-      <span class="profile-avatar-ring">
-        <img v-if="websiteConfig.authorAvatar" :class="avatarClass" :src="websiteConfig.authorAvatar" alt="" />
-        <img v-else :class="avatarClass" :src="default" alt="" />
-      </span>
-      <h2 class="text-center pt-4 text-2xl font-semibold text-ob-bright">
-        <template v-if="websiteConfig.author">
-          {{ websiteConfig.author }}
-        </template>
-        <ob-skeleton v-else height="2.25rem" width="7rem" />
-      </h2>
+      <BrandMark :size="72" />
+      <h2 class="text-center pt-4 text-2xl font-semibold text-ob-bright">{{ websiteConfig.name || 'Stellar Beacon' }}</h2>
       <span class="brand-rule w-14 mt-2" />
-      <p
-        v-if="websiteConfig.authorIntro"
-        class="pt-5 w-full text-sm text-center text-ob-dim"
-        v-html="websiteConfig.authorIntro" />
-      <p v-else class="pt-5 w-full text-sm text-center flex flex-col gap-2">
-        <ob-skeleton :count="2" height="20px" width="10rem" />
-      </p>
-      <Social />
+      <p class="pt-5 w-full text-sm text-center text-ob-dim">{{ t('platform.description') }}</p>
       <ul class="profile-stats">
         <li>
           <span>{{ articleCount }}</span>
@@ -46,23 +31,15 @@
 import { useAppStore } from '@/stores/app'
 import { computed, defineComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Social from '@/components/Social.vue'
-import avatarPlaceholder from '@/assets/avatar-placeholder.svg'
+import BrandMark from '@/components/BrandMark.vue'
 
 export default defineComponent({
   name: 'Profile',
-  components: { Social },
+  components: { BrandMark },
   setup() {
     const appStore = useAppStore()
     const { t } = useI18n()
     return {
-      default: avatarPlaceholder,
-      avatarClass: computed(() => {
-        return {
-          'ob-avatar': true,
-          [appStore.themeConfig.profile_shape]: true
-        }
-      }),
       websiteConfig: computed(() => {
         return appStore.websiteConfig
       }),

@@ -15,7 +15,7 @@
 
     <form v-else class="studio-profile-form" @submit.prevent="save">
       <div class="studio-profile-layout">
-        <main class="studio-profile-main">
+        <section class="studio-profile-main">
           <section class="studio-profile-panel studio-profile-panel--identity">
             <header>
               <div><p>IDENTITY</p><h2>作者身份</h2></div>
@@ -74,8 +74,38 @@
               <input v-model.trim="form.website" maxlength="255" inputmode="url" placeholder="https://example.com" />
               <small>可选，必须以 http:// 或 https:// 开头</small>
             </label>
+            <label class="studio-profile-field studio-profile-long-about">
+              <span>详细介绍</span>
+              <textarea v-model="form.about" maxlength="20000" rows="10" placeholder="介绍你的创作方向、兴趣或个人经历。支持 Markdown。" />
+              <small>{{ form.about.length }}/20000</small>
+            </label>
           </section>
-        </main>
+
+          <section class="studio-profile-panel">
+            <header>
+              <div><p>LINKS</p><h2>个人外链</h2></div>
+              <button type="button" class="studio-profile-add-link" @click="form.links.push({ label: '', url: '', description: '' })">添加链接</button>
+            </header>
+            <div v-if="form.links.length" class="studio-profile-links">
+              <div v-for="(link, index) in form.links" :key="index" class="studio-profile-link-row">
+                <label class="studio-profile-field">
+                  <span>名称</span>
+                  <input v-model.trim="link.label" maxlength="40" placeholder="GitHub、个人主页…" />
+                </label>
+                <label class="studio-profile-field">
+                  <span>链接</span>
+                  <input v-model.trim="link.url" maxlength="1000" inputmode="url" placeholder="https://example.com" />
+                </label>
+                <label class="studio-profile-field">
+                  <span>说明（可选）</span>
+                  <input v-model.trim="link.description" maxlength="160" placeholder="简短说明" />
+                </label>
+                <button type="button" class="studio-profile-remove-link" @click="form.links.splice(index, 1)">移除</button>
+              </div>
+            </div>
+            <p v-else class="studio-profile-empty-links">添加社交账号、个人网站或其他公开链接。</p>
+          </section>
+        </section>
 
         <aside class="studio-profile-sidebar">
           <section class="studio-profile-panel studio-profile-preview">
@@ -86,6 +116,7 @@
               <h2>{{ form.nickname || '未设置昵称' }}</h2>
               <p>{{ form.intro || '这位作者还没有写下简介。' }}</p>
               <a v-if="validPreviewWebsite" :href="form.website" target="_blank" rel="noopener noreferrer">{{ form.website }}</a>
+              <a v-for="(link, index) in form.links.filter((item) => item.label && item.url)" :key="index" :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.label }}</a>
               <router-link v-if="validHandle" :to="`/u/${form.handle}`">打开公开主页 →</router-link>
             </div>
           </section>
@@ -133,7 +164,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notify } from '@/services/notifications'
+import { confirm } from '@/services/confirm'
 import AvatarCropper from 'vue-avatar-cropper'
 
 import api from '@/api/api'
@@ -160,7 +192,7 @@ const uploadingAvatar = ref(false)
 const showCropper = ref(false)
 const error = ref('')
 const saveState = ref('')
-const form = reactive<StudioProfile>({ handle: '', nickname: '', avatar: '', intro: '', website: '' })
+const form = reactive<StudioProfile>({ handle: '', nickname: '', avatar: '', intro: '', website: '', about: '', links: [] })
 let savedHandle = ''
 
 const stableForm = () => stableSnapshot(form)
@@ -184,12 +216,24 @@ function validate(): string {
   form.nickname = String(form.nickname || '').trim()
   form.intro = String(form.intro || '').trim()
   form.website = String(form.website || '').trim()
+  form.about = String(form.about || '').trim()
   if (!isValidStudioHandle(form.handle)) return 'Handle 需为 3-40 位小写字母、数字或连字符，且必须以字母或数字开头'
   if (!form.nickname) return '昵称不能为空'
   if ([...form.nickname].length > 30) return '昵称不能超过 30 个字'
   if ([...form.intro].length > 255) return '个人简介不能超过 255 个字'
   if ([...form.website].length > 255) return '个人网站不能超过 255 个字'
   if (!isValidStudioWebsite(form.website)) return '个人网站必须是有效的 HTTP(S) 地址'
+  if ([...form.about].length > 20000) return '主页介绍不能超过 20000 个字'
+  if (form.links.length > 100) return '个人外链不能超过 100 条'
+  for (const link of form.links) {
+    link.label = String(link.label || '').trim()
+    link.url = String(link.url || '').trim()
+    link.description = String(link.description || '').trim()
+    if (!link.label && !link.url && !link.description) continue
+    if (!link.label || [...link.label].length > 40) return '每条外链都需要填写不超过 40 个字的名称'
+    if (!isValidStudioWebsite(link.url)) return '个人外链必须是有效的 HTTP(S) 地址'
+    if ([...link.description].length > 160) return '外链说明不能超过 160 个字'
+  }
   return ''
 }
 
@@ -205,7 +249,9 @@ async function load(): Promise<void> {
       nickname: String(profile.nickname || ''),
       avatar: String(profile.avatar || ''),
       intro: String(profile.intro || ''),
-      website: String(profile.website || '')
+      website: String(profile.website || ''),
+      about: String(profile.about || ''),
+      links: Array.isArray(profile.links) ? profile.links.map((link: any) => ({ label: String(link.label || ''), url: String(link.url || ''), description: String(link.description || '') })) : []
     })
     savedHandle = form.handle
     markClean()
@@ -219,19 +265,16 @@ async function load(): Promise<void> {
 async function save(): Promise<void> {
   const validation = validate()
   if (validation) {
-    ElMessage.warning(validation)
+    notify.warning(validation)
     return
   }
   if (savedHandle && form.handle !== savedHandle) {
-    try {
-      await ElMessageBox.confirm(
-        `Handle 将从 @${savedHandle} 改为 @${form.handle}。旧主页 /u/${savedHandle} 将不再可访问。`,
-        '确认更换公开地址',
-        { confirmButtonText: '确认更换', cancelButtonText: '取消', type: 'warning' }
-      )
-    } catch {
-      return
-    }
+    const accepted = await confirm({
+      message: `Handle 将从 @${savedHandle} 改为 @${form.handle}。旧主页 /u/${savedHandle} 将不再可访问。`,
+      title: '确认更换公开地址',
+      confirmText: '确认更换'
+    })
+    if (!accepted) return
   }
 
   saving.value = true
@@ -241,7 +284,9 @@ async function save(): Promise<void> {
       handle: form.handle,
       nickname: form.nickname,
       intro: form.intro,
-      website: form.website
+      website: form.website,
+      about: form.about,
+      links: form.links
     })
     if (!response?.data?.flag) throw new Error(response?.data?.message || '保存失败')
     const updated = response.data.data || { ...form }
@@ -250,16 +295,18 @@ async function save(): Promise<void> {
       nickname: String(updated.nickname || ''),
       avatar: String(updated.avatar || form.avatar || ''),
       intro: String(updated.intro || ''),
-      website: String(updated.website || '')
+      website: String(updated.website || ''),
+      about: String(updated.about || ''),
+      links: Array.isArray(updated.links) ? updated.links : []
     })
     savedHandle = form.handle
     markClean()
     userStore.userInfo = { ...(userStore.userInfo || {}), ...form }
     saveState.value = `已保存 · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
-    ElMessage.success('公开资料已更新')
+    notify.success('公开资料已更新')
   } catch (reason: any) {
     saveState.value = '保存失败'
-    ElMessage.error(reason?.response?.data?.message || reason?.message || '保存失败')
+    notify.error(reason?.response?.data?.message || reason?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -274,9 +321,9 @@ async function handleAvatarUploaded(payload: any): Promise<void> {
     if (!success || typeof data.data !== 'string') throw new Error(data?.message || '头像上传失败')
     form.avatar = data.data
     userStore.userInfo = { ...(userStore.userInfo || {}), avatar: data.data }
-    ElMessage.success('头像已更新')
+    notify.success('头像已更新')
   } catch (reason: any) {
-    ElMessage.error(reason?.message || '头像上传失败')
+    notify.error(reason?.message || '头像上传失败')
   } finally {
     uploadingAvatar.value = false
     showCropper.value = false
@@ -355,4 +402,11 @@ onMounted(() => {
 .studio-profile-leave button.danger { border-color: transparent; background: #df8177; color: #160a08; font-weight: 700; }
 @media (max-width: 1000px) { .studio-profile-layout { grid-template-columns: 1fr; } .studio-profile-sidebar { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .studio-profile-head { grid-template-columns: 1fr; } .studio-profile-state { justify-self: start; } .studio-profile-identity, .studio-profile-sidebar { grid-template-columns: 1fr; } .studio-profile-footer { align-items: stretch; flex-direction: column; } .studio-profile-footer > div { display: grid; grid-template-columns: 1fr 1fr; } .studio-profile-link { grid-column: 1 / -1; text-align: center; } }
+.studio-profile-links { display: grid; gap: 12px; }
+.studio-profile-link-row { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(220px, 1.4fr) minmax(140px, 1fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid var(--border-hairline); border-radius: 14px; }
+.studio-profile-add-link, .studio-profile-remove-link { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-hairline); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.studio-profile-add-link { color: var(--color-ob); }
+.studio-profile-remove-link { color: #e2776c; }
+.studio-profile-empty-links { margin: 0; color: var(--text-ob-dim); font-size: 13px; }
+@media (max-width: 800px) { .studio-profile-link-row { grid-template-columns: 1fr 1fr; } .studio-profile-remove-link { justify-self: start; } }
 </style>

@@ -179,8 +179,7 @@ export default defineComponent({
   word-wrap: break-word;
   word-break: break-word;
 }
-/* el-col with :md="4" collapsed into odd shapes whenever an item had fewer than
-   six images. Fixed-size tracks keep every thumbnail square whatever the count. */
+/* Fixed-size tracks keep every thumbnail square whatever the count. */
 .talk-images {
   display: grid;
   grid-template-columns: repeat(auto-fill, 118px);

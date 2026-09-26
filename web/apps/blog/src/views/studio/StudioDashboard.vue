@@ -173,7 +173,7 @@
 
 <script lang="ts">
 import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { notify } from '@/services/notifications'
 import api from '@/api/api'
 import type { StudioActivation, StudioActivationSync } from '@stellar-beacon/api-contract'
 import { useAppStore } from '@/stores/app'
@@ -217,7 +217,9 @@ export default defineComponent({
       nickname: userStore.userInfo?.nickname || '',
       avatar: userStore.userInfo?.avatar || '',
       intro: userStore.userInfo?.intro || '',
-      website: userStore.userInfo?.website || ''
+      website: userStore.userInfo?.website || '',
+      about: '',
+      links: []
     })
     const stats = [
       { key: 'articleCount', label: '全部文章', index: 'A' },
@@ -352,7 +354,7 @@ export default defineComponent({
         if (data.activation) applyServerActivation(data.activation)
         dashboardLoaded.value = true
       } catch {
-        ElMessage.error('创作数据加载失败')
+        notify.error('创作数据加载失败')
       }
     }
     const loadAnalytics = async () => {
@@ -406,10 +408,10 @@ export default defineComponent({
       try {
         const response = await api.retryStudioArticlePublication(event.articleId)
         if (!response?.data?.flag) throw new Error(response?.data?.message || '重试失败')
-        ElMessage.success('已重新加入通知重试队列')
+        notify.success('已重新加入通知重试队列')
         await Promise.all([loadCalendar(), loadAnalytics()])
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '重试失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '重试失败')
       }
     }
 

@@ -1,29 +1,9 @@
 <template>
-  <div class="flex flex-col justify-center items-center">
-    <img
-      v-if="websiteConfig.authorAvatar !== ''"
-      class="circle-avatar h-28 w-28 shadow-xl m-0"
-      :src="websiteConfig.authorAvatar"
-      alt="avatar" />
-    <ob-skeleton v-else width="7rem" height="7rem" circle />
-
-    <h2 class="text-center pt-4 text-4xl font-semibold text-ob-bright">
-      <template v-if="websiteConfig.author">
-        {{ websiteConfig.author }}
-      </template>
-      <ob-skeleton v-else height="2.25rem" width="7rem" />
-    </h2>
-
+  <div class="mobile-menu-brand flex flex-col justify-center items-center">
+    <BrandMark :size="76" />
+    <h2 class="text-center pt-4 text-3xl font-semibold text-ob-bright">{{ websiteConfig.name || 'Stellar Beacon' }}</h2>
     <span class="brand-rule w-14 mt-2" />
-
-    <p
-      v-if="websiteConfig.authorIntro"
-      class="pt-6 px-2 w-full text-sm text-center text-ob-dim"
-      v-html="websiteConfig.authorIntro" />
-    <p v-else class="pt-6 px-10 w-full text-sm text-center flex flex-col gap-2">
-      <ob-skeleton :count="2" height="20px" width="10rem" />
-    </p>
-    <Social />
+    <p class="pt-5 px-5 w-full text-sm text-center text-ob-dim">{{ t('platform.description') }}</p>
     <ul class="grid grid-cols-3 pt-4 w-full px-2 text-lg">
       <li class="col-span-1 text-center">
         <span class="text-ob-bright">{{ articleCount }}</span>
@@ -41,10 +21,7 @@
   </div>
   <ul class="flex flex-col justify-center items-center mt-8 w-full list-none text-ob-bright">
     <li class="pb-2 cursor-pointer" v-for="route in routes" :key="route.path">
-      <div
-        class="text-sm block px-1.5 py-0.5 rounded-md relative uppercase"
-        @click="pushPage(route.path)"
-        v-if="route.children && route.children.length === 0">
+      <button type="button" class="mobile-menu-route text-sm block px-1.5 py-0.5 rounded-md relative uppercase" @click="pushPage(route.path)">
         <span class="relative z-50" v-if="$i18n.locale === 'cn' && route.i18n.cn">
           {{ route.i18n.cn }}
         </span>
@@ -52,80 +29,29 @@
           {{ route.i18n.en }}
         </span>
         <span class="relative z-50" v-else>{{ route.name }}</span>
-      </div>
-      <Dropdown
-        @command="pushPage"
-        v-else
-        class="flex flex-col justify-center items-center nav-link text-sm block px-1.5 py-0.5 rounded-md relative uppercase">
-        <span class="relative z-50" v-if="$i18n.locale === 'cn' && route.i18n.cn">
-          {{ route.i18n.cn }}
-        </span>
-        <span class="relative z-50" v-else-if="$i18n.locale === 'en' && route.i18n.en">
-          {{ route.i18n.en }}
-        </span>
-        <span class="relative z-50" v-else>{{ route.name }}</span>
-        <DropdownMenu expand>
-          <DropdownItem v-for="sub in route.children" :key="sub.path" :name="sub.path">
-            <span class="relative z-50" v-if="$i18n.locale === 'cn' && sub.i18n.cn">
-              {{ sub.i18n.cn }}
-            </span>
-            <span class="relative z-50" v-else-if="$i18n.locale === 'en' && sub.i18n.en">
-              {{ sub.i18n.en }}
-            </span>
-            <span class="relative z-50" v-else>{{ sub.name }}</span>
-          </DropdownItem>
-        </DropdownMenu>
-      </Dropdown>
-    </li>
-    <li>
-      <Dropdown
-        class="flex flex-col justify-center items-center nav-link text-sm block px-1.5 py-0.5 rounded-md relative uppercase">
-        <span class="relative z-50" v-if="$i18n.locale === 'cn'"> 相册 </span>
-        <span class="relative z-50" v-else-if="$i18n.locale === 'en'"> PhotoAlbums </span>
-        <DropdownMenu expand>
-          <template v-for="item in albums" :key="item.id">
-            <DropdownItem @click="pushPage(`/photos/${item.id}`)" :name="item.albumName">
-              <span class="relative z-50">{{ item.albumName }}</span>
-            </DropdownItem>
-          </template>
-        </DropdownMenu>
-      </Dropdown>
+      </button>
     </li>
   </ul>
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, reactive, toRefs } from 'vue'
+import { computed, defineComponent } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useI18n } from 'vue-i18n'
-import { Dropdown, DropdownMenu, DropdownItem } from '@/components/Dropdown'
 import { useRouter } from 'vue-router'
 import { useNavigatorStore } from '@/stores/navigator'
-import Social from '@/components/Social.vue'
+import BrandMark from '@/components/BrandMark.vue'
 import config from '@/config/config'
-import api from '@/api/api'
 
 export default defineComponent({
   name: 'ObMobileMenu',
-  components: { Dropdown, DropdownMenu, DropdownItem, Social },
+  components: { BrandMark },
   setup() {
     const appStore = useAppStore()
     const router = useRouter()
     const navigatorStore = useNavigatorStore()
     const { t } = useI18n()
-    const reactiveData = reactive({
-      routes: '' as any,
-      albums: [] as any
-    })
-    onMounted(() => {
-      reactiveData.routes = config.routes
-      fetchAblums()
-    })
-    const fetchAblums = () => {
-      api.getAlbums().then(({ data }) => {
-        reactiveData.albums = data.data
-      })
-    }
+    const routes = config.routes as Array<{ name: string; path: string; i18n: { cn: string; en: string } }>
     const pushPage = (path: string): void => {
       console.log(path)
       if (!path) return
@@ -140,9 +66,7 @@ export default defineComponent({
       }
     }
     return {
-      ...toRefs(reactiveData),
-      themeConfig: computed(() => appStore.themeConfig),
-
+      routes,
       pushPage,
       websiteConfig: computed(() => appStore.websiteConfig),
       articleCount: computed(() => appStore.articleCount),
@@ -154,3 +78,19 @@ export default defineComponent({
   }
 })
 </script>
+
+<style lang="scss" scoped>
+.mobile-menu-route {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.mobile-menu-route:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+</style>

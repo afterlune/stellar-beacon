@@ -37,6 +37,7 @@ var (
 	collectionSubService      service.CollectionSubscriptionService = new(service.MyCollectionSubscriptionService)
 	collectionReactionService service.CollectionReactionService     = new(service.MyCollectionReactionService)
 	commentReactionService    service.CommentReactionService        = new(service.MyCommentReactionService)
+	systemMonitorService      service.SystemMonitorService          = new(service.MySystemMonitorService)
 )
 
 type Services struct {
@@ -74,6 +75,7 @@ type Services struct {
 	CollectionSub      service.CollectionSubscriptionService
 	CollectionReaction service.CollectionReactionService
 	CommentReaction    service.CommentReactionService
+	SystemMonitor      service.SystemMonitorService
 }
 
 func ConfigureServices(s Services) {
@@ -111,4 +113,7 @@ func ConfigureServices(s Services) {
 	collectionSubService = s.CollectionSub
 	collectionReactionService = s.CollectionReaction
 	commentReactionService = s.CommentReaction
+	if s.SystemMonitor != nil {
+		systemMonitorService = s.SystemMonitor
+	}
 }

@@ -1,5 +1,5 @@
 <template>
-  <main id="not-found-page" aria-labelledby="not-found-title">
+  <section id="not-found-page" aria-labelledby="not-found-title">
     <div class="not-found-copy">
       <p class="not-found-kicker">CHANNEL 404 <span>/</span> ROUTE NOT FOUND</p>
       <h1 id="not-found-title">Signal<br /><em>lost.</em></h1>
@@ -15,7 +15,7 @@
       <span class="not-found-console__code">ERR / 0x0194</span>
       <span class="not-found-console__status">NO RESPONSE</span>
     </div>
-  </main>
+  </section>
 </template>
 
 <style lang="scss" scoped>

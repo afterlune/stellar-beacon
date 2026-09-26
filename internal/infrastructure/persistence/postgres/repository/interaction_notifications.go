@@ -119,6 +119,8 @@ func commentContentTarget(commentType, topicID int) (string, int) {
 		return port.FollowContentTalk, topicID
 	case 6:
 		return port.FollowContentCollection, topicID
+	case 7:
+		return port.FollowContentProfile, topicID
 	default:
 		return "", 0
 	}

@@ -13,32 +13,21 @@
     <p v-if="loading && !items.length" class="recommendation-state">正在整理推荐…</p>
     <p v-else-if="error" class="recommendation-state is-error">{{ error }}</p>
     <div v-else-if="items.length" class="recommendation-grid">
-      <article v-for="item in items" :key="item.id" class="recommendation-card" data-testid="recommendation-card">
-        <router-link :to="`/articles/${item.id}`" class="recommendation-card__cover">
-          <img v-if="item.articleCover" :src="item.articleCover" :alt="item.articleTitle" loading="lazy" />
-          <span v-else>{{ String(item.articleTitle || 'SIGNAL').slice(0, 1) }}</span>
-        </router-link>
-        <div class="recommendation-card__body">
-          <div class="recommendation-card__author">
-            <img :src="item.author?.avatar || defaultAvatar" :alt="item.author?.nickname || '作者头像'" />
-            <router-link :to="`/u/${item.author?.handle}`">{{ item.author?.nickname || item.author?.handle }}</router-link>
-            <time>{{ formatDate(item.createTime) }}</time>
-          </div>
-          <router-link :to="`/articles/${item.id}`" class="recommendation-card__title">{{ item.articleTitle }}</router-link>
-          <p>{{ excerpt(item.articleContent) }}</p>
-          <footer>
-            <span class="recommendation-reason">{{ item.reason?.label || '为你推荐' }}</span>
-            <details class="recommendation-menu" @toggle="onMenuToggle">
-              <summary>不感兴趣</summary>
-              <div>
-                <button type="button" @click="applyFeedback(item, { targetType: 'article', articleId: item.id }, '已隐藏这篇文章')">隐藏这篇文章</button>
-                <button type="button" @click="applyFeedback(item, { targetType: 'author', authorId: item.userId }, '已减少这位作者')">少看 {{ item.author?.nickname || item.author?.handle }}</button>
-                <button v-for="topic in topicOptions(item)" :key="`${topic.topicType}:${topic.topicKey}`" type="button" @click="applyFeedback(item, { targetType: 'topic', topicType: topic.topicType, topicKey: topic.topicKey }, `已减少「${topic.label}」`)">少看「{{ topic.label }}」</button>
-              </div>
-            </details>
-          </footer>
-        </div>
-      </article>
+      <ArticleFeedCard v-for="item in items" :key="item.id" :data="item" class="recommendation-card" data-testid="recommendation-card">
+        <template #meta>
+          <span class="recommendation-reason">{{ item.reason?.label || '为你推荐' }}</span>
+        </template>
+        <template #actions>
+          <details class="recommendation-menu" @toggle="onMenuToggle">
+            <summary>不感兴趣</summary>
+            <div>
+              <button type="button" @click="applyFeedback(item, { targetType: 'article', articleId: item.id }, '已隐藏这篇文章')">隐藏这篇文章</button>
+              <button type="button" @click="applyFeedback(item, { targetType: 'author', authorId: item.userId }, '已减少这位作者')">少看 {{ item.author?.nickname || item.author?.handle }}</button>
+              <button v-for="topic in topicOptions(item)" :key="`${topic.topicType}:${topic.topicKey}`" type="button" @click="applyFeedback(item, { targetType: 'topic', topicType: topic.topicType, topicKey: topic.topicKey }, `已减少「${topic.label}」`)">少看「{{ topic.label }}」</button>
+            </div>
+          </details>
+        </template>
+      </ArticleFeedCard>
     </div>
     <p v-else class="recommendation-state">暂时没有可推荐的公开文章。</p>
 
@@ -53,12 +42,14 @@ import { defineComponent, getCurrentInstance, onMounted, ref } from 'vue'
 import api from '@/api/api'
 import { useReaderStore } from '@/stores/reader'
 import type { RecommendationItem, RecommendationTargetType } from '@stellar-beacon/api-contract'
+import { ArticleFeedCard } from '@/components/ArticleCard'
 
 type TopicOption = { topicType: 'category' | 'tag'; topicKey: string; label: string }
 type FeedbackPayload = { targetType: RecommendationTargetType; articleId?: number; authorId?: number; topicType?: 'category' | 'tag'; topicKey?: string }
 
 export default defineComponent({
   name: 'RecommendationPanel',
+  components: { ArticleFeedCard },
   props: { compact: { type: Boolean, default: false } },
   setup(props) {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties

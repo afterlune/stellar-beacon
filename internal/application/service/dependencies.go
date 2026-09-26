@@ -15,6 +15,7 @@ type ArticleServiceDeps struct {
 	Cache            port.Cache
 	Storage          port.ObjectStorage
 	Search           port.ArticleSearcher
+	SearchIndex      ArticleSearchMaintainer
 	Newsletter       port.NewsletterEnqueuer
 }
 

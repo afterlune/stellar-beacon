@@ -21,20 +21,20 @@
     </div>
     <p v-else class="studio-state">还没有书单，先整理一组公开文章吧。</p>
 
-    <el-dialog v-model="createVisible" title="新建书单" width="440px">
-      <el-form label-position="top">
-        <el-form-item label="标题"><el-input v-model="form.title" maxlength="80" show-word-limit /></el-form-item>
-        <el-form-item label="简介"><el-input v-model="form.description" type="textarea" :rows="3" maxlength="500" show-word-limit /></el-form-item>
-        <el-form-item label="可见性">
-          <el-select v-model="form.visibility" style="width: 100%">
-            <el-option value="private" label="私有：仅自己可见" />
-            <el-option value="unlisted" label="链接可见：不公开列出" />
-            <el-option value="public" label="公开：进入主页与发现页" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer><button type="button" class="dialog-secondary" @click="createVisible = false">取消</button><button type="button" class="dialog-primary" :disabled="creating" @click="create">{{ creating ? '创建中…' : '创建并编辑' }}</button></template>
-    </el-dialog>
+    <DialogSurface v-model="createVisible" title="新建书单">
+      <form class="collection-create-form" @submit.prevent="create">
+        <label>标题<input v-model="form.title" maxlength="80" required /></label>
+        <label>简介<textarea v-model="form.description" rows="3" maxlength="500" /></label>
+        <label>可见性
+          <select v-model="form.visibility">
+            <option value="private">私有：仅自己可见</option>
+            <option value="unlisted">链接可见：不公开列出</option>
+            <option value="public">公开：进入主页与发现页</option>
+          </select>
+        </label>
+        <footer><button type="button" class="dialog-secondary" @click="createVisible = false">取消</button><button type="submit" class="dialog-primary" :disabled="creating">{{ creating ? '创建中…' : '创建并编辑' }}</button></footer>
+      </form>
+    </DialogSurface>
   </section>
 </template>
 
@@ -42,9 +42,11 @@
 import { defineComponent, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api/api'
+import DialogSurface from '@/components/overlays/DialogSurface.vue'
 
 export default defineComponent({
   name: 'StudioCollections',
+  components: { DialogSurface },
   setup() {
     const router = useRouter()
     const records = ref<any[]>([])
@@ -96,5 +98,9 @@ export default defineComponent({
 .collection-admin-grid footer { display: flex; justify-content: space-between; margin-top: 15px; color: var(--text-ob-dim); font-size: 10px; }
 .collection-admin-grid footer a { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 0; color: var(--color-ob); text-decoration: none; }
 .studio-state { padding: 60px 0; color: var(--text-ob-dim); text-align: center; }
+.collection-create-form { display: grid; gap: 14px; }
+.collection-create-form label { display: grid; gap: 6px; color: var(--text-ob-dim); font-size: 12px; }
+.collection-create-form input, .collection-create-form textarea, .collection-create-form select { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border-hairline); border-radius: 9px; background: var(--background-primary-alt); color: var(--text-normal); font: inherit; }
+.collection-create-form footer { display: flex; justify-content: flex-end; gap: 9px; }
 @media (max-width: 760px) { .collection-admin-grid { grid-template-columns: 1fr; } }
 </style>

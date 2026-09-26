@@ -155,6 +155,12 @@ type PhotoAlbumAdmin struct {
 
 type PhotoAlbumRepository interface {
 	ListPublic(ctx context.Context) ([]entity.TPhotoAlbum, error)
+	ListPublicByHandle(ctx context.Context, handle string) ([]entity.TPhotoAlbum, error)
+	GetPublicByHandle(ctx context.Context, handle string, albumID int) (entity.TPhotoAlbum, error)
+	ListOwned(ctx context.Context, userID int) ([]entity.TPhotoAlbum, error)
+	GetOwned(ctx context.Context, id, userID int) (entity.TPhotoAlbum, error)
+	SaveOwned(ctx context.Context, album entity.TPhotoAlbum, userID int) error
+	DeleteOwned(ctx context.Context, id, userID int) error
 	FindByName(ctx context.Context, name string) (entity.TPhotoAlbum, error)
 	ListAdmin(ctx context.Context, current, size int, keywords string) ([]PhotoAlbumAdmin, int64, error)
 	ListOptions(ctx context.Context) ([]entity.TPhotoAlbum, error)
@@ -165,6 +171,9 @@ type PhotoAlbumRepository interface {
 
 type PhotoRepository interface {
 	List(ctx context.Context, current, size, albumID, isDelete int, keywords string) ([]entity.TPhoto, int64, error)
+	ListOwnedByAlbum(ctx context.Context, userID, albumID int) ([]entity.TPhoto, error)
+	InsertOwned(ctx context.Context, userID, albumID int, photos []entity.TPhoto) error
+	DeleteOwned(ctx context.Context, userID int, photoIDs []int) error
 	Update(ctx context.Context, photo entity.TPhoto) error
 	InsertMany(ctx context.Context, photos []entity.TPhoto) error
 	UpdateAlbum(ctx context.Context, ids []int, albumID int) error

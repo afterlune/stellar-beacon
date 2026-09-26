@@ -29,13 +29,15 @@ type Sender func(context.Context, port.CommentNotification) error
 // CommentQueue is a bounded asynchronous sink for comment notification emails.
 // Comment writes never wait for SMTP and never fail because of it.
 type CommentQueue struct {
-	ctx    context.Context
-	ch     chan port.CommentNotification
-	send   Sender
-	mu     sync.RWMutex
-	closed bool
-	once   sync.Once
-	wg     sync.WaitGroup
+	ctx     context.Context
+	ch      chan port.CommentNotification
+	send    Sender
+	mu      sync.RWMutex
+	closed  bool
+	once    sync.Once
+	wg      sync.WaitGroup
+	active  atomic.Int64
+	workers atomic.Int64
 }
 
 var defaultCommentQueue atomic.Pointer[CommentQueue]
@@ -119,6 +121,8 @@ func (q *CommentQueue) enqueue(item port.CommentNotification) bool {
 }
 
 func (q *CommentQueue) worker() {
+	q.workers.Add(1)
+	defer q.workers.Add(-1)
 	defer q.wg.Done()
 	for {
 		select {
@@ -126,10 +130,31 @@ func (q *CommentQueue) worker() {
 			if !ok {
 				return
 			}
+			q.active.Add(1)
 			q.deliver(item)
+			q.active.Add(-1)
 		case <-q.ctx.Done():
 			return
 		}
+	}
+}
+
+func (q *CommentQueue) MonitorWorker() port.MonitorWorker {
+	if q == nil {
+		return port.MonitorWorker{Name: "commentNotifications", Status: port.MonitorStatusUnknown}
+	}
+	q.mu.RLock()
+	closed := q.closed
+	q.mu.RUnlock()
+	status := port.MonitorStatusHealthy
+	if closed {
+		status = port.MonitorStatusUnhealthy
+	} else if q.workers.Load() != commentQueueWorkers {
+		status = port.MonitorStatusDegraded
+	}
+	return port.MonitorWorker{
+		Name: "commentNotifications", Status: status,
+		Queued: int64(len(q.ch)), Capacity: int64(cap(q.ch)), Running: int(q.active.Load()), UpdatedAt: time.Now(),
 	}
 }
 

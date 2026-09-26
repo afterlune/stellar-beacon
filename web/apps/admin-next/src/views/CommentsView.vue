@@ -6,6 +6,7 @@
           v-model="keywords"
           class="admin-filter-input"
           :placeholder="t('comments.comments.searchPlaceholder')"
+          :input-attrs="{ id: 'comments-keywords', name: 'keywords', 'aria-label': t('comments.comments.searchPlaceholder') }"
           allow-clear
           @search="reload" />
         <a-button :loading="loading" @click="load">
@@ -18,15 +19,44 @@
     <a-card class="admin-panel" :bordered="false">
       <div class="admin-table-toolbar">
         <div class="admin-table-toolbar-main">
-          <a-radio-group v-model="reviewFilter" type="button" size="small" @change="reload">
-            <a-radio :value="0">{{ t('common.all') }}</a-radio>
-            <a-radio :value="2">{{ t('status.pending') }}</a-radio>
-            <a-radio :value="1">{{ t('comments.comments.filterApproved') }}</a-radio>
-          </a-radio-group>
-          <a-select v-model="collectionFilter" size="small" class="admin-filter-select" @change="reload">
-            <a-option :value="0">{{ t('comments.comments.collectionAll') }}</a-option>
-            <a-option v-for="item in collections" :key="item.id" :value="Number(item.id)">{{ item.title }}</a-option>
-          </a-select>
+          <div class="admin-filter-group" role="group" :aria-label="t('comments.comments.reviewFilterLabel')">
+            <button
+              type="button"
+              class="admin-filter-button"
+              :class="{ 'is-active': reviewFilter === 0 }"
+              :aria-pressed="reviewFilter === 0"
+              @click="setReviewFilter(0)">
+              {{ t('common.all') }}
+            </button>
+            <button
+              type="button"
+              class="admin-filter-button"
+              :class="{ 'is-active': reviewFilter === 2 }"
+              :aria-pressed="reviewFilter === 2"
+              @click="setReviewFilter(2)">
+              {{ t('status.pending') }}
+            </button>
+            <button
+              type="button"
+              class="admin-filter-button"
+              :class="{ 'is-active': reviewFilter === 1 }"
+              :aria-pressed="reviewFilter === 1"
+              @click="setReviewFilter(1)">
+              {{ t('comments.comments.filterApproved') }}
+            </button>
+          </div>
+          <label class="admin-filter-select">
+            <span class="admin-sr-only">{{ t('comments.comments.collectionFilterLabel') }}</span>
+            <select
+              id="comments-collection-filter"
+              v-model.number="collectionFilter"
+              name="collectionFilter"
+              :aria-label="t('comments.comments.collectionFilterLabel')"
+              @change="reload">
+              <option :value="0">{{ t('comments.comments.collectionAll') }}</option>
+              <option v-for="item in collections" :key="item.id" :value="Number(item.id)">{{ item.title }}</option>
+            </select>
+          </label>
           <span class="admin-toolbar-caption">{{ t('comments.comments.total', { total }) }}</span>
         </div>
         <div class="admin-table-toolbar-actions">
@@ -211,6 +241,12 @@ useQueryFilters([
   { key: 'collectionId', ref: collectionFilter },
   { key: 'page', ref: current }
 ], { onRestore: () => void load(), onSearch: () => void reload() })
+
+function setReviewFilter(value: number): void {
+  if (reviewFilter.value === value) return
+  reviewFilter.value = value
+  void reload()
+}
 
 const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
 const pendingCount = computed(() => records.value.filter((row) => Number(row.isReview) !== 1).length)

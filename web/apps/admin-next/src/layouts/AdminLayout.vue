@@ -101,20 +101,20 @@
         </div>
 
         <div class="admin-topbar-actions">
-          <button class="admin-search-trigger" type="button" :aria-label="t('shell.quickJump')" @click="paletteVisible = true">
+          <button class="admin-search-trigger" type="button" @click="paletteVisible = true">
             <IconSearch aria-hidden="true" />
             <span>{{ t('shell.quickJump') }}</span>
             <kbd>Ctrl K</kbd>
           </button>
           <AdminShellControls />
           <a-dropdown trigger="click">
-            <button class="admin-user" type="button" :aria-label="t('shell.accountMenu')">
+            <button class="admin-user" type="button" >
               <a-avatar :size="32" :image-url="auth.user?.avatar">{{ avatarText }}</a-avatar>
               <span class="admin-user-meta">
                 <span class="admin-user-name">{{ auth.user?.nickname || auth.user?.username || t('shell.admin') }}</span>
                 <span class="admin-user-role">{{ t('shell.adminRole') }}</span>
               </span>
-              <IconDown class="admin-user-chevron" aria-hidden="true" />
+              <IconDown class="admin-user-chevron" aria-hidden="true" /><span class="admin-sr-only">{{ t('shell.accountMenu') }}</span>
             </button>
             <template #content>
               <div class="admin-user-menu-header">
@@ -148,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   IconDown,
@@ -180,6 +180,7 @@ const STORAGE_KEY = 'stellar-beacon.admin.sider-collapsed'
 const LEGACY_STORAGE_KEY = 'benetnasch.admin.sider-collapsed'
 const collapsed = ref(readCollapsed())
 const paletteVisible = ref(false)
+let tableSelectionObserver: MutationObserver | undefined
 
 const avatarText = computed(() => (
   auth.user?.nickname || auth.user?.username || t('shell.adminFallback')
@@ -209,8 +210,49 @@ watch(collapsed, (value) => {
   }
 })
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  void nextTick(labelTableSelections)
+  tableSelectionObserver = new MutationObserver(labelTableSelections)
+  tableSelectionObserver.observe(document.body, { childList: true, subtree: true })
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  tableSelectionObserver?.disconnect()
+})
+
+watch(() => route.fullPath, () => void nextTick(labelTableSelections))
+
+/**
+ * Arco 表格的批量选择框没有可访问名称；在全局补齐，避免每个列表重复实现。
+ */
+function labelTableSelections(): void {
+  document.querySelectorAll<HTMLInputElement>('.arco-table input.arco-checkbox-target').forEach((input, index) => {
+    const isHeader = Boolean(input.closest('th'))
+    const name = isHeader ? 'table-select-all' : 'table-select-row'
+    if (!input.name) input.name = name
+    if (!input.id) input.id = `${name}-${index + 1}`
+    if (!input.hasAttribute('aria-label')) {
+      input.setAttribute('aria-label', isHeader ? t('shell.selectAllRows') : t('shell.selectRow'))
+    }
+  })
+  document.querySelectorAll<HTMLInputElement>('.arco-pagination .arco-select-view-input').forEach((input, index) => {
+    if (!input.name) input.name = 'table-page-size'
+    if (!input.id) input.id = `table-page-size-${index + 1}`
+    if (!input.hasAttribute('aria-label')) input.setAttribute('aria-label', t('shell.pageSize'))
+  })
+  document.querySelectorAll<HTMLInputElement>('.arco-pagination input.arco-input').forEach((input, index) => {
+    if (!input.name) input.name = 'table-page-jump'
+    if (!input.id) input.id = `table-page-jump-${index + 1}`
+    if (!input.hasAttribute('aria-label')) input.setAttribute('aria-label', t('shell.pageJump'))
+  })
+  document.querySelectorAll<HTMLElement>('.arco-pagination-list > span.arco-pagination-item').forEach((item) => {
+    const listItem = document.createElement('li')
+    listItem.style.display = 'contents'
+    item.parentNode?.insertBefore(listItem, item)
+    listItem.appendChild(item)
+  })
+}
 
 function onKeydown(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {

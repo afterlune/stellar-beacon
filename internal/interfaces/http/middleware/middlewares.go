@@ -752,7 +752,8 @@ func CasbinResourceFilter() gin.HandlerFunc {
 			}
 			dto := value.(model.UserDetailsDTO)
 			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
-			ok, deniedMessage, err := checkPermission(roles, permissionPath(c.Request.URL.Path), c.Request.Method)
+			permissionResource, permissionMethod := permissionTarget(c.Request.URL.Path, c.Request.Method)
+			ok, deniedMessage, err := checkPermission(roles, permissionPath(permissionResource), permissionMethod)
 			if err != nil {
 				slog.Error("authorization check failed", "error", err)
 				c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("权限检查失败"))
@@ -769,6 +770,16 @@ func CasbinResourceFilter() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// Incident handling notes share the same audience as the health monitor. This
+// keeps existing read-only monitor grants consistent without granting general
+// admin POST access.
+func permissionTarget(path, method string) (string, string) {
+	if method == http.MethodPost && strings.HasPrefix(path, "/v1/admin/monitor/incidents/") && strings.HasSuffix(path, "/updates") {
+		return "/v1/admin/monitor/health", http.MethodGet
+	}
+	return path, method
 }
 
 // 配置项

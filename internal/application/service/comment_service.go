@@ -27,9 +27,10 @@ const (
 // Comment types carried by t_comment.type. Public count surfaces reuse these
 // so a counter can never disagree with the target a comment was accepted for.
 const (
-	commentTypeArticle    = 1
-	commentTypeTalk       = 5
-	commentTypeCollection = 6
+	commentTypeArticle     = 1
+	commentTypeTalk        = 5
+	commentTypeCollection  = 6
+	commentTypeProfileWall = 7
 )
 
 type CommentService interface {
@@ -284,6 +285,10 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		recipientID = collection.Owner.Id
 		contentType = port.FollowContentCollection
 		contentID = collection.ID
+	case created.Type == commentTypeProfileWall && created.TopicId != 0:
+		recipientID = created.TopicId
+		contentType = port.FollowContentProfile
+		contentID = created.TopicId
 	default:
 		return
 	}
@@ -329,7 +334,11 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		notification.ArticleID = talk.Id
 		notification.ArticleTitle = commentExcerpt(talk.Content, 80)
 		notification.ArticleURL = config.PublicSiteURL + "/talks/" + strconv.Itoa(talk.Id)
-	} else {
+	} else if contentType == port.FollowContentProfile {
+		notification.ArticleID = recipient.Id
+		notification.ArticleTitle = recipient.Nickname + " 的主页留言"
+		notification.ArticleURL = config.PublicSiteURL + "/u/" + recipient.Handle + "#comments"
+	} else if contentType == port.FollowContentCollection {
 		if c.collections == nil {
 			return
 		}
@@ -341,6 +350,8 @@ func (c *MyCommentService) notifyComment(ctx context.Context, created entity.TCo
 		notification.ArticleID = collection.ID
 		notification.ArticleTitle = collection.Title
 		notification.ArticleURL = config.PublicSiteURL + "/collections/" + collection.Slug
+	} else {
+		return
 	}
 	if err := c.notifications.EnqueueComment(notification); err != nil {
 		slog.WarnContext(ctx, "enqueue comment notification failed", "error", err)
@@ -358,6 +369,8 @@ func commentTarget(commentType, topicID int) (string, int) {
 		return port.FollowContentTalk, topicID
 	case commentTypeCollection:
 		return port.FollowContentCollection, topicID
+	case commentTypeProfileWall:
+		return port.FollowContentProfile, topicID
 	default:
 		return "", 0
 	}
@@ -642,7 +655,7 @@ func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO)
 	if len(TypeHM[vo.Type]) == 0 {
 		return apperrors.Invalid("comment.validate", "invalid comment type")
 	}
-	if vo.Type == Article || vo.Type == Talk || vo.Type == Collection {
+	if vo.Type == Article || vo.Type == Talk || vo.Type == Collection || vo.Type == ProfileWall {
 		if vo.TopicId == "" {
 			return apperrors.Invalid("comment.validate", "topic is required")
 		}
@@ -653,9 +666,6 @@ func (c *MyCommentService) checkComment(ctx context.Context, vo model.CommentVO)
 		if err := c.commentRepository().ValidateTarget(ctx, vo.Type, topicID); err != nil {
 			return err
 		}
-	}
-	if (vo.Type == Link || vo.Type == Abouts || vo.Type == Message) && vo.TopicId != "" {
-		return apperrors.Invalid("comment.validate", "topic must be empty")
 	}
 	if vo.ParentId == 0 && vo.ReplyUserId != 0 {
 		return apperrors.Invalid("comment.validate", "reply user requires parent")

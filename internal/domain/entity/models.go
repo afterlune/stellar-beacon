@@ -271,6 +271,7 @@ type TPhoto struct {
 
 type TPhotoAlbum struct {
 	Id         int       `xorm:"autoincr not null pk comment('主键') unique INTEGER"`
+	UserId     int       `xorm:"user_id not null index comment('相册所有者') INTEGER" json:"userId"`
 	AlbumName  string    `xorm:"not null comment('相册名') VARCHAR(20)"`
 	AlbumDesc  string    `xorm:"not null comment('相册描述') VARCHAR(50)"`
 	AlbumCover string    `xorm:"not null comment('相册封面') VARCHAR(255)"`
@@ -396,6 +397,8 @@ type TUserInfo struct {
 	Avatar                 string    `xorm:"not null comment('用户头像') VARCHAR(1024)" json:"avatar"`
 	Intro                  string    `xorm:"comment('用户简介') VARCHAR(255)" json:"intro"`
 	Website                string    `xorm:"comment('个人网站') VARCHAR(255)" json:"website"`
+	About                  string    `xorm:"comment('个人主页长介绍') TEXT" json:"-"`
+	ProfileLinksJSON       string    `xorm:"profile_links_json comment('个人主页外链') JSONB" json:"-"`
 	IsSubscribe            int       `xorm:"comment('是否订阅') SMALLINT" json:"isSubscribe"`
 	NotifyComment          int       `xorm:"notify_comment not null default 1 comment('是否接收评论邮件通知') SMALLINT" json:"notifyComment"`
 	NotifyInteraction      int       `xorm:"notify_interaction not null default 1 comment('是否接收站内互动通知') SMALLINT" json:"notifyInteraction"`

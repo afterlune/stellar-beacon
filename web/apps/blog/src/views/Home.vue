@@ -68,12 +68,9 @@
       <p v-if="loading && !records.length" class="plaza-feed__state">正在接收公开信号…</p>
       <p v-else-if="error" class="plaza-feed__state is-error">{{ error }}</p>
       <div v-else-if="records.length" class="plaza-feed__grid">
-        <article v-for="item in records" :key="`${activeType}-${item.id}`" class="plaza-card">
-          <router-link v-if="activeType === 'article'" class="plaza-card__cover" :to="`/articles/${item.id}`">
-            <img v-if="item.articleCover" :src="item.articleCover" :alt="item.articleTitle" loading="lazy" />
-            <span v-else class="plaza-card__placeholder">{{ String(item.articleTitle || 'SIGNAL').slice(0, 1) }}</span>
-            <em v-if="item.isFeatured === 1">精选</em>
-          </router-link>
+        <template v-for="item in records" :key="`${activeType}-${item.id}`">
+          <ArticleFeedCard v-if="activeType === 'article'" :data="item" />
+          <article v-else class="plaza-card">
           <div class="plaza-card__body">
             <div class="plaza-card__author">
               <img :src="authorOf(item).avatar || defaultAvatar" :alt="authorOf(item).nickname" />
@@ -82,24 +79,14 @@
               </router-link>
               <time>{{ formatDate(item.createTime) }}</time>
             </div>
-            <template v-if="activeType === 'article'">
-              <router-link class="plaza-card__title" :to="`/articles/${item.id}`">{{ item.articleTitle }}</router-link>
-              <p>{{ excerpt(item.articleContent) }}</p>
-              <div class="plaza-card__meta">
-                <span>{{ item.categoryName || '未分类' }}</span>
-                <span v-if="item.likeCount">{{ item.likeCount }} 赞</span>
-                <span v-if="item.favoriteCount">{{ item.favoriteCount }} 收藏</span>
-              </div>
-            </template>
-            <template v-else>
-              <router-link class="plaza-card__title" :to="`/talks/${item.id}`">{{ excerpt(item.content, 120) }}</router-link>
-              <div class="plaza-card__meta">
-                <span>{{ item.commentCount || 0 }} 条回应</span>
-                <span v-if="item.isTop === 1">置顶</span>
-              </div>
-            </template>
+            <router-link class="plaza-card__title" :to="`/talks/${item.id}`">{{ excerpt(item.content, 120) }}</router-link>
+            <div class="plaza-card__meta">
+              <span>{{ item.commentCount || 0 }} 条回应</span>
+              <span v-if="item.isTop === 1">置顶</span>
+            </div>
           </div>
-        </article>
+          </article>
+        </template>
       </div>
       <p v-else class="plaza-feed__state">公共空间还没有内容。登录后发布第一篇公开文章吧。</p>
 
@@ -116,12 +103,13 @@ import api from '@/api/api'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import RecommendationPanel from '@/components/RecommendationPanel.vue'
+import { ArticleFeedCard } from '@/components/ArticleCard'
 
 const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3Crect width="80" height="80" rx="40" fill="%23172554"/%3E%3Ccircle cx="40" cy="30" r="14" fill="%239bb8ff"/%3E%3Cpath d="M15 72c3-18 14-27 25-27s22 9 25 27" fill="%239bb8ff"/%3E%3C/svg%3E'
 
 export default defineComponent({
   name: 'Home',
-  components: { RecommendationPanel },
+  components: { RecommendationPanel, ArticleFeedCard },
   setup() {
     const appStore = useAppStore()
     const userStore = useUserStore()

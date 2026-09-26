@@ -1,6 +1,6 @@
 <template>
   <button type="button" class="collection-add-button" @click="open" data-testid="add-to-collection">加入书单</button>
-  <el-dialog v-model="visible" title="加入书单" width="460px">
+  <DialogSurface v-model="visible" title="加入书单">
     <p class="collection-add-hint">选择收藏集，或将这篇文章加入新书单。</p>
     <div v-if="loading" class="collection-add-state">加载中…</div>
     <div v-else class="collection-add-list">
@@ -14,15 +14,17 @@
       <select v-model="newVisibility"><option value="private">私有</option><option value="unlisted">链接可见</option><option value="public">公开</option></select>
       <button type="button" :disabled="!newTitle || creating" @click="createAndAdd">{{ creating ? '创建中…' : '新建并加入' }}</button>
     </div>
-  </el-dialog>
+  </DialogSurface>
 </template>
 
 <script lang="ts">
 import { defineComponent, getCurrentInstance, onMounted, ref } from 'vue'
 import api from '@/api/api'
+import DialogSurface from '@/components/overlays/DialogSurface.vue'
 
 export default defineComponent({
   name: 'AddToCollectionButton',
+  components: { DialogSurface },
   props: { articleId: { type: Number, required: true } },
   setup(props) {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties

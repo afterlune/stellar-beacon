@@ -14,7 +14,7 @@
         <ul class="flex flex-col gap-2 text-center lg:text-right mx-auto lg:mx-0">
           <li>
             Copyright © 2022 - {{ currentYear }}
-            <b class="font-extrabold">{{ websiteConfig.author }}</b>
+            <b class="font-extrabold">{{ websiteConfig.name || websiteConfig.englishName || 'Stellar Beacon' }}</b>
           </li>
           <li v-if="websiteConfig.beianNumber != ''">
             <a href="https://beian.miit.gov.cn/" target="_blank">

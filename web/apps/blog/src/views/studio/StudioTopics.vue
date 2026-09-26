@@ -26,7 +26,8 @@
 
 <script lang="ts">
 import { defineComponent, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notify } from '@/services/notifications'
+import { confirm } from '@/services/confirm'
 import api from '@/api/api'
 
 export default defineComponent({
@@ -46,7 +47,7 @@ export default defineComponent({
         categories.value = Array.isArray(dataOf(categoryResponse)) ? dataOf(categoryResponse) : []
         tags.value = Array.isArray(dataOf(tagResponse)) ? dataOf(tagResponse) : []
       } catch {
-        ElMessage.error('分类与标签加载失败')
+        notify.error('分类与标签加载失败')
       }
     }
     const resetCategory = () => { categoryId.value = 0; categoryName.value = '' }
@@ -57,27 +58,27 @@ export default defineComponent({
       if (!categoryName.value) return
       try {
         await api.saveStudioCategory({ id: categoryId.value, name: categoryName.value }, categoryId.value || undefined)
-        resetCategory(); await load(); ElMessage.success('分类已保存')
-      } catch (reason: any) { ElMessage.error(reason?.response?.data?.message || '分类保存失败') }
+        resetCategory(); await load(); notify.success('分类已保存')
+      } catch (reason: any) { notify.error(reason?.response?.data?.message || '分类保存失败') }
     }
     const saveTag = async () => {
       if (!tagName.value) return
       try {
         await api.saveStudioTag({ id: tagId.value, name: tagName.value }, tagId.value || undefined)
-        resetTag(); await load(); ElMessage.success('标签已保存')
-      } catch (reason: any) { ElMessage.error(reason?.response?.data?.message || '标签保存失败') }
+        resetTag(); await load(); notify.success('标签已保存')
+      } catch (reason: any) { notify.error(reason?.response?.data?.message || '标签保存失败') }
     }
     const removeCategory = async (item: any) => {
+      if (!await confirm({ title: '删除确认', message: `确认删除分类“${item.categoryName}”？`, confirmText: '删除' })) return
       try {
-        await ElMessageBox.confirm(`确认删除分类“${item.categoryName}”？`, '删除确认', { type: 'warning' })
         await api.deleteStudioCategory(item.id); await load()
-      } catch (reason: any) { if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || '删除失败') }
+      } catch (reason: any) { notify.error(reason?.response?.data?.message || '删除失败') }
     }
     const removeTag = async (item: any) => {
+      if (!await confirm({ title: '删除确认', message: `确认删除标签“#${item.tagName}”？`, confirmText: '删除' })) return
       try {
-        await ElMessageBox.confirm(`确认删除标签“#${item.tagName}”？`, '删除确认', { type: 'warning' })
         await api.deleteStudioTag(item.id); await load()
-      } catch (reason: any) { if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || '删除失败') }
+      } catch (reason: any) { notify.error(reason?.response?.data?.message || '删除失败') }
     }
 
     onMounted(load)

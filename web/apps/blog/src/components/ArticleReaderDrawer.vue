@@ -1,11 +1,5 @@
 <template>
-  <el-drawer
-    v-model="drawerVisible"
-    class="article-reader-drawer"
-    direction="btt"
-    size="78%"
-    append-to-body
-    :title="t('reader.tocTitle')">
+  <DialogSurface v-model="drawerVisible" variant="drawer-bottom" :title="t('reader.tocTitle')">
     <div class="article-reader-drawer__body" data-testid="article-reader-drawer">
       <nav v-if="tocItems.length" class="reader-toc" :aria-label="t('reader.tocTitle')">
         <button
@@ -62,7 +56,7 @@
         </router-link>
       </section>
     </div>
-  </el-drawer>
+  </DialogSurface>
 </template>
 
 <script setup lang="ts">
@@ -72,6 +66,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useReaderStore } from '@/stores/reader'
 import { scrollToArticleHeading } from '@/utils/article-reader'
+import DialogSurface from '@/components/overlays/DialogSurface.vue'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ 'update:visible': [value: boolean] }>()

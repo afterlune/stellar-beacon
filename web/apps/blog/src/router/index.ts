@@ -124,6 +124,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'series/:id/preview', name: 'StudioSeriesPreview', component: () => import('../views/studio/StudioPreviewView.vue'), props: { kind: 'series' } },
       { path: 'collections', name: 'StudioCollections', component: () => import('../views/studio/StudioCollections.vue') },
       { path: 'collections/:id/edit', name: 'StudioCollectionEdit', component: () => import('../views/studio/StudioCollectionEditor.vue') },
+      { path: 'albums', name: 'StudioAlbums', component: () => import('../views/studio/StudioAlbumsView.vue') },
       { path: 'topics', name: 'StudioTopics', component: () => import('../views/studio/StudioTopics.vue') },
       { path: 'library', redirect: '/studio/library/reading' },
       { path: 'library/reading', name: 'StudioReading', component: () => import('../views/Reading.vue') },
@@ -131,23 +132,19 @@ const routes: RouteRecordRaw[] = [
     ]
   },  {
     path: '/about',
-    name: 'About',
-    component: () => import('../views/About.vue')
+    redirect: '/authors'
   },
   {
     path: '/message',
-    name: 'Message',
-    component: () => import('../views/Message.vue')
+    redirect: '/authors'
   },
   {
     path: '/friends',
-    name: 'Friends',
-    component: () => import('../views/FriendLink.vue')
+    redirect: '/authors'
   },
   {
     path: '/photos/:albumId',
-    name: 'Photos',
-    component: () => import('../views/Photos.vue')
+    redirect: '/authors'
   },
   {
     path: '/series',
@@ -189,7 +186,13 @@ const routes: RouteRecordRaw[] = [
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { el: to.hash, behavior: 'smooth' }
+    if (to.path.startsWith('/studio') && to.path !== from.path) return { top: 0 }
+    return false
+  }
 })
 
 export default router

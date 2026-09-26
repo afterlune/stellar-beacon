@@ -1,19 +1,11 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { createApiClient } from '@stellar-beacon/api-client'
 
-import { normalizePage, unwrapResult, type AdminAlbum, type AdminArticle, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminFriendLink, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminPhoto, type AdminRole, type AdminTalk, type AdminUser, type CollectionSummary, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
-  type ContentAuditItem, type ContentAuditRecord, type ContentContinuationTarget, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
+import { normalizePage, unwrapResult, type AdminArticle, type AdminArticleView, type AdminContentAnalytics, type AdminDashboardAnalytics, type AdminJob, type AdminJobTarget, type AdminMediaAsset, type AdminRole, type AdminTalk, type AdminUser, type CollectionSummary, type ContentAnalyticsRange, type ContentArticleAnalyticsDetail, type ContentArticlePerformance,
+	  type ContentAuditItem, type ContentAuditRecord, type ContentContinuationTarget, type DashboardRange, type GrowthSummaryItem, type JobRunOutcome, type NewsletterDelivery, type NewsletterHealth, type NewsletterSubscriber, type Page, type ResultVO, type SystemHealthSnapshot, type SystemMonitorHistoryRange, type SystemMonitorIncident, type SystemMonitorIncidentUpdate, type SystemMonitorRange, type SystemMonitorTimeline, type SystemMonitorTrends, type UserMenu, type UserRole } from '@stellar-beacon/api-contract'
 import { t } from '@/i18n'
 
 export const AUTH_EXPIRED_EVENT = 'stellar-beacon-admin-auth-expired'
-
-/** `GET admin/albums/options`（服务端 `PhotoAlbumDTO`）的可用字段。 */
-export interface AdminAlbumOption {
-  id: number
-  albumName: string
-  albumDesc?: string
-  albumCover?: string
-}
 
 export const http = createApiClient({
   getToken: () => sessionStorage.getItem('token'),
@@ -81,6 +73,36 @@ export async function retryFailedNewsletterDeliveries(): Promise<number> {
 
 export async function getNewsletterHealth(): Promise<NewsletterHealth> {
   const response = await http.get<ResultVO<NewsletterHealth>>('admin/newsletter/health')
+  return responseData(response)
+}
+
+export async function getSystemHealth(): Promise<SystemHealthSnapshot> {
+  const response = await http.get<ResultVO<SystemHealthSnapshot>>('admin/monitor/health')
+  return responseData(response)
+}
+
+export async function getSystemHealthTrends(range: SystemMonitorRange = '1h'): Promise<SystemMonitorTrends> {
+  const response = await http.get<ResultVO<SystemMonitorTrends>>('admin/monitor/health/trends', { params: { range } })
+  return responseData(response)
+}
+
+export async function getSystemHealthTimeline(range: SystemMonitorHistoryRange = '90d'): Promise<SystemMonitorTimeline> {
+  const response = await http.get<ResultVO<SystemMonitorTimeline>>('admin/monitor/health/timeline', { params: { range } })
+  return responseData(response)
+}
+
+export async function listSystemMonitorIncidents(range: SystemMonitorHistoryRange = '90d', limit = 100): Promise<SystemMonitorIncident[]> {
+  const response = await http.get<ResultVO<SystemMonitorIncident[]>>('admin/monitor/incidents', { params: { range, limit } })
+  return responseData(response)
+}
+
+export async function getSystemMonitorIncident(id: number): Promise<SystemMonitorIncident> {
+  const response = await http.get<ResultVO<SystemMonitorIncident>>(`admin/monitor/incidents/${id}`)
+  return responseData(response)
+}
+
+export async function addSystemMonitorIncidentUpdate(id: number, content: string): Promise<SystemMonitorIncidentUpdate> {
+  const response = await http.post<ResultVO<SystemMonitorIncidentUpdate>>(`admin/monitor/incidents/${id}/updates`, { content })
   return responseData(response)
 }
 
@@ -205,39 +227,6 @@ export async function listAdminJobTargets(): Promise<AdminJobTarget[]> {
   return responseData(response)
 }
 
-export async function listAdminAlbums(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminAlbum>> {
-  return listAdminPage<AdminAlbum>('admin/albums', params, config)
-}
-
-export async function saveAdminAlbum(payload: { id?: number; albumName: string; albumDesc: string; albumCover: string; status: number }): Promise<void> {
-  const response = await http.post<ResultVO<unknown>>('admin/albums', payload)
-  responseData(response)
-}
-
-export async function deleteAdminAlbum(id: number): Promise<void> {
-  const response = await http.delete<ResultVO<unknown>>(`admin/albums/${encodeURIComponent(id)}`)
-  responseData(response)
-}
-
-export async function listAdminFriendLinks(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminFriendLink>> {
-  return listAdminPage<AdminFriendLink>('admin/friend-links', params, config)
-}
-
-export async function saveAdminFriendLink(payload: { id?: number; linkName: string; linkAvatar: string; linkAddress: string; linkIntro: string }): Promise<void> {
-  const response = await http.post<ResultVO<unknown>>('admin/friend-links', payload)
-  responseData(response)
-}
-
-export async function reviewAdminFriendLinks(ids: number[], status: number): Promise<void> {
-  const response = await http.put<ResultVO<unknown>>('admin/friend-links/review', { ids, status })
-  responseData(response)
-}
-
-export async function deleteAdminFriendLinks(ids: number[]): Promise<void> {
-  const response = await http.delete<ResultVO<unknown>>('admin/friend-links', { data: ids })
-  responseData(response)
-}
-
 /** 文章系列（合集）：列表、下拉选项与写操作。 */
 export interface AdminSeries {
   id: number
@@ -280,13 +269,6 @@ export async function deleteAdminSeries(ids: number[]): Promise<void> {
   responseData(response)
 }
 
-export async function uploadAdminAlbumCover(file: File): Promise<string> {
-  const form = new FormData()
-  form.append('file', file)
-  const response = await http.post<ResultVO<string>>('admin/albums/cover', form)
-  return responseData(response)
-}
-
 export async function listAdminTalks(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminTalk>> {
   return listAdminPage<AdminTalk>('admin/talks', params, config)
 }
@@ -326,53 +308,6 @@ export async function listAdminCategories(keywords = ''): Promise<Array<Record<s
 
 export async function listAdminTags(keywords = ''): Promise<Array<Record<string, unknown>>> {
   return listAdminCollection<Record<string, unknown>>('admin/tags/search', keywords ? { keywords } : {})
-}
-
-export async function getAdminAlbum(id: number): Promise<AdminAlbum> {
-  const response = await http.get<ResultVO<AdminAlbum>>(`admin/albums/${encodeURIComponent(id)}`)
-  return responseData(response)
-}
-
-export async function listAdminPhotos(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<Page<AdminPhoto>> {
-  return listAdminPage<AdminPhoto>('admin/photos', params, config)
-}
-
-export async function uploadAdminPhoto(file: File): Promise<string> {
-  const form = new FormData()
-  form.append('file', file)
-  const response = await http.post<ResultVO<string>>('admin/photos/upload', form)
-  return responseData(response)
-}
-
-export async function saveAdminPhotos(albumId: number, photoUrls: string[]): Promise<void> {
-  const response = await http.post<ResultVO<unknown>>('admin/photos', { albumId: String(albumId), photoUrls })
-  responseData(response)
-}
-
-export async function updateAdminPhoto(payload: { id: number; photoName: string; photoDesc: string }): Promise<void> {
-  const response = await http.put<ResultVO<unknown>>('admin/photos', payload)
-  responseData(response)
-}
-
-export async function updateAdminPhotoDelete(ids: number[], isDelete = 1): Promise<void> {
-  const response = await http.put<ResultVO<unknown>>('admin/photos/trash', { ids, isDelete })
-  responseData(response)
-}
-
-export async function deleteAdminPhotos(ids: number[]): Promise<void> {
-  const response = await http.delete<ResultVO<unknown>>('admin/photos', { data: ids })
-  responseData(response)
-}
-
-/** Move the selected photos into another album. */
-export async function moveAdminPhotosToAlbum(photoIds: number[], albumId: number): Promise<void> {
-  const response = await http.put<ResultVO<unknown>>('admin/photos/album', { photoIds, albumId })
-  responseData(response)
-}
-
-/** Album id/name options used by the "move photos" picker. */
-export async function listAdminAlbumOptions(): Promise<AdminAlbumOption[]> {
-  return listAdminCollection<AdminAlbumOption>('admin/albums/options')
 }
 
 export async function listAdminMenus(params: Record<string, string | number> = {}, config?: AxiosRequestConfig): Promise<unknown[]> {
@@ -630,16 +565,6 @@ export async function getWebsiteConfig(): Promise<Record<string, unknown>> {
 
 export async function updateWebsiteConfig(payload: Record<string, unknown>): Promise<void> {
   const response = await http.put<ResultVO<unknown>>('admin/site', payload)
-  responseData(response)
-}
-
-export async function getAbout(): Promise<Record<string, unknown>> {
-  const response = await http.get<ResultVO<Record<string, unknown>>>('public/about')
-  return responseData(response)
-}
-
-export async function updateAbout(content: string): Promise<void> {
-  const response = await http.put<ResultVO<unknown>>('admin/about', { content })
   responseData(response)
 }
 

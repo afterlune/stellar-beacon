@@ -1,5 +1,6 @@
 <template>
   <div id="App-Wrapper" :class="[appWrapperClass, theme]">
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
     <AmbientGrid />
     <div
       id="App-Container"
@@ -14,18 +15,19 @@
           <span class="future-banner__signal">SIGNAL ONLINE</span>
         </div>
       </template>
-      <div class="app-content">
+      <main id="main-content" class="app-content" tabindex="-1">
         <router-view v-slot="{ Component }">
-          <transition name="fade-slide-y" mode="out-in">
+          <transition v-if="!isStudioRoute" name="fade-slide-y" mode="out-in">
             <component :is="Component" />
           </transition>
+          <component v-else :is="Component" />
         </router-view>
-      </div>
+      </main>
     </div>
     <div id="loading-bar-wrapper" :class="loadingBarClass"></div>
   </div>
   <Footer id="footer" />
-  <div class="App-Mobile-sidebar" :class="{ 'is-open': navigatorStore.openMenu }" v-if="isMobile">
+  <div class="App-Mobile-sidebar" :class="{ 'is-open': navigatorStore.openMenu }" v-if="showNavigationMenu">
     <div id="App-Mobile-Profile" class="App-Mobile-wrapper">
       <MobileMenu />
     </div>
@@ -33,6 +35,8 @@
   <AuroraNavigator />
   <Dia v-if="!isMobile" />
   <UserCenter />
+  <ToastHost />
+  <ConfirmDialogHost />
 </template>
 
 <script lang="ts">
@@ -47,6 +51,8 @@ import MobileMenu from '@/components/MobileMenu.vue'
 import Dia from '@/components/Dia.vue'
 import AuroraNavigator from '@/components/AuroraNavigator.vue'
 import UserCenter from '@/components/UserCenter.vue'
+import ToastHost from '@/components/overlays/ToastHost.vue'
+import ConfirmDialogHost from '@/components/overlays/ConfirmDialogHost.vue'
 import AmbientGrid from '@/components/AmbientGrid.vue'
 import api from './api/api'
 import { useSeoMeta } from '@/composables/useSeoMeta'
@@ -59,7 +65,9 @@ export default defineComponent({
     AuroraNavigator,
     MobileMenu,
     UserCenter,
-    AmbientGrid
+    AmbientGrid,
+    ToastHost,
+    ConfirmDialogHost
   },
   setup() {
     const appStore = useAppStore()
@@ -69,12 +77,14 @@ export default defineComponent({
     const { setSeo } = useSeoMeta()
     const MOBILE_WITH = 996
     const appWrapperClass = 'app-wrapper'
+    const compactNavigation = ref(false)
     const loadingBarClass = ref({
       'nprogress-custom-parent': false
     })
     const isMobile = computed(() => {
       return commonStore.isMobile
     })
+    const showNavigationMenu = computed(() => isMobile.value || compactNavigation.value || navigatorStore.openMenu)
     onBeforeMount(() => {
       initialApp()
       applyRouteSeo()
@@ -124,6 +134,9 @@ export default defineComponent({
       const rect = document.body.getBoundingClientRect()
       const mobileState = rect.width - 1 < MOBILE_WITH
       if (isMobile.value !== mobileState) commonStore.changeMobileState(mobileState)
+      const compactNavigationState = window.matchMedia('(max-width: 1023px)').matches
+      if (!compactNavigationState && navigatorStore.openMenu) navigatorStore.closeMobileMenu()
+      compactNavigation.value = compactNavigationState
     }
     const initResizeEvent = () => {
       resizeHander()
@@ -140,6 +153,7 @@ export default defineComponent({
     }
     return {
       theme: computed(() => appStore.themeConfig.theme),
+      isStudioRoute: computed(() => route.path === '/studio' || route.path.startsWith('/studio/')),
       hideBanner: computed(() => route.meta.hideBanner === true),
       // The cover is a homepage treatment. Inner pages use a clear heading
       // band so the sticky navigation never sits on top of their first row.
@@ -155,6 +169,7 @@ export default defineComponent({
       }),
 
       isMobile: computed(() => commonStore.isMobile),
+      showNavigationMenu,
       navigatorStore,
       appWrapperClass,
       loadingBarClass
@@ -171,16 +186,27 @@ export default defineComponent({
 .img-error {
   display: none !important;
 }
-.el-drawer {
-  background-color: var(--background-primary) !important;
-}
-.el-dialog {
-  background-color: var(--background-primary) !important;
-}
 body {
   background: var(--background-primary-alt);
 }
 
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  z-index: 1000;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: var(--color-ob);
+  color: #081127;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 160ms ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
 #app {
   @apply relative min-w-full min-h-screen h-full;
   display: flex;

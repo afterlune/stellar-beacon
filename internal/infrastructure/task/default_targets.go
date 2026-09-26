@@ -17,13 +17,19 @@ type DefaultTargetsDeps struct {
 	JobLogs          port.JobLogRepository
 	UserAreas        port.UserAreaRefresher
 	StudioActivation port.StudioActivationReminderRepository
+	Search           articleSearchMaintainer
+}
+
+type articleSearchMaintainer interface {
+	Sync(context.Context, ...int) error
+	Reconcile(context.Context) error
 }
 
 func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error {
 	if scheduler == nil {
 		return errors.New("scheduler is nil")
 	}
-	if deps.Publishes == nil || deps.Growth == nil || deps.JobLogs == nil || deps.UserAreas == nil || deps.StudioActivation == nil {
+	if deps.Publishes == nil || deps.Growth == nil || deps.JobLogs == nil || deps.UserAreas == nil || deps.StudioActivation == nil || deps.Search == nil {
 		return errors.New("default job dependencies are incomplete")
 	}
 	targets := []struct {
@@ -33,7 +39,16 @@ func RegisterDefaultTargets(scheduler *Scheduler, deps DefaultTargetsDeps) error
 		{
 			meta: port.JobTarget{Target: "article.publishScheduled", Name: "Publish scheduled articles", Description: "Publish due scheduled articles, enqueue subscriber notifications, and retry failed hand-offs.", CronExample: "* * * * *"},
 			handler: func(ctx context.Context) (port.JobRunResult, error) {
-				return runScheduledPublish(ctx, deps.Publishes, deps.Newsletter)
+				return runScheduledPublish(ctx, deps.Publishes, deps.Newsletter, deps.Search)
+			},
+		},
+		{
+			meta: port.JobTarget{Target: "article.searchReconcile", Name: "Reconcile article search", Description: "Rebuild public article search documents and remove stale Meilisearch entries.", CronExample: "*/5 * * * *"},
+			handler: func(ctx context.Context) (port.JobRunResult, error) {
+				if err := deps.Search.Reconcile(ctx); err != nil {
+					return port.JobRunResult{}, err
+				}
+				return port.JobRunResult{Processed: true, Message: "article search index reconciled"}, nil
 			},
 		},
 		{
@@ -89,7 +104,7 @@ var scheduledPublishRetryDelays = [...]time.Duration{
 	6 * time.Hour,
 }
 
-func runScheduledPublish(ctx context.Context, publishes port.ScheduledPublishRepository, newsletter port.NewsletterEnqueuer) (port.JobRunResult, error) {
+func runScheduledPublish(ctx context.Context, publishes port.ScheduledPublishRepository, newsletter port.NewsletterEnqueuer, search articleSearchMaintainer) (port.JobRunResult, error) {
 	now := time.Now()
 	retries, err := publishes.ListRetryableScheduledPublishes(ctx, now, 100)
 	if err != nil {
@@ -102,6 +117,15 @@ func runScheduledPublish(ctx context.Context, publishes port.ScheduledPublishRep
 	records := make([]port.ScheduledPublish, 0, len(retries)+len(due))
 	records = append(records, retries...)
 	records = append(records, due...)
+	if search != nil && len(due) > 0 {
+		articleIDs := make([]int, 0, len(due))
+		for _, record := range due {
+			articleIDs = append(articleIDs, record.ArticleID)
+		}
+		if err := search.Sync(ctx, articleIDs...); err != nil {
+			slog.WarnContext(ctx, "sync scheduled publish search index failed", "articleIds", articleIDs, "error", err)
+		}
+	}
 
 	queued, suppressed, failed := 0, 0, 0
 	var runErr error

@@ -22,7 +22,7 @@
         <span>{{ noticeText }}</span>
       </aside>
 
-      <main v-if="kind === 'article'" class="studio-preview-article">
+      <section v-if="kind === 'article'" class="studio-preview-article">
         <img v-if="article.articleCover" :src="article.articleCover" :alt="article.articleTitle" class="studio-preview-cover" />
         <p class="studio-preview-kicker">{{ article.categoryName || '未分类' }} · {{ typeLabel(article.type) }}</p>
         <h1>{{ article.articleTitle }}</h1>
@@ -31,9 +31,9 @@
           <span><strong>{{ author.nickname || author.handle || '作者' }}</strong><small>@{{ author.handle || 'author' }}</small></span>
         </div>
         <article class="studio-preview-content" v-html="articleHtml"></article>
-      </main>
+      </section>
 
-      <main v-else-if="kind === 'talk'" class="studio-preview-talk">
+      <section v-else-if="kind === 'talk'" class="studio-preview-talk">
         <div class="studio-preview-byline">
           <img :src="author.avatar || defaultAvatar" :alt="author.nickname || '作者'" />
           <span><strong>{{ author.nickname || author.handle || '作者' }}</strong><small>@{{ author.handle || 'author' }}</small></span>
@@ -42,9 +42,9 @@
         <div v-if="talkImages.length" class="studio-preview-talk__images" :class="{ 'is-single': talkImages.length === 1 }">
           <img v-for="image in talkImages" :key="image" :src="image" alt="" />
         </div>
-      </main>
+      </section>
 
-      <main v-else class="studio-preview-series">
+      <section v-else class="studio-preview-series">
         <header>
           <img v-if="series.cover" :src="series.cover" :alt="series.seriesName" />
           <div><p>SERIES / {{ seriesArticles.length }} ARTICLES</p><h1>{{ series.seriesName }}</h1><span>{{ series.seriesDesc || '暂无系列简介' }}</span></div>
@@ -58,7 +58,7 @@
             </router-link>
           </li>
         </ol>
-      </main>
+      </section>
     </template>
   </div>
 </template>

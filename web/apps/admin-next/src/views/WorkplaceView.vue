@@ -99,7 +99,6 @@ import {
   IconBarChart,
   IconBook,
   IconDashboard,
-  IconImage,
   IconMessage,
   IconPlus,
   IconSettings,
@@ -165,7 +164,6 @@ const trendTotal = computed(() => analytics.trend.reduce((total, item) => total 
 const shortcuts = computed(() => [
   { path: '/article-list', label: t('dashboard.workplace.shortcut.articles'), caption: t('dashboard.workplace.shortcut.articlesCaption'), icon: IconBook },
   { path: '/talk-list', label: t('dashboard.workplace.shortcut.talks'), caption: t('dashboard.workplace.shortcut.talksCaption'), icon: IconMessage },
-  { path: '/albums', label: t('dashboard.workplace.shortcut.albums'), caption: t('dashboard.workplace.shortcut.albumsCaption'), icon: IconImage },
   { path: '/setting', label: t('dashboard.workplace.shortcut.profile'), caption: t('dashboard.workplace.shortcut.profileCaption'), icon: IconSettings }
 ])
 

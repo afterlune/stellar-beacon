@@ -11,6 +11,12 @@
           <span class="author-hero__handle">@{{ author.handle }}</span>
           <p class="author-hero__intro">{{ author.intro || '这位作者还没有写下简介。' }}</p>
           <a v-if="author.website" :href="author.website" target="_blank" rel="noopener noreferrer">{{ author.website }}</a>
+          <div v-if="author.about" class="author-long-about" v-html="renderAbout(author.about)" />
+          <nav v-if="author.links?.length" class="author-profile-links" aria-label="个人外链">
+            <a v-for="link in author.links" :key="link.url" :href="link.url" target="_blank" rel="noopener noreferrer">
+              <strong>{{ link.label }}</strong><small v-if="link.description">{{ link.description }}</small>
+            </a>
+          </nav>
           <div class="author-hero__actions">
             <template v-if="isSelf">
               <router-link to="/studio/profile" class="author-hero__action">编辑公开资料</router-link>
@@ -85,18 +91,33 @@
           <button type="button" :class="{ active: tab === 'talks' }" @click="switchTab('talks')">随想</button>
           <button type="button" :class="{ active: tab === 'series' }" @click="switchTab('series')">系列</button>
           <button type="button" :class="{ active: tab === 'collections' }" @click="switchTab('collections')">书单</button>
+          <button type="button" :class="{ active: tab === 'albums' }" @click="switchTab('albums')">相册</button>
+          <button type="button" :class="{ active: tab === 'wall' }" @click="switchTab('wall')">主页留言</button>
         </nav>
 
-        <p v-if="loading" class="author-state">加载中…</p>
-        <div v-else-if="tab === 'articles'" class="author-list">
-          <router-link v-for="item in records" :key="item.id" :to="`/articles/${item.id}`" class="author-list__item">
-            <div>
-              <span>{{ item.categoryName || '未分类' }} · {{ formatDate(item.createTime) }}</span>
-              <h2>{{ item.articleTitle }}</h2>
-              <p>{{ excerpt(item.articleContent) }}</p>
+        <Comment v-if="tab === 'wall'" />
+        <div v-else-if="tab === 'albums'" class="author-albums">
+          <button v-if="activeAlbum" type="button" class="author-albums__back" @click="activeAlbum = null; albumPhotos = []">← 全部相册</button>
+          <div v-if="!activeAlbum" class="author-albums__grid">
+            <button v-for="album in albums" :key="album.id" type="button" class="author-album-card" @click="openAlbum(album)">
+              <img v-if="album.albumCover" :src="album.albumCover" :alt="album.albumName" loading="lazy" />
+              <span v-else class="author-album-card__empty">相册</span>
+              <strong>{{ album.albumName }}</strong><small>{{ album.albumDesc || '个人相册' }}</small>
+            </button>
+            <p v-if="!loadingAlbums && !albums.length" class="author-state">这位作者还没有公开相册。</p>
+          </div>
+          <div v-else class="author-album-photos">
+            <h2>{{ activeAlbum.albumName }}</h2>
+            <p>{{ activeAlbum.albumDesc }}</p>
+            <div class="author-album-photos__grid">
+              <img v-for="photo in albumPhotos" :key="photo" :src="photo" alt="" loading="lazy" />
             </div>
-            <img v-if="item.articleCover" :src="item.articleCover" :alt="item.articleTitle" loading="lazy" />
-          </router-link>
+            <p v-if="!loadingAlbums && !albumPhotos.length" class="author-state">这个相册还没有照片。</p>
+          </div>
+        </div>
+        <p v-else-if="loading" class="author-state">加载中…</p>
+        <div v-else-if="tab === 'articles'" class="article-feed-grid author-list">
+          <ArticleFeedCard v-for="item in records" :key="item.id" :data="item" />
         </div>
         <div v-else-if="tab === 'talks'" class="author-talks">
           <article v-for="item in records" :key="item.id">
@@ -126,33 +147,47 @@
             </span>
           </router-link>
         </div>
-        <p v-if="!loading && !records.length" class="author-state">这里还没有公开内容。</p>
-        <button v-if="records.length < total" type="button" class="author-more" :disabled="loading" @click="loadMore">加载更多</button>
+        <p v-if="!loading && tab !== 'albums' && tab !== 'wall' && !records.length" class="author-state">这里还没有公开内容。</p>
+        <button v-if="tab !== 'albums' && tab !== 'wall' && records.length < total" type="button" class="author-more" :disabled="loading" @click="loadMore">加载更多</button>
       </section>
     </template>
   </div>
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, onMounted, ref } from 'vue'
+import { computed, defineComponent, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { notify } from '@/services/notifications'
 import api from '@/api/api'
 import FollowButton from '@/components/FollowButton.vue'
+import { ArticleFeedCard } from '@/components/ArticleCard'
+import { Comment } from '@/components/Comment'
 import { useSeoMeta } from '@/composables/useSeoMeta'
 import { useUserStore } from '@/stores/user'
+import { useCommentStore } from '@/stores/comment'
+import emitter from '@/utils/mitt'
+import { pageCount, pageRecords } from '@/utils/page'
+import markdownToHtml, { sanitizePreviewHtml } from '@/utils/markdown'
 
 const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="120" height="120"%3E%3Crect width="120" height="120" rx="60" fill="%23172554"/%3E%3Ccircle cx="60" cy="44" r="21" fill="%239bb8ff"/%3E%3Cpath d="M20 108c4-27 21-41 40-41s36 14 40 41" fill="%239bb8ff"/%3E%3C/svg%3E'
 
 export default defineComponent({
   name: 'Author',
-  components: { FollowButton },
+  components: { FollowButton, ArticleFeedCard, Comment },
   setup() {
     const route = useRoute()
     const userStore = useUserStore()
+    const commentStore = useCommentStore()
     const author = ref<any>(null)
     const records = ref<any[]>([])
-    const tab = ref<'articles' | 'talks' | 'series' | 'collections'>('articles')
+    const tab = ref<'articles' | 'talks' | 'series' | 'collections' | 'albums' | 'wall'>('articles')
+    const albums = ref<any[]>([])
+    const activeAlbum = ref<any>(null)
+    const albumPhotos = ref<string[]>([])
+    const loadingAlbums = ref(false)
+    const wallComments = ref<any[]>([])
+    const wallHaveMore = ref(false)
+    const wallPage = ref(1)
     const highlights = ref<any[]>([])
     const highlightSeries = ref<any[]>([])
     const highlightCollections = ref<any[]>([])
@@ -164,6 +199,11 @@ export default defineComponent({
     const total = ref(0)
     const pageSize = 12
     const handle = String(route.params.handle || '')
+
+    const renderAbout = (value: unknown) => sanitizePreviewHtml(markdownToHtml(String(value || '')))
+
+    provide('comments', computed(() => wallComments.value))
+    provide('haveMore', computed(() => wallHaveMore.value))
 
     const responseData = (response: any) => response?.data?.data || {}
     const isSelf = computed(() => {
@@ -252,9 +292,79 @@ export default defineComponent({
       }
     }
 
-    const switchTab = (next: 'articles' | 'talks' | 'series' | 'collections') => {
+    const loadAuthorAlbums = async () => {
+      if (!author.value) return
+      loadingAlbums.value = true
+      activeAlbum.value = null
+      albumPhotos.value = []
+      try {
+        const data = responseData(await api.getAuthorAlbums(handle))
+        albums.value = Array.isArray(data) ? data : []
+      } catch {
+        albums.value = []
+      } finally {
+        loadingAlbums.value = false
+      }
+    }
+
+    const openAlbum = async (album: any) => {
+      activeAlbum.value = album
+      albumPhotos.value = []
+      loadingAlbums.value = true
+      try {
+        const data = responseData(await api.getAuthorAlbumPhotos(handle, Number(album.id)))
+        albumPhotos.value = Array.isArray(data.photos) ? data.photos : []
+      } catch {
+        albumPhotos.value = []
+      } finally {
+        loadingAlbums.value = false
+      }
+    }
+
+    const loadProfileWall = async (reset = false) => {
+      if (!author.value?.id) return
+      if (reset) {
+        wallPage.value = 1
+        wallComments.value = []
+      }
+      commentStore.type = 7
+      commentStore.topicId = String(author.value.id)
+      try {
+        const response = await api.getComments({ type: 7, topicId: author.value.id, current: wallPage.value, size: 7 })
+        const next = pageRecords(response.data)
+        wallComments.value = reset ? next : wallComments.value.concat(next)
+        wallHaveMore.value = wallComments.value.length < pageCount(response.data)
+        wallPage.value += 1
+      } catch {
+        if (reset) wallComments.value = []
+        wallHaveMore.value = false
+      }
+    }
+
+    const loadProfileWallReplies = async (index: number) => {
+      const comment = wallComments.value[index]
+      if (!comment?.id) return
+      try {
+        const response = await api.getRepliesByCommentId(comment.id)
+        comment.replyDTOs = response.data?.data || []
+      } catch {
+        comment.replyDTOs = []
+      }
+    }
+
+    const onProfileWallRefresh = () => void loadProfileWall(true)
+    const onProfileWallReplies = (index: unknown): void => { void loadProfileWallReplies(Number(index)) }
+    const onProfileWallMore = () => void loadProfileWall(false)
+
+    const switchTab = (next: 'articles' | 'talks' | 'series' | 'collections' | 'albums' | 'wall') => {
       tab.value = next
-      void loadContent(true)
+      if (next === 'albums') {
+        void loadAuthorAlbums()
+      } else if (next === 'wall') {
+        void loadProfileWall(true)
+      } else {
+        void loadContent(true)
+      }
     }
     const loadMore = () => {
       page.value += 1
@@ -336,20 +446,28 @@ export default defineComponent({
           document.execCommand('copy')
           input.remove()
         }
-        ElMessage.success('公开主页链接已复制')
+        notify.success('公开主页链接已复制')
       } catch {
-        ElMessage.error('分享失败，请手动复制浏览器地址')
+        notify.error('分享失败，请手动复制浏览器地址')
       }
     }
     onMounted(async () => {
+      emitter.on('profileFetchComment', onProfileWallRefresh)
+      emitter.on('profileFetchReplies', onProfileWallReplies)
+      emitter.on('profileLoadMore', onProfileWallMore)
       await loadAuthor()
       await Promise.allSettled([loadHighlights(), loadContent(true)])
+    })
+    onUnmounted(() => {
+      emitter.off('profileFetchComment', onProfileWallRefresh)
+      emitter.off('profileFetchReplies', onProfileWallReplies)
+      emitter.off('profileLoadMore', onProfileWallMore)
     })
 
     return {
       author, records, highlights, highlightSeries, highlightCollections, highlightTalks,
-      hasCuratedContent, tab, loading, loadingAuthor, error, total,
-      defaultAvatar, switchTab, loadMore, excerpt, formatDate, isSelf, followChanged, shareProfile
+      albums, activeAlbum, albumPhotos, loadingAlbums, hasCuratedContent, tab, loading, loadingAuthor, error, total, renderAbout,
+      defaultAvatar, switchTab, loadMore, openAlbum, excerpt, formatDate, isSelf, followChanged, shareProfile
     }
   }
 })
@@ -396,6 +514,11 @@ export default defineComponent({
 .author-hero h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.6rem); letter-spacing: -.05em; }
 .author-hero__handle { display: inline-block; margin-top: 6px; color: var(--text-ob-dim); font-size: 13px; }
 .author-hero__intro { max-width: 620px; margin: 18px 0 8px; color: var(--text-ob-dim); line-height: 1.75; }
+.author-long-about { max-width: 720px; margin: 14px 0; line-height: 1.8; }
+.author-long-about :deep(p) { margin: 0 0 10px; }
+.author-profile-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.author-profile-links a { display: grid; gap: 2px; padding: 7px 11px; border: 1px solid var(--border-hairline); border-radius: 12px; }
+.author-profile-links small { color: var(--text-ob-dim); font-size: 10px; }
 .author-hero__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .author-hero__copy a { display: inline-flex; align-items: center; min-height: 24px; color: var(--color-ob); font-size: 12px; text-decoration: none; }
 .author-hero__action { min-height: 36px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--color-ob) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-ob) 16%, transparent); color: var(--color-ob); font: inherit; font-size: 12px; cursor: pointer; }

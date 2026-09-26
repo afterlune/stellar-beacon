@@ -55,6 +55,30 @@ func GetNewsletterHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, newsletterService.Health(c))
 }
 
+func GetSystemHealth(c *gin.Context) {
+	c.JSON(http.StatusOK, systemMonitorService.Snapshot(c))
+}
+
+func GetSystemHealthTrends(c *gin.Context) {
+	c.JSON(http.StatusOK, systemMonitorService.Trends(c))
+}
+
+func GetSystemHealthTimeline(c *gin.Context) {
+	c.JSON(http.StatusOK, systemMonitorService.Timeline(c))
+}
+
+func ListSystemMonitorIncidents(c *gin.Context) {
+	c.JSON(http.StatusOK, systemMonitorService.Incidents(c))
+}
+
+func GetSystemMonitorIncident(c *gin.Context) {
+	c.JSON(http.StatusOK, systemMonitorService.Incident(c))
+}
+
+func AddSystemMonitorIncidentUpdate(c *gin.Context) {
+	c.JSON(http.StatusOK, systemMonitorService.AddIncidentUpdate(c))
+}
+
 func RenderAuthorSEO(c *gin.Context) {
 	seoService.RenderAuthorHTML(c)
 }

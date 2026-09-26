@@ -46,6 +46,7 @@
   --admin-ink-strong: #0f1a2e;
   --admin-muted: #64748b;
   --admin-subtle: #94a3b8;
+  --admin-readable-subtle: #5f6b7a;
   --admin-border: #e4e9f2;
   --admin-border-strong: #ccd6e5;
   --admin-border-hover: #b6c2d6;
@@ -751,7 +752,7 @@ a:hover {
 .admin-nav-user-copy span {
   display: block;
   overflow: hidden;
-  color: var(--admin-subtle);
+  color: var(--admin-readable-subtle);
   font-size: 10.5px;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -910,7 +911,7 @@ a:hover {
   padding: 0 9px 0 10px;
   border: 1px solid var(--admin-border);
   border-radius: 9px;
-  color: var(--admin-subtle);
+  color: var(--admin-readable-subtle);
   background: var(--admin-surface-soft);
   font-size: 12.5px;
   cursor: pointer;
@@ -931,7 +932,7 @@ a:hover {
   padding: 1px 5px;
   border: 1px solid var(--admin-border);
   border-radius: 5px;
-  color: var(--admin-subtle);
+  color: var(--admin-readable-subtle);
   background: var(--admin-surface);
   font-family: inherit;
   font-size: 10px;
@@ -1296,8 +1297,69 @@ a:hover {
   width: min(280px, 100%);
 }
 
+.admin-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface-soft);
+}
+
+.admin-filter-button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--admin-readable-subtle);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease),
+    box-shadow var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-filter-button:hover {
+  color: var(--admin-ink);
+  background: var(--admin-surface);
+}
+
+.admin-filter-button.is-active {
+  color: var(--admin-brand-ink);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-xs);
+}
+
+.admin-filter-select {
+  display: inline-flex;
+  align-items: center;
+}
+
+.admin-filter-select select {
+  min-height: 30px;
+  max-width: 220px;
+  padding: 0 28px 0 9px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  color: var(--admin-ink);
+  background: var(--admin-surface-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.admin-filter-button:focus-visible,
+.admin-filter-select select:focus-visible {
+  outline: 2px solid var(--admin-brand);
+  outline-offset: 2px;
+}
+
 .admin-toolbar-caption {
-  color: var(--admin-muted);
+  color: var(--admin-readable-subtle);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1570,9 +1632,56 @@ a:hover {
 }
 
 .admin-id-cell {
-  color: var(--admin-subtle);
+  color: var(--admin-readable-subtle);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
+}
+
+.admin-table-shell .arco-table-th .arco-table-th-title,
+.admin-table-shell .arco-table-th .arco-auto-tooltip-content {
+  color: var(--admin-readable-subtle);
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-green {
+  color: #166534;
+  background-color: #dcfce7;
+  border-color: #86efac;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-orange {
+  color: #9a3412;
+  background-color: #ffedd5;
+  border-color: #fdba74;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-arcoblue {
+  color: #1e40af;
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-gray {
+  color: #475569;
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-red {
+  color: #991b1b;
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-purple {
+  color: #6b21a8;
+  background-color: #f3e8ff;
+  border-color: #d8b4fe;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-cyan {
+  color: #155e75;
+  background-color: #cffafe;
+  border-color: #67e8f9;
 }
 
 .arco-tag {
@@ -2137,9 +2246,9 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 
-.admin-rank-item:nth-child(1) .admin-rank-index { color: #b07d1a; background: #fdf3dd; }
-.admin-rank-item:nth-child(2) .admin-rank-index { color: #6b7683; background: #eef1f5; }
-.admin-rank-item:nth-child(3) .admin-rank-index { color: #a2632f; background: #fbeee2; }
+.admin-rank-item:nth-child(1) .admin-rank-index { color: #7a5600; background: #fdf3dd; }
+.admin-rank-item:nth-child(2) .admin-rank-index { color: #475569; background: #eef1f5; }
+.admin-rank-item:nth-child(3) .admin-rank-index { color: #7c4714; background: #fbeee2; }
 
 .admin-rank-title {
   min-width: 0;
@@ -3094,6 +3203,7 @@ a:hover {
   --admin-ink-strong: #f3f6ff;
   --admin-muted: #8b97ba;
   --admin-subtle: #5f6b8f;
+  --admin-readable-subtle: #9aa7c7;
   --admin-border: #1d2740;
   --admin-border-strong: #2b3757;
   --admin-border-hover: #3a4770;

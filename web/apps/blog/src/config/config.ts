@@ -73,15 +73,6 @@ export default {
       children: []
     },
     {
-      name: 'About',
-      path: '/about',
-      i18n: {
-        cn: '关于',
-        en: 'About'
-      },
-      children: []
-    },
-    {
       name: 'Archives',
       path: '/archives',
       i18n: {
@@ -99,23 +90,5 @@ export default {
       },
       children: []
     },
-    {
-      name: 'Message',
-      path: '/message',
-      i18n: {
-        cn: '留言',
-        en: 'Message'
-      },
-      children: []
-    },
-    {
-      name: 'Friends',
-      path: '/friends',
-      i18n: {
-        cn: '友链',
-        en: 'Friends'
-      },
-      children: []
-    }
   ]
 }

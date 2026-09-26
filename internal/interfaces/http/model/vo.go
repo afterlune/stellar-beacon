@@ -2,6 +2,8 @@ package model
 
 import (
 	"time"
+
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 )
 
 type AboutVO struct {
@@ -58,10 +60,12 @@ type ArticleVO struct {
 }
 
 type StudioProfileVO struct {
-	Handle   string `json:"handle"`
-	Nickname string `json:"nickname"`
-	Intro    string `json:"intro"`
-	Website  string `json:"website"`
+	Handle   string             `json:"handle"`
+	Nickname string             `json:"nickname"`
+	Intro    string             `json:"intro"`
+	Website  string             `json:"website"`
+	About    string             `json:"about"`
+	Links    []port.ProfileLink `json:"links"`
 }
 
 type StudioActivationVO struct {
@@ -329,6 +333,15 @@ type PhotoAlbumVO struct {
 	Status     int    `json:"status"`
 }
 
+type StudioPhotosVO struct {
+	AlbumId   int      `json:"albumId"`
+	PhotoUrls []string `json:"photoUrls"`
+}
+
+type StudioDeletePhotosVO struct {
+	Ids []int `json:"ids"`
+}
+
 type PhotoInfoVO struct {
 	Id        int    `json:"id"`
 	PhotoName string `json:"photoName"`
@@ -436,29 +449,13 @@ type UserVO struct {
 type WebsiteConfigVO struct {
 	Name              string `json:"name"`
 	EnglishName       string `json:"englishName"`
-	Author            string `json:"author"`
-	AuthorAvatar      string `json:"authorAvatar"`
-	AuthorIntro       string `json:"authorIntro"`
 	Logo              string `json:"logo"`
 	MultiLanguage     int    `json:"multiLanguage"`
 	Notice            string `json:"notice"`
 	WebsiteCreateTime string `json:"websiteCreateTime"`
 	BeianNumber       string `json:"beianNumber"`
-	Github            string `json:"github"`
-	Gitee             string `json:"gitee"`
-	QQ                string `json:"qq"`
-	WeChat            string `json:"weChat"`
-	Weibo             string `json:"weibo"`
-	Csdn              string `json:"csdn"`
-	Zhihu             string `json:"zhihu"`
-	Juejin            string `json:"juejin"`
-	Twitter           string `json:"twitter"`
-	Stackoverflow     string `json:"stackoverflow"`
 	TouristAvatar     string `json:"touristAvatar"`
 	UserAvatar        string `json:"userAvatar"`
 	IsCommentReview   int    `json:"isCommentReview"`
 	IsEmailNotice     int    `json:"isEmailNotice"`
-	IsReward          int    `json:"isReward"`
-	WeiXinQRCode      string `json:"weiXinQRCode"`
-	AlipayQRCode      string `json:"alipayQRCode"`
 }

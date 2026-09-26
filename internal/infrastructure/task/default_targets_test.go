@@ -65,7 +65,7 @@ func TestRunScheduledPublishQueuesRetriesAndSuppressesHiddenContent(t *testing.T
 	}
 	newsletter := &flakyNewsletter{failArticleID: 12}
 
-	result, err := runScheduledPublish(context.Background(), repo, newsletter)
+	result, err := runScheduledPublish(context.Background(), repo, newsletter, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestRunScheduledPublishUsesTerminalFailureAfterFinalRetryGap(t *testing.T) 
 	repo := &fakeScheduledPublishRepo{due: []port.ScheduledPublish{{RecordID: 4, ArticleID: 14, NotificationAttempts: len(scheduledPublishRetryDelays)}}}
 	newsletter := &flakyNewsletter{failArticleID: 14}
 
-	if _, err := runScheduledPublish(context.Background(), repo, newsletter); err != nil {
+	if _, err := runScheduledPublish(context.Background(), repo, newsletter, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(repo.failed) != 1 || repo.failed[0].retryAt != nil {

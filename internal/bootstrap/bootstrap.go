@@ -3,12 +3,15 @@ package bootstrap
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/cache"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/mail/smtp"
+	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/monitoring"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/notification"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
@@ -30,6 +33,7 @@ type Runtime struct {
 	newsletter     *service.MyNewsletterService
 	newsletterDone chan struct{}
 	commentQueue   *notification.CommentQueue
+	monitorDone    chan struct{}
 
 	stopOnce sync.Once
 	stopErr  error
@@ -63,6 +67,11 @@ func Initialize(parent context.Context) (*Runtime, error) {
 
 	site := repository.NewSiteInfoRepo(engine)
 	article := repository.NewArticleRepo(engine)
+	articleSearchService, err := service.NewArticleSearchService(article, searcher)
+	if err != nil {
+		cancel()
+		return nil, errors.Unavailable("bootstrap.service.article_search", err)
+	}
 	platform := repository.NewPlatformRepo(engine)
 	articleReaction := repository.NewArticleReactionRepo(engine)
 	series := repository.NewSeriesRepo(engine)
@@ -94,6 +103,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	collectionSubRepo := repository.NewCollectionSubscriptionRepo(engine)
 	collectionReactionRepo := repository.NewCollectionReactionRepo(engine)
 	commentReactionRepo := repository.NewCommentReactionRepo(engine)
+	monitorRepo := repository.NewSystemMonitorRepository(engine)
 
 	service.ConfigureRepositories(category, job, jobLog, errorLog, operationLog, friendLink, menu, resource, role, tag)
 	service.ConfigureFriendLinkLimiter(redisCache)
@@ -138,7 +148,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	}
 	platformService, err := service.NewPlatformService(service.PlatformServiceDeps{
 		Repo: platform, Articles: article, Newsletter: newsletterService, Storage: ossStorage, Cache: redisCache,
-		Reactions: articleReaction, Comments: comment,
+		Reactions: articleReaction, Comments: comment, SearchIndex: articleSearchService,
 	})
 	if err != nil {
 		cancel()
@@ -151,6 +161,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		Cache:            redisCache,
 		Storage:          ossStorage,
 		Search:           searcher,
+		SearchIndex:      articleSearchService,
 		Newsletter:       newsletterService,
 	})
 	if err != nil {
@@ -265,12 +276,99 @@ func Initialize(parent context.Context) (*Runtime, error) {
 	scheduler := task.NewScheduler(job, jobLog, redisCache)
 	if err := task.RegisterDefaultTargets(scheduler, task.DefaultTargetsDeps{
 		Publishes: article, Newsletter: newsletterService, Growth: growthRepo,
-		JobLogs: jobLog, UserAreas: userAuthService, StudioActivation: platform,
+		JobLogs: jobLog, UserAreas: userAuthService, StudioActivation: platform, Search: articleSearchService,
 	}); err != nil {
 		cancel()
 		return nil, errors.Unavailable("bootstrap.scheduler.targets", err)
 	}
 	jobService := service.NewJobService(job, scheduler)
+	monitorProbes := []monitoring.Probe{
+		{
+			Name: "postgresql", Required: true,
+			Check: func(ctx context.Context) (string, string) {
+				if err := engine.PingContext(ctx); err != nil {
+					return port.MonitorStatusUnhealthy, "postgresUnavailable"
+				}
+				return port.MonitorStatusHealthy, "connected"
+			},
+		},
+		{
+			Name: "redis",
+			Check: func(ctx context.Context) (string, string) {
+				if err := redisCache.Ping(ctx); err != nil {
+					return port.MonitorStatusDegraded, "redisUnavailable"
+				}
+				return port.MonitorStatusHealthy, "connected"
+			},
+		},
+		{
+			Name: "meilisearch",
+			Check: func(ctx context.Context) (string, string) {
+				if err := searcher.CheckHealth(ctx); err != nil {
+					return port.MonitorStatusDegraded, "meilisearchUnavailable"
+				}
+				return port.MonitorStatusHealthy, "connected"
+			},
+		},
+		{
+			Name: "objectStorage",
+			Check: func(ctx context.Context) (string, string) {
+				checker, ok := ossStorage.(port.ObjectStorageHealthChecker)
+				if !ok {
+					return port.MonitorStatusUnknown, "storageUnsupported"
+				}
+				if err := checker.CheckHealth(ctx); err != nil {
+					return port.MonitorStatusDegraded, "storageUnavailable"
+				}
+				return port.MonitorStatusHealthy, "storageConnected"
+			},
+		},
+		{
+			Name: "smtp",
+			Check: func(ctx context.Context) (string, string) {
+				status := smtpMailer.Check(ctx)
+				if !status.Configured {
+					return port.MonitorStatusNotConfigured, "smtpNotConfigured"
+				}
+				if !status.Reachable {
+					return port.MonitorStatusDegraded, "smtpUnavailable"
+				}
+				return port.MonitorStatusHealthy, "smtpConnected"
+			},
+		},
+	}
+	monitorCollector := monitoring.NewCollector(monitorRepo, monitoring.DefaultRequestMetrics, monitorProbes, func(ctx context.Context) []port.MonitorWorker {
+		components := appruntime.Snapshot().Components
+		workerStatus := func(name string) string {
+			if components[name] == "ready" {
+				return port.MonitorStatusHealthy
+			}
+			if components[name] == "stopped" || components[name] == "stopping" {
+				return port.MonitorStatusUnhealthy
+			}
+			return port.MonitorStatusUnknown
+		}
+		workers := []port.MonitorWorker{
+			{Name: "scheduler", Status: port.MonitorStatusUnhealthy, Running: scheduler.RunningCount(), UpdatedAt: time.Now()},
+			{Name: "newsletter", Status: workerStatus("newsletter"), UpdatedAt: time.Now()},
+			{Name: "databaseLogWriter", Status: workerStatus("logQueue"), UpdatedAt: time.Now()},
+			commentQueue.MonitorWorker(),
+		}
+		if scheduler.Ready() {
+			workers[0].Status = port.MonitorStatusHealthy
+		}
+		statsCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		stats, err := newsletterRepo.Stats(statsCtx)
+		cancel()
+		if err == nil {
+			workers[1].Queued = stats.Queued
+			workers[1].Failed = stats.Failed
+			workers[1].Running = int(stats.Sending)
+		} else {
+			workers[1].Status = port.MonitorStatusDegraded
+		}
+		return workers
+	})
 
 	api.ConfigureServices(api.Services{
 		Article:            articleService,
@@ -307,6 +405,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		CollectionSub:      collectionSubService,
 		CollectionReaction: collectionReactionService,
 		CommentReaction:    commentReactionService,
+		SystemMonitor:      service.NewSystemMonitorService(monitorCollector),
 	})
 	middlewares.ConfigureRoleRepository(role)
 	middlewares.ConfigureUserAuthService(userAuthService)
@@ -321,9 +420,14 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		return nil, errors.Unavailable("bootstrap.scheduler.start", err)
 	}
 	appruntime.SetComponent("scheduler", "ready")
+	monitorDone := make(chan struct{})
+	go func() {
+		defer close(monitorDone)
+		monitorCollector.Run(runCtx)
+	}()
 	return &Runtime{
 		cancel: cancel, scheduler: scheduler, newsletter: newsletterService,
-		newsletterDone: newsletterDone, commentQueue: commentQueue,
+		newsletterDone: newsletterDone, commentQueue: commentQueue, monitorDone: monitorDone,
 	}, nil
 }
 
@@ -340,6 +444,15 @@ func (r *Runtime) Stop(ctx context.Context) error {
 		appruntime.SetComponent("scheduler", "stopped")
 		if r.cancel != nil {
 			r.cancel()
+		}
+		if r.monitorDone != nil {
+			select {
+			case <-r.monitorDone:
+			case <-ctx.Done():
+				if r.stopErr == nil {
+					r.stopErr = ctx.Err()
+				}
+			}
 		}
 		if r.newsletterDone != nil {
 			select {

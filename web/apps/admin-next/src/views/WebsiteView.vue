@@ -65,25 +65,6 @@
             </div>
           </a-form>
 
-          <a-form v-else-if="activeSection === 'author'" class="config-form" :model="form" layout="vertical" @submit-success="save">
-            <div class="config-grid">
-              <a-form-item field="author" :label="t('site.website.author')">
-                <a-input v-model="form.author" :placeholder="t('site.website.authorPlaceholder')" />
-              </a-form-item>
-              <a-form-item field="authorAvatar" :label="t('site.website.authorAvatar')">
-                <a-input v-model="form.authorAvatar" :placeholder="t('site.website.imageUrlPlaceholder')" />
-              </a-form-item>
-            </div>
-            <a-form-item field="authorIntro" :label="t('site.website.authorIntro')">
-              <a-textarea v-model="form.authorIntro" :auto-size="{ minRows: 2, maxRows: 5 }" :placeholder="t('site.website.authorIntroPlaceholder')" />
-            </a-form-item>
-            <div class="config-grid">
-              <a-form-item v-for="field in socialFields" :key="field.key" :label="field.label">
-                <a-input v-model="form[field.key]" :placeholder="field.placeholder" />
-              </a-form-item>
-            </div>
-          </a-form>
-
           <a-form v-else-if="activeSection === 'images'" class="config-form" :model="form" layout="vertical" @submit-success="save">
             <a-form-item field="logo" :label="t('site.website.logo')">
               <div class="config-image-field">
@@ -122,13 +103,6 @@
                 </div>
                 <a-switch v-model="switches.isEmailNotice" :checked-value="1" :unchecked-value="0" />
               </div>
-              <div class="config-switch-item">
-                <div>
-                  <strong>{{ t('site.website.reward') }}</strong>
-                  <small>{{ t('site.website.rewardHint') }}</small>
-                </div>
-                <a-switch v-model="switches.isReward" :checked-value="1" :unchecked-value="0" />
-              </div>
             </div>
           </a-form>
         </div>
@@ -166,45 +140,25 @@ import { isHttpUrl } from '@/utils/format'
  * payload stays complete even when the server adds new configuration keys.
  */
 const TEXT_FIELDS = [
-  'name', 'englishName', 'author', 'authorAvatar', 'authorIntro', 'logo', 'notice',
-  'websiteCreateTime', 'beianNumber', 'github', 'gitee', 'qq', 'weChat', 'weibo',
-  'csdn', 'zhihu', 'juejin', 'twitter', 'stackoverflow', 'touristAvatar',
-  'userAvatar', 'weiXinQRCode', 'alipayQRCode'
+  'name', 'englishName', 'logo', 'notice', 'websiteCreateTime', 'beianNumber',
+  'touristAvatar', 'userAvatar'
 ] as const
 
-const SWITCH_FIELDS = ['multiLanguage', 'isCommentReview', 'isEmailNotice', 'isReward'] as const
-
-// 标签与提示都取自词典，因此这三个列表必须是 computed，语言切换后才会重新求值。
-const socialFields = computed<SocialField[]>(() => [
-  { key: 'github', label: 'GitHub', placeholder: 'https://github.com/…' },
-  { key: 'gitee', label: 'Gitee', placeholder: 'https://gitee.com/…' },
-  { key: 'qq', label: 'QQ', placeholder: t('site.website.qqPlaceholder') },
-  { key: 'weChat', label: t('site.website.wechat'), placeholder: t('site.website.wechatPlaceholder') },
-  { key: 'weibo', label: t('site.website.weibo'), placeholder: 'https://weibo.com/…' },
-  { key: 'csdn', label: 'CSDN', placeholder: 'https://blog.csdn.net/…' },
-  { key: 'zhihu', label: t('site.website.zhihu'), placeholder: 'https://www.zhihu.com/…' },
-  { key: 'juejin', label: t('site.website.juejin'), placeholder: 'https://juejin.cn/…' },
-  { key: 'twitter', label: 'Twitter', placeholder: 'https://twitter.com/…' },
-  { key: 'stackoverflow', label: 'Stack Overflow', placeholder: 'https://stackoverflow.com/…' }
-])
+const SWITCH_FIELDS = ['multiLanguage', 'isCommentReview', 'isEmailNotice'] as const
 
 const imageFields = computed<ImageField[]>(() => [
   { key: 'userAvatar', label: t('site.website.userAvatar') },
-  { key: 'touristAvatar', label: t('site.website.touristAvatar') },
-  { key: 'weiXinQRCode', label: t('site.website.wechatQr') },
-  { key: 'alipayQRCode', label: t('site.website.alipayQr') }
+  { key: 'touristAvatar', label: t('site.website.touristAvatar') }
 ])
 
 const sections = computed<SectionDef[]>(() => [
   { key: 'basic', label: t('site.website.sectionBasic'), hint: t('site.website.sectionBasicHint') },
-  { key: 'author', label: t('site.website.sectionAuthor'), hint: t('site.website.sectionAuthorHint') },
   { key: 'images', label: t('site.website.sectionImages'), hint: t('site.website.sectionImagesHint') },
   { key: 'interaction', label: t('site.website.sectionInteraction'), hint: t('site.website.sectionInteractionHint') }
 ])
 
-type SectionKey = 'basic' | 'author' | 'images' | 'interaction'
+type SectionKey = 'basic' | 'images' | 'interaction'
 
-type SocialField = { key: TextField; label: string; placeholder: string }
 type ImageField = { key: TextField; label: string }
 type SectionDef = { key: SectionKey; label: string; hint: string }
 

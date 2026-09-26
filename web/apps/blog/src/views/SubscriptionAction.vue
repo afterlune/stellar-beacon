@@ -1,12 +1,12 @@
 <template>
-  <main class="subscription-action">
+  <section class="subscription-action">
     <div class="subscription-action__panel">
       <p class="subscription-action__eyebrow">STELLAR BEACON / {{ mode === 'confirm' ? 'CONFIRM' : 'UNSUBSCRIBE' }}</p>
       <h1>{{ mode === 'confirm' ? t('newsletter.confirmTitle') : t('newsletter.unsubscribeTitle') }}</h1>
       <p>{{ status === 'loading' ? t('newsletter.processing') : status === 'success' ? t('newsletter.done') : t('newsletter.failed') }}</p>
       <router-link to="/">{{ t('settings.tips-back-to-home') }}</router-link>
     </div>
-  </main>
+  </section>
 </template>
 
 <script setup lang="ts">

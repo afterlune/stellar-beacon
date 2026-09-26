@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-start self-stretch relative" @click="handleClick">
+  <router-link class="flex items-start self-stretch relative" to="/" @click="handleClick">
     <div class="logo-mark flex items-center gap-3 relative py-4 z-10 cursor-pointer">
       <BrandMark :size="38" />
       <span class="logo-copy flex flex-col justify-center">
@@ -11,15 +11,13 @@
         </span>
       </span>
     </div>
-  </div>
+  </router-link>
 </template>
 
 <script lang="ts">
 import { useAppStore } from '@/stores/app'
 import { computed } from '@vue/reactivity'
 import { defineComponent } from 'vue'
-import { useRouter } from 'vue-router'
-import { useCommonStore } from '@/stores/common'
 import { useNavigatorStore } from '@/stores/navigator'
 import BrandMark from '@/components/BrandMark.vue'
 
@@ -28,12 +26,9 @@ export default defineComponent({
   components: { BrandMark },
   setup() {
     const appStore = useAppStore()
-    const commonStore = useCommonStore()
     const navigatorStore = useNavigatorStore()
-    const router = useRouter()
     const handleClick = () => {
-      router.push({ path: '/' })
-      if (commonStore.isMobile && navigatorStore.openMenu === true) {
+      if (navigatorStore.openMenu) {
         navigatorStore.toggleMobileMenu()
       }
     }
@@ -50,6 +45,7 @@ export default defineComponent({
 <style lang="scss" scoped>
 .logo-mark {
   color: var(--header-fg);
+  text-decoration: none;
   transition: color 250ms ease;
 }
 

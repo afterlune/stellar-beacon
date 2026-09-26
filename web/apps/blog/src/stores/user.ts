@@ -11,7 +11,16 @@ export const useUserStore = defineStore('userStore', {
       page: 1 as any
     }
   },
-  actions: {},
+  actions: {
+    clearSession() {
+      this.userVisible = false
+      this.userInfo = ''
+      this.token = ''
+      this.accessArticles = []
+      this.tab = 0
+      this.page = 1
+    }
+  },
   persist: {
     storage: window.sessionStorage
   }

@@ -17,6 +17,19 @@ func repoSession(engine *xorm.Engine, ctx context.Context, operation string) (*x
 	return engine.Context(ctx), nil
 }
 
+// repoTransactionSession returns a caller-owned session for explicit
+// transactions. Engine.Context marks its sessions auto-close, which closes a
+// transaction after the first Get/Find call.
+func repoTransactionSession(engine *xorm.Engine, ctx context.Context, operation string) (*xorm.Session, error) {
+	if engine == nil {
+		return nil, apperrors.Unavailable(operation+".database", nil)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return engine.NewSession().Context(ctx), nil
+}
+
 // repoCtxErr keeps a disconnected caller from being reported as a service
 // failure. A canceled request reaches the driver as an opaque error
 // (driver.ErrBadConn, "pq: canceling statement due to user request"), so the

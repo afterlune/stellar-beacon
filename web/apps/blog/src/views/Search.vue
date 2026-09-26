@@ -48,13 +48,9 @@
       <p v-if="loading" class="search-page__status">{{ t('reactions.loading') }}</p>
       <p v-else-if="errorMessage" class="search-page__status is-error" role="alert">{{ errorMessage }}</p>
       <p v-else-if="query && articles.length === 0" class="search-page__status">{{ t('search.empty') }}</p>
-      <ul v-else-if="articles.length" class="search-page__list">
+      <ul v-else-if="articles.length" class="article-feed-grid search-page__list">
         <li v-for="result in articles" :key="result.id">
-          <router-link :to="`/articles/${result.id}`">
-            <span class="search-page__result-title" v-html="safeSearchHighlight(result.articleTitle)" />
-            <span class="search-page__result-excerpt" v-html="safeSearchHighlight(result.articleContent)" />
-            <span class="search-page__result-action">{{ t('search.openArticle') }} →</span>
-          </router-link>
+          <ArticleFeedCard :data="result" />
         </li>
       </ul>
       <Paginator
@@ -74,6 +70,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { ArticleSearchResult } from '@stellar-beacon/api-contract'
 
 import { PageHeader } from '@/components/PageHeader'
+import { ArticleFeedCard } from '@/components/ArticleCard'
 import Paginator from '@/components/Paginator.vue'
 import api from '@/api/api'
 import { useDiscoveryStore, type DiscoveryTopic } from '@/stores/discovery'
@@ -83,7 +80,7 @@ const PAGE_SIZE = 20
 
 export default defineComponent({
   name: 'Search',
-  components: { PageHeader, Paginator },
+  components: { PageHeader, ArticleFeedCard, Paginator },
   setup() {
     const route = useRoute()
     const router = useRouter()

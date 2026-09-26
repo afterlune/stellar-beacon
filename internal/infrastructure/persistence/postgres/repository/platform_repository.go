@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -484,29 +485,36 @@ func (r *MyPlatformRepo) GetStudioProfile(ctx context.Context, userID int) (port
 	}
 	return port.StudioProfile{
 		Handle: user.Handle, Nickname: user.Nickname, Avatar: user.Avatar,
-		Intro: user.Intro, Website: user.Website,
+		Intro: user.Intro, Website: user.Website, About: user.About,
+		Links: decodeProfileLinks(user.ProfileLinksJSON),
 	}, nil
 }
-func (r *MyPlatformRepo) UpdateAuthorProfile(ctx context.Context, userID int, handle, nickname, intro, website string) error {
-	handle = strings.ToLower(strings.TrimSpace(handle))
-	nickname = strings.TrimSpace(nickname)
-	if !validPublicHandle(handle) {
+
+func (r *MyPlatformRepo) UpdateAuthorProfile(ctx context.Context, userID int, profile port.StudioProfile) error {
+	profile.Handle = strings.ToLower(strings.TrimSpace(profile.Handle))
+	profile.Nickname = strings.TrimSpace(profile.Nickname)
+	if !validPublicHandle(profile.Handle) {
 		return apperrors.Invalid("platform.profile.handle", "handle is invalid")
 	}
-	if nickname == "" {
+	if profile.Nickname == "" {
 		return apperrors.Invalid("platform.profile.nickname", "nickname is required")
+	}
+	linksJSON, err := json.Marshal(profile.Links)
+	if err != nil {
+		return apperrors.Invalid("platform.profile.links", "links could not be encoded")
 	}
 	return ormInit.WithEngineTx(r.engine, ctx, func(session *xorm.Session) error {
 		var existing entity.TUserInfo
-		found, err := session.Where("lower(handle) = lower(?) AND id <> ?", handle, userID).Get(&existing)
+		found, err := session.Where("lower(handle) = lower(?) AND id <> ?", profile.Handle, userID).Get(&existing)
 		if err != nil {
 			return apperrors.Unavailable("platform.profile.handle.unique", err)
 		}
 		if found {
 			return apperrors.Conflict("platform.profile.handle", "handle already exists")
 		}
-		affected, err := session.ID(userID).Cols("handle", "nickname", "intro", "website").Update(&entity.TUserInfo{
-			Handle: handle, Nickname: nickname, Intro: intro, Website: website,
+		affected, err := session.ID(userID).Cols("handle", "nickname", "intro", "website", "about", "profile_links_json").Update(&entity.TUserInfo{
+			Handle: profile.Handle, Nickname: profile.Nickname, Intro: profile.Intro,
+			Website: profile.Website, About: profile.About, ProfileLinksJSON: string(linksJSON),
 		})
 		if err != nil {
 			return apperrors.Unavailable("platform.profile.update", err)
@@ -1522,5 +1530,15 @@ func toPublicAuthor(user entity.TUserInfo) port.PublicAuthor {
 		Avatar:   user.Avatar,
 		Intro:    user.Intro,
 		Website:  user.Website,
+		About:    user.About,
+		Links:    decodeProfileLinks(user.ProfileLinksJSON),
 	}
+}
+
+func decodeProfileLinks(raw string) []port.ProfileLink {
+	var links []port.ProfileLink
+	if raw == "" || json.Unmarshal([]byte(raw), &links) != nil {
+		return []port.ProfileLink{}
+	}
+	return links
 }

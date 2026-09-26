@@ -128,6 +128,18 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyStudioActivationReminderSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyArticleSearchReconcileJob(ctx, engine); err != nil {
+		return err
+	}
+	if err := applySystemMonitorSchema(ctx, engine); err != nil {
+		return err
+	}
+	if err := applySystemMonitorHistorySchema(ctx, engine); err != nil {
+		return err
+	}
+	if err := applyPerUserLegacyContentSchema(ctx, engine); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -293,7 +305,6 @@ var defaultMenus = []menuSeed{
 	{name: "文章管理", path: "/article-submenu", component: "Layout", icon: "article", order: 5},
 	{name: "消息管理", path: "/message-submenu", component: "Layout", icon: "message", order: 6},
 	{name: "说说管理", path: "/talk-submenu", component: "Layout", icon: "talk", order: 7},
-	{name: "相册管理", path: "/album-submenu", component: "Layout", icon: "album", order: 8},
 	{name: "系统管理", path: "/system-submenu", component: "Layout", icon: "settings", order: 9},
 	{name: "用户管理", path: "/users-submenu", component: "Layout", icon: "users", order: 10},
 	{name: "权限管理", path: "/permission-submenu", component: "Layout", icon: "permissions", order: 11},
@@ -312,11 +323,6 @@ var defaultMenus = []menuSeed{
 	{name: "说说列表", path: "/talk-list", component: "/talk/TalkList.vue", icon: "list", order: 1, parentPath: "/talk-submenu"},
 	{name: "发布说说", path: "/talks", component: "/talk/Talk.vue", icon: "pen", order: 2, parentPath: "/talk-submenu"},
 	{name: "修改说说", path: "/talks/:talkId", component: "/talk/Talk.vue", icon: "pen", order: 3, parentPath: "/talk-submenu", hidden: 1},
-	{name: "相册列表", path: "/albums", component: "/album/Album.vue", icon: "albums", order: 1, parentPath: "/album-submenu"},
-	{name: "照片管理", path: "/albums/:albumId", component: "/album/Photo.vue", icon: "photos", order: 2, parentPath: "/album-submenu", hidden: 1},
-	{name: "照片回收站", path: "/photos/delete", component: "/album/Delete.vue", icon: "delete", order: 3, parentPath: "/album-submenu", hidden: 1},
-	{name: "友链管理", path: "/links", component: "/friendLink/FriendLink.vue", icon: "links", order: 1, parentPath: "/system-submenu"},
-	{name: "关于我", path: "/about", component: "/about/About.vue", icon: "about", order: 2, parentPath: "/system-submenu"},
 	{name: "定时任务", path: "/quartz", component: "/quartz/Quartz.vue", icon: "schedule", order: 3, parentPath: "/system-submenu"},
 	{name: "网站配置", path: "/website", component: "/website/Website.vue", icon: "website", order: 4, parentPath: "/system-submenu"},
 	{name: "用户列表", path: "/users", component: "/user/User.vue", icon: "users", order: 1, parentPath: "/users-submenu"},
@@ -1934,6 +1940,302 @@ func applyStudioActivationReminderSchema(ctx context.Context, engine *xorm.Engin
 	return nil
 }
 
+// applyArticleSearchReconcileJob registers the recurring search repair job.
+// The index itself lives in Meilisearch, so this migration only owns the
+// durable scheduler entry.
+func applyArticleSearchReconcileJob(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 31)").Get(&applied); err != nil {
+		return fmt.Errorf("check article search reconcile migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin article search reconcile migration: %w", err)
+	}
+	defer session.Rollback()
+	if _, err := session.Exec(`
+		INSERT INTO t_job (job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, remark, create_time, update_time)
+		SELECT ?, ?, ?, ?, 3, 0, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+		WHERE NOT EXISTS (SELECT 1 FROM t_job WHERE invoke_target = ?)
+	`, "对账文章搜索索引", "系统", "article.searchReconcile", "*/5 * * * *", "每 5 分钟修复 Meilisearch 中的缺失和陈旧文章文档", "article.searchReconcile"); err != nil {
+		return fmt.Errorf("seed article search reconcile job: %w", err)
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 31, "article-search-reconcile"); err != nil {
+		return fmt.Errorf("record article search reconcile migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit article search reconcile migration: %w", err)
+	}
+	return nil
+}
+
+// applySystemMonitorSchema stores per-instance minute aggregates for the
+// admin health dashboard. The retention policy is enforced by the collector.
+func applySystemMonitorSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 32)").Get(&applied); err != nil {
+		return fmt.Errorf("check system monitor migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin system monitor migration: %w", err)
+	}
+	defer session.Rollback()
+	if _, err := session.Exec(`
+		CREATE TABLE IF NOT EXISTS t_system_monitor_sample (
+			instance_id VARCHAR(120) NOT NULL,
+			captured_at TIMESTAMPTZ NOT NULL,
+			overall_status VARCHAR(24) NOT NULL,
+			components_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+			resources_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+			workers_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+			http_requests BIGINT NOT NULL DEFAULT 0,
+			http_2xx BIGINT NOT NULL DEFAULT 0,
+			http_3xx BIGINT NOT NULL DEFAULT 0,
+			http_4xx BIGINT NOT NULL DEFAULT 0,
+			http_5xx BIGINT NOT NULL DEFAULT 0,
+			http_avg_latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
+			http_p95_latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
+			http_sample_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
+			http_latency_buckets JSONB NOT NULL DEFAULT '[0,0,0,0,0,0,0]'::jsonb,
+			PRIMARY KEY (instance_id, captured_at)
+		)`); err != nil {
+		return fmt.Errorf("create system monitor sample table: %w", err)
+	}
+	if _, err := session.Exec(`CREATE INDEX IF NOT EXISTS idx_system_monitor_sample_captured_at ON t_system_monitor_sample (captured_at DESC)`); err != nil {
+		return fmt.Errorf("create system monitor sample index: %w", err)
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 32, "system-monitor-samples"); err != nil {
+		return fmt.Errorf("record system monitor migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit system monitor migration: %w", err)
+	}
+	return nil
+}
+
+// applySystemMonitorHistorySchema adds compact long-retention status samples
+// and operator-authored incident updates without extending metric retention.
+func applySystemMonitorHistorySchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 33)").Get(&applied); err != nil {
+		return fmt.Errorf("check system monitor history migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin system monitor history migration: %w", err)
+	}
+	defer session.Rollback()
+	statements := []string{
+		`ALTER TABLE t_system_monitor_sample ADD COLUMN IF NOT EXISTS replica_id VARCHAR(120)`,
+		`UPDATE t_system_monitor_sample SET replica_id = regexp_replace(instance_id, '-[a-z0-9]+$', '') WHERE replica_id IS NULL`,
+		`CREATE TABLE IF NOT EXISTS t_system_monitor_status_sample (
+			replica_id VARCHAR(120) NOT NULL,
+			instance_id VARCHAR(120) NOT NULL,
+			captured_at TIMESTAMPTZ NOT NULL,
+			states_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+			PRIMARY KEY (instance_id, captured_at)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_system_monitor_status_replica_time ON t_system_monitor_status_sample (replica_id, captured_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_system_monitor_status_captured_at ON t_system_monitor_status_sample (captured_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS t_system_monitor_incident (
+			id BIGSERIAL PRIMARY KEY,
+			replica_id VARCHAR(120) NOT NULL,
+			instance_id VARCHAR(120) NOT NULL,
+			scope VARCHAR(120) NOT NULL,
+			severity VARCHAR(16) NOT NULL,
+			state VARCHAR(16) NOT NULL DEFAULT 'open',
+			started_at TIMESTAMPTZ NOT NULL,
+			resolved_at TIMESTAMPTZ NULL,
+			last_seen_at TIMESTAMPTZ NOT NULL,
+			message TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_system_monitor_incident_open ON t_system_monitor_incident (replica_id, scope) WHERE state = 'open'`,
+		`CREATE INDEX IF NOT EXISTS idx_system_monitor_incident_started_at ON t_system_monitor_incident (started_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS t_system_monitor_incident_update (
+			id BIGSERIAL PRIMARY KEY,
+			incident_id BIGINT NOT NULL REFERENCES t_system_monitor_incident(id) ON DELETE CASCADE,
+			author_id INTEGER NOT NULL,
+			author_name VARCHAR(120) NOT NULL,
+			content TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_system_monitor_incident_update_incident ON t_system_monitor_incident_update (incident_id, created_at ASC)`,
+		`INSERT INTO t_system_monitor_status_sample (replica_id, instance_id, captured_at, states_json)
+		 SELECT COALESCE(replica_id, regexp_replace(instance_id, '-[a-z0-9]+$', '')), instance_id, captured_at,
+			jsonb_build_array(jsonb_build_object('scope', 'system', 'status', overall_status, 'message', '', 'latencyMs', 0))
+			|| COALESCE((
+				SELECT jsonb_agg(jsonb_build_object(
+					'scope', component.value->>'name',
+					'status', component.value->>'status',
+					'message', COALESCE(component.value->>'message', ''),
+					'latencyMs', COALESCE(NULLIF(component.value->>'latencyMs', '')::DOUBLE PRECISION, 0)
+				))
+				FROM jsonb_array_elements(components_json) AS component(value)
+			), '[]'::jsonb)
+			|| COALESCE((
+				SELECT jsonb_agg(jsonb_build_object(
+					'scope', 'worker:' || (worker.value->>'name'),
+					'status', worker.value->>'status',
+					'message', '',
+					'latencyMs', 0
+				))
+				FROM jsonb_array_elements(workers_json) AS worker(value)
+			), '[]'::jsonb)
+		 FROM t_system_monitor_sample
+		 ON CONFLICT (instance_id, captured_at) DO NOTHING`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply system monitor history schema: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 33, "system-monitor-status-history"); err != nil {
+		return fmt.Errorf("record system monitor history migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit system monitor history migration: %w", err)
+	}
+	return nil
+}
+
+// applyPerUserLegacyContentSchema moves the remaining single-owner profile,
+// guestbook, links, and albums onto the one account whose nickname exactly
+// matches the legacy site author. Unmatched material is archived before it is
+// removed from public tables.
+func applyPerUserLegacyContentSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 34)").Get(&applied); err != nil {
+		return fmt.Errorf("check per-user legacy-content migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin per-user legacy-content migration: %w", err)
+	}
+	defer session.Rollback()
+
+	statements := []string{
+		`ALTER TABLE t_user_info ADD COLUMN IF NOT EXISTS about TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE t_user_info ADD COLUMN IF NOT EXISTS profile_links_json JSONB NOT NULL DEFAULT '[]'::jsonb`,
+		`ALTER TABLE t_photo_album ADD COLUMN IF NOT EXISTS user_id INTEGER`,
+		`CREATE TABLE IF NOT EXISTS t_legacy_blog_archive (
+			id BIGSERIAL PRIMARY KEY,
+			source_table VARCHAR(80) NOT NULL,
+			source_id BIGINT NOT NULL,
+			payload JSONB NOT NULL,
+			archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TEMP TABLE migration_legacy_site_owner ON COMMIT DROP AS
+			WITH configured_author AS (
+				SELECT NULLIF(lower(trim(config::jsonb->>'author')), '') AS nickname
+				FROM t_website_config WHERE id = 1
+			), matches AS (
+				SELECT u.id
+				FROM t_user_info u CROSS JOIN configured_author a
+				WHERE a.nickname IS NOT NULL AND lower(trim(u.nickname)) = a.nickname
+			)
+			SELECT min(id) AS user_id FROM matches HAVING count(*) = 1`,
+		`INSERT INTO t_legacy_blog_archive (source_table, source_id, payload)
+			SELECT 't_about', a.id, to_jsonb(a) FROM t_about a
+			WHERE trim(COALESCE(a.content, '')) <> '' AND NOT EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`INSERT INTO t_legacy_blog_archive (source_table, source_id, payload)
+			SELECT 't_friend_link', f.id, to_jsonb(f) FROM t_friend_link f
+			WHERE f.status <> 1 OR NOT EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`INSERT INTO t_legacy_blog_archive (source_table, source_id, payload)
+			SELECT 't_comment', c.id, to_jsonb(c) FROM t_comment c
+			WHERE c.type IN (2, 3, 4) AND NOT EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`INSERT INTO t_legacy_blog_archive (source_table, source_id, payload)
+			SELECT 't_photo_album', a.id, to_jsonb(a) FROM t_photo_album a
+			WHERE NOT EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`INSERT INTO t_legacy_blog_archive (source_table, source_id, payload)
+			SELECT 't_photo', p.id, to_jsonb(p) FROM t_photo p
+			JOIN t_photo_album a ON a.id = p.album_id
+			WHERE NOT EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`UPDATE t_user_info u SET
+			about = CASE WHEN trim(COALESCE(u.about, '')) = '' THEN COALESCE((
+				SELECT CASE WHEN left(ltrim(a.content), 1) = '{' THEN COALESCE(a.content::jsonb->>'content', '') ELSE a.content END
+				FROM t_about a ORDER BY a.id LIMIT 1
+			), '') ELSE u.about END,
+			intro = CASE WHEN trim(COALESCE(u.intro, '')) = '' THEN COALESCE(wc.config::jsonb->>'authorIntro', '') ELSE u.intro END,
+			avatar = CASE WHEN trim(COALESCE(u.avatar, '')) = '' OR u.avatar = COALESCE(wc.config::jsonb->>'userAvatar', '')
+				THEN COALESCE(NULLIF(wc.config::jsonb->>'authorAvatar', ''), u.avatar) ELSE u.avatar END,
+			profile_links_json = (
+				SELECT COALESCE(jsonb_agg(link_value), '[]'::jsonb) FROM (
+					SELECT existing_links.link_value FROM jsonb_array_elements(COALESCE(u.profile_links_json, '[]'::jsonb)) AS existing_links(link_value)
+					UNION ALL
+					SELECT jsonb_build_object('label', social.label, 'url', social.url)
+					FROM (VALUES
+						('GitHub', wc.config::jsonb->>'github'), ('Gitee', wc.config::jsonb->>'gitee'),
+						('Weibo', wc.config::jsonb->>'weibo'), ('CSDN', wc.config::jsonb->>'csdn'),
+						('Zhihu', wc.config::jsonb->>'zhihu'), ('Juejin', wc.config::jsonb->>'juejin'),
+						('Twitter', wc.config::jsonb->>'twitter'), ('Stack Overflow', wc.config::jsonb->>'stackoverflow')
+					) AS social(label, url)
+					WHERE social.url ~* '^https?://'
+					UNION ALL
+					SELECT jsonb_build_object('label', f.link_name, 'url', f.link_address, 'description', f.link_intro)
+					FROM t_friend_link f WHERE f.status = 1
+				) profile_links
+			)
+		FROM t_website_config wc WHERE wc.id = 1 AND u.id = (SELECT user_id FROM migration_legacy_site_owner)`,
+		`UPDATE t_comment SET type = 7, topic_id = (SELECT user_id FROM migration_legacy_site_owner)
+			WHERE type IN (2, 3, 4) AND EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`UPDATE t_comment SET is_delete = 1, is_review = 0, topic_id = 0
+			WHERE type IN (2, 3, 4) AND NOT EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`UPDATE t_photo_album SET user_id = (SELECT user_id FROM migration_legacy_site_owner)
+			WHERE user_id IS NULL AND EXISTS (SELECT 1 FROM migration_legacy_site_owner)`,
+		`DELETE FROM t_photo WHERE album_id IN (SELECT id FROM t_photo_album WHERE user_id IS NULL)`,
+		`DELETE FROM t_photo_album WHERE user_id IS NULL`,
+		`ALTER TABLE t_photo_album ALTER COLUMN user_id SET NOT NULL`,
+		`DELETE FROM t_friend_link`,
+		`DELETE FROM t_about`,
+		`DELETE FROM t_role_menu WHERE menu_id IN (SELECT id FROM t_menu WHERE path IN ('/album-submenu', '/albums', '/albums/:albumId', '/photos/delete', '/links', '/about'))`,
+		`DELETE FROM t_menu WHERE path IN ('/album-submenu', '/albums', '/albums/:albumId', '/photos/delete', '/links', '/about')`,
+		`UPDATE t_website_config SET config = (config::jsonb - ARRAY[
+			'author', 'authorAvatar', 'authorIntro', 'github', 'gitee', 'qq', 'weChat', 'weibo',
+			'csdn', 'zhihu', 'juejin', 'twitter', 'stackoverflow'
+		]::text[])::text WHERE id = 1`,
+		`CREATE INDEX IF NOT EXISTS idx_photo_album_user_id ON t_photo_album(user_id, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_comment_profile_wall ON t_comment(topic_id, id DESC) WHERE type = 7`,
+	}
+	for _, statement := range statements {
+		if _, err := session.Exec(statement); err != nil {
+			return fmt.Errorf("apply per-user legacy-content migration: %w", err)
+		}
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 34, "per-user-legacy-content"); err != nil {
+		return fmt.Errorf("record per-user legacy-content migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit per-user legacy-content migration: %w", err)
+	}
+	return nil
+}
+
 func handleBase(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var builder strings.Builder
@@ -2127,18 +2429,7 @@ func seedSiteContent(session *xorm.Session) error {
 	`, string(configJSON)); err != nil {
 		return fmt.Errorf("insert default website configuration: %w", err)
 	}
-	aboutJSON, err := json.Marshal(model.AboutDTO{Content: ""})
-	if err != nil {
-		return fmt.Errorf("encode default about content: %w", err)
-	}
-	if _, err := session.Exec(`
-		INSERT INTO t_about (id, content, create_time) OVERRIDING SYSTEM VALUE
-		VALUES (1, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT (id) DO NOTHING
-	`, string(aboutJSON)); err != nil {
-		return fmt.Errorf("insert default about content: %w", err)
-	}
-	for _, table := range []string{"t_website_config", "t_about"} {
+	for _, table := range []string{"t_website_config"} {
 		if _, err := session.Exec("SELECT setval(pg_get_serial_sequence('" + table + "', 'id'), GREATEST((SELECT MAX(id) FROM " + table + "), 1), true)"); err != nil {
 			return fmt.Errorf("advance %s id sequence: %w", table, err)
 		}

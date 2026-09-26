@@ -6,7 +6,7 @@
       <p v-else-if="articles.length === 0" class="taxonomy-status">{{ t('taxonomy.emptyArticles') }}</p>
       <ul v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">
         <li v-for="article in articles" :key="article.id">
-          <ArticleCard class="tag-article" :data="article" />
+          <ArticleFeedCard :data="article" />
         </li>
       </ul>
       <Paginator
@@ -23,10 +23,9 @@
 import { computed, defineComponent, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import MarkdownIt from 'markdown-it'
 
 import { PageHeader } from '@/components/PageHeader'
-import { ArticleCard } from '@/components/ArticleCard'
+import { ArticleFeedCard } from '@/components/ArticleCard'
 import Paginator from '@/components/Paginator.vue'
 import api from '@/api/api'
 import { useDiscoveryStore } from '@/stores/discovery'
@@ -38,13 +37,12 @@ function positiveQueryNumber(value: unknown): number {
 
 export default defineComponent({
   name: 'ArticleList',
-  components: { PageHeader, ArticleCard, Paginator },
+  components: { PageHeader, ArticleFeedCard, Paginator },
   setup() {
     const route = useRoute()
     const router = useRouter()
     const { t } = useI18n()
     const discoveryStore = useDiscoveryStore()
-    const md = new MarkdownIt({ html: true })
     const articles = ref<any[]>([])
     const loading = ref(false)
     const pageTitle = ref('')
@@ -95,13 +93,6 @@ export default defineComponent({
           : await api.getArticlesByTagId({ ...params, tagId: routeId.value, tagName: topicName })
         const payload = response.data?.data || {}
         const records = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.records) ? payload.records : []
-        records.forEach((item: any) => {
-          item.articleContent = md
-            .render(item.articleContent)
-            .replace(/<\/?[^>]*>/g, '')
-            .replace(/[|]*\n/, '')
-            .replace(/&npsp;/gi, '')
-        })
         articles.value = records
         pagination.total = Number(payload.total ?? payload.count ?? records.length)
       } catch {

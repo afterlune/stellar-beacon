@@ -100,6 +100,16 @@ type ArticleSearcher interface {
 	Search(context.Context, string, int, int) (ArticleSearchPage, error)
 }
 
+// ArticleSearchIndexer keeps the public article documents in the search
+// provider. Reconcile receives the complete public document set and is
+// responsible for removing stale documents that no longer exist in the
+// authoritative database.
+type ArticleSearchIndexer interface {
+	Upsert(context.Context, []ArticleSearch) error
+	Delete(context.Context, []int) error
+	Reconcile(context.Context, []ArticleSearch) error
+}
+
 // EmailMessage is the provider-neutral email command used by services.
 type EmailMessage struct {
 	To         string

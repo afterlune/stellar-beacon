@@ -44,47 +44,27 @@
     },
     {
       "selector": "[data-menu='Talks']",
-      "text": ["这里有主人日常的说说哦!"]
+      "text": ["这里可以看看作者们分享的短内容。"]
     },
     {
       "selector": "[data-menu='Archives']",
-      "text": ["这里存储了主人的所有作品哦！", "想看看主人的图书馆吗？"]
-    },
-    {
-      "selector": "[data-menu='About']",
-      "text": ["你想知道我家主人是谁吗？", "这里有一些关于我家主人的秘密哦，要不要看看呢？", "发现主人出没地点！"]
+      "text": ["这里整理了公开文章与随想。", "可以按时间回看社区内容。"]
     },
     {
       "selector": "[data-menu='Tags']",
       "text": ["点击就可以看文章的标签啦！", "使用标签可以更好的分类你的文章哦～"]
     },
     {
-      "selector": "[data-menu='Message']",
-      "text": ["来这里给主人留言吧！"]
-    },
-    {
-      "selector": "[data-menu='Friends']",
-      "text": ["这里有主人的朋友们哦！"]
-    },
-    {
-      "selector": "[data-menu='Friends']",
-      "text": ["这里有主人的朋友们哦！"]
-    },
-    {
-      "selector": "[data-menu='PhotoAlbums']",
-      "text": ["这里有主人的日常照片哦！"]
-    },
-    {
       "selector": "[data-dia='language']",
-      "text": "主人的博客支持多种语言。"
+      "text": "可以在这里切换界面语言。"
     },
     {
       "selector": "[data-dia='light-switch']",
       "text": "您可以点击这里切换黑白模式哦！"
     },
     {
-      "selector": "[data-dia='author']",
-      "text": ["这是我主人的简介。", "点击其中任何一个链接都可以传送到我主人的其他世界。"]
+      "selector": "[data-dia='platform']",
+      "text": ["这里展示平台的公开内容概况。", "每位作者都可以在个人主页介绍自己。"]
     },
     {
       "selector": "[data-dia='jump-to-comment']",
@@ -106,11 +86,11 @@
     },
     {
       "selector": ".gt-header-textarea",
-      "text": ["要吐槽些什么呢？", "一定要认真填写喵～", "有什么想说的吗？", "如果觉得文章不错的话，就给博主留个言吧～"]
+      "text": ["有什么想说的吗？", "欢迎给作者留下评论。"]
     },
     {
       "selector": ".veditor",
-      "text": ["要吐槽些什么呢？", "一定要认真填写喵～", "有什么想说的吗？", "如果觉得文章不错的话，就给博主留个言吧～"]
+      "text": ["有什么想说的吗？", "欢迎给作者留下评论。"]
     }
   ],
   "events": [
@@ -160,7 +140,7 @@
     },
     {
       "date": "12/20-12/31",
-      "text": "这几天是<span>圣诞节</span>，主人肯定又去剁手买买买了～"
+      "text": "这几天是<span>圣诞节</span>，祝大家节日愉快～"
     }
   ]
 }

@@ -28,20 +28,14 @@ export default defineComponent({
         case 1:
           emitter.emit('articleLoadMore')
           break
-        case 2:
-          emitter.emit('messageLoadMore')
-          break
-        case 3:
-          emitter.emit('aboutLoadMore')
-          break
-        case 4:
-          emitter.emit('friendLinkLoadMore')
-          break
         case 5:
           emitter.emit('talkLoadMore')
           break
         case 6:
           emitter.emit('collectionLoadMore')
+          break
+        case 7:
+          emitter.emit('profileLoadMore')
           break
       }
     }

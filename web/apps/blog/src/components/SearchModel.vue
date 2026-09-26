@@ -55,7 +55,10 @@
         </header>
         <div id="Search-Dropdown" class="search-dropdown" v-if="searchResults !== null">
           <div>
-            <section v-if="searchResults.length > 0">
+            <div v-if="searchLoading && keywords.trim()" class="search-hit-label" role="status">
+              {{ t('reactions.loading') }}
+            </div>
+            <section v-else-if="searchResults.length > 0">
               <div class="search-hit-label"><span>{{ t('search.previewCount', { total: searchResultTotal }) }}</span><button type="button" class="search-view-all" @click="openSearchPage">{{ t('search.viewAll') }}</button></div>
               <ul id="search-menu">
                 <li
@@ -79,8 +82,8 @@
                         </svg>
                       </div>
                       <div class="search-hit-content-wrapper">
-                        <span class="search-hit-title" v-html="safeSearchHighlight(result.articleContent)"></span>
-                        <span class="search-hit-path" v-html="safeSearchHighlight(result.articleTitle)"></span>
+                        <span class="search-hit-title" v-html="safeSearchHighlight(result.highlightedContent || result.articleContent)"></span>
+                        <span class="search-hit-path" v-html="safeSearchHighlight(result.highlightedTitle || result.articleTitle)"></span>
                       </div>
                       <div class="search-hit-action">
                         <svg class="DocSearch-Hit-Select-Icon" width="20" height="20" viewBox="0 0 20 20">
@@ -109,7 +112,7 @@
                 </div>
               </section>
             </section>
-            <section v-else>
+            <section v-else-if="!keywords.trim()">
               <div class="search-hit-label">
                 {{ t('settings.recently-search') }}
               </div>
@@ -156,6 +159,12 @@
                 </li>
               </ul>
             </section>
+            <div v-else-if="searchError" class="search-startscreen" role="alert">
+              <p>{{ searchError }}</p>
+            </div>
+            <div v-else class="search-startscreen">
+              <p>{{ t('settings.no-search-result') }}</p>
+            </div>
           </div>
         </div>
         <div class="search-startscreen" v-else-if="!isEmpty">
@@ -270,7 +279,11 @@ export default defineComponent({
     const searchIndexStatus = ref(false)
     const searchResults = ref<ArticleSearchResult[]>([])
     const searchResultTotal = ref(0)
+    const searchLoading = ref(false)
+    const searchError = ref('')
     let searchRequestVersion = 0
+    let searchTimer: ReturnType<typeof setTimeout> | undefined
+    let searchAbortController: AbortController | undefined
     const router = useRouter()
     const openModal = ref(false)
     const openSearchContainer = ref(false)
@@ -292,6 +305,8 @@ export default defineComponent({
     })
 
     onUnmounted(() => {
+      if (searchTimer) clearTimeout(searchTimer)
+      searchAbortController?.abort()
       document.body.classList.remove('modal--active')
     })
     watch(
@@ -299,10 +314,16 @@ export default defineComponent({
       (status: boolean) => {
         reloadRecentResult()
         if (status) {
+          void discoveryStore.load()
           keywords.value = ''
           searchResults.value = []
           searchResultTotal.value = 0
+          searchLoading.value = false
+          searchError.value = ''
           isEmpty.value = false
+        } else {
+          cancelPendingSearch()
+          searchLoading.value = false
         }
         openModal.value = status
         setTimeout(() => {
@@ -312,6 +333,7 @@ export default defineComponent({
       }
     )
     const handleStatusChange = (status: boolean) => {
+      if (!status) cancelPendingSearch()
       searchStore.setOpenModal(status)
     }
     const handleLinkClick = (result: any) => {
@@ -334,8 +356,11 @@ export default defineComponent({
       localStore.recentSearch = localStore.recentSearch.sort((a: any, b: any) => b.weight - a.weight)
     }
     const handleResetInput = () => {
+      cancelPendingSearch()
       keywords.value = ''
       searchResults.value = []
+      searchLoading.value = false
+      searchError.value = ''
       isEmpty.value = false
       resetIndex(recentResults.value.length)
     }
@@ -377,29 +402,51 @@ export default defineComponent({
         })
       }
     }
-    const handleEnterDown = () => {
-      if (keywords.value.trim()) {
+    const handleEnterDown = (event: KeyboardEvent) => {
+      if (!keywords.value.trim()) {
+        if (recentResults.value.length > 0) {
+          handleLinkClick(recentResults.value[menuActiveIndex.value])
+        }
+        return
+      }
+      if (event.metaKey || event.ctrlKey || searchResults.value.length === 0) {
         openSearchPage()
         return
       }
-      if (recentResults.value.length > 0) {
-        handleLinkClick(recentResults.value[menuActiveIndex.value])
-      }
+      const activeResult = searchResults.value[Math.min(menuActiveIndex.value, searchResults.value.length - 1)]
+      if (activeResult) handleLinkClick(activeResult)
     }
-    const searchKeywords = async (event: Event) => {
+    const searchKeywords = (event: Event) => {
       const value = (event.target as HTMLInputElement).value.trim()
+      cancelPendingSearch()
+      searchError.value = ''
+      searchResults.value = []
+      searchResultTotal.value = 0
+      isEmpty.value = false
       if (!value) {
-        searchRequestVersion++
-        isEmpty.value = false
-        searchResults.value = []
-        searchResultTotal.value = 0
+        searchLoading.value = false
         resetIndex(recentResults.value.length)
         return
       }
+      resetIndex(0)
+      searchLoading.value = true
+      searchTimer = setTimeout(() => void runSearch(value), 180)
+    }
+    const cancelPendingSearch = () => {
+      searchRequestVersion++
+      if (searchTimer) {
+        clearTimeout(searchTimer)
+        searchTimer = undefined
+      }
+      searchAbortController?.abort()
+      searchAbortController = undefined
+    }
+    const runSearch = async (value: string) => {
       const version = ++searchRequestVersion
+      const controller = new AbortController()
+      searchAbortController = controller
       try {
-        await discoveryStore.load()
-        const { data } = await api.searchArticles({ keywords: value, current: 1, size: 5 })
+        const { data } = await api.searchArticles({ keywords: value, current: 1, size: 5 }, controller.signal)
         if (version !== searchRequestVersion) return
         const page = normalizeSearchPage(data?.data)
         searchResults.value = page.items
@@ -407,15 +454,19 @@ export default defineComponent({
         resetIndex(searchResults.value.length)
         isEmpty.value = searchResults.value.length === 0
       } catch {
-        if (version !== searchRequestVersion) return
+        if (controller.signal.aborted || version !== searchRequestVersion) return
         searchResults.value = []
         searchResultTotal.value = 0
-        isEmpty.value = true
+        searchError.value = t('search.loadFailed')
+        isEmpty.value = false
+      } finally {
+        if (version === searchRequestVersion) searchLoading.value = false
       }
     }
     const openSearchPage = () => {
       const value = keywords.value.trim()
       if (!value) return
+      cancelPendingSearch()
       searchStore.setOpenModal(false)
       void router.push({ path: '/search', query: { q: value } })
     }
@@ -448,6 +499,8 @@ export default defineComponent({
       searchInput,
       searchResults,
       searchResultTotal,
+      searchLoading,
+      searchError,
       topicMatches,
       topicLabel,
       openSearchPage,

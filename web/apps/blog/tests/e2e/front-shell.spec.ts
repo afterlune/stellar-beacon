@@ -279,10 +279,156 @@ test.describe('blog front shell', () => {
       await expect(page.locator('#App-Mobile-Profile')).toHaveCSS('opacity', '1')
       await page.locator('#App-Mobile-Profile').getByText(/^(about|关于)$/i).click()
     } else {
-      await page.locator('[data-menu="About"]').click()
+      await page.locator('a[data-menu="About"]').click()
     }
     await expect(page).toHaveURL(/\/about$/)
     await expect(page.locator('.post-header')).toBeVisible()
+  })
+
+  test('exposes one main landmark and keyboard-operable header controls', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Desktop header accessibility only')
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.locator('main'), 'the app must expose exactly one main landmark').toHaveCount(1)
+    await expect(page.locator('main')).toBeFocused()
+    await expect(page.locator('.skip-link')).toHaveAttribute('href', '#main-content')
+    await expect(page.locator('a[data-menu="About"]')).toHaveAttribute('href', '/about')
+    await expect(page.locator('a[data-menu="About"]')).toHaveJSProperty('tagName', 'A')
+    await expect(page.locator('header a[href="/"]').first()).toHaveAccessibleName(/Stellar Beacon|星际信标/)
+    const languageControl = page.locator('[data-dia="language"]')
+    if (await languageControl.count()) {
+      await expect(languageControl).toHaveAccessibleName(/EN|中文/)
+      await expect(languageControl.locator('xpath=..')).toHaveCSS('border-width', '0px')
+    }
+
+    const search = page.locator('[data-dia="search"]')
+    await expect(search).toHaveRole('button')
+    await search.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#search-input')).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    const login = page.locator('[data-dia="login"]')
+    await expect(login).toHaveRole('button')
+    await login.focus()
+    await page.keyboard.press('Enter')
+    const dialog = page.locator('dialog.app-dialog').filter({ hasText: '登录' }).first()
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByPlaceholder('邮箱')).toBeFocused()
+    await dialog.getByRole('button', { name: '显示密码' }).click()
+    await expect(dialog.getByPlaceholder('密码')).toHaveAttribute('type', 'text')
+    await dialog.getByRole('button', { name: '隐藏密码' }).click()
+    await expect(dialog.getByPlaceholder('密码')).toHaveAttribute('type', 'password')
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+  })
+
+  test('shows the main focus outline only after keyboard navigation', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Desktop header focus behavior only')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const main = page.locator('#main-content')
+    await expect(main).toBeFocused()
+    expect(await main.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('none')
+
+    await page.locator('.site-navigation a[href="/about"]').click()
+    await expect(page).toHaveURL(/\/about$/)
+    await expect(main).toBeFocused()
+    expect(await main.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('none')
+
+    const topicsLink = page.locator('.site-navigation a[href="/topics"]').first()
+    await topicsLink.focus()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/topics$/)
+    await expect(main).toBeFocused()
+    expect(await main.evaluate((element) => element.classList.contains('keyboard-route-focus'))).toBe(true)
+    expect(await main.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid')
+  })
+
+  test('keeps Topics reachable from the compact desktop navigation', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 900 })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const directTopicLink = page.locator('.site-navigation a[href="/topics"]')
+    if (await directTopicLink.count()) {
+      await directTopicLink.first().click()
+    } else {
+      await page.locator('.site-navigation .nav-more-trigger').click()
+      await page.locator('#header-nav-overflow a[href="/topics"]').click()
+    }
+
+    await expect(page).toHaveURL(/\/topics$/)
+    await expect(page.getByRole('heading', { name: '话题广场' })).toBeVisible()
+  })
+
+  test('keeps Topics open when the real backend rejects an expired session @integration', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Real backend session recovery runs once on desktop')
+    test.skip(process.env.E2E_REAL_INTEGRATION !== '1' || !process.env.BLOG_BASE_URL, 'set E2E_REAL_INTEGRATION=1 and BLOG_BASE_URL')
+
+    await page.addInitScript(() => {
+      sessionStorage.setItem('token', 'expired-integration-token')
+      sessionStorage.setItem('userStore', JSON.stringify({
+        userVisible: false,
+        userInfo: { userInfoId: 1, id: 1, nickname: 'Expired User', handle: 'expired-user', avatar: '' },
+        token: 'expired-integration-token',
+        accessArticles: [],
+        tab: 0,
+        page: 1
+      }))
+    })
+
+    // Let the topics page issue its subscription request before the header's
+    // unread-count request can clear the expired session.
+    await page.route('**/api/v1/auth/me/notifications/unread-count', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      await route.continue()
+    })
+
+    const subscriptions401 = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/v1/auth/me/topic-subscriptions' && response.status() === 401
+    )
+    await page.goto('/topics', { waitUntil: 'domcontentloaded' })
+    expect((await subscriptions401).status()).toBe(401)
+
+    await expect(page).toHaveURL(/\/topics$/)
+    await expect(page.getByRole('heading', { name: '话题广场' })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('token'))).toBeNull()
+    await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('userStore') || '{}').userInfo)).toBe('')
+    await expect(page.locator('[data-dia=\"space-switcher\"]')).toHaveCount(0)
+    await expect(page.locator('[data-dia="login"]')).toBeVisible()
+  })
+
+  test('opens login and remembers the requested personal center after a real 401 @integration', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Real backend session recovery runs once on desktop')
+    test.skip(process.env.E2E_REAL_INTEGRATION !== '1' || !process.env.BLOG_BASE_URL, 'set E2E_REAL_INTEGRATION=1 and BLOG_BASE_URL')
+
+    await page.addInitScript(() => {
+      sessionStorage.setItem('token', 'expired-integration-token')
+      sessionStorage.setItem('userStore', JSON.stringify({
+        userVisible: false,
+        userInfo: { userInfoId: 1, id: 1, nickname: 'Expired User', handle: 'expired-user', avatar: '' },
+        token: 'expired-integration-token',
+        accessArticles: [],
+        tab: 0,
+        page: 1
+      }))
+    })
+
+    const authFailure = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.startsWith('/api/v1/auth/me/') && response.status() === 401
+    )
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    expect((await authFailure).status()).toBe(401)
+
+    await expect.poll(() => page.evaluate(() => {
+      const url = new URL(window.location.href)
+      return `${url.pathname}|${url.searchParams.get('login')}|${url.searchParams.get('redirect')}`
+    })).toBe('/|1|/studio/dashboard')
+    await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: '登录' }).getByPlaceholder('邮箱')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('token'))).toBeNull()
+    await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('userStore') || '{}').userInfo)).toBe('')
   })
 
   test('keeps the static routes free of horizontal overflow', async ({ page }) => {
@@ -682,7 +828,7 @@ test.describe('content discovery', () => {
 
     const authorLink = page.getByRole('link', { name: /测试作者/ }).first()
     await expect(authorLink).toHaveAttribute('href', '/u/test-author')
-    await expect(page.getByRole('link', { name: '公共空间的第一篇文章' })).toHaveAttribute('href', '/articles/101')
+    await expect(page.getByTestId('public-feed').locator('.feed-card__title')).toHaveAttribute('href', '/articles/101')
   })
 
   test('author page presents identity, curated modules, and content channels', async ({ page }) => {
@@ -694,7 +840,7 @@ test.describe('content discovery', () => {
     await expect(page.getByRole('button', { name: '关注' })).toBeVisible()
     await expect(page).toHaveTitle('测试作者 (@test-author) · Stellar Beacon')
     await expect(page.locator('meta[name="description"][data-stellar-seo]').last()).toHaveAttribute('content', '公共空间作者')
-    await expect(page.locator('link[rel="canonical"][data-stellar-seo]').last()).toHaveAttribute('href', 'http://127.0.0.1:8080/u/test-author')
+    await expect(page.locator('link[rel="canonical"][data-stellar-seo]').last()).toHaveAttribute('href', new URL('/u/test-author', page.url()).href)
     await expect(page.locator('meta[property="og:type"][data-stellar-seo]').last()).toHaveAttribute('content', 'profile')
     await expect(page.locator('meta[property="og:image"][data-stellar-seo]').last()).toHaveAttribute('content', 'https://cdn.example.test/author-avatar.png')
     await expect.poll(() => page.locator('script[type="application/ld+json"][data-stellar-seo]').textContent()).toContain('ProfilePage')
@@ -737,9 +883,10 @@ test.describe('content discovery', () => {
     await mockContentDiscovery(page)
     await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
 
+    const publicUrl = page.url()
     await page.getByTestId('author-share').click()
 
-    await expect.poll(() => page.evaluate(() => (window as any).__sharedAuthor?.url)).toBe('http://127.0.0.1:8080/u/test-author')
+    await expect.poll(() => page.evaluate(() => (window as any).__sharedAuthor?.url)).toBe(publicUrl)
   })
 
   test('author page copies the canonical URL when native sharing is unavailable', async ({ page }) => {
@@ -753,9 +900,10 @@ test.describe('content discovery', () => {
     await mockContentDiscovery(page)
     await page.goto('/u/test-author', { waitUntil: 'domcontentloaded' })
 
+    const publicUrl = page.url()
     await page.getByTestId('author-share').click()
 
-    await expect.poll(() => page.evaluate(() => (window as any).__copiedAuthor)).toBe('http://127.0.0.1:8080/u/test-author')
+    await expect.poll(() => page.evaluate(() => (window as any).__copiedAuthor)).toBe(publicUrl)
     await expect(page.getByText('公开主页链接已复制')).toBeVisible()
   })
   test('author curation falls back to latest when hot articles are empty', async ({ page }) => {
@@ -797,7 +945,7 @@ test.describe('content discovery', () => {
 
     await expect(page).toHaveURL(/\/categories\/1\?name=/)
     await expect(page.locator('.post-title')).toContainText('工程实践')
-    await expect(page.locator('.tag-article')).toContainText('目录文章')
+    await expect(page.locator('.feed-card__title')).toContainText('目录文章')
   })
 
   test('tag route serves its article list and keeps the legacy path working', async ({ page }) => {
@@ -805,11 +953,11 @@ test.describe('content discovery', () => {
 
     await page.goto('/tags/1?tagName=Go', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('.post-title')).toContainText('Go')
-    await expect(page.locator('.tag-article')).toContainText('目录文章')
+    await expect(page.locator('.feed-card__title')).toContainText('目录文章')
 
     await page.goto('/article-list/1?tagName=Go', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(/\/tags\/1\?tagName=Go$/)
-    await expect(page.locator('.tag-article')).toContainText('目录文章')
+    await expect(page.locator('.feed-card__title')).toContainText('目录文章')
   })
 
   test('search page paginates results and restores state from the URL', async ({ page }) => {
@@ -881,11 +1029,11 @@ test.describe('content discovery', () => {
     await mockContentDiscovery(page)
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-    await page.locator('[data-menu="Categories"]').click()
+    await page.locator('a[data-menu="Categories"]').click()
     await expect(page).toHaveURL(/\/categories$/)
     await expect(page.getByTestId('categories-grid')).toContainText('工程实践')
 
-    await page.locator('[data-menu="Series"]').click()
+    await page.locator('a[data-menu="Series"]').click()
     await expect(page).toHaveURL(/\/series$/)
     await expect(page.locator('.series-page')).toContainText('阅读系列')
   })
@@ -1033,7 +1181,7 @@ test.describe('front-end experience regressions', () => {
       })
     })
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('link', { name: '限流重试后的文章' })).toBeVisible()
+    await expect(page.getByTestId('public-feed').locator('.feed-card__title')).toContainText('限流重试后的文章')
     expect(attempts).toBeGreaterThan(1)
   })
 
@@ -1045,7 +1193,7 @@ test.describe('front-end experience regressions', () => {
     const sidebar = page.locator('.App-Mobile-sidebar')
     await expect(sidebar).toHaveCSS('visibility', 'hidden')
 
-    await page.getByTestId('public-feed').getByRole('link', { name: '公共空间的第一篇文章' }).click()
+    await page.getByTestId('public-feed').locator('.feed-card__title').click()
     await expect(page).toHaveURL(/\/articles\/101$/)
     await expect(sidebar).toHaveCSS('visibility', 'hidden')
 
@@ -1123,6 +1271,12 @@ async function mockStudioApi(page: Page, options: {
       body: JSON.stringify({ code: 'OK', message: '操作成功', data: saved.profile.avatar })
     })
   })
+
+  await page.route('**/api/v1/auth/me/notifications/unread-count', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ code: 'OK', message: '操作成功', flag: true, data: { count: 0 } })
+  }))
 
   await page.route('**/api/v1/studio/**', async (route) => {
     const url = new URL(route.request().url())
@@ -1302,6 +1456,11 @@ test.describe('studio workspace', () => {
 
   test('switches directly between public and private spaces', async ({ page }) => {
     await mockStudioApi(page)
+    await page.route('**/api/v1/auth/me/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'OK', message: '操作成功', data: { count: 0, items: [], records: [] } })
+    }))
     await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: '创作总览' })).toBeVisible()
@@ -1322,6 +1481,26 @@ test.describe('studio workspace', () => {
       await page.locator('[data-dia="space-switcher"] [data-space="private"]').click()
     }
     await expect(page).toHaveURL(/\/studio\/dashboard$/)
+  })
+
+  test('shows an avatar fallback and opens the personal center from the account menu', async ({ page }) => {
+    await mockStudioApi(page)
+    await page.route('**/api/v1/auth/me/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'OK', message: '操作成功', data: { items: [], records: [], count: 0 } })
+    }))
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+
+    const accountTrigger = page.getByRole('button', { name: '账号菜单' })
+    await expect(accountTrigger).toBeVisible()
+    await expect.poll(() => accountTrigger.locator('img').evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    await accountTrigger.click()
+
+    const personalCenter = page.getByRole('button', { name: '个人中心' })
+    await expect(personalCenter).toBeVisible()
+    await personalCenter.click()
+    await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible()
   })
 
   test('guides a new creator through studio activation and remembers collapse', async ({ page }) => {
@@ -1465,7 +1644,7 @@ test.describe('studio workspace', () => {
     await page.getByRole('link', { name: /管理全部 1 篇/ }).click()
 
     await expect(page).toHaveURL(/\/studio\/articles\?status=4$/)
-    await expect(page.getByText('下周发布的文章')).toBeVisible()
+    await expect(page.locator('.studio-record').filter({ hasText: '下周发布的文章' })).toBeVisible()
     await expect(page.locator('.studio-schedule')).toContainText('计划发布')
     await expect(page.getByText('普通草稿')).toHaveCount(0)
   })
@@ -1541,13 +1720,13 @@ test.describe('studio workspace', () => {
 
     await page.locator('.studio-record__select input').first().check()
     await page.getByRole('button', { name: '批量删除' }).click()
-    await page.locator('.el-message-box:visible').getByRole('button', { name: '确认删除', exact: true }).click()
+    await page.locator('dialog.app-dialog:visible').getByRole('button', { name: '确认删除', exact: true }).click()
 
     await expect.poll(() => saved.batchDelete?.scope?.ids?.length).toBe(1)
     await expect(page.locator('.studio-record')).toHaveCount(1)
 
     await page.getByRole('button', { name: '删除', exact: true }).click()
-    await page.locator('.el-message-box:visible').getByRole('button', { name: 'OK', exact: true }).click()
+    await page.locator('dialog.app-dialog:visible').getByRole('button', { name: '确认删除', exact: true }).click()
     await expect.poll(() => saved.batchDelete?.scope).toEqual({ mode: 'ids', ids: [52] })
     await expect(page.locator('.studio-record')).toHaveCount(0)
   })
@@ -1606,7 +1785,7 @@ test.describe('studio workspace', () => {
     await page.getByRole('button', { name: '复制链接' }).click()
 
     await expect(page.getByText('公开链接已复制')).toBeVisible()
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('http://127.0.0.1:8080/articles/61')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(new URL('/articles/61', page.url()).href)
   })
   test('creates a draft in the dedicated article editor', async ({ page }) => {
     const saved = await mockStudioApi(page)
@@ -1698,5 +1877,182 @@ test.describe('studio workspace', () => {
     await expect.poll(() => saved.series?.seriesName).toBe('测试系列')
     expect(saved.series?.cover).toBe('https://cdn.example.test/studio-upload.png')
     expect(saved.series?.visibility).toBe('draft')
+  })
+})
+
+test.describe('live Meilisearch preview', () => {
+  test('debounces input and shows the current highlighted result', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Search keyboard interaction is covered on desktop')
+    const queries: string[] = []
+    let releaseResponse: () => void = () => undefined
+    const responseGate = new Promise<void>((resolve) => { releaseResponse = resolve })
+    await page.route('**/public/articles/search**', async (route) => {
+      const url = new URL(route.request().url())
+      queries.push(url.searchParams.get('keywords') || '')
+      await responseGate
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'OK',
+          message: '操作成功',
+          data: {
+            items: [{
+              id: 121,
+              articleTitle: 'Meilisearch result',
+              articleContent: 'Fast Meilisearch preview',
+              highlightedTitle: '<mark>Meilisearch</mark> result',
+              highlightedContent: 'Fast <mark>Meilisearch</mark> preview',
+              articleCover: '',
+              categoryName: '测试分类',
+              createTime: '2026-09-18T10:00:00+08:00'
+            }],
+            total: 1,
+            page: 1,
+            pageSize: 5
+          }
+        })
+      })
+    })
+
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
+    await page.locator('[data-dia="search"]').click()
+    const input = page.locator('#search-input')
+    await expect(input).toBeVisible()
+    await input.pressSequentially('meili', { delay: 25 })
+    await expect.poll(() => queries.length).toBe(1)
+    expect(queries).toEqual(['meili'])
+    await expect(page.getByRole('status')).toBeVisible()
+    releaseResponse()
+    await expect(page.locator('.search-hit-path mark')).toHaveText('Meilisearch')
+    await expect(page.locator('.search-hit-path')).toContainText('result')
+  })
+
+  test('ignores an older request and Enter opens the active result', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Search keyboard interaction is covered on desktop')
+    let slowRequestStarted: () => void = () => undefined
+    const slowStarted = new Promise<void>((resolve) => { slowRequestStarted = resolve })
+    const queries: string[] = []
+    await page.route('**/public/articles/search**', async (route) => {
+      const query = new URL(route.request().url()).searchParams.get('keywords')
+      queries.push(query || '')
+      if (query === 'slow') {
+        slowRequestStarted()
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        try {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ code: 'OK', message: '操作成功', data: { items: [{ id: 120, articleTitle: 'Old result', articleContent: 'Old result body' }], total: 1 } })
+          })
+        } catch {
+          // The browser may already have cancelled this route after the next input.
+        }
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', message: '操作成功', data: { items: [{ id: 122, articleTitle: 'Latest result', articleContent: 'Current body' }], total: 1 } })
+      })
+    })
+
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
+    await page.locator('[data-dia="search"]').click()
+    const input = page.locator('#search-input')
+    await expect(input).toBeVisible()
+    await input.fill('slow')
+    await slowStarted
+    await input.fill('latest')
+    await expect.poll(() => queries).toContain('latest')
+    await expect(page.locator('.search-hit-path')).toContainText('Latest result')
+    await page.waitForTimeout(550)
+    await expect(page.locator('.search-hit-path')).toContainText('Latest result')
+    await input.press('Enter')
+    await expect(page).toHaveURL(/\/articles\/122$/)
+  })
+
+  test('shows an error and then an empty result state', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Search keyboard interaction is covered on desktop')
+    await page.route('**/public/articles/search**', async (route) => {
+      const query = new URL(route.request().url()).searchParams.get('keywords')
+      if (query === 'failure') {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'search unavailable' }) })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', message: '操作成功', data: { items: [], total: 0 } })
+      })
+    })
+
+    await page.goto('/about', { waitUntil: 'domcontentloaded' })
+    await page.locator('[data-dia="search"]').click()
+    const input = page.locator('#search-input')
+    await expect(input).toBeVisible()
+    await input.fill('failure')
+    await expect(page.locator('#search-modal .search-startscreen[role="alert"]')).toBeVisible()
+    await input.fill('no-match')
+    await expect(page.locator('#search-modal [role="alert"]')).toHaveCount(0)
+    await expect(page.locator('#search-modal .search-startscreen').last()).toBeVisible()
+  })
+})
+
+test.describe('shared article feed cards', () => {
+  test('category and tag results use the shared landscape card', async ({ page }) => {
+    const results = [1, 2, 3].map((id) => articleFixture(id, `共享卡片 ${id}`))
+    await page.route(/\/api\/v1\/public\/articles\/by-category(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', message: '操作成功', data: { items: results, total: results.length, page: 1, pageSize: 12 } })
+      })
+    })
+    await page.route(/\/api\/v1\/public\/articles\/by-tag(?:\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', message: '操作成功', data: { items: results, total: results.length, page: 1, pageSize: 12 } })
+      })
+    })
+
+    for (const route of ['/categories/44?name=共享卡片', '/tags/55?tagName=共享卡片']) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' })
+      const cards = page.getByTestId('article-feed-card')
+      await expect(cards).toHaveCount(3)
+      const cover = await cards.first().locator('.feed-card__cover').boundingBox()
+      expect(cover).not.toBeNull()
+      expect(Math.abs((cover!.width / cover!.height) - (16 / 9))).toBeLessThan(0.04)
+      await expect(cards.first().locator('.feed-card__title')).toBeVisible()
+      await expect(cards.first().locator('.feed-card__excerpt')).toBeVisible()
+    }
+  })
+})
+
+test.describe('studio navigation feedback', () => {
+  test('keeps the sidebar mounted, marks the active item, and restores the content scroll position', async ({ page }) => {
+    await mockStudioApi(page)
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    const nav = page.locator('.studio-nav')
+    await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute('href', '/studio/dashboard')
+    await page.evaluate(() => {
+      ;(window as any).__studioNavigation = document.querySelector('.studio-nav')
+      window.scrollTo(0, document.documentElement.scrollHeight)
+    })
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+    await nav.locator('a[href="/studio/articles"]').click()
+    await expect(page).toHaveURL(/\/studio\/articles$/)
+    await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute('href', '/studio/articles')
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    expect(await page.evaluate(() => document.querySelector('.studio-nav') === (window as any).__studioNavigation)).toBe(true)
+  })
+
+  test('removes Studio motion when reduced motion is requested', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await mockStudioApi(page)
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    const duration = await page.locator('.studio-nav a').first().evaluate((element) => getComputedStyle(element).transitionDuration)
+    expect(Number.parseFloat(duration)).toBeLessThan(0.001)
   })
 })

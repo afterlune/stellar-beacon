@@ -12,13 +12,11 @@ import { registerSvgIcon } from '@/icons'
 import { registerObSkeleton } from '@/components/LoadingSkeleton'
 import 'prismjs/themes/prism.css'
 import 'prismjs'
-import 'element-plus/theme-chalk/index.css'
-import { components, plugins } from './plugins/element-plus'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import infiniteScroll from 'vue3-infinite-scroll-better'
 import v3ImgPreview from 'v3-img-preview'
 import api from './api/api'
-import { ElMessage } from 'element-plus'
+import { notify } from '@/services/notifications'
 import defaultCover from '@/assets/default-cover.jpg'
 
 const pinia = createPinia()
@@ -31,12 +29,7 @@ export const app = createApp(App)
   .use(infiniteScroll)
   .use(v3ImgPreview, {})
   .use(lazyPlugin, { loading: defaultCover, error: defaultCover })
-components.forEach((component) => {
-  app.component(component.name, component)
-})
-plugins.forEach((plugin) => {
-  app.use(plugin)
-})
+app.config.globalProperties.$notify = notify
 registerSvgIcon(app)
 registerObSkeleton(app)
 
@@ -50,7 +43,7 @@ window.addEventListener('unhandledrejection', (event) => {
   const now = Date.now()
   if (now - lastFailureNotice < 4000) return
   lastFailureNotice = now
-  ElMessage.warning(i18n.global.t('settings.request-failed'))
+  notify.warning(i18n.global.t('settings.request-failed'))
 })
 
 app.mount('#app')

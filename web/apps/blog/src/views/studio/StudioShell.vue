@@ -17,14 +17,23 @@
 
     <div class="studio-shell__body">
       <aside class="studio-nav">
-        <router-link v-for="item in navigation" :key="item.path" :to="item.path" :class="{ active: isActive(item.path) }">
+        <router-link
+          v-for="item in navigation"
+          :key="item.path"
+          :to="item.path"
+          :class="{ active: isActive(item.path) }"
+          :aria-current="isActive(item.path) ? 'page' : undefined">
           <span>{{ item.index }}</span>
           <div><strong>{{ item.label }}</strong><small>{{ item.hint }}</small></div>
         </router-link>
       </aside>
-      <main class="studio-main">
-        <router-view />
-      </main>
+      <section class="studio-main">
+        <router-view v-slot="{ Component }">
+          <transition name="studio-page" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </section>
     </div>
   </div>
 </template>
@@ -49,10 +58,11 @@ export default defineComponent({
       { path: '/studio/talks', index: '03', label: '随想', hint: '轻量内容' },
       { path: '/studio/series', index: '04', label: '系列', hint: '组织长期主题' },
       { path: '/studio/collections', index: '05', label: '书单', hint: '公开文章收藏集' },
-      { path: '/studio/topics', index: '06', label: '分类与标签', hint: '私有词汇表' },
-      { path: '/studio/library/reading', index: '07', label: '阅读记录', hint: '最近读过' },
-      { path: '/studio/library/favorites', index: '08', label: '我的收藏', hint: '稍后阅读' },
-      { path: '/studio/profile', index: '09', label: '公开资料', hint: '主页身份与头像' }
+      { path: '/studio/albums', index: '06', label: '相册', hint: '管理个人图片' },
+      { path: '/studio/topics', index: '07', label: '分类与标签', hint: '私有词汇表' },
+      { path: '/studio/library/reading', index: '08', label: '阅读记录', hint: '最近读过' },
+      { path: '/studio/library/favorites', index: '09', label: '我的收藏', hint: '稍后阅读' },
+      { path: '/studio/profile', index: '10', label: '公开资料', hint: '主页身份与头像' }
     ]
     const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
     const logout = async () => {
@@ -83,12 +93,24 @@ export default defineComponent({
 .studio-shell__identity:hover { border-color: color-mix(in srgb, var(--color-ob) 48%, transparent); }
 .studio-shell__body { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 22px; margin-top: 22px; }
 .studio-nav { position: sticky; top: 18px; align-self: start; display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border-hairline); border-radius: 18px; background: color-mix(in srgb, var(--background-primary-alt) 86%, transparent); }
-.studio-nav a { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 10px; border-radius: 12px; color: var(--text-ob-dim); text-decoration: none; transition: background .2s ease, color .2s ease; }
+.studio-nav a { position: relative; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 10px; border: 1px solid transparent; border-radius: 12px; color: var(--text-ob-dim); text-decoration: none; transition: background .18s ease, border-color .18s ease, color .18s ease, transform .12s ease; }
 .studio-nav a > span { color: color-mix(in srgb, var(--text-ob-dim) 60%, transparent); font-size: 10px; }
 .studio-nav a strong, .studio-nav a small { display: block; }
 .studio-nav a strong { color: inherit; font-size: 13px; }
 .studio-nav a small { margin-top: 2px; font-size: 10px; opacity: .65; }
-.studio-nav a:hover, .studio-nav a.active { background: color-mix(in srgb, var(--color-ob) 12%, transparent); color: var(--color-ob); }
-.studio-main { min-width: 0; }
+.studio-nav a:hover { transform: translateX(2px); background: color-mix(in srgb, var(--color-ob) 9%, transparent); color: var(--color-ob); }
+.studio-nav a.active { transform: translateX(3px); border-color: color-mix(in srgb, var(--color-ob) 28%, transparent); background: color-mix(in srgb, var(--color-ob) 14%, transparent); color: var(--color-ob); box-shadow: 0 8px 20px color-mix(in srgb, var(--color-ob) 10%, transparent); }
+.studio-nav a.active::before { content: ''; position: absolute; top: 10px; bottom: 10px; left: -5px; width: 3px; border-radius: 999px; background: var(--color-ob); box-shadow: 0 0 14px color-mix(in srgb, var(--color-ob) 70%, transparent); }
+.studio-nav a:active { transform: translateX(3px) scale(.98); }
+.studio-nav a:focus-visible { outline: 2px solid var(--color-ob); outline-offset: 2px; }
+.studio-main { min-width: 0; min-height: 320px; }
+.studio-page-enter-active { transition: opacity .16s ease, transform .16s ease; }
+.studio-page-leave-active { transition: opacity .1s ease, transform .1s ease; }
+.studio-page-enter-from { opacity: 0; transform: translateY(10px); }
+.studio-page-leave-to { opacity: 0; transform: translateY(-4px); }
+@media (prefers-reduced-motion: reduce) {
+  .studio-nav a, .studio-page-enter-active, .studio-page-leave-active { transition: none; }
+  .studio-nav a:hover, .studio-nav a.active, .studio-nav a:active { transform: none; }
+}
 @media (max-width: 860px) { .studio-shell__top { align-items: flex-start; flex-direction: column; } .studio-shell__body { grid-template-columns: 1fr; } .studio-nav { position: static; display: flex; overflow-x: auto; } .studio-nav a { min-width: 150px; } }
 </style>

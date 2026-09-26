@@ -42,7 +42,8 @@
 
 <script lang="ts">
 import { computed, defineComponent, inject, reactive, ref, toRefs, provide } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notify } from '@/services/notifications'
+import { confirm } from '@/services/confirm'
 import Avatar from '@/components/Avatar.vue'
 import CommentReplyItem from './CommentReplyItem.vue'
 import CommentReplyForm from './CommentReplyForm.vue'
@@ -76,7 +77,7 @@ export default defineComponent({
         if (!response?.data?.flag) throw new Error(response?.data?.message || '操作失败')
         emitter.emit('collectionFetchComment')
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '操作失败')
       } finally {
         busy.value = false
       }
@@ -107,10 +108,10 @@ export default defineComponent({
     const isPinned = computed(() => Boolean(props.comment.isTop))
     const isHidden = computed(() => Number(props.comment.isDelete || 0) === 1)
     const togglePin = () => moderate((collectionID) => api.pinCollectionComment(collectionID, Number(comment.id), !isPinned.value))
-    const removeComment = () => moderate(async (collectionID) => {
-      await ElMessageBox.confirm('删除后该评论及其回复将不再公开显示。', '删除评论', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
-      return api.deleteOwnedCollectionComment(collectionID, Number(comment.id))
-    })
+    const removeComment = async () => {
+      if (!await confirm({ title: '删除评论', message: '删除后该评论及其回复将不再公开显示。', confirmText: '删除' })) return
+      await moderate((collectionID) => api.deleteOwnedCollectionComment(collectionID, Number(comment.id)))
+    }
     return {
       ...toRefs(reactiveData),
       clickOnReply,

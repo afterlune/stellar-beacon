@@ -7,7 +7,7 @@
 
 <script lang="ts">
 import { defineComponent, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { notify } from '@/services/notifications'
 import api from '@/api/api'
 import { useUserStore } from '@/stores/user'
 
@@ -39,7 +39,7 @@ export default defineComponent({
         count.value = Number(response.data.data?.likeCount || 0)
         emit('changed', { active: active.value, likeCount: count.value })
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '操作失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '操作失败')
       } finally {
         busy.value = false
       }

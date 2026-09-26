@@ -109,7 +109,8 @@
 import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { StudioBatchScope } from '@stellar-beacon/api-contract'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notify } from '@/services/notifications'
+import { confirm } from '@/services/confirm'
 import api from '@/api/api'
 
 type Kind = 'article' | 'talk' | 'series'
@@ -202,22 +203,20 @@ export default defineComponent({
           document.execCommand('copy')
           input.remove()
         }
-        ElMessage.success('公开链接已复制')
+        notify.success('公开链接已复制')
       } catch {
-        ElMessage.error('复制失败，请手动打开公开页')
+        notify.error('复制失败，请手动打开公开页')
       }
     }
 
     const remove = async (item: any) => {
+      if (!await confirm({ title: '删除确认', message: `确认删除这条${kindLabel.value}吗？`, confirmText: '确认删除' })) return
       try {
-        await ElMessageBox.confirm(`确认删除这条${kindLabel.value}吗？`, '删除确认', { type: 'warning' })
         const response = await api.batchDeleteStudioContent({ kind: props.kind, scope: { mode: 'ids', ids: [item.id] } })
         if (!response?.data?.flag) throw new Error(response?.data?.message || '删除失败')
-        ElMessage.success('已删除')
+        notify.success('已删除')
         await loadList(true)
-      } catch (reason: any) {
-        if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || '删除失败')
-      }
+      } catch (reason: any) { notify.error(reason?.response?.data?.message || '删除失败') }
     }
 
     const changeStatus = (value: number) => {
@@ -265,7 +264,7 @@ export default defineComponent({
         const response = await api.previewStudioContent({ kind: props.kind, ...currentFilter() })
         const preview = dataOf(response)
         if (!response?.data?.flag || Number(preview.count || 0) <= 0) {
-          ElMessage.warning('当前筛选条件下没有可操作内容')
+          notify.warning('当前筛选条件下没有可操作内容')
           return
         }
         selectedIds.value = []
@@ -277,7 +276,7 @@ export default defineComponent({
           hiddenCount: Number(preview.hiddenCount || 0)
         }
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || '无法读取全部匹配内容')
+        notify.error(reason?.response?.data?.message || '无法读取全部匹配内容')
       }
     }
     const batchVisibility = (value: number): 'public' | 'private' | 'draft' => value === 2 ? 'private' : value === 3 ? 'draft' : 'public'
@@ -305,17 +304,9 @@ export default defineComponent({
           ? `将按当前筛选条件处理 ${targetCount} 条内容。`
           : selectedRecords.value.slice(0, 5).map((item) => `· ${titleOf(item)}`).join('\n')
         const moderation = hiddenCount ? `\n其中 ${hiddenCount} 条已被审核隐藏，改状态后仍不会公开可见。` : ''
-        try {
-          await ElMessageBox.confirm(`将 ${targetCount} 条内容批量公开：\n${preview}${moderation}`, '确认批量公开', { type: 'warning', confirmButtonText: '确认公开', cancelButtonText: '取消' })
-        } catch {
-          return
-        }
+        if (!await confirm({ title: '确认批量公开', message: `将 ${targetCount} 条内容批量公开：\n${preview}${moderation}`, confirmText: '确认公开' })) return
       } else {
-        try {
-          await ElMessageBox.confirm(`确认将 ${targetCount} 条内容改为“${statusLabel(batchStatus.value)}”？`, '批量修改状态', { type: 'warning' })
-        } catch {
-          return
-        }
+        if (!await confirm({ title: '批量修改状态', message: `确认将 ${targetCount} 条内容改为“${statusLabel(batchStatus.value)}”？` })) return
       }
       try {
         const response = await api.batchUpdateStudioContentStatus({
@@ -324,27 +315,25 @@ export default defineComponent({
           visibility: batchVisibility(batchStatus.value)
         })
         if (!response?.data?.flag) throw new Error(response?.data?.message || '批量修改失败')
-        ElMessage.success(`已更新 ${Number(response.data.data?.affected ?? targetCount)} 条内容`)
+        notify.success(`已更新 ${Number(response.data.data?.affected ?? targetCount)} 条内容`)
         clearSelection()
         await loadList(true)
       } catch (reason: any) {
-        ElMessage.error(reason?.response?.data?.message || reason?.message || '批量修改失败')
+        notify.error(reason?.response?.data?.message || reason?.message || '批量修改失败')
       }
     }
 
     const batchDelete = async () => {
       if (!selectionCount.value) return
       const targetCount = selectionCount.value
+      if (!await confirm({ title: '批量删除', message: `确认删除已选择的 ${targetCount} 条${kindLabel.value}吗？此操作不可撤销。`, confirmText: '确认删除' })) return
       try {
-        await ElMessageBox.confirm(`确认删除已选择的 ${targetCount} 条${kindLabel.value}吗？此操作不可撤销。`, '批量删除', { type: 'warning', confirmButtonText: '确认删除' })
         const response = await api.batchDeleteStudioContent({ kind: props.kind, scope: selectionScope() })
         if (!response?.data?.flag) throw new Error(response?.data?.message || '批量删除失败')
-        ElMessage.success(`已删除 ${Number(response.data.data?.affected ?? targetCount)} 条内容`)
+        notify.success(`已删除 ${Number(response.data.data?.affected ?? targetCount)} 条内容`)
         clearSelection()
         await loadList(true)
-      } catch (reason: any) {
-        if (reason !== 'cancel' && reason !== 'close') ElMessage.error(reason?.response?.data?.message || reason?.message || '批量删除失败')
-      }
+      } catch (reason: any) { notify.error(reason?.response?.data?.message || reason?.message || '批量删除失败') }
     }
     watch(() => props.kind, () => {
       status.value = Number(route.query.status || 0)

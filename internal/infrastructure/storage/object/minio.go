@@ -44,6 +44,22 @@ func NewMinioStorage(conf *config.Oss) (*MinioStorage, error) {
 	}, nil
 }
 
+// CheckHealth performs a read-only check and deliberately does not call
+// ensureBucket, which creates missing buckets as part of upload operations.
+func (s *MinioStorage) CheckHealth(ctx context.Context) error {
+	if s == nil || s.client == nil || strings.TrimSpace(s.bucket) == "" {
+		return fmt.Errorf("object storage is not configured")
+	}
+	exists, err := s.client.BucketExists(ctx, s.bucket)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("object storage bucket is missing")
+	}
+	return nil
+}
+
 func (s *MinioStorage) Put(ctx context.Context, key string, body io.Reader) (port.ObjectRef, error) {
 	if s == nil || s.client == nil {
 		return port.ObjectRef{}, errors.Unavailable("minio.put", fmt.Errorf("MinIO client is not configured"))

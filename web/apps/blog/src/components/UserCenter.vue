@@ -1,6 +1,7 @@
 <template>
-  <el-drawer v-model="visible" direction="rtl" :with-header="false" :before-close="handleClose">
+  <DialogSurface v-model="visible" title="个人中心" variant="drawer-right" hide-header aria-label="个人中心">
     <div class="account-center-header">
+      <button type="button" class="account-center-close" aria-label="关闭个人中心" @click="handleClose">×</button>
       <span>ACCOUNT / SETTINGS</span>
       <h2>账号设置</h2>
       <p>公开身份已移到创作台统一维护，这里只管理邮箱、订阅和通知。</p>
@@ -24,10 +25,7 @@
         </div>
         <div class="account-row">
           <div><strong>文章订阅邮件</strong><small>{{ userInfo.email ? '新文章发布后的邮件通知' : '绑定邮箱后可用' }}</small></div>
-          <el-switch
-            :model-value="Number(userInfo.isSubscribe) === 1"
-            :disabled="!userInfo.email || loading"
-            @change="changeSubscribe" />
+          <label class="account-switch-control"><input type="checkbox" role="switch" aria-label="文章订阅邮件" :checked="Number(userInfo.isSubscribe) === 1" :disabled="!userInfo.email || loading" @change="changeSubscribe" /><span /></label>
         </div>
       </section>
 
@@ -35,38 +33,23 @@
         <header><h3>互动通知</h3><span>分别控制站内互动和评论邮件</span></header>
         <div class="account-row">
           <div><strong>站内互动提醒</strong><small>评论、回复、点赞和收藏进入通知中心</small></div>
-          <el-switch
-            :model-value="Number(userInfo.notifyInteraction ?? 1) === 1"
-            :disabled="loading"
-            @change="changeInteractionNotice" />
+          <label class="account-switch-control"><input type="checkbox" role="switch" aria-label="站内互动提醒" :checked="Number(userInfo.notifyInteraction ?? 1) === 1" :disabled="loading" @change="changeInteractionNotice" /><span /></label>
         </div>
         <div class="account-row">
           <div><strong>创作进度提醒</strong><small>激活停滞时发送低频站内提醒，最多两次</small></div>
-          <el-switch
-            :model-value="Number(userInfo.notifyStudioActivation ?? 1) === 1"
-            :disabled="loading"
-            @change="changeStudioActivationNotice" />
+          <label class="account-switch-control"><input type="checkbox" role="switch" aria-label="创作进度提醒" :checked="Number(userInfo.notifyStudioActivation ?? 1) === 1" :disabled="loading" @change="changeStudioActivationNotice" /><span /></label>
         </div>
         <div class="account-row">
           <div><strong>话题订阅提醒</strong><small>订阅的话题有新文章时进入通知中心</small></div>
-          <el-switch
-            :model-value="Number(userInfo.notifyTopic ?? 1) === 1"
-            :disabled="loading"
-            @change="changeTopicNotice" />
+          <label class="account-switch-control"><input type="checkbox" role="switch" aria-label="话题订阅提醒" :checked="Number(userInfo.notifyTopic ?? 1) === 1" :disabled="loading" @change="changeTopicNotice" /><span /></label>
         </div>
         <div class="account-row">
           <div><strong>书单更新提醒</strong><small>订阅的书单新增文章时进入通知中心</small></div>
-          <el-switch
-            :model-value="Number(userInfo.notifyCollection ?? 1) === 1"
-            :disabled="loading"
-            @change="changeCollectionNotice" />
+          <label class="account-switch-control"><input type="checkbox" role="switch" aria-label="书单更新提醒" :checked="Number(userInfo.notifyCollection ?? 1) === 1" :disabled="loading" @change="changeCollectionNotice" /><span /></label>
         </div>
         <div class="account-row">
           <div><strong>评论邮件通知</strong><small>有人回复你时发送邮件提醒</small></div>
-          <el-switch
-            :model-value="Number(userInfo.notifyComment) === 1"
-            :disabled="loading"
-            @change="changeCommentNotice" />
+          <label class="account-switch-control"><input type="checkbox" role="switch" aria-label="评论邮件通知" :checked="Number(userInfo.notifyComment) === 1" :disabled="loading" @change="changeCommentNotice" /><span /></label>
         </div>
       </section>
 
@@ -82,25 +65,18 @@
         <p v-else class="account-empty">还没有推荐偏好。</p>
       </section>
     </template>
-  </el-drawer>
+  </DialogSurface>
 
-  <el-dialog v-model="emailDialogVisible" width="30%">
-    <el-form>
-      <el-form-item class="mt-5">
-        <el-input v-model.trim="email" placeholder="邮箱号" />
-      </el-form-item>
-      <el-form-item class="mt-8">
-        <el-input v-model.trim="verificationCode" placeholder="验证码">
-          <template #append>
-            <button type="button" class="account-code-button" @click="sendCode">{{ message }}</button>
-          </template>
-        </el-input>
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" size="large" class="mx-auto mt-3" @click="bindingEmail">保存邮箱</el-button>
-      </el-form-item>
-    </el-form>
-  </el-dialog>
+  <DialogSurface v-model="emailDialogVisible" title="绑定或修改邮箱">
+    <form class="account-email-form" @submit.prevent="bindingEmail">
+      <input v-model.trim="email" type="email" autocomplete="email" placeholder="邮箱号" required />
+      <div class="account-email-code">
+        <input v-model.trim="verificationCode" inputmode="numeric" autocomplete="one-time-code" placeholder="验证码" required />
+        <button type="button" class="account-code-button" @click="sendCode">{{ message }}</button>
+      </div>
+      <button class="account-email-submit" type="submit">保存邮箱</button>
+    </form>
+  </DialogSurface>
 </template>
 
 <script lang="ts">
@@ -108,9 +84,11 @@ import { defineComponent, getCurrentInstance, reactive, toRef, toRefs, watch } f
 import { useRouter } from 'vue-router'
 import api from '@/api/api'
 import { useUserStore } from '@/stores/user'
+import DialogSurface from '@/components/overlays/DialogSurface.vue'
 
 export default defineComponent({
   name: 'UserCenter',
+  components: { DialogSurface },
   setup() {
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
     const router = useRouter()
@@ -146,7 +124,9 @@ export default defineComponent({
         proxy.$notify({ title: '错误', message: reason?.response?.data?.message || reason?.message || '邮箱保存失败', type: 'error' })
       }
     }
-    const changeSubscribe = async (value: boolean) => {
+    const switchValue = (event: Event) => (event.target as HTMLInputElement).checked
+    const changeSubscribe = async (event: Event) => {
+      const value = switchValue(event)
       reactiveData.loading = true
       try {
         const response = await api.updateUserSubscribe({ userId: userStore.userInfo.userInfoId, isSubscribe: value ? 1 : 0 })
@@ -159,7 +139,8 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
-    const changeCommentNotice = async (value: boolean) => {
+    const changeCommentNotice = async (event: Event) => {
+      const value = switchValue(event)
       reactiveData.loading = true
       try {
         const notifyComment = value ? 1 : 0
@@ -173,7 +154,8 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
-    const changeInteractionNotice = async (value: boolean) => {
+    const changeInteractionNotice = async (event: Event) => {
+      const value = switchValue(event)
       reactiveData.loading = true
       try {
         const notifyInteraction = value ? 1 : 0
@@ -191,7 +173,8 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
-    const changeStudioActivationNotice = async (value: boolean) => {
+    const changeStudioActivationNotice = async (event: Event) => {
+      const value = switchValue(event)
       reactiveData.loading = true
       try {
         const notifyStudioActivation = value ? 1 : 0
@@ -210,7 +193,8 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
-    const changeTopicNotice = async (value: boolean) => {
+    const changeTopicNotice = async (event: Event) => {
+      const value = switchValue(event)
       reactiveData.loading = true
       try {
         const notifyTopic = value ? 1 : 0
@@ -228,7 +212,8 @@ export default defineComponent({
         reactiveData.loading = false
       }
     }
-    const changeCollectionNotice = async (value: boolean) => {
+    const changeCollectionNotice = async (event: Event) => {
+      const value = switchValue(event)
       reactiveData.loading = true
       try {
         const notifyCollection = value ? 1 : 0
@@ -297,6 +282,7 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .account-center-header { padding: 6px 0 20px; border-bottom: 1px solid var(--border-hairline); }
+.account-center-close { float: right; width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--background-primary-alt); color: inherit; font-size: 22px; cursor: pointer; }
 .account-center-header span { color: var(--color-ob); font-size: 10px; letter-spacing: .18em; }
 .account-center-header h2 { margin: 8px 0; font-size: 1.8rem; }
 .account-center-header p { margin: 0; color: var(--text-ob-dim); font-size: 12px; line-height: 1.7; }
@@ -312,5 +298,18 @@ export default defineComponent({
 .account-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 0; border-top: 1px solid var(--border-hairline); }
 .account-row strong, .account-row small { display: block; }
 .account-row small { margin-top: 3px; color: var(--text-ob-dim); font-size: 11px; } .account-empty { margin: 0; padding: 14px 0; color: var(--text-ob-dim); font-size: 11px; } .account-feedback-list .account-row strong { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-switch-control { position: relative; display: inline-flex; flex: 0 0 42px; width: 42px; height: 24px; cursor: pointer; }
+.account-switch-control input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.account-switch-control span { width: 42px; height: 24px; border-radius: 999px; background: color-mix(in srgb, var(--text-ob-dim) 35%, transparent); transition: background .16s ease; }
+.account-switch-control span::after { display: block; width: 18px; height: 18px; margin: 3px; border-radius: 50%; background: white; content: ''; transition: transform .16s ease; }
+.account-switch-control input:checked + span { background: var(--color-ob); }
+.account-switch-control input:checked + span::after { transform: translateX(18px); }
+.account-switch-control input:focus-visible + span { outline: 2px solid var(--color-ob); outline-offset: 3px; }
+.account-switch-control input:disabled + span { opacity: .45; cursor: not-allowed; }
+.account-email-form { display: grid; gap: 12px; }
+.account-email-form input { min-width: 0; width: 100%; min-height: 42px; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border-hairline); border-radius: 9px; background: var(--background-primary-alt); color: inherit; font: inherit; }
+.account-email-code { display: flex; align-items: center; gap: 10px; }
+.account-email-form .account-code-button { flex: 0 0 auto; min-height: 40px; padding: 6px 10px; }
+.account-email-submit { min-height: 42px; border: 0; border-radius: 999px; background: var(--color-ob); color: #081127; font: inherit; font-weight: 700; cursor: pointer; }
 @media (max-width: 620px) { .account-identity { grid-template-columns: 52px 1fr; } .account-identity button { grid-column: 1 / -1; text-align: left; } }
 </style>
