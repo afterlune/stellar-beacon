@@ -372,6 +372,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 
 	api.ConfigureServices(api.Services{
 		Article:            articleService,
+		PublicArticle:      articleService,
 		Platform:           platformService,
 		ArticleReaction:    articleReactionService,
 		Series:             seriesService,

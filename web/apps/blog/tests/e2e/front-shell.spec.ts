@@ -2000,6 +2000,34 @@ test.describe('live Meilisearch preview', () => {
 })
 
 test.describe('shared article feed cards', () => {
+  test('archives reads the canonical items and total page fields', async ({ page }) => {
+    await page.route('**/api/v1/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/v1/public/archives') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 'OK',
+            message: '操作成功',
+            data: {
+              items: [{ time: '2026-9-27', articles: [articleFixture(71, '归档分页文章')] }],
+              total: 1,
+              page: 1,
+              pageSize: 12
+            }
+          })
+        })
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'OK', message: '操作成功', data: null }) })
+    })
+
+    await page.goto('/archives', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('.archive-entry-title')).toHaveText('归档分页文章')
+    await expect(page.locator('.archive-group-count')).toHaveText('1')
+  })
+
   test('category and tag results use the shared landscape card', async ({ page }) => {
     const results = [1, 2, 3].map((id) => articleFixture(id, `共享卡片 ${id}`))
     await page.route(/\/api\/v1\/public\/articles\/by-category(?:\?|$)/, async (route) => {

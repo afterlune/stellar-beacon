@@ -4,6 +4,7 @@ import "github.com/eternallyzzz/stellar-beacon/internal/application/service"
 
 var (
 	articleService            service.ArticleService                = new(service.MyArticleService)
+	publicArticleReader       service.PublicArticleReader           = new(service.MyArticleService)
 	platformService           service.PlatformService               = new(service.MyPlatformService)
 	articleReactionService    service.ArticleReactionService        = new(service.MyArticleReactionService)
 	seriesService             service.SeriesService                 = new(service.MySeriesService)
@@ -42,6 +43,7 @@ var (
 
 type Services struct {
 	Article            service.ArticleService
+	PublicArticle      service.PublicArticleReader
 	Platform           service.PlatformService
 	ArticleReaction    service.ArticleReactionService
 	Series             service.SeriesService
@@ -80,6 +82,10 @@ type Services struct {
 
 func ConfigureServices(s Services) {
 	articleService = s.Article
+	publicArticleReader = s.PublicArticle
+	if publicArticleReader == nil {
+		publicArticleReader, _ = s.Article.(service.PublicArticleReader)
+	}
 	platformService = s.Platform
 	articleReactionService = s.ArticleReaction
 	seriesService = s.Series

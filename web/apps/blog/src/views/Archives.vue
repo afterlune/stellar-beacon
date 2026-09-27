@@ -77,7 +77,13 @@ export default defineComponent({
           size: pagination.size
         })
         .then(({ data }) => {
-          data.data.records.forEach((item: any) => {
+          const page = data?.data || {}
+          const archives = Array.isArray(page.items)
+            ? page.items
+            : Array.isArray(page.records)
+              ? page.records
+              : []
+          archives.forEach((item: any) => {
             item.articles.forEach((article: any) => {
               article.articleContent = md
                 .render(article.articleContent)
@@ -86,8 +92,8 @@ export default defineComponent({
                 .replace(/&npsp;/gi, '')
             })
           })
-          articleStore.archives = data.data.records
-          pagination.total = data.data.count
+          articleStore.archives = archives
+          pagination.total = Number(page.total ?? page.count ?? archives.length)
         })
     }
     const pageChangeHanlder = (current: number) => {

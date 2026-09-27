@@ -88,6 +88,10 @@ jobs:
         shell: bash
         run: bash scripts/checks/check-service-infra-boundary.sh
 
+      - name: Check public article reader boundary
+        shell: bash
+        run: bash scripts/checks/check-public-article-reader-boundary.sh
+
       - name: Check infrastructure HTTP boundary
         shell: bash
         run: bash scripts/checks/check-infrastructure-http-boundary.sh

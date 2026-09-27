@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
@@ -16,19 +18,35 @@ import (
 )
 
 type fakeArticleRepository struct {
-	listErr      error
-	archives     []port.ArticleCard
-	related      []*port.ArticleCard
-	record       entity.TArticle
-	recordErr    error
-	saveErr      error
-	savedArticle entity.TArticle
-	saveCalls    int
-	updateResult entity.TArticle
-	updateErr    error
-	updateCalls  int
-	trashCalls   int
-	deleteCalls  int
+	listErr         error
+	listItems       []*port.ArticleCard
+	featured        []*port.ArticleCard
+	categoryItems   []*port.ArticleCard
+	tagItems        []*port.ArticleCard
+	article         port.Article
+	articleErr      error
+	preArticle      port.ArticleCard
+	nextArticle     port.ArticleCard
+	firstArticle    port.ArticleCard
+	lastArticle     port.ArticleCard
+	categoryNameArg string
+	categoryIDArg   int
+	tagNameArg      string
+	tagIDArg        int
+	pageCurrent     int
+	pageSize        int
+	archives        []port.ArticleCard
+	related         []*port.ArticleCard
+	record          entity.TArticle
+	recordErr       error
+	saveErr         error
+	savedArticle    entity.TArticle
+	saveCalls       int
+	updateResult    entity.TArticle
+	updateErr       error
+	updateCalls     int
+	trashCalls      int
+	deleteCalls     int
 }
 
 type fakeArticleSearcher struct {
@@ -43,6 +61,11 @@ type recordingArticleCache struct {
 	fakeServiceCache
 	value      string
 	viewWrites int
+	allowed    bool
+	accessErr  error
+	grantErr   error
+	accessKey  string
+	accessItem string
 }
 
 func (c *recordingArticleCache) Get(context.Context, string) (string, error) {
@@ -55,6 +78,23 @@ func (c *recordingArticleCache) Get(context.Context, string) (string, error) {
 func (c *recordingArticleCache) ZIncrBy(context.Context, string, float64, string) (float64, error) {
 	c.viewWrites++
 	return float64(c.viewWrites), nil
+}
+
+func (c *recordingArticleCache) SIsMember(_ context.Context, key string, value any) (bool, error) {
+	c.accessKey = key
+	c.accessItem = fmt.Sprint(value)
+	return c.allowed, c.accessErr
+}
+
+func (c *recordingArticleCache) SAdd(_ context.Context, key string, values ...any) (int64, error) {
+	c.accessKey = key
+	if len(values) > 0 {
+		c.accessItem = fmt.Sprint(values[0])
+	}
+	if c.grantErr != nil {
+		return 0, c.grantErr
+	}
+	return int64(len(values)), nil
 }
 
 type recordingContentAnalyticsRepo struct {
@@ -78,23 +118,31 @@ func (f *fakeArticleSearcher) Search(_ context.Context, _ string, offset, limit 
 }
 
 func (f *fakeArticleRepository) ListTopAndFeaturedArticles(context.Context) ([]*port.ArticleCard, error) {
-	return nil, nil
+	return f.featured, nil
 }
-func (f *fakeArticleRepository) ListArticles(context.Context, int, int) ([]*port.ArticleCard, int, error) {
+func (f *fakeArticleRepository) ListArticles(_ context.Context, current, size int) ([]*port.ArticleCard, int, error) {
+	f.pageCurrent, f.pageSize = current, size
 	if f.listErr != nil {
 		return nil, 0, f.listErr
 	}
+	if f.listItems != nil {
+		return f.listItems, len(f.listItems), nil
+	}
 	return []*port.ArticleCard{{Id: 1, ArticleTitle: "test"}}, 1, nil
 }
-func (f *fakeArticleRepository) GetArticlesByCategoryName(context.Context, int, int, string) ([]*port.ArticleCard, int, error) {
-	return nil, 0, nil
+func (f *fakeArticleRepository) GetArticlesByCategoryName(_ context.Context, current, size int, name string) ([]*port.ArticleCard, int, error) {
+	f.pageCurrent, f.pageSize, f.categoryNameArg = current, size, name
+	return f.categoryItems, len(f.categoryItems), nil
 }
 
-func (f *fakeArticleRepository) ListArticlesByTagName(context.Context, int, int, string) ([]*port.ArticleCard, int, error) {
-	return nil, 0, nil
+func (f *fakeArticleRepository) ListArticlesByTagName(_ context.Context, current, size int, name string) ([]*port.ArticleCard, int, error) {
+	f.pageCurrent, f.pageSize, f.tagNameArg = current, size, name
+	return f.tagItems, len(f.tagItems), nil
 }
-func (f *fakeArticleRepository) GetArticlesByCategoryID(context.Context, int, int, int) ([]*port.ArticleCard, int, error) {
-	return nil, 0, nil
+func (f *fakeArticleRepository) GetArticlesByCategoryID(_ context.Context, current, size, id int) ([]*port.ArticleCard, int, error) {
+	f.pageCurrent, f.pageSize, f.categoryIDArg = current, size, id
+	f.categoryNameArg = ""
+	return f.categoryItems, len(f.categoryItems), nil
 }
 func (f *fakeArticleRepository) ListArticleCardsByIDs(context.Context, []int) ([]*port.ArticleCard, error) {
 	return nil, nil
@@ -109,22 +157,24 @@ func (f *fakeArticleRepository) PublishDueArticles(context.Context) ([]int, erro
 	return nil, nil
 }
 func (f *fakeArticleRepository) GetArticleByID(context.Context, int) (port.Article, error) {
-	return port.Article{}, nil
+	return f.article, f.articleErr
 }
 func (f *fakeArticleRepository) GetPreArticleByID(context.Context, int) (port.ArticleCard, error) {
-	return port.ArticleCard{}, nil
+	return f.preArticle, nil
 }
 func (f *fakeArticleRepository) GetNextArticleByID(context.Context, int) (port.ArticleCard, error) {
-	return port.ArticleCard{}, nil
+	return f.nextArticle, nil
 }
 func (f *fakeArticleRepository) GetFirstArticle(context.Context) (port.ArticleCard, error) {
-	return port.ArticleCard{}, nil
+	return f.firstArticle, nil
 }
 func (f *fakeArticleRepository) GetLastArticle(context.Context) (port.ArticleCard, error) {
-	return port.ArticleCard{}, nil
+	return f.lastArticle, nil
 }
-func (f *fakeArticleRepository) ListArticlesByTagID(context.Context, int, int, int) ([]*port.ArticleCard, int, error) {
-	return nil, 0, nil
+func (f *fakeArticleRepository) ListArticlesByTagID(_ context.Context, current, size, id int) ([]*port.ArticleCard, int, error) {
+	f.pageCurrent, f.pageSize, f.tagIDArg = current, size, id
+	f.tagNameArg = ""
+	return f.tagItems, len(f.tagItems), nil
 }
 func (f *fakeArticleRepository) ListArchives(context.Context, int, int) ([]port.ArticleCard, int, error) {
 	return f.archives, len(f.archives), nil
@@ -182,130 +232,141 @@ func (f *fakeArticleRepository) Export(context.Context, []int) ([]entity.TArticl
 	return nil, nil
 }
 
-func articleTestContext() *gin.Context {
-	return articleRequestContext("/articles?current=1&size=10")
-}
-
-func articleRequestContext(target string) *gin.Context {
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest(http.MethodGet, target, nil)
-	return c
-}
-
-func TestArticleServiceListPropagatesRepositoryData(t *testing.T) {
-	result := mustArticleService(t, &fakeArticleRepository{}, nil).ListArticles(articleTestContext())
-	if !result.Flag || result.Code != 20000 {
-		t.Fatalf("unexpected result: %+v", result)
+func TestArticleReaderReturnsTypedListPage(t *testing.T) {
+	repo := &fakeArticleRepository{listItems: []*port.ArticleCard{{Id: 1, ArticleTitle: "one"}, {Id: 2, ArticleTitle: "two"}}}
+	page, err := mustArticleService(t, repo, nil).List(context.Background(), PageQuery{Current: 2, Size: 12})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if result.Data == nil {
-		t.Fatal("expected page data")
+	if page.Total != 2 || page.Page != 2 || page.PageSize != 12 || len(page.Items) != 2 {
+		t.Fatalf("unexpected article page: %#v", page)
+	}
+	if repo.pageCurrent != 2 || repo.pageSize != 12 {
+		t.Fatalf("pagination not forwarded: current=%d size=%d", repo.pageCurrent, repo.pageSize)
 	}
 }
 
-func TestArticleServiceMapsRepositoryFailureWithoutLeakingDetail(t *testing.T) {
-	result := mustArticleService(t, &fakeArticleRepository{
+func TestArticleReaderNormalizesEmptyCollectionsAndLimitsFeatured(t *testing.T) {
+	repo := &fakeArticleRepository{
+		listItems: []*port.ArticleCard{},
+		featured:  []*port.ArticleCard{{Id: 1}, {Id: 2}, {Id: 3}, {Id: 4}},
+	}
+	service := mustArticleService(t, repo, nil)
+	page, err := service.List(context.Background(), PageQuery{Current: 1, Size: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Items == nil || len(page.Items) != 0 {
+		t.Fatalf("empty collection should be a non-nil empty slice: %#v", page.Items)
+	}
+	featured, err := service.ListFeatured(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if featured.TopArticle == nil || featured.TopArticle.Id != 1 || len(featured.FeaturedArticles) != 2 || featured.FeaturedArticles[1].Id != 3 {
+		t.Fatalf("featured list exceeded or changed its existing limit: %#v", featured)
+	}
+}
+
+func TestArticleReaderReturnsRepositoryFailure(t *testing.T) {
+	service := mustArticleService(t, &fakeArticleRepository{
 		listErr: apperrors.Unavailable("article.list", testServiceError("connection refused: password=secret")),
-	}, nil).ListArticles(articleTestContext())
-	if result.Flag {
-		t.Fatal("expected failed result")
-	}
-	if result.Message != "系统繁忙，请稍后再试" {
-		t.Fatalf("unexpected message: %q", result.Message)
+	}, nil)
+	_, err := service.List(context.Background(), PageQuery{Current: 1, Size: 12})
+	if err == nil || model.ResultFromError(err).Message != "系统繁忙，请稍后再试" {
+		t.Fatalf("repository failure was not mapped safely: %v", err)
 	}
 }
 
-func TestArticleServiceRejectsInvalidArticleIDs(t *testing.T) {
-	service := mustArticleService(t, &fakeArticleRepository{}, nil)
-	for name, result := range map[string]model.ResultVO{
-		"category": service.ListArticlesByCategoryId(articleRequestContext("/articles?current=1&size=10&categoryId=bad")),
-		"tag":      service.ListArticlesByTagId(articleRequestContext("/articles?current=1&size=10&tagId=bad")),
-	} {
-		if result.Flag || result.Message != "参数格式不正确" {
-			t.Fatalf("%s: unexpected result: %+v", name, result)
-		}
+func TestArticleReaderUsesCategoryAndTagNamesWhenProvided(t *testing.T) {
+	repo := &fakeArticleRepository{categoryItems: []*port.ArticleCard{}, tagItems: []*port.ArticleCard{}}
+	service := mustArticleService(t, repo, nil)
+	page := PageQuery{Current: 1, Size: 12}
+	if _, err := service.ListByCategory(context.Background(), CategoryArticleQuery{Page: page, ID: 8, Name: " Engineering "}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.categoryNameArg != "Engineering" || repo.categoryIDArg != 0 {
+		t.Fatalf("category name did not take precedence: name=%q id=%d", repo.categoryNameArg, repo.categoryIDArg)
+	}
+	if _, err := service.ListByTag(context.Background(), TagArticleQuery{Page: page, ID: 9, Name: " Go "}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.tagNameArg != "Go" || repo.tagIDArg != 0 {
+		t.Fatalf("tag name did not take precedence: name=%q id=%d", repo.tagNameArg, repo.tagIDArg)
+	}
+	if _, err := service.ListByCategory(context.Background(), CategoryArticleQuery{Page: page, ID: 8}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.categoryIDArg != 8 || repo.categoryNameArg != "" {
+		t.Fatalf("category id fallback was not used: name=%q id=%d", repo.categoryNameArg, repo.categoryIDArg)
+	}
+	if _, err := service.ListByTag(context.Background(), TagArticleQuery{Page: page, ID: 9}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.tagIDArg != 9 || repo.tagNameArg != "" {
+		t.Fatalf("tag id fallback was not used: name=%q id=%d", repo.tagNameArg, repo.tagIDArg)
 	}
 }
 
-func TestArticleServiceSortsArchivesNewestFirst(t *testing.T) {
+func TestArticleReaderGroupsArchivesByMonthNewestFirst(t *testing.T) {
 	service := mustArticleService(t, &fakeArticleRepository{archives: []port.ArticleCard{
 		{Id: 1, CreateTime: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)},
 		{Id: 2, CreateTime: time.Date(2025, 3, 4, 0, 0, 0, 0, time.UTC)},
-		{Id: 3, CreateTime: time.Date(2024, 1, 2, 1, 0, 0, 0, time.UTC)},
+		{Id: 3, CreateTime: time.Date(2024, 1, 8, 1, 0, 0, 0, time.UTC)},
 	}}, nil)
-	result := service.ListArchives(articleRequestContext("/archives/all?current=1&size=10"))
-	if !result.Flag {
-		t.Fatalf("unexpected result: %+v", result)
+	page, err := service.ListArchives(context.Background(), PageQuery{Current: 1, Size: 12})
+	if err != nil {
+		t.Fatal(err)
 	}
-	page, ok := result.Data.(model.PageResultDTO)
-	if !ok {
-		t.Fatalf("unexpected page type: %T", result.Data)
+	if len(page.Items) != 2 || page.Items[0].Time != "2025-3" || page.Items[1].Time != "2024-1" {
+		t.Fatalf("unexpected archive order: %#v", page.Items)
 	}
-	archives, ok := page.Records.([]model.ArchiveDTO)
-	if !ok {
-		t.Fatalf("unexpected archive type: %T", page.Records)
-	}
-	if len(archives) != 2 || archives[0].Time != "2025-3-4" || archives[1].Time != "2024-1-2" {
-		t.Fatalf("unexpected archive order: %#v", archives)
-	}
-	if len(archives[1].Articles) != 2 {
-		t.Fatalf("same-day articles were not grouped: %#v", archives[1].Articles)
+	if len(page.Items[1].Articles) != 2 {
+		t.Fatalf("same-month articles were not grouped: %#v", page.Items)
 	}
 }
 
-func TestArticleServiceUsesTypedSearchPort(t *testing.T) {
+func TestArticleReaderUsesTypedSearchPort(t *testing.T) {
 	searcher := &fakeArticleSearcher{hits: []port.ArticleSearchHit{{
 		ArticleSearch:      port.ArticleSearch{Id: 7, ArticleTitle: "raw title", ArticleContent: "raw content"},
 		HighlightedTitle:   "<mark>title</mark>",
 		HighlightedContent: "<mark>content</mark>",
 	}}, total: 7}
 	service := mustArticleService(t, &fakeArticleRepository{}, searcher)
-	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title&current=2&size=3"))
-	if !result.Flag {
-		t.Fatalf("unexpected result: %+v", result)
+	page, err := service.Search(context.Background(), ArticleSearchQuery{Page: PageQuery{Current: 2, Size: 3}, Keywords: " title "})
+	if err != nil {
+		t.Fatal(err)
 	}
-	page, ok := result.Data.(model.PageResultDTO)
-	if !ok || page.Count != 7 || page.Page != 2 || page.PageSize != 3 {
-		t.Fatalf("unexpected search page: %#v", result.Data)
+	if page.Total != 7 || page.Page != 2 || page.PageSize != 3 || len(page.Items) != 1 {
+		t.Fatalf("unexpected search page: %#v", page)
 	}
-	hits, ok := page.Records.([]model.ArticleSearchDTO)
-	if !ok || len(hits) != 1 {
-		t.Fatalf("unexpected search result: %#v", page.Records)
-	}
-	if hits[0].ArticleTitle != "raw title" || hits[0].ArticleContent != "raw content" ||
-		hits[0].HighlightedTitle != "<mark>title</mark>" || hits[0].HighlightedContent != "<mark>content</mark>" {
-		t.Fatalf("raw and highlighted fields were not preserved: %#v", hits[0])
+	hit := page.Items[0]
+	if hit.ArticleTitle != "raw title" || hit.ArticleContent != "raw content" ||
+		hit.HighlightedTitle != "<mark>title</mark>" || hit.HighlightedContent != "<mark>content</mark>" {
+		t.Fatalf("raw or highlighted fields were not preserved: %#v", hit)
 	}
 	if searcher.gotOffset != 3 || searcher.gotLimit != 3 {
 		t.Fatalf("pagination was not forwarded: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)
 	}
 }
 
-func TestArticleServiceSearchNormalizesPagingAndEmptyKeywords(t *testing.T) {
-	searcher := &fakeArticleSearcher{}
-	service := mustArticleService(t, &fakeArticleRepository{}, searcher)
-	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title&current=-4&size=500"))
-	page, ok := result.Data.(model.PageResultDTO)
-	if !ok || page.Page != 1 || page.PageSize != 50 {
-		t.Fatalf("paging was not clamped: %#v", result.Data)
+func TestArticleReaderEmptySearchSkipsSearcher(t *testing.T) {
+	searcher := &fakeArticleSearcher{gotOffset: -1, gotLimit: -1}
+	page, err := mustArticleService(t, &fakeArticleRepository{}, searcher).Search(context.Background(), ArticleSearchQuery{
+		Page: PageQuery{Current: 2, Size: 9}, Keywords: "  ",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if searcher.gotOffset != 0 || searcher.gotLimit != 50 {
-		t.Fatalf("clamped paging was not forwarded: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)
-	}
-
-	searcher.gotOffset = -1
-	searcher.gotLimit = -1
-	empty := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=&current=2&size=9"))
-	emptyPage, ok := empty.Data.(model.PageResultDTO)
-	if !ok || emptyPage.Count != 0 || emptyPage.Page != 2 || emptyPage.PageSize != 9 {
-		t.Fatalf("empty search page = %#v", empty.Data)
+	if page.Total != 0 || page.Page != 2 || page.PageSize != 9 || len(page.Items) != 0 {
+		t.Fatalf("unexpected empty search page: %#v", page)
 	}
 	if searcher.gotOffset != -1 || searcher.gotLimit != -1 {
-		t.Fatalf("empty keyword search should not call the searcher: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)
+		t.Fatalf("empty keyword search called the searcher: offset=%d limit=%d", searcher.gotOffset, searcher.gotLimit)
 	}
 }
 
-func TestArticleServiceCountsCachedPublicViews(t *testing.T) {
+func TestArticleReaderCountsCachedPublicViews(t *testing.T) {
 	cache := &recordingArticleCache{value: `{"id":7,"status":1,"isDelete":0,"articleTitle":"cached"}`}
 	content := &recordingContentAnalyticsRepo{}
 	service, err := NewArticleService(ArticleServiceDeps{
@@ -315,15 +376,13 @@ func TestArticleServiceCountsCachedPublicViews(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := articleRequestContext("/v1/public/articles/7")
-	ctx.Params = gin.Params{{Key: "articleId", Value: "7"}}
-	result := service.GetArticleById(ctx)
-	if !result.Flag || cache.viewWrites != 1 || content.viewWrites != 1 {
-		t.Fatalf("cached public article should count one view: result=%+v cache=%d analytics=%d", result, cache.viewWrites, content.viewWrites)
+	article, err := service.Get(context.Background(), 7, 0)
+	if err != nil || article == nil || cache.viewWrites != 1 || content.viewWrites != 1 {
+		t.Fatalf("cached public article should count one view: article=%+v error=%v cache=%d analytics=%d", article, err, cache.viewWrites, content.viewWrites)
 	}
 }
 
-func TestArticleServiceDoesNotCountNonPublicCachedViews(t *testing.T) {
+func TestArticleReaderDoesNotCountNonPublicCachedViews(t *testing.T) {
 	cache := &recordingArticleCache{value: `{"id":7,"status":3,"isDelete":0,"articleTitle":"draft"}`}
 	content := &recordingContentAnalyticsRepo{}
 	service, err := NewArticleService(ArticleServiceDeps{
@@ -333,26 +392,85 @@ func TestArticleServiceDoesNotCountNonPublicCachedViews(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := articleRequestContext("/v1/public/articles/7")
-	ctx.Params = gin.Params{{Key: "articleId", Value: "7"}}
-	_ = service.GetArticleById(ctx)
-	if cache.viewWrites != 0 || content.viewWrites != 0 {
-		t.Fatalf("non-public cached article must not count views: cache=%d analytics=%d", cache.viewWrites, content.viewWrites)
+	article, err := service.Get(context.Background(), 7, 0)
+	if err != nil || article != nil || cache.viewWrites != 0 || content.viewWrites != 0 {
+		t.Fatalf("non-public cached article must not be counted: article=%+v error=%v cache=%d analytics=%d", article, err, cache.viewWrites, content.viewWrites)
 	}
 }
 
-func TestArticleServiceMapsSearchFailure(t *testing.T) {
+func TestArticleReaderChecksPasswordGrantUsingAccountID(t *testing.T) {
+	repo := &fakeArticleRepository{record: entity.TArticle{Id: 7, Status: 1, Password: "secret"}, article: port.Article{Id: 7, Status: 1}}
+	cache := &recordingArticleCache{allowed: true}
+	service, err := NewArticleService(ArticleServiceDeps{
+		Repo: repo, Reactions: &fakeArticleReactionRepository{}, ContentAnalytics: fakeContentAnalyticsRepository{},
+		Cache: cache, Storage: fakeServiceStorage{}, Search: &fakeArticleSearcher{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	article, err := service.Get(context.Background(), 7, 42)
+	if err != nil || article == nil {
+		t.Fatalf("authorized article read failed: article=%+v error=%v", article, err)
+	}
+	if cache.accessKey != ArticleAccess+"42" || cache.accessItem != "7" {
+		t.Fatalf("password grant lookup used the wrong key: key=%q item=%q", cache.accessKey, cache.accessItem)
+	}
+}
+
+func TestArticleReaderRequiresPasswordGrant(t *testing.T) {
+	repo := &fakeArticleRepository{record: entity.TArticle{Id: 7, Status: 1, Password: "secret"}}
+	cache := &recordingArticleCache{}
+	service, err := NewArticleService(ArticleServiceDeps{
+		Repo: repo, Reactions: &fakeArticleReactionRepository{}, ContentAnalytics: fakeContentAnalyticsRepository{},
+		Cache: cache, Storage: fakeServiceStorage{}, Search: &fakeArticleSearcher{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.Get(context.Background(), 7, 42)
+	var articleErr *PublicArticleError
+	if !errors.As(err, &articleErr) || articleErr.Failure != PublicArticlePasswordRequired {
+		t.Fatalf("expected password grant failure, got %v", err)
+	}
+}
+
+func TestArticleReaderGrantsPasswordAccess(t *testing.T) {
+	repo := &fakeArticleRepository{record: entity.TArticle{Id: 7, Password: "secret"}}
+	cache := &recordingArticleCache{}
+	service, err := NewArticleService(ArticleServiceDeps{
+		Repo: repo, Reactions: &fakeArticleReactionRepository{}, ContentAnalytics: fakeContentAnalyticsRepository{},
+		Cache: cache, Storage: fakeServiceStorage{}, Search: &fakeArticleSearcher{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.GrantPasswordAccess(context.Background(), ArticlePasswordAccess{ArticleID: 7, Password: "secret", UserID: 42}); err != nil {
+		t.Fatal(err)
+	}
+	if cache.accessKey != ArticleAccess+"42" || cache.accessItem != "7" {
+		t.Fatalf("password grant used the wrong cache key: key=%q item=%q", cache.accessKey, cache.accessItem)
+	}
+	if err := service.GrantPasswordAccess(context.Background(), ArticlePasswordAccess{ArticleID: 7, Password: "wrong", UserID: 42}); err == nil {
+		t.Fatal("wrong password was accepted")
+	} else {
+		var articleErr *PublicArticleError
+		if !errors.As(err, &articleErr) || articleErr.Failure != PublicArticlePasswordInvalid {
+			t.Fatalf("unexpected wrong-password error: %v", err)
+		}
+	}
+}
+
+func TestArticleReaderMapsSearchFailureAtHTTPBoundary(t *testing.T) {
 	service := mustArticleService(t, &fakeArticleRepository{}, &fakeArticleSearcher{err: apperrors.Unavailable("search.articles", testServiceError("meili unavailable"))})
-	result := service.ListArticlesBySearch(articleRequestContext("/articles/search?keywords=title"))
-	if result.Flag || result.Message != "系统繁忙，请稍后再试" {
-		t.Fatalf("unexpected result: %+v", result)
+	_, err := service.Search(context.Background(), ArticleSearchQuery{Page: PageQuery{Current: 1, Size: 12}, Keywords: "title"})
+	if result := model.ResultFromError(err); result.Flag || result.Message != "系统繁忙，请稍后再试" {
+		t.Fatalf("unexpected mapped result: %+v", result)
 	}
 }
 
 type testServiceError string
 
 func (e testServiceError) Error() string { return string(e) }
-
 func articleJSONContext(method, target, body string) *gin.Context {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
