@@ -132,6 +132,7 @@ export default defineComponent({
 .recommendation-head p { margin: 0 0 7px; color: var(--color-ob); font-size: 10px; letter-spacing: .18em; }
 .recommendation-head h2 { margin: 0 0 7px; font-size: clamp(1.45rem, 3vw, 2.1rem); }
 .recommendation-head span, .recommendation-head a { color: var(--text-ob-dim); font-size: 12px; text-decoration: none; }
+.recommendation-head a { display: inline-flex; min-height: 32px; align-items: center; padding-block: 4px; }
 .recommendation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .is-compact .recommendation-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .recommendation-card { display: flex; min-width: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--border-hairline); border-radius: 17px; background: color-mix(in srgb, var(--background-primary) 94%, transparent); }

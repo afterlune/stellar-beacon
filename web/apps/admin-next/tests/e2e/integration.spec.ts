@@ -34,17 +34,29 @@ test.describe('admin-next isolated integration', () => {
 
     const routes = [
       '/growth',
+      '/dashboard',
+      '/monitor',
+      '/media',
+      '/articles',
       '/article-list',
       '/categories',
       '/tags',
+      '/series',
+      '/content-performance',
+      '/content-moderation',
       '/comments',
       '/users',
+      '/online/users',
       '/roles',
+      '/menus',
+      '/resources',
+      '/website',
       '/operation/log',
       '/exception/log',
       '/quartz',
-      '/albums',
-      '/talk-list'
+      '/talk-list',
+      '/talks',
+      '/setting'
     ]
     for (const route of routes) {
       const response = await page.goto(route, { waitUntil: 'domcontentloaded' })

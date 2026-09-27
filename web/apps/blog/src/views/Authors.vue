@@ -98,6 +98,7 @@ export default defineComponent({
 .author-card { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 18px; border: 1px solid var(--border-hairline); border-radius: 17px; background: color-mix(in srgb, var(--background-primary-alt) 90%, transparent); }
 .author-card > a img { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; }
 .author-card__copy { min-width: 0; }
+.author-card__copy > a { display: inline-flex; min-height: 32px; align-items: center; }
 .author-card__copy strong { color: inherit; font-size: 1.08rem; text-decoration: none; }
 .author-card__copy > span, .author-card__copy p, .author-card__copy small { display: block; color: var(--text-ob-dim); }
 .author-card__copy > span { margin-top: 3px; font-size: 11px; }

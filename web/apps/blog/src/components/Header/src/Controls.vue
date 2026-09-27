@@ -1,32 +1,32 @@
 <template>
   <div class="header-controls absolute top-10 right-0 flex flex-row">
     <button type="button" class="header-control header-control-menu" data-dia="menu" :aria-label="t('settings.tips-open-menu')" @click="handleOpenMenu"><svg-icon icon-class="nav-menu" /></button>
-    <button type="button" class="ob-drop-shadow" data-dia="search" :aria-label="$i18n.locale === 'cn' ? '搜索' : 'Search'" aria-keyshortcuts="Control+K Meta+K" @click="handleOpenModel(true)"><svg-icon icon-class="search" /></button>
+    <button type="button" class="ob-drop-shadow" data-dia="search" :aria-label="locale === 'cn' ? '搜索' : 'Search'" aria-keyshortcuts="Control+K Meta+K" @click="handleOpenModel(true)"><svg-icon icon-class="search" /></button>
     <button type="button" class="ob-drop-shadow" data-dia="reading" :aria-label="t('settings.tips-open-reading')" @click="openReading"><svg-icon icon-class="clock-outline" /></button>
     <Dropdown v-if="multiLanguage === 1" @command="handleClick">
-      <button type="button" class="ob-drop-shadow" data-dia="language" ><svg-icon icon-class="globe" /><span v-if="$i18n.locale == 'cn'">中文</span><span v-if="$i18n.locale == 'en'">EN</span><span class="sr-only">{{ $i18n.locale === 'cn' ? '切换语言' : 'Switch language' }}</span></button>
+      <button type="button" class="ob-drop-shadow" data-dia="language" ><svg-icon icon-class="globe" /><span v-if="locale == 'cn'">中文</span><span v-if="locale == 'en'">EN</span><span class="sr-only">{{ locale === 'cn' ? '切换语言' : 'Switch language' }}</span></button>
       <DropdownMenu>
         <DropdownItem name="en">English</DropdownItem>
         <DropdownItem name="cn">中文</DropdownItem>
       </DropdownMenu>
     </Dropdown>
     <SpaceSwitcher />
-    <button v-if="userInfo !== ''" type="button" class="ob-drop-shadow header-notification" data-dia="notifications" @click="openNotifications"><svg-icon icon-class="notice" /><i v-if="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</i><span class="sr-only">{{ $i18n.locale === 'cn' ? '通知中心' : 'Notifications' }}</span></button>
+    <button v-if="userInfo !== ''" type="button" class="ob-drop-shadow header-notification" data-dia="notifications" @click="openNotifications"><svg-icon icon-class="notice" /><i v-if="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</i><span class="sr-only">{{ locale === 'cn' ? '通知中心' : 'Notifications' }}</span></button>
     <template v-if="userInfo === ''">
       <button type="button" class="header-login" data-dia="login" @click="openLoginDialog">{{ t('settings.login') }}</button>
     </template>
     <template v-if="userInfo !== ''">
       <Dropdown class="account-menu">
-        <button type="button" class="header-avatar-trigger" :aria-label="$i18n.locale === 'cn' ? '账号菜单' : 'Account menu'" aria-haspopup="true">
+        <button type="button" class="header-avatar-trigger" :aria-label="locale === 'cn' ? '账号菜单' : 'Account menu'" aria-haspopup="true">
           <Avatar :url="userInfo.avatar" />
         </button>
         <DropdownMenu>
           <template v-if="!isMobile">
-            <DropdownItem @click="openForYou">{{ $i18n.locale === 'cn' ? '为你推荐' : 'For you' }}</DropdownItem>
-            <DropdownItem @click="openPublicProfile" :disabled="!publicHandle">{{ $i18n.locale === 'cn' ? '我的公开主页' : 'My public profile' }}</DropdownItem>
-            <DropdownItem @click="openFollowing">{{ $i18n.locale === 'cn' ? '关注动态' : 'Following' }}</DropdownItem>
-            <DropdownItem @click="openNotifications">{{ $i18n.locale === 'cn' ? '发布提醒' : 'Notifications' }}</DropdownItem>
-            <DropdownItem @click="openStudioProfile">{{ $i18n.locale === 'cn' ? '公开资料' : 'Public profile' }}</DropdownItem>
+            <DropdownItem @click="openForYou">{{ locale === 'cn' ? '为你推荐' : 'For you' }}</DropdownItem>
+            <DropdownItem @click="openPublicProfile" :disabled="!publicHandle">{{ locale === 'cn' ? '我的公开主页' : 'My public profile' }}</DropdownItem>
+            <DropdownItem @click="openFollowing">{{ locale === 'cn' ? '关注动态' : 'Following' }}</DropdownItem>
+            <DropdownItem @click="openNotifications">{{ locale === 'cn' ? '发布提醒' : 'Notifications' }}</DropdownItem>
+            <DropdownItem @click="openStudioProfile">{{ locale === 'cn' ? '公开资料' : 'Public profile' }}</DropdownItem>
             <DropdownItem @click="openFavorites">{{ t('reactions.favorites') }}</DropdownItem>
           </template>
           <DropdownItem @click="openUserCenter">{{ t('settings.personal-center') }}</DropdownItem>
@@ -125,7 +125,7 @@ export default defineComponent({
     SpaceSwitcher
   },
   setup() {
-    const { t } = useI18n()
+    const { t, locale } = useI18n()
     const proxy: any = getCurrentInstance()?.appContext.config.globalProperties
     const appStore = useAppStore()
     const commonStore = useCommonStore()
@@ -219,13 +219,11 @@ export default defineComponent({
       try {
         const { data } = await api.login(params)
         if (!data.flag) throw new Error(data.message || '登录失败')
-        userStore.userInfo = data.data
-        sessionStorage.setItem('token', data.data.token)
-        userStore.token = data.data.token
+        userStore.setAuthSession({ userInfo: data.data, token: data.data.token })
         proxy.$notify({ title: '成功', message: '登录成功', type: 'success' })
-        reactiveDate.loginDialogVisible = false
         const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
         if (redirect) await router.replace(redirect)
+        reactiveDate.loginDialogVisible = false
       } catch (reason: any) {
         proxy.$notify({ title: '错误', message: errorMessage(reason, '登录失败'), type: 'error' })
       } finally {
@@ -245,10 +243,7 @@ export default defineComponent({
     const logout = () => {
       api.logout().then(({ data }) => {
         if (data.flag) {
-          userStore.userInfo = ''
-          userStore.token = ''
-          userStore.accessArticles = []
-          sessionStorage.removeItem('token')
+          userStore.clearSession()
           proxy.$notify({
             title: '成功',
             message: '登出成功',
@@ -426,6 +421,7 @@ export default defineComponent({
         let websiteConfig: any = appStore.websiteConfig
         return websiteConfig.multiLanguage
       }),
+      locale,
       t
     }
   }
@@ -437,7 +433,10 @@ export default defineComponent({
   cursor: pointer;
 }
 .auth-link {
-  padding: 0;
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 6px 4px;
   border: 0;
   background: transparent;
   color: var(--color-ob);
@@ -481,7 +480,7 @@ export default defineComponent({
 .auth-input-group { display: flex; align-items: center; gap: 12px; padding-right: 12px; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 25%, transparent); border-radius: 9px; background: var(--background-primary-alt); }
 .auth-input-group .auth-input { border: 0; background: transparent; box-shadow: none; }
 .auth-input-group .auth-link { flex: 0 0 auto; }
-.auth-input-group .password-toggle { min-width: 34px; }
+.auth-input-group .password-toggle { min-width: 38px; justify-content: center; }
 .auth-link:disabled { cursor: progress; }
 .auth-form > .auth-link { justify-self: start; }
 .auth-form .mt-8 { margin-top: .5rem; }
@@ -554,13 +553,13 @@ export default defineComponent({
       transition: stroke 250ms ease;
     }
   }
-  /* Hamburger only exists below the lg breakpoint, where Navigation is hidden. */
+  /* The side drawer replaces desktop navigation below the 1280px breakpoint. */
   .header-control-menu {
-    display: none;
+    display: flex;
   }
-  @media (max-width: 1023px) {
+  @media (min-width: 1280px) {
     .header-control-menu {
-      display: flex;
+      display: none;
     }
   }
   .search-bar {

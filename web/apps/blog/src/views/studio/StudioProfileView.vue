@@ -301,7 +301,7 @@ async function save(): Promise<void> {
     })
     savedHandle = form.handle
     markClean()
-    userStore.userInfo = { ...(userStore.userInfo || {}), ...form }
+    userStore.updateUserInfo(form)
     saveState.value = `已保存 · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
     notify.success('公开资料已更新')
   } catch (reason: any) {
@@ -320,7 +320,7 @@ async function handleAvatarUploaded(payload: any): Promise<void> {
     const success = data?.flag === true || data?.code === 'OK' || data?.code === 'SUCCESS'
     if (!success || typeof data.data !== 'string') throw new Error(data?.message || '头像上传失败')
     form.avatar = data.data
-    userStore.userInfo = { ...(userStore.userInfo || {}), avatar: data.data }
+    userStore.updateUserInfo({ avatar: data.data })
     notify.success('头像已更新')
   } catch (reason: any) {
     notify.error(reason?.message || '头像上传失败')
@@ -378,7 +378,7 @@ onMounted(() => {
 .studio-public-card > span { margin-top: 12px; color: var(--color-ob); font-size: 11px; }
 .studio-public-card h2 { margin: 5px 0 8px; }
 .studio-public-card p { margin: 0 0 12px; color: var(--text-ob-dim); font-size: 12px; line-height: 1.7; }
-.studio-public-card a { color: var(--color-ob); font-size: 11px; }
+.studio-public-card a { display: inline-flex; max-width: 100%; min-height: 34px; align-items: center; justify-content: center; padding: 4px 12px; border: 1px solid var(--border-hairline); border-radius: 999px; color: var(--color-ob); font-size: 11px; overflow-wrap: anywhere; }
 .studio-profile-progress { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
 .studio-profile-progress strong { font-size: 1.8rem; }
 .studio-profile-progress > span { height: 5px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--text-ob-dim) 18%, transparent); }
@@ -392,7 +392,7 @@ onMounted(() => {
 .studio-profile-footer > div { display: flex; align-items: center; gap: 8px; }
 .studio-profile-primary { border-color: transparent; background: var(--color-ob); color: #081127; font-weight: 700; }
 .studio-profile-primary:disabled, .studio-profile-avatar button:disabled { opacity: .55; cursor: wait; }
-.studio-profile-link { color: var(--color-ob); font-size: 12px; text-decoration: none; }
+.studio-profile-link { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid var(--border-hairline); border-radius: 999px; color: var(--color-ob); font-size: 12px; text-decoration: none; }
 .studio-profile-leave { position: fixed; z-index: 3000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(2, 6, 20, .72); backdrop-filter: blur(8px); }
 .studio-profile-leave section { width: min(440px, 100%); padding: 26px; border: 1px solid var(--border-hairline); border-radius: 18px; background: var(--background-primary-alt); }
 .studio-profile-leave h2 { margin: 0 0 10px; }

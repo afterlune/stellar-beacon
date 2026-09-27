@@ -2,11 +2,12 @@ import type { FollowContentType, NotificationCursor, NotificationGroup, Recommen
 import { createApiClient } from '@stellar-beacon/api-client'
 import router from '@/router'
 import { useUserStore } from '@/stores/user'
+import { clearAuthSession, getAuthToken } from '@/utils/authSession'
 
 let redirectingAfterUnauthorized = false
 
 const handleUnauthorized = () => {
-  sessionStorage.removeItem('token')
+  clearAuthSession()
   useUserStore().clearSession()
 
   const currentRoute = router.currentRoute.value
@@ -28,7 +29,7 @@ const handleUnauthorized = () => {
 const http = createApiClient({
   legacyResponse: true,
   rejectBusinessErrors: false,
-  getToken: () => sessionStorage.getItem('token'),
+  getToken: getAuthToken,
   onUnauthorized: handleUnauthorized
 })
 

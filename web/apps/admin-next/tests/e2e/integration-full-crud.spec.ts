@@ -6,7 +6,7 @@ const allowLogin = process.env.E2E_ADMIN_ALLOW_LOGIN === '1'
 test.describe.configure({ mode: 'serial' })
 
 test.describe('admin-next full isolated CRUD integration', () => {
-  test('covers every write-capable migrated module with reversible actions @integration @crud @full', async ({ page }) => {
+  test('covers active admin modules with reversible real-backend actions @integration @crud @full', async ({ page }) => {
     test.setTimeout(360_000)
     test.skip(
       !realIntegration || !allowLogin || !process.env.E2E_ADMIN_EMAIL || !process.env.E2E_ADMIN_PASSWORD,
@@ -37,9 +37,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
     await traceStep('reactions', () => runArticleReactionRoundTrip(page, token, suffix))
     await traceStep('comment-notify', () => runCommentNotificationRoundTrip(page, token, suffix))
     await traceStep('series', () => runSeriesRoundTrip(page, token, suffix))
-    await traceStep('link-application', () => runFriendLinkApplicationRoundTrip(page, token, suffix))
     await traceStep('scheduled-publish', () => runScheduledPublishRoundTrip(page, token, suffix))
-    await traceStep('album', () => runAlbumCRUD(page, suffix))
     await traceStep('job', () => runJobCRUD(page, token, suffix))
     await traceStep('role', () => runRoleCRUD(page, suffix))
     await traceStep('menus', () => runPermissionCRUD(page, 'menus', suffix))
@@ -47,9 +45,7 @@ test.describe('admin-next full isolated CRUD integration', () => {
     await traceStep('user', () => runUserEditRoundTrip(page, suffix))
     await traceStep('comment', () => runCommentReviewRoundTrip(page))
     await traceStep('website', () => runWebsiteRoundTrip(page, suffix))
-    await traceStep('about', () => runAboutRoundTrip(page, suffix))
     await traceStep('setting', () => runSettingRoundTrip(page, suffix))
-    await traceStep('photos', () => runPhotoCRUD(page, suffix))
     await traceStep('logs', () => runLogReadOnlyRoundTrips(page))
     // Seeded articles still point at the retired OSS bucket, so the media proxy
     // answers 502 for those covers.  That is an environment artifact, not a
@@ -125,35 +121,6 @@ async function runArticleDraftCRUD(page: Page, token: string, suffix: string): P
   } finally {
     if (articleID > 0) await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', [articleID])
   }
-}
-
-async function runAlbumCRUD(page: Page, suffix: string): Promise<void> {
-  const shortSuffix = suffix.slice(-4)
-  const name = `e2e-a-${shortSuffix}`
-  const editedName = `e2e-a2-${shortSuffix}`
-  await page.goto('/albums', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.arco-table')).toBeVisible()
-  await page.getByRole('button', { name: '新增', exact: true }).click()
-  let modal = visibleModal(page)
-  const textInputs = modal.locator('input[type="text"]')
-  await textInputs.nth(0).fill(name)
-  await modal.locator('textarea').fill(`隔离相册 ${suffix}`)
-  await textInputs.nth(1).fill(`https://example.com/e2e-album-${suffix}.png`)
-  await expectMutation(page, '/api/v1/admin/albums', 'POST', () => modal.getByRole('button', { name: '确定', exact: true }).click())
-  await filterTable(page, '/api/v1/admin/albums', name)
-  await expect(rowWithText(page, name)).toBeVisible()
-
-  await rowWithText(page, name).getByRole('button', { name: '编辑', exact: true }).click()
-  modal = visibleModal(page)
-  await modal.locator('input[type="text"]').nth(0).fill(editedName)
-  await expectMutation(page, '/api/v1/admin/albums', 'POST', () => modal.getByRole('button', { name: '确定', exact: true }).click())
-  await filterTable(page, '/api/v1/admin/albums', editedName)
-  await expect(rowWithText(page, editedName)).toBeVisible()
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await filterTable(page, '/api/v1/admin/albums', editedName)
-  await expect(rowWithText(page, editedName)).toBeVisible()
-  await deleteAlbumRow(page, editedName)
-  await expect(rowWithText(page, editedName)).toHaveCount(0)
 }
 
 async function runJobCRUD(page: Page, token: string, suffix: string): Promise<void> {
@@ -318,22 +285,6 @@ async function runWebsiteRoundTrip(page: Page, suffix: string): Promise<void> {
   await expect(name).toHaveValue(original)
 }
 
-async function runAboutRoundTrip(page: Page, suffix: string): Promise<void> {
-  await page.goto('/about', { waitUntil: 'domcontentloaded' })
-  const main = page.getByRole('main')
-  const textarea = main.locator('textarea')
-  const original = await textarea.inputValue()
-  const changed = `${original}\n\n[e2e-${suffix}]`
-  await textarea.fill(changed)
-  await expectMutation(page, '/api/v1/admin/about', 'PUT', () => main.getByRole('button', { name: '保存', exact: true }).click())
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await expect(textarea).toHaveValue(changed)
-  await textarea.fill(original)
-  await expectMutation(page, '/api/v1/admin/about', 'PUT', () => main.getByRole('button', { name: '保存', exact: true }).click())
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await expect(textarea).toHaveValue(original)
-}
-
 async function runSettingRoundTrip(page: Page, suffix: string): Promise<void> {
   await page.goto('/setting', { waitUntil: 'domcontentloaded' })
   const main = page.getByRole('main')
@@ -359,54 +310,6 @@ async function runSettingRoundTrip(page: Page, suffix: string): Promise<void> {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(inputs.nth(0)).toHaveValue(originalNickname)
   await expect(textarea).toHaveValue(originalIntro)
-}
-
-async function runPhotoCRUD(page: Page, suffix: string): Promise<void> {
-  // The isolated seed contains album 11 with reversible photo fixtures.  Do
-  // not upload a new object here: the photo delete API removes the database
-  // row but deliberately does not own object-store garbage collection.
-  const albumID = 11
-  await page.goto(`/albums/${albumID}`, { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.photo-masonry')).toBeVisible()
-  // Arco's table body classes differ between builds; use the accessible row
-  // contract already used by the other CRUD steps.
-  const row = page.getByRole('row').filter({ has: page.getByRole('button', { name: '编辑', exact: true }) }).first()
-  await expect(row, 'isolated photo fixture').toBeVisible()
-  const originalName = (await row.locator('.photo-tile-copy strong').innerText()).trim()
-  expect(originalName).not.toBe('')
-  const editedName = `e2e-p-${suffix.slice(-8)}`
-
-  await row.getByRole('button', { name: '编辑', exact: true }).click()
-  let modal = visibleModal(page)
-  await modal.locator('input[type="text"]').first().fill(editedName)
-  await expectMutation(page, '/api/v1/admin/photos', 'PUT', () => modal.getByRole('button', { name: '确定', exact: true }).click())
-  await expect(rowWithText(page, editedName)).toBeVisible()
-
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.photo-masonry')).toBeVisible()
-  await expect(rowWithText(page, editedName)).toBeVisible()
-
-  const editedRow = rowWithText(page, editedName)
-  await editedRow.getByRole('button', { name: '移除', exact: true }).click()
-  const removeConfirm = page.locator('.arco-popconfirm:visible').last()
-  await expectMutation(page, '/api/v1/admin/photos/trash', 'PUT', () => removeConfirm.getByRole('button', { name: '确定', exact: true }).click())
-  await expect(rowWithText(page, editedName)).toHaveCount(0)
-
-  await page.goto('/photos/delete', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('main').getByText('照片回收站')).toBeVisible()
-  await expect(rowWithText(page, editedName)).toBeVisible()
-  const deletedRow = rowWithText(page, editedName)
-  await expectMutation(page, '/api/v1/admin/photos/trash', 'PUT', () => deletedRow.getByRole('button', { name: '恢复', exact: true }).click())
-
-  await page.goto(`/albums/${albumID}`, { waitUntil: 'domcontentloaded' })
-  await expect(rowWithText(page, editedName)).toBeVisible()
-  await rowWithText(page, editedName).getByRole('button', { name: '编辑', exact: true }).click()
-  modal = visibleModal(page)
-  await modal.locator('input[type="text"]').first().fill(originalName)
-  await expectMutation(page, '/api/v1/admin/photos', 'PUT', () => modal.getByRole('button', { name: '确定', exact: true }).click())
-  await expect(rowWithText(page, originalName)).toBeVisible()
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await expect(rowWithText(page, originalName)).toBeVisible()
 }
 
 async function runLogReadOnlyRoundTrips(page: Page): Promise<void> {
@@ -517,22 +420,6 @@ async function deletePermissionRow(page: Page, endpoint: string, text: string): 
   expect(response.status(), `DELETE ${endpoint}/:id`).toBe(200)
   const payload = await response.json() as { flag?: boolean; code?: number | string }
   expect(payload.code === 'OK' || payload.flag === true, `DELETE ${endpoint}/:id success`).toBe(true)
-}
-
-async function deleteAlbumRow(page: Page, text: string): Promise<void> {
-  const row = rowWithText(page, text)
-  await expect(row).toBeVisible()
-  await row.getByRole('button', { name: '删除', exact: true }).click()
-  const popconfirm = page.locator('.arco-popconfirm:visible').last()
-  const responsePromise = page.waitForResponse((response) => {
-    const responseURL = new URL(response.url())
-    return responseURL.pathname.startsWith('/api/v1/admin/albums/') && response.request().method() === 'DELETE'
-  })
-  await popconfirm.getByRole('button', { name: '确定', exact: true }).click()
-  const response = await responsePromise
-  expect(response.status(), 'DELETE /api/v1/admin/albums/:id').toBe(200)
-  const payload = await response.json() as { flag?: boolean; code?: number | string }
-  expect(payload.code === 'OK' || payload.flag === true).toBe(true)
 }
 
 function rowWithText(page: Page, text: string): ReturnType<Page['getByRole']> {
@@ -844,69 +731,6 @@ async function runSeriesRoundTrip(page: Page, token: string, suffix: string): Pr
     }
     if (articleIDs.length > 0) {
       await deleteAdminIDs(page.context().request, token, '/api/v1/admin/articles/batch-delete', articleIDs)
-    }
-  }
-}
-
-/**
- * A reader submission must stay invisible until an administrator approves it,
- * and a rejected submission must never surface.
- */
-async function runFriendLinkApplicationRoundTrip(page: Page, token: string, suffix: string): Promise<void> {
-  const address = `https://e2e-link-${suffix}.example.test`
-  let linkID = 0
-  try {
-    const applied = await page.request.post('/api/v1/public/links/applications', {
-      data: {
-        linkName: `e2e-${suffix}`.slice(0, 20),
-        linkAvatar: '',
-        linkAddress: address,
-        linkIntro: 'integration application',
-        email: `e2e-link-${suffix}@example.test`
-      }
-    })
-    expect(applied.status(), 'submit application').toBe(200)
-    const appliedPayload = await applied.json() as { code?: string | number }
-    expect(appliedPayload.code === 'OK', 'application accepted').toBe(true)
-
-    const publicLinks = await page.request.get('/api/v1/public/links')
-    const publicPayload = await publicLinks.json() as { data?: Array<{ linkAddress: string }> }
-    expect((publicPayload.data || []).some((item) => item.linkAddress === address), 'pending links stay private').toBe(false)
-
-    const adminList = await page.request.get(`/api/v1/admin/friend-links?current=1&size=10&keywords=${encodeURIComponent(`e2e-${suffix}`.slice(0, 20))}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const adminItems = (await adminList.json() as { data?: { items?: Array<{ id: number; status: number; linkAddress: string; applicantEmail: string }> } }).data?.items || []
-    const pending = adminItems.find((item) => item.linkAddress === address)
-    expect(pending, 'pending application is visible to admins').toBeTruthy()
-    expect(Number(pending?.status), 'application starts pending').toBe(0)
-    expect(pending?.applicantEmail, 'applicant email is stored').toContain('example.test')
-    linkID = Number(pending?.id || 0)
-
-    const approved = await page.request.put('/api/v1/admin/friend-links/review', {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { ids: [linkID], status: 1 }
-    })
-    expect(approved.status(), 'approve application').toBe(200)
-
-    const afterApprove = await page.request.get('/api/v1/public/links')
-    const approvedPayload = await afterApprove.json() as { data?: Array<{ linkAddress: string }> }
-    expect((approvedPayload.data || []).some((item) => item.linkAddress === address), 'approved links become public').toBe(true)
-
-    const rejected = await page.request.put('/api/v1/admin/friend-links/review', {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { ids: [linkID], status: 2 }
-    })
-    expect(rejected.status(), 'reject application').toBe(200)
-    const afterReject = await page.request.get('/api/v1/public/links')
-    const rejectedPayload = await afterReject.json() as { data?: Array<{ linkAddress: string }> }
-    expect((rejectedPayload.data || []).some((item) => item.linkAddress === address), 'rejected links stay private').toBe(false)
-  } finally {
-    if (linkID > 0) {
-      await page.request.delete('/api/v1/admin/friend-links', {
-        headers: { Authorization: `Bearer ${token}` },
-        data: [linkID]
-      })
     }
   }
 }

@@ -393,7 +393,7 @@ export default defineComponent({
         const response = await api.getStudioProfile()
         if (!response?.data?.flag) return
         Object.assign(profile, response.data.data || {})
-        userStore.userInfo = { ...(userStore.userInfo || {}), ...response.data.data }
+        userStore.updateUserInfo(response.data.data || {})
         profileLoaded.value = true
       } catch {
         // Keep the cached identity visible when the profile request is unavailable.
@@ -470,7 +470,7 @@ export default defineComponent({
 .studio-range-tabs button.active { border-color: var(--color-ob); color: var(--color-ob); }
 .studio-operation-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .studio-operation-cards article { padding: 15px; border: 1px solid var(--border-hairline); border-radius: 13px; }
-.studio-operation-cards span, .studio-operation-cards small { display: block; color: var(--text-ob-dim); font-size: 10px; } .studio-operation-cards small a { color: var(--color-ob); text-decoration: none; }
+.studio-operation-cards span, .studio-operation-cards small { display: block; color: var(--text-ob-dim); font-size: 10px; } .studio-operation-cards small a { display: inline-flex; min-height: 28px; align-items: center; padding-block: 4px; color: var(--color-ob); text-decoration: none; }
 .studio-operation-cards strong { display: block; margin: 7px 0 4px; font-size: 1.5rem; }
 .studio-operation-cards article.is-danger strong { color: #df8177; }
 .studio-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 16px; margin-top: 16px; }
@@ -518,12 +518,13 @@ export default defineComponent({
 .studio-profile-summary__copy strong { font-size: 1.2rem; }
 .studio-profile-summary__copy span { margin-top: 3px; color: var(--color-ob); font-size: 11px; }
 .studio-profile-summary__copy p { margin: 9px 0 0; color: var(--text-ob-dim); font-size: 12px; line-height: 1.65; }
+.studio-profile-summary__copy small a { display: inline-flex; min-height: 28px; align-items: center; padding-block: 4px; }
 .studio-profile-progress { grid-column: 1 / -1; display: grid; gap: 8px; }
 .studio-profile-progress > span { height: 5px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--text-ob-dim) 18%, transparent); }
 .studio-profile-progress i { display: block; height: 100%; border-radius: inherit; background: var(--color-ob); transition: width .2s ease; }
 .studio-profile-progress small { color: var(--text-ob-dim); font-size: 11px; }
 .studio-profile-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
-.studio-profile-actions a { color: var(--color-ob); font-size: 12px; text-decoration: none; }
+.studio-profile-actions a { display: inline-flex; min-height: 34px; align-items: center; padding: 0 10px; border: 1px solid var(--border-hairline); border-radius: 999px; color: var(--color-ob); font-size: 12px; text-decoration: none; }
 .studio-quick { display: grid; gap: 10px; }
 .studio-quick a { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 15px; border: 1px solid var(--border-hairline); border-radius: 13px; color: inherit; text-decoration: none; }
 .studio-quick strong, .studio-quick span { display: block; }

@@ -4,11 +4,15 @@ import path from 'node:path'
 
 const adminEmail = process.env.E2E_ADMIN_EMAIL || ''
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || ''
+type VisualRoute = { name: string; path: string; authenticated?: boolean; guest?: boolean }
 // The authenticated reader routes are only audited when the run can obtain a
 // real session; a fake token would only screenshot an error state. Every other
 // route keeps the historical fake token so the audit baseline is unchanged.
-const authenticatedRoutes = adminEmail && adminPassword
+const authenticatedRoutes: VisualRoute[] = adminEmail && adminPassword
   ? [
+      { name: 'home-authenticated', path: '/', authenticated: true },
+      { name: 'studio-dashboard', path: '/studio/dashboard', authenticated: true },
+      { name: 'studio-profile', path: '/studio/profile', authenticated: true },
       { name: 'for-you', path: '/for-you', authenticated: true },
       { name: 'following', path: '/following', authenticated: true },
       { name: 'studio-collections', path: '/studio/collections', authenticated: true },
@@ -16,8 +20,9 @@ const authenticatedRoutes = adminEmail && adminPassword
     ]
   : []
 
-const routes = [
+const routes: VisualRoute[] = [
   { name: 'home', path: '/' },
+  { name: 'login', path: '/?login=1&redirect=%2Fstudio%2Fdashboard', guest: true },
   { name: 'author', path: '/u/admin' },
   { name: 'article', path: '/articles/158' },
   { name: 'archives', path: '/archives' },
@@ -39,17 +44,28 @@ const themes = ['theme-dark', 'theme-light']
 let session: { token: string; userInfo: Record<string, unknown> } | null = null
 const outputRoot = 'test-results/visual/screens'
 
-async function browse(page: Page, route: string, theme: string, authenticated = false): Promise<void> {
-  await page.context().addInitScript(({ themeName, session: current }) => {
+async function browse(page: Page, route: string, theme: string, authenticated = false, guest = false): Promise<void> {
+  await page.context().addInitScript(({ themeName, session: current, guest }) => {
     document.cookie = 'locale=cn; path=/'
     document.cookie = `theme=${themeName}; path=/`
+    const storageKey = 'stellar-beacon:auth-session'
+    if (guest) {
+      localStorage.removeItem(storageKey)
+      sessionStorage.removeItem('token')
+      sessionStorage.removeItem('userStore')
+      return
+    }
+
+    localStorage.removeItem(storageKey)
     sessionStorage.setItem('token', current?.token || 'visual-reading-token')
+    sessionStorage.removeItem('userStore')
     if (current) {
+      localStorage.setItem(storageKey, JSON.stringify({ token: current.token, userInfo: current.userInfo }))
       sessionStorage.setItem('userStore', JSON.stringify({
         userVisible: false, userInfo: current.userInfo, token: current.token, accessArticles: [], tab: 0, page: 1
       }))
     }
-  }, { themeName: theme, session: authenticated ? session : null })
+  }, { themeName: theme, session: authenticated ? session : null, guest })
   await page.goto(route, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1200)
 }
@@ -73,7 +89,19 @@ async function auditPage(page: Page, mobile: boolean, light: boolean) {
       .map((item) => `${item.node.tagName.toLowerCase()}.${String(item.node.className || '').slice(0, 40)}`)
     const smallTargets = Array.from(document.querySelectorAll('a, button, [role="button"]'))
       .filter((node) => node instanceof HTMLElement)
-      .map((node) => ({ node: node as HTMLElement, rect: (node as HTMLElement).getBoundingClientRect() }))
+      .map((node) => {
+        const element = node as HTMLElement
+        let current: HTMLElement | null = element
+        let visible = element.getClientRects().length > 0
+        while (current && visible) {
+          const style = getComputedStyle(current)
+          visible = style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0 &&
+            !current.hasAttribute('hidden') && current.getAttribute('aria-hidden') !== 'true'
+          current = current.parentElement
+        }
+        return { node: element, rect: element.getBoundingClientRect(), visible }
+      })
+      .filter((item) => item.visible)
       .filter((item) => item.rect.width > 0 && item.rect.height > 0 && item.rect.height < 24)
       .slice(0, 5)
       .map((item) => `${(item.node.textContent || '').trim().slice(0, 20)} h=${Math.round(item.rect.height)}`)
@@ -153,7 +181,7 @@ test.describe('blog visual gate', () => {
       const failures: string[] = []
 
       for (const route of [...routes, ...authenticatedRoutes]) {
-        await browse(page, route.path, theme, 'authenticated' in route && Boolean(route.authenticated))
+        await browse(page, route.path, theme, Boolean(route.authenticated), Boolean(route.guest))
         const audit = await auditPage(page, mobile, theme === 'theme-light')
         await page.screenshot({ path: path.join(outputDir, `${route.name}.png`) })
         await page.screenshot({ path: path.join(outputDir, `${route.name}-full.png`), fullPage: true })

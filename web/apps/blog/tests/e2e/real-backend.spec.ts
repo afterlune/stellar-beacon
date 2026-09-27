@@ -137,6 +137,109 @@ test.describe('blog real backend main chain @integration', () => {
     }
   })
 
+  test('keeps a real login across tabs and clears it after logout', async ({ browser, request }, testInfo) => {
+    const context = await browser.newContext({
+      baseURL: blogBaseURL,
+      locale: 'zh-CN',
+      viewport: { width: 1600, height: 900 },
+      extraHTTPHeaders: e2eHeaders
+    })
+    browserContexts.push(context)
+    await context.addCookies([{ name: 'locale', value: 'cn', url: blogBaseURL }])
+
+    const page = await context.newPage()
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('[data-dia="login"]')).toBeVisible()
+
+    const assertWideNavigation = async () => {
+      const metrics = await page.locator('.site-navigation .nav-link').evaluateAll((links) => {
+        const rects = links.map((link) => link.getBoundingClientRect())
+        return {
+          count: links.length,
+          labels: links.filter((link) => {
+            const label = link.querySelector('.nav-label')
+            return label && getComputedStyle(label).display !== 'none'
+          }).length,
+          rows: new Set(rects.map((rect) => Math.round(rect.top))).size,
+          overflow: document.documentElement.scrollWidth > window.innerWidth + 1
+        }
+      })
+      expect(metrics.count).toBe(10)
+      expect(metrics.labels).toBe(10)
+      expect(metrics.rows).toBe(1)
+      expect(metrics.overflow).toBe(false)
+    }
+
+    for (const width of [1280, 1440, 1600, 2048]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await assertWideNavigation()
+      await testInfo.attach(`guest-navigation-${width}`, {
+        body: await page.screenshot(),
+        contentType: 'image/png'
+      })
+    }
+
+    await page.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    await expect(page).toHaveURL(/login=1/)
+    const loginDialog = page.getByRole('dialog', { name: '登录' })
+    await expect(loginDialog.getByPlaceholder('邮箱')).toBeVisible()
+    await page.setViewportSize({ width: 390, height: 844 })
+    await testInfo.attach('login-dialog-mobile', {
+      body: await page.screenshot(),
+      contentType: 'image/png'
+    })
+    await page.setViewportSize({ width: 1600, height: 1000 })
+    await loginDialog.getByPlaceholder('邮箱').fill(userEmail)
+    await loginDialog.getByPlaceholder('密码').fill(userPassword)
+
+    const loginResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/v1/auth/login' && response.request().method() === 'POST'
+    )
+    await loginDialog.getByRole('button', { name: '登录', exact: true }).click()
+    expect((await loginResponse).status()).toBe(200)
+    await expect(page).toHaveURL(/\/studio\/dashboard$/)
+    await expect(page.locator('[data-dia="space-switcher"]')).toBeVisible()
+
+    for (const width of [1280, 1440, 1600, 2048]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await assertWideNavigation()
+      await testInfo.attach(`signed-in-navigation-${width}`, {
+        body: await page.screenshot(),
+        contentType: 'image/png'
+      })
+    }
+
+    const secondTab = await context.newPage()
+    await secondTab.setViewportSize({ width: 1600, height: 1000 })
+    await secondTab.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    await expect(secondTab).toHaveURL(/\/studio\/dashboard$/)
+    await expect(secondTab.locator('[data-dia="space-switcher"]')).toBeVisible()
+    await expect(secondTab.locator('.site-navigation .nav-link')).toHaveCount(10)
+    await secondTab.reload({ waitUntil: 'domcontentloaded' })
+    await expect(secondTab).toHaveURL(/\/studio\/dashboard$/)
+    await expect(secondTab.locator('[data-dia="space-switcher"]')).toBeVisible()
+    await testInfo.attach('new-tab-studio-dashboard', {
+      body: await secondTab.screenshot(),
+      contentType: 'image/png'
+    })
+
+    const logoutResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/v1/auth/logout' && response.request().method() === 'POST'
+    )
+    await page.locator('.studio-shell__user').getByRole('button', { name: '退出', exact: true }).click()
+    expect((await logoutResponse).status()).toBe(200)
+    await expect(secondTab.locator('[data-dia="space-switcher"]')).toHaveCount(0)
+    await expect(secondTab.locator('[data-dia="login"]')).toBeVisible()
+
+    await secondTab.goto('/studio/dashboard', { waitUntil: 'domcontentloaded' })
+    await expect(secondTab).toHaveURL(/login=1/)
+    await expect(secondTab.getByRole('dialog', { name: '登录' })).toBeVisible()
+
+    // The backend revokes the account's active token on logout. Refresh the
+    // shared API fixture so subsequent integration cases don't inherit it.
+    user = await loginByAPI(request, userEmail, userPassword)
+  })
+
   test('persists studio activation state per account', async ({ request }) => {
     const first = await putAPI(request, '/api/v1/studio/activation', admin.token, {
       started: true, collapsed: true, identityComplete: false, contentComplete: false, profileVisited: false, completed: false

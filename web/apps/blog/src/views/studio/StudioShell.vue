@@ -67,10 +67,7 @@ export default defineComponent({
     const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
     const logout = async () => {
       try { await api.logout() } catch { /* local session still clears */ }
-      userStore.userInfo = ''
-      userStore.token = ''
-      userStore.accessArticles = []
-      sessionStorage.removeItem('token')
+      userStore.clearSession()
       await router.replace('/')
     }
     return { userInfo, defaultAvatar, navigation, isActive, logout }

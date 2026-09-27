@@ -22,10 +22,10 @@
   <ul class="flex flex-col justify-center items-center mt-8 w-full list-none text-ob-bright">
     <li class="pb-2 cursor-pointer" v-for="route in routes" :key="route.path">
       <button type="button" class="mobile-menu-route text-sm block px-1.5 py-0.5 rounded-md relative uppercase" @click="pushPage(route.path)">
-        <span class="relative z-50" v-if="$i18n.locale === 'cn' && route.i18n.cn">
+        <span class="relative z-50" v-if="locale === 'cn' && route.i18n.cn">
           {{ route.i18n.cn }}
         </span>
-        <span class="relative z-50" v-else-if="$i18n.locale === 'en' && route.i18n.en">
+        <span class="relative z-50" v-else-if="locale === 'en' && route.i18n.en">
           {{ route.i18n.en }}
         </span>
         <span class="relative z-50" v-else>{{ route.name }}</span>
@@ -50,7 +50,7 @@ export default defineComponent({
     const appStore = useAppStore()
     const router = useRouter()
     const navigatorStore = useNavigatorStore()
-    const { t } = useI18n()
+    const { t, locale } = useI18n()
     const routes = config.routes as Array<{ name: string; path: string; i18n: { cn: string; en: string } }>
     const pushPage = (path: string): void => {
       console.log(path)
@@ -68,6 +68,7 @@ export default defineComponent({
     return {
       routes,
       pushPage,
+      locale,
       websiteConfig: computed(() => appStore.websiteConfig),
       articleCount: computed(() => appStore.articleCount),
       talkCount: computed(() => appStore.talkCount),
@@ -81,6 +82,8 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .mobile-menu-route {
+  min-height: 44px;
+  padding: 8px 12px;
   border: 0;
   background: transparent;
   color: inherit;

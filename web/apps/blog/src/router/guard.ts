@@ -1,6 +1,7 @@
 import router from '@/router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import { readAuthSession } from '@/utils/authSession'
 
 let keyboardNavigation = false
 
@@ -17,8 +18,10 @@ router.beforeEach((to) => {
   const appStore = useAppStore()
   const userStore = useUserStore()
   appStore.startLoading()
-  const token = sessionStorage.getItem('token')
-  if (!token) userStore.clearSession()
+  const authSession = readAuthSession()
+  if (authSession) userStore.setAuthSession(authSession, false)
+  else if (userStore.token || userStore.userInfo) userStore.clearSession()
+  const token = authSession?.token
   if (to.meta.requiresAuth && !token) {
     return { path: '/', query: { login: '1', redirect: to.fullPath } }
   }

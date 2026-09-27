@@ -18,6 +18,8 @@ import v3ImgPreview from 'v3-img-preview'
 import api from './api/api'
 import { notify } from '@/services/notifications'
 import defaultCover from '@/assets/default-cover.jpg'
+import { AUTH_SESSION_STORAGE_KEY, parseAuthSession, readAuthSession } from '@/utils/authSession'
+import { useUserStore } from '@/stores/user'
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
@@ -29,6 +31,17 @@ export const app = createApp(App)
   .use(infiniteScroll)
   .use(v3ImgPreview, {})
   .use(lazyPlugin, { loading: defaultCover, error: defaultCover })
+const userStore = useUserStore(pinia)
+const initialAuthSession = readAuthSession()
+if (initialAuthSession) userStore.setAuthSession(initialAuthSession, false)
+window.addEventListener('storage', (event) => {
+  if (event.key !== AUTH_SESSION_STORAGE_KEY && event.key !== null) return
+  const authSession = event.key === AUTH_SESSION_STORAGE_KEY
+    ? parseAuthSession(event.newValue)
+    : null
+  if (authSession) userStore.setAuthSession(authSession, false)
+  else userStore.clearSession()
+})
 app.config.globalProperties.$notify = notify
 registerSvgIcon(app)
 registerObSkeleton(app)

@@ -13,9 +13,14 @@ interface MenuContract {
 
 const visibleMenuContracts: MenuContract[] = [
   { path: '/', marker: '发布文章' },
+  { path: '/dashboard', marker: '仪表盘', contentSelector: '.dashboard-page' },
+  { path: '/monitor', marker: '实时监控', contentSelector: '.monitor-page' },
+  { path: '/media', marker: '图片资源', contentSelector: '.media-page' },
   { path: '/growth', marker: '订阅与增长', contentSelector: '.growth-overview-grid' },
   { path: '/articles', marker: '发布文章', contentSelector: '.article-form' },
   { path: '/article-list', marker: '文章列表', table: true },
+  { path: '/series', marker: '系列管理', table: true },
+  { path: '/content-performance', marker: '内容表现', contentSelector: '[data-testid="content-performance-page"]' },
   { path: '/content-moderation', marker: '内容审核', table: true },
   { path: '/categories', marker: '分类管理', table: true },
   { path: '/tags', marker: '标签管理', table: true },
@@ -26,13 +31,10 @@ const visibleMenuContracts: MenuContract[] = [
   { path: '/operation/log', marker: '操作日志', table: true },
   { path: '/exception/log', marker: '异常日志', table: true },
   { path: '/quartz', marker: '定时任务', table: true },
-  { path: '/albums', marker: '相册管理', table: true },
   { path: '/talk-list', marker: '说说管理', table: true },
   { path: '/talks', marker: '发布说说', contentSelector: '.talk-form' },
   { path: '/menus', marker: '菜单管理', table: true },
   { path: '/resources', marker: '接口资源管理', table: true },
-  { path: '/links', marker: '友链管理', table: true },
-  { path: '/about', marker: '关于我' },
   { path: '/website', marker: '网站配置' },
   { path: '/setting', marker: '个人中心' }
 ]
@@ -209,8 +211,6 @@ test.describe('admin-next real read-only integration', () => {
     const routes = [
       { path: `/articles/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/articles')}`, menuPaths: ['/articles/*'], marker: '修改文章', contentSelector: '.article-form' },
       { path: '/quartz/log/85', menuPaths: ['/quartz/log/:quartzId'], marker: '任务日志' },
-      { path: `/albums/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/albums')}`, menuPaths: ['/albums/*', '/albums/:albumId'], marker: '上传照片', contentSelector: '.photo-masonry' },
-      { path: '/photos/delete', menuPaths: ['/photos/delete'], marker: '照片回收站' },
       { path: `/talks/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/talks')}`, menuPaths: ['/talks/*', '/talks/:talkId'], marker: '编辑说说', contentSelector: '.talk-form' }
     ]
 
@@ -289,7 +289,8 @@ function flattenMenuItems(value: unknown, parentPath = ''): Array<{ name: string
 }
 
 const menuDisplayNames: Record<string, string> = {
-  '/albums': '相册管理',
+  '/monitor': '监控',
+  '/media': '媒体库',
   '/talk-list': '说说管理',
   '/users': '用户管理',
   '/resources': '资源管理'

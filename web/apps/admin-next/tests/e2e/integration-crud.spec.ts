@@ -31,20 +31,16 @@ test.describe('admin-next isolated CRUD integration', () => {
     const categoryEdited = `e2e-c2-${suffix}`
     const tagName = `e2e-tag-${suffix}`
     const tagEdited = `e2e-t2-${suffix}`
-    const linkName = `e2e-link-${suffix}`
-    const linkEdited = `e2e-l2-${suffix}`
     const talkContent = `e2e talk ${suffix}`
     const talkEdited = `e2e talk edited ${suffix}`
 
     try {
       await runTaxonomyCRUD(page, '/categories', 'categories', categoryName, categoryEdited)
       await runTaxonomyCRUD(page, '/tags', 'tags', tagName, tagEdited)
-      await runFriendLinkCRUD(page, linkName, linkEdited)
       await runTalkCRUD(page, talkContent, talkEdited)
     } finally {
       await cleanupTaxonomy(page, '/categories', 'categories', [categoryName, categoryEdited])
       await cleanupTaxonomy(page, '/tags', 'tags', [tagName, tagEdited])
-      await cleanupFriendLink(page, [linkName, linkEdited])
       await cleanupTalk(page, [talkContent, talkEdited])
     }
 
@@ -87,39 +83,6 @@ async function runTaxonomyCRUD(page: Page, route: string, endpoint: string, crea
   await expect(tableRow(page, edited)).toBeVisible()
   await deleteTableRow(page, `/api/v1/admin/${endpoint}`, edited)
   await expect(tableRow(page, edited)).toHaveCount(0)
-}
-
-async function runFriendLinkCRUD(page: Page, created: string, edited: string): Promise<void> {
-  await page.goto('/links', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.arco-table')).toBeVisible()
-  await page.getByRole('button', { name: '新增', exact: true }).click()
-  let modal = visibleModal(page)
-  await fillFriendLink(modal, created)
-  await expectMutation(page, '/api/v1/admin/friend-links', 'POST', () => modal.getByRole('button', { name: '确定', exact: true }).click())
-  await filterTable(page, '/api/v1/admin/friend-links', created)
-  await expect(tableRow(page, created)).toBeVisible()
-
-  await tableRow(page, created).getByRole('button', { name: '编辑', exact: true }).click()
-  modal = visibleModal(page)
-  await fillFriendLink(modal, edited)
-  await expectMutation(page, '/api/v1/admin/friend-links', 'POST', () => modal.getByRole('button', { name: '确定', exact: true }).click())
-  await filterTable(page, '/api/v1/admin/friend-links', edited)
-  await expect(tableRow(page, edited)).toBeVisible()
-  await expect(tableRow(page, created)).toHaveCount(0)
-
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await filterTable(page, '/api/v1/admin/friend-links', edited)
-  await expect(tableRow(page, edited)).toBeVisible()
-  await deleteTableRow(page, '/api/v1/admin/friend-links', edited)
-  await expect(tableRow(page, edited)).toHaveCount(0)
-}
-
-async function fillFriendLink(modal: ReturnType<Page['locator']>, name: string): Promise<void> {
-  const inputs = modal.locator('input')
-  await inputs.nth(0).fill(name)
-  await inputs.nth(1).fill('https://example.com/e2e-avatar.png')
-  await inputs.nth(2).fill(`https://example.com/e2e-${name}`)
-  await modal.locator('textarea').fill(`integration link ${name}`)
 }
 
 async function runTalkCRUD(page: Page, created: string, edited: string): Promise<void> {
@@ -204,27 +167,6 @@ async function cleanupTaxonomy(page: Page, route: string, endpoint: string, name
       const responsePromise = page.waitForResponse((response) => {
         const responseURL = new URL(response.url())
         return responseURL.pathname === `/api/v1/admin/${endpoint}` && response.request().method() === 'DELETE'
-      })
-      await popconfirm.getByRole('button', { name: '确定', exact: true }).click()
-      await responsePromise
-    }
-  } catch {
-    // Preserve the original assertion when cleanup cannot reach the isolated UI.
-  }
-}
-
-async function cleanupFriendLink(page: Page, names: string[]): Promise<void> {
-  try {
-    await page.goto('/links', { waitUntil: 'domcontentloaded' })
-    for (const name of names) {
-      await filterTable(page, '/api/v1/admin/friend-links', name)
-      const row = tableRow(page, name)
-      if (await row.count() === 0) continue
-      await row.getByRole('button', { name: '删除', exact: true }).click()
-      const popconfirm = page.locator('.arco-popconfirm:visible').last()
-      const responsePromise = page.waitForResponse((response) => {
-        const responseURL = new URL(response.url())
-        return responseURL.pathname === '/api/v1/admin/friend-links' && response.request().method() === 'DELETE'
       })
       await popconfirm.getByRole('button', { name: '确定', exact: true }).click()
       await responsePromise
