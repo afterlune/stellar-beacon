@@ -228,6 +228,7 @@ interface TableColumn {
 }
 
 const VIEW_KEY = 'article-list'
+const PAGE_SIZE_OPTIONS = [12, 20, 50, 100]
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -284,10 +285,10 @@ const {
     status: status.value ?? 0,
     type: type.value ?? 0
   }, { signal }),
-  { pageSize: readStoredPageSize(VIEW_KEY), fallbackMessage: t('articles.list.loadFailed') }
+  { pageSize: readStoredPageSize(VIEW_KEY, 12, PAGE_SIZE_OPTIONS), fallbackMessage: t('articles.list.loadFailed') }
 )
 
-useStoredPageSize(VIEW_KEY, pageSize)
+useStoredPageSize(VIEW_KEY, pageSize, 12, PAGE_SIZE_OPTIONS)
 useQueryFilters([
   { key: 'keywords', ref: keywords, debounce: true },
   { key: 'status', ref: status },
@@ -300,7 +301,7 @@ const tableColumns = computed(() => columns.value
   .filter((column) => columnPrefs.isVisible(column.dataIndex))
   .map((column) => ({ ...column, slotName: column.slotName || 'formatted' })))
 
-const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value))
+const pagination = computed(() => tablePagination(current.value, pageSize.value, total.value, PAGE_SIZE_OPTIONS))
 const hasFilters = computed(() => Boolean(keywords.value.trim()) || status.value !== undefined || type.value !== undefined)
 const allSelectedOwned = computed(() => selectedKeys.value.length > 0 && selectedIds().every((id) => {
   const record = records.value.find((item) => Number(item.id) === id)

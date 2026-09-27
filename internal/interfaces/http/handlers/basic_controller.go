@@ -3,7 +3,7 @@ package api
 import "github.com/eternallyzzz/stellar-beacon/internal/application/service"
 
 var (
-	articleService            service.ArticleService                = new(service.MyArticleService)
+	articleAdminUseCases      service.ArticleAdminUseCases          = new(service.MyArticleService)
 	publicArticleReader       service.PublicArticleReader           = new(service.MyArticleService)
 	platformService           service.PlatformService               = new(service.MyPlatformService)
 	articleReactionService    service.ArticleReactionService        = new(service.MyArticleReactionService)
@@ -42,7 +42,7 @@ var (
 )
 
 type Services struct {
-	Article            service.ArticleService
+	ArticleAdmin       service.ArticleAdminUseCases
 	PublicArticle      service.PublicArticleReader
 	Platform           service.PlatformService
 	ArticleReaction    service.ArticleReactionService
@@ -81,10 +81,11 @@ type Services struct {
 }
 
 func ConfigureServices(s Services) {
-	articleService = s.Article
-	publicArticleReader = s.PublicArticle
-	if publicArticleReader == nil {
-		publicArticleReader, _ = s.Article.(service.PublicArticleReader)
+	if s.ArticleAdmin != nil {
+		articleAdminUseCases = s.ArticleAdmin
+	}
+	if s.PublicArticle != nil {
+		publicArticleReader = s.PublicArticle
 	}
 	platformService = s.Platform
 	articleReactionService = s.ArticleReaction

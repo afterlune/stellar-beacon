@@ -2,9 +2,11 @@ package service
 
 import (
 	"bytes"
-	"container/list"
+	"context"
 	"io"
 	"log/slog"
+	"mime"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -12,198 +14,200 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
 )
 
-func (a *MyArticleService) ListArticlesAdmin(c *gin.Context) model.ResultVO {
-	var conditionVO model.ConditionVO
-	err := c.ShouldBindQuery(&conditionVO)
-	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	filter := port.ArticleFilter{
-		Current:          conditionVO.Current,
-		Size:             conditionVO.Size,
-		Keywords:         conditionVO.Keywords,
-		IsDelete:         conditionVO.IsDelete,
-		Status:           conditionVO.Status,
-		ModerationStatus: conditionVO.ModerationStatus,
-		Category:         conditionVO.CategoryId,
-		Type:             conditionVO.Type,
-		Tag:              conditionVO.TagId,
-	}
-	count, err := a.articleRepository().CountArticleAdmins(c.Request.Context(), filter)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	articleAdminDTOs, err := a.articleRepository().ListArticlesAdmin(c.Request.Context(), filter)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	viewsCountMap := map[string]float64{}
-	if a.cache != nil {
-		viewsCountMap, err = a.cache.ZRangeWithScores(c.Request.Context(), ArticleViewsCount)
-		if err != nil {
-			slog.WarnContext(c.Request.Context(), "load article view counts failed", "error", err)
-			viewsCountMap = map[string]float64{}
-		}
-	}
-	for _, v := range articleAdminDTOs {
-		index := strconv.Itoa(v.Id)
-		viewsCount := viewsCountMap[index]
-		if viewsCount != 0 {
-			v.ViewsCount = int(viewsCount)
-		}
-	}
-	a.attachAdminReactionCounts(c.Request.Context(), articleAdminDTOs)
-	if len(articleAdminDTOs) == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
-	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: articleAdminDTOs, Count: count})
+// ArticleAdminUseCases is the typed application boundary for admin article
+// operations. Transport binding, authentication extraction and response
+// envelopes belong to the HTTP adapter.
+type ArticleAdminUseCases interface {
+	ListAdminArticles(context.Context, port.ArticleFilter) (ArticlePage[*port.ArticleAdmin], error)
+	SaveAdminArticle(context.Context, ArticleSaveInput) error
+	SetArticleTopAndFeatured(context.Context, int, int, int) error
+	TrashArticles(context.Context, int, []int, int) error
+	DeleteArticles(context.Context, int, []int) error
+	UploadArticleImage(context.Context, ArticleImageUpload) (port.ObjectRef, error)
+	GetAdminArticle(context.Context, int) (port.ArticleAdminView, bool, error)
+	ImportAdminArticle(context.Context, ArticleImportInput) error
+	ExportAdminArticles(context.Context, []int) ([]string, error)
 }
 
-func (a *MyArticleService) SaveOrUpdateArticle(c *gin.Context) model.ResultVO {
-	var articleVO model.ArticleVO
-	if err := c.ShouldBind(&articleVO); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+// ArticleSaveInput contains application-level article data independent of an
+// HTTP request or the wire DTO used to populate it.
+type ArticleSaveInput struct {
+	Article      entity.TArticle
+	CategoryName string
+	TagNames     []string
+	ScheduledAt  string
+	UserID       int
+}
+
+type ArticleImageUpload struct {
+	Filename    string
+	ContentType string
+	Size        int64
+	Content     io.Reader
+}
+
+type ArticleImportInput struct {
+	Filename string
+	Content  io.Reader
+	UserID   int
+}
+
+type ArticleAdminFailure string
+
+const (
+	ArticleAdminContentRequired ArticleAdminFailure = "content_required"
+	ArticleAdminPublicRequired  ArticleAdminFailure = "public_article_required"
+	ArticleAdminImportRead      ArticleAdminFailure = "import_read_failed"
+)
+
+// ArticleAdminError identifies the few legacy failures with messages that are
+// more specific than the shared domain error mapping.
+type ArticleAdminError struct {
+	Failure ArticleAdminFailure
+}
+
+func (e *ArticleAdminError) Error() string {
+	if e == nil {
+		return "article admin operation failed"
 	}
-	vo, ok := c.Get("articleVO")
-	if ok {
-		articleVO = vo.(model.ArticleVO)
+	return string(e.Failure)
+}
+
+func (a *MyArticleService) ListAdminArticles(ctx context.Context, filter port.ArticleFilter) (ArticlePage[*port.ArticleAdmin], error) {
+	total, err := a.repo.CountArticleAdmins(ctx, filter)
+	if err != nil {
+		return ArticlePage[*port.ArticleAdmin]{}, err
 	}
-	value, ok := c.Get("userInfo")
-	if !ok {
-		return model.ResultFailWithMessage("用户未登录")
+	items, err := a.repo.ListArticlesAdmin(ctx, filter)
+	if err != nil {
+		return ArticlePage[*port.ArticleAdmin]{}, err
 	}
-	dto, ok := value.(model.UserDetailsDTO)
-	if !ok {
-		return model.ResultFailWithMessage("用户信息无效")
+	if items == nil {
+		items = []*port.ArticleAdmin{}
 	}
-	if strings.TrimSpace(articleVO.ArticleContentHTML) != "" {
-		articleVO.ArticleContentHTML = sanitizeArticleHTML(articleVO.ArticleContentHTML)
-		if !articleHTMLHasContent(articleVO.ArticleContentHTML) {
-			return model.ResultFailWithMessage("文章内容不能为空")
+	if a.cache != nil {
+		views, viewErr := a.cache.ZRangeWithScores(ctx, ArticleViewsCount)
+		if viewErr != nil {
+			slog.WarnContext(ctx, "load article view counts failed", "error", viewErr)
+		} else {
+			for _, item := range items {
+				if item == nil {
+					continue
+				}
+				if count := views[strconv.Itoa(item.Id)]; count != 0 {
+					item.ViewsCount = int(count)
+				}
+			}
+		}
+	}
+	a.attachAdminReactionCounts(ctx, items)
+	return ArticlePage[*port.ArticleAdmin]{Items: items, Total: total, Page: filter.Current, PageSize: filter.Size}, nil
+}
+
+func (a *MyArticleService) SaveAdminArticle(ctx context.Context, input ArticleSaveInput) error {
+	article := input.Article
+	article.UserId = input.UserID
+	if strings.TrimSpace(article.ArticleContentHTML) != "" {
+		article.ArticleContentHTML = sanitizeArticleHTML(article.ArticleContentHTML)
+		if !articleHTMLHasContent(article.ArticleContentHTML) {
+			return &ArticleAdminError{Failure: ArticleAdminContentRequired}
 		}
 		// Keep the legacy field populated so older readers and Markdown exports
 		// continue to receive a renderable article body.
-		articleVO.ArticleContent = articleVO.ArticleContentHTML
-	} else if strings.TrimSpace(articleVO.ArticleContent) == "" {
-		return model.ResultFailWithMessage("文章内容不能为空")
+		article.ArticleContent = article.ArticleContentHTML
+	} else if strings.TrimSpace(article.ArticleContent) == "" {
+		return &ArticleAdminError{Failure: ArticleAdminContentRequired}
 	}
-	var article entity.TArticle
-	if err := normalizeScheduledAt(&articleVO); err != nil {
-		return model.ResultFromError(err)
-	}
-	marshal, err := json.Marshal(articleVO)
+	scheduledAt, err := normalizeScheduledAt(article.Status, input.ScheduledAt)
 	if err != nil {
-		return model.ResultFromError(err)
+		return err
 	}
-	if err := json.Unmarshal(marshal, &article); err != nil {
-		return model.ResultFromError(err)
-	}
-	article.UserId = dto.UserInfoId
+	article.ScheduledAt = scheduledAt
+
 	previousStatus := 0
 	if article.Id != 0 {
-		previous, previousErr := a.articleRepository().GetArticleRecord(c.Request.Context(), article.Id)
-		if previousErr != nil {
-			return model.ResultFromError(previousErr)
+		previous, err := a.repo.GetArticleRecord(ctx, article.Id)
+		if err != nil {
+			return err
 		}
-		if previous.UserId != dto.UserInfoId {
-			return model.ResultFromError(apperrors.New(apperrors.KindForbidden, "article.save", nil))
+		if previous.UserId != input.UserID {
+			return apperrors.New(apperrors.KindForbidden, "article.save", nil)
 		}
 		previousStatus = previous.Status
 	}
-	articlebase, err := a.articleRepository().SaveOrUpdate(c.Request.Context(), article, articleVO.CategoryName, articleVO.TagNames)
+	saved, err := a.repo.SaveOrUpdate(ctx, article, input.CategoryName, input.TagNames)
 	if err != nil {
-		return model.ResultFromError(err)
+		return err
 	}
-	if articlebase.Id != 0 {
-		if a.newsletter != nil && previousStatus != 1 && articlebase.Status == 1 && articlebase.IsDelete == 0 {
-			if err := a.newsletter.EnqueueArticle(c.Request.Context(), articlebase.Id); err != nil {
-				// Publishing the article must not fail because the notification
-				// outbox is temporarily unavailable; the admin can re-enqueue later.
-				slog.ErrorContext(c.Request.Context(), "enqueue newsletter article failed", "articleId", articlebase.Id, "error", err)
+	if saved.Id != 0 {
+		if a.newsletter != nil && previousStatus != 1 && saved.Status == 1 && saved.IsDelete == 0 {
+			if err := a.newsletter.EnqueueArticle(ctx, saved.Id); err != nil {
+				// Publishing must not fail because the notification outbox is
+				// temporarily unavailable; an admin can re-enqueue later.
+				slog.ErrorContext(ctx, "enqueue newsletter article failed", "articleId", saved.Id, "error", err)
 			}
 		}
-		a.cacheArticle(c.Request.Context(), articlebase.Id, articlebase.Status, articlebase.IsDelete, articlebase)
-		a.syncArticleSearch(c.Request.Context(), articlebase.Id)
+		a.cacheArticle(ctx, saved.Id, saved.Status, saved.IsDelete, saved)
+		a.syncArticleSearch(ctx, saved.Id)
 	}
-	return model.ResultOk()
+	return nil
 }
 
-func (a *MyArticleService) UpdateArticleTopAndFeatured(c *gin.Context) model.ResultVO {
-	var articleTopFeaturedVO model.ArticleTopFeaturedVO
-	if err := c.ShouldBind(&articleTopFeaturedVO); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	if articleTopFeaturedVO.IsTop == 1 || articleTopFeaturedVO.IsFeatured == 1 {
-		current, err := a.articleRepository().GetArticleRecord(c.Request.Context(), articleTopFeaturedVO.Id)
+func (a *MyArticleService) SetArticleTopAndFeatured(ctx context.Context, articleID, isTop, isFeatured int) error {
+	if isTop == 1 || isFeatured == 1 {
+		current, err := a.repo.GetArticleRecord(ctx, articleID)
 		if err != nil {
-			return model.ResultFromError(err)
+			return err
 		}
 		if current.IsDelete != 0 || current.Status != 1 || current.ModerationStatus != "visible" {
-			return model.ResultFailWithMessage("只有公开且审核可见的文章可以置顶或推荐")
+			return &ArticleAdminError{Failure: ArticleAdminPublicRequired}
 		}
 	}
-	articlebase, err := a.articleRepository().UpdateTopAndFeatured(c.Request.Context(), articleTopFeaturedVO.Id, articleTopFeaturedVO.IsTop, articleTopFeaturedVO.IsFeatured)
+	article, err := a.repo.UpdateTopAndFeatured(ctx, articleID, isTop, isFeatured)
 	if err != nil {
 		if apperrors.IsKind(err, apperrors.KindNotFound) {
-			return model.ResultOk()
+			return nil
 		}
-		return model.ResultFromError(err)
+		return err
 	}
-	if articlebase.Id != 0 {
-		a.cacheArticle(c.Request.Context(), articlebase.Id, articlebase.Status, articlebase.IsDelete, articlebase)
-		a.syncArticleSearch(c.Request.Context(), articlebase.Id)
+	if article.Id != 0 {
+		a.cacheArticle(ctx, article.Id, article.Status, article.IsDelete, article)
+		a.syncArticleSearch(ctx, article.Id)
 	}
-	return model.ResultOk()
+	return nil
 }
 
-func (a *MyArticleService) UpdateArticleDelete(c *gin.Context) model.ResultVO {
-	var deleteVO model.DeleteVO
-	if err := c.ShouldBind(&deleteVO); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (a *MyArticleService) TrashArticles(ctx context.Context, userID int, ids []int, isDelete int) error {
+	if err := a.requireOwnedArticles(ctx, userID, ids); err != nil {
+		return err
 	}
-	user, ok := currentUser(c)
-	if !ok {
-		return model.ResultFailWithStatus(model.NO_LOGIN)
+	if err := a.repo.UpdateDelete(ctx, ids, isDelete); err != nil {
+		return err
 	}
-	if err := a.requireOwnedArticles(c, user.UserInfoId, deleteVO.Ids); err != nil {
-		return model.ResultFromError(err)
+	for _, id := range ids {
+		a.evictArticleCache(ctx, strconv.Itoa(id))
 	}
-	if err := a.articleRepository().UpdateDelete(c.Request.Context(), deleteVO.Ids, deleteVO.IsDelete); err != nil {
-		return model.ResultFromError(err)
-	}
-	// Recycled or restored articles must not keep a stale public body.
-	for _, id := range deleteVO.Ids {
-		a.evictArticleCache(c.Request.Context(), strconv.Itoa(id))
-	}
-	a.syncArticleSearch(c.Request.Context(), deleteVO.Ids...)
-	return model.ResultOk()
+	a.syncArticleSearch(ctx, ids...)
+	return nil
 }
 
-func (a *MyArticleService) DeleteArticles(c *gin.Context) model.ResultVO {
-	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (a *MyArticleService) DeleteArticles(ctx context.Context, userID int, ids []int) error {
+	if err := a.requireOwnedArticles(ctx, userID, ids); err != nil {
+		return err
 	}
-	user, ok := currentUser(c)
-	if !ok {
-		return model.ResultFailWithStatus(model.NO_LOGIN)
+	if err := a.repo.Delete(ctx, ids); err != nil {
+		return err
 	}
-	if err := a.requireOwnedArticles(c, user.UserInfoId, ids); err != nil {
-		return model.ResultFromError(err)
-	}
-	if err := a.articleRepository().Delete(c.Request.Context(), ids); err != nil {
-		return model.ResultFromError(err)
-	}
-	a.syncArticleSearch(c.Request.Context(), ids...)
-	return model.ResultOk()
+	a.syncArticleSearch(ctx, ids...)
+	return nil
 }
 
-func (a *MyArticleService) requireOwnedArticles(c *gin.Context, userID int, ids []int) error {
+func (a *MyArticleService) requireOwnedArticles(ctx context.Context, userID int, ids []int) error {
+	if userID <= 0 {
+		return apperrors.New(apperrors.KindUnauthorized, "article.owner", nil)
+	}
 	if len(ids) == 0 {
 		return apperrors.Invalid("article.owner", "article id is required")
 	}
@@ -211,7 +215,7 @@ func (a *MyArticleService) requireOwnedArticles(c *gin.Context, userID int, ids 
 		if id <= 0 {
 			return apperrors.Invalid("article.owner", "article id is invalid")
 		}
-		article, err := a.articleRepository().GetArticleRecord(c.Request.Context(), id)
+		article, err := a.repo.GetArticleRecord(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -222,126 +226,108 @@ func (a *MyArticleService) requireOwnedArticles(c *gin.Context, userID int, ids 
 	return nil
 }
 
-func (a *MyArticleService) SaveArticleImages(c *gin.Context) model.ResultVO {
-	file, err := c.FormFile("file")
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "read article image failed", "error", err)
-		return model.ResultFail()
+func (a *MyArticleService) UploadArticleImage(ctx context.Context, upload ArticleImageUpload) (port.ObjectRef, error) {
+	if a.storage == nil {
+		return port.ObjectRef{}, apperrors.Unavailable("storage.upload", nil)
 	}
-	ref, err := uploadMultipart(c.Request.Context(), a.storage, file, "articles/")
-	if err != nil {
-		return model.ResultFromError(err)
+	if upload.Size > maxImageUploadBytes {
+		return port.ObjectRef{}, apperrors.Invalid("storage.upload", "image file is too large")
 	}
-	return model.ResultOkWithData(ref.URL)
+	contentType := strings.ToLower(strings.TrimSpace(upload.ContentType))
+	if !strings.HasPrefix(contentType, "image/") {
+		contentType = strings.ToLower(strings.TrimSpace(mime.TypeByExtension(filepath.Ext(upload.Filename))))
+	}
+	if !strings.HasPrefix(contentType, "image/") {
+		return port.ObjectRef{}, apperrors.Invalid("storage.upload", "only image files are supported")
+	}
+	if upload.Content == nil {
+		return port.ObjectRef{}, apperrors.Invalid("storage.upload", "file is required")
+	}
+	key, err := ObjectKey(upload.Filename, "articles/")
+	if err != nil {
+		return port.ObjectRef{}, apperrors.Invalid("storage.upload", err.Error())
+	}
+	return a.storage.Put(ctx, key, upload.Content)
 }
 
-// normalizeScheduledAt keeps the scheduled release consistent with status 4:
-// a scheduled article needs a future timestamp, and every other status must not
-// carry a stale one. The value is rewritten as RFC3339 because the VO reaches
-// the entity through a JSON round-trip.
-func normalizeScheduledAt(vo *model.ArticleVO) error {
-	raw := strings.TrimSpace(vo.ScheduledAt)
-	if vo.Status != ArticleStatusScheduled {
-		vo.ScheduledAt = ""
-		return nil
+// normalizeScheduledAt keeps scheduled releases consistent with status 4:
+// scheduled articles require a future timestamp, while other states clear it.
+func normalizeScheduledAt(status int, raw string) (time.Time, error) {
+	if status != ArticleStatusScheduled {
+		return time.Time{}, nil
 	}
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return apperrors.Invalid("article.schedule", "scheduled articles need a release time")
+		return time.Time{}, apperrors.Invalid("article.schedule", "scheduled articles need a release time")
 	}
 	parsed, err := time.Parse(time.RFC3339, raw)
 	if err != nil {
 		parsed, err = time.Parse("2006-01-02 15:04:05", raw)
 	}
 	if err != nil {
-		return apperrors.Invalid("article.schedule", "release time must be an RFC3339 timestamp")
+		return time.Time{}, apperrors.Invalid("article.schedule", "release time must be an RFC3339 timestamp")
 	}
 	if !parsed.After(time.Now()) {
-		return apperrors.Invalid("article.schedule", "release time must be in the future")
+		return time.Time{}, apperrors.Invalid("article.schedule", "release time must be in the future")
 	}
-	vo.ScheduledAt = parsed.Format(time.RFC3339)
-	return nil
+	return parsed, nil
 }
 
-func (a *MyArticleService) GetArticleBackById(c *gin.Context) model.ResultVO {
-	id, err := strconv.Atoi(c.Param("articleId"))
-	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	article, categoryName, tagNames, err := a.articleRepository().GetAdminArticle(c.Request.Context(), id)
+func (a *MyArticleService) GetAdminArticle(ctx context.Context, articleID int) (port.ArticleAdminView, bool, error) {
+	article, categoryName, tagNames, err := a.repo.GetAdminArticle(ctx, articleID)
 	if err != nil {
 		if apperrors.IsKind(err, apperrors.KindNotFound) {
-			return model.ResultOkWithData(model.ArticleAdminViewDTO{})
+			return port.ArticleAdminView{}, false, nil
 		}
-		return model.ResultFromError(err)
+		return port.ArticleAdminView{}, false, err
 	}
-	var articleAdminViewDTO model.ArticleAdminViewDTO
-	marshal, err := json.Marshal(article)
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "marshal admin article failed", "error", err)
-		return model.ResultFail()
-	}
-	err = json.Unmarshal(marshal, &articleAdminViewDTO)
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "decode admin article failed", "error", err)
-		return model.ResultFail()
-	}
-	articleAdminViewDTO.CategoryName = categoryName
-	if len(tagNames) == 0 {
-		articleAdminViewDTO.TagNames = list.New()
-	} else {
-		articleAdminViewDTO.TagNames = tagNames
-	}
-	return model.ResultOkWithData(articleAdminViewDTO)
+	scheduledAt := article.ScheduledAt.Format(time.RFC3339)
+	return port.ArticleAdminView{
+		Id: article.Id, UserId: article.UserId, ArticleCover: article.ArticleCover,
+		ArticleTitle: article.ArticleTitle, ArticleContent: article.ArticleContent,
+		ArticleContentHTML: article.ArticleContentHTML, IsTop: article.IsTop,
+		IsFeatured: article.IsFeatured, CategoryId: article.CategoryId,
+		CategoryName: categoryName, TagNames: tagNames, Status: article.Status,
+		Type: article.Type, Password: article.Password, OriginalUrl: article.OriginalUrl,
+		SeriesId: article.SeriesId, SeriesOrder: article.SeriesOrder,
+		ScheduledAt: scheduledAt, ModerationStatus: article.ModerationStatus,
+		ModerationReason: article.ModerationReason,
+	}, true, nil
 }
 
-func (a *MyArticleService) ImportArticles(c *gin.Context) model.ResultVO {
-	file, err := c.FormFile("file")
-	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	filename := file.Filename
+func (a *MyArticleService) ImportAdminArticle(ctx context.Context, input ArticleImportInput) error {
+	filename := input.Filename
 	index := strings.LastIndex(filename, ".")
 	if index <= 0 || index == len(filename)-1 {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return apperrors.Invalid("article.import", "file name needs an extension")
 	}
-	articleTitle := filename[:index]
-	content, err := file.Open()
+	if input.Content == nil {
+		return apperrors.Invalid("article.import", "file is required")
+	}
+	content, err := io.ReadAll(input.Content)
 	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "open imported article failed", "error", err)
-		return model.ResultFail()
+		return &ArticleAdminError{Failure: ArticleAdminImportRead}
 	}
-	defer content.Close()
-	all, err := io.ReadAll(content)
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "read imported article failed", "error", err)
-		return model.ResultFail()
-	}
-	articleVO := model.ArticleVO{
-		ArticleTitle:   articleTitle,
-		ArticleContent: string(all),
-		Status:         3,
-	}
-	c.Set("articleVO", articleVO)
-	return a.SaveOrUpdateArticle(c)
+	return a.SaveAdminArticle(ctx, ArticleSaveInput{
+		Article: entity.TArticle{ArticleTitle: filename[:index], ArticleContent: string(content), Status: 3},
+		UserID:  input.UserID,
+	})
 }
 
-func (a *MyArticleService) ExportArticles(c *gin.Context) model.ResultVO {
-	var iDs []int
-	err := c.ShouldBind(&iDs)
+func (a *MyArticleService) ExportAdminArticles(ctx context.Context, ids []int) ([]string, error) {
+	articles, err := a.repo.Export(ctx, ids)
 	if err != nil {
-		return model.ResultFailWithMessage("导出文章失败")
-	}
-	articles, err := a.articleRepository().Export(c.Request.Context(), iDs)
-	if err != nil {
-		return model.ResultFromError(err)
+		return nil, err
 	}
 	var urls []string
-	for _, v := range articles {
-		ref, err := uploadNamed(c.Request.Context(), a.storage, bytes.NewReader([]byte(v.ArticleContent)), v.ArticleTitle+".md", "markdown/")
+	for _, article := range articles {
+		ref, err := uploadNamed(ctx, a.storage, bytes.NewReader([]byte(article.ArticleContent)), article.ArticleTitle+".md", "markdown/")
 		if err != nil {
-			return model.ResultFromError(err)
+			return nil, err
 		}
 		urls = append(urls, ref.URL)
 	}
-	return model.ResultOkWithData(urls)
+	return urls, nil
 }
+
+var _ ArticleAdminUseCases = (*MyArticleService)(nil)

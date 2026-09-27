@@ -3,12 +3,10 @@ package service
 import (
 	"context"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"log/slog"
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 )
 
@@ -16,17 +14,6 @@ import (
 // its scheduled_at passes.
 const ArticleStatusScheduled = 4
 
-type ArticleService interface {
-	ListArticlesAdmin(c *gin.Context) model.ResultVO
-	SaveOrUpdateArticle(c *gin.Context) model.ResultVO
-	UpdateArticleTopAndFeatured(c *gin.Context) model.ResultVO
-	UpdateArticleDelete(c *gin.Context) model.ResultVO
-	DeleteArticles(c *gin.Context) model.ResultVO
-	SaveArticleImages(c *gin.Context) model.ResultVO
-	GetArticleBackById(c *gin.Context) model.ResultVO
-	ImportArticles(c *gin.Context) model.ResultVO
-	ExportArticles(c *gin.Context) model.ResultVO
-}
 type MyArticleService struct {
 	repo             port.ArticleRepository
 	reactions        port.ArticleReactionRepository

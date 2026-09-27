@@ -45,16 +45,22 @@ function write(viewKey: string, patch: Partial<TablePreferences>): void {
 }
 
 /** 同步读取持久化的每页条数（在首次请求发出前调用）。 */
-export function readStoredPageSize(viewKey: string, fallback = 10): number {
+export function readStoredPageSize(viewKey: string, fallback = 10, allowedPageSizes?: number[]): number {
   const stored = read(viewKey).pageSize
-  return stored && stored > 0 ? stored : fallback
+  return normalizePageSize(stored, fallback, allowedPageSizes)
 }
 
 /** 把 `useAsyncList` 的 `pageSize` 与持久化偏好双向同步。 */
-export function useStoredPageSize(viewKey: string, pageSize: Ref<number>): void {
+export function useStoredPageSize(viewKey: string, pageSize: Ref<number>, fallback?: number, allowedPageSizes?: number[]): void {
   const stored = read(viewKey).pageSize
-  if (stored && stored > 0) pageSize.value = stored
+  if (stored !== undefined) pageSize.value = normalizePageSize(stored, fallback ?? pageSize.value, allowedPageSizes)
   watch(pageSize, (value) => write(viewKey, { pageSize: value }))
+}
+
+function normalizePageSize(value: number | undefined, fallback: number, allowedPageSizes?: number[]): number {
+  if (!value || value < 1) return fallback
+  if (allowedPageSizes && !allowedPageSizes.includes(value)) return fallback
+  return value
 }
 
 export interface ColumnPreferences {

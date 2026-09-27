@@ -8,13 +8,9 @@ import (
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeArticleRepository struct {
@@ -47,6 +43,17 @@ type fakeArticleRepository struct {
 	updateCalls     int
 	trashCalls      int
 	deleteCalls     int
+	adminCount      int
+	adminItems      []*port.ArticleAdmin
+	adminFilter     port.ArticleFilter
+	saveArticle     entity.TArticle
+	saveCategory    string
+	saveTags        []string
+	adminArticle    entity.TArticle
+	adminCategory   string
+	adminTags       []string
+	exportItems     []entity.TArticle
+	exportIDs       []int
 }
 
 type fakeArticleSearcher struct {
@@ -179,11 +186,13 @@ func (f *fakeArticleRepository) ListArticlesByTagID(_ context.Context, current, 
 func (f *fakeArticleRepository) ListArchives(context.Context, int, int) ([]port.ArticleCard, int, error) {
 	return f.archives, len(f.archives), nil
 }
-func (f *fakeArticleRepository) CountArticleAdmins(context.Context, port.ArticleFilter) (int, error) {
-	return 0, nil
+func (f *fakeArticleRepository) CountArticleAdmins(_ context.Context, filter port.ArticleFilter) (int, error) {
+	f.adminFilter = filter
+	return f.adminCount, nil
 }
-func (f *fakeArticleRepository) ListArticlesAdmin(context.Context, port.ArticleFilter) ([]*port.ArticleAdmin, error) {
-	return nil, nil
+func (f *fakeArticleRepository) ListArticlesAdmin(_ context.Context, filter port.ArticleFilter) ([]*port.ArticleAdmin, error) {
+	f.adminFilter = filter
+	return f.adminItems, nil
 }
 func (f *fakeArticleRepository) ListArticleStatistics(context.Context) ([]port.ArticleStatistics, error) {
 	return nil, nil
@@ -208,8 +217,9 @@ func (f *fakeArticleRepository) ListPublicArticleSearchDocuments(context.Context
 func (f *fakeArticleRepository) GetArticleRecord(context.Context, int) (entity.TArticle, error) {
 	return f.record, f.recordErr
 }
-func (f *fakeArticleRepository) SaveOrUpdate(context.Context, entity.TArticle, string, []string) (entity.TArticle, error) {
+func (f *fakeArticleRepository) SaveOrUpdate(_ context.Context, article entity.TArticle, category string, tags []string) (entity.TArticle, error) {
 	f.saveCalls++
+	f.saveArticle, f.saveCategory, f.saveTags = article, category, append([]string(nil), tags...)
 	return f.savedArticle, f.saveErr
 }
 func (f *fakeArticleRepository) UpdateTopAndFeatured(context.Context, int, int, int) (entity.TArticle, error) {
@@ -226,10 +236,11 @@ func (f *fakeArticleRepository) Delete(context.Context, []int) error {
 }
 
 func (f *fakeArticleRepository) GetAdminArticle(context.Context, int) (entity.TArticle, string, []string, error) {
-	return entity.TArticle{}, "", nil, nil
+	return f.adminArticle, f.adminCategory, f.adminTags, nil
 }
-func (f *fakeArticleRepository) Export(context.Context, []int) ([]entity.TArticle, error) {
-	return nil, nil
+func (f *fakeArticleRepository) Export(_ context.Context, ids []int) ([]entity.TArticle, error) {
+	f.exportIDs = append([]int(nil), ids...)
+	return f.exportItems, nil
 }
 
 func TestArticleReaderReturnsTypedListPage(t *testing.T) {
@@ -471,43 +482,70 @@ func TestArticleReaderMapsSearchFailureAtHTTPBoundary(t *testing.T) {
 type testServiceError string
 
 func (e testServiceError) Error() string { return string(e) }
-func articleJSONContext(method, target, body string) *gin.Context {
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest(method, target, strings.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	return c
+
+func TestArticleAdminListReturnsTypedPageMetadata(t *testing.T) {
+	repo := &fakeArticleRepository{
+		adminCount: 31,
+		adminItems: []*port.ArticleAdmin{{Id: 9, ArticleTitle: "draft"}},
+	}
+	filter := port.ArticleFilter{Current: 2, Size: 12, Keywords: "draft", Status: 3, Category: 4, Tag: 7}
+	page, err := mustArticleService(t, repo, nil).ListAdminArticles(context.Background(), filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 31 || page.Page != 2 || page.PageSize != 12 || len(page.Items) != 1 || page.Items[0].Id != 9 {
+		t.Fatalf("unexpected typed admin page: %#v", page)
+	}
+	if repo.adminFilter != filter {
+		t.Fatalf("admin filter was not forwarded: got %+v want %+v", repo.adminFilter, filter)
+	}
+}
+
+func TestArticleAdminSaveSanitizesHTMLAndMapsInput(t *testing.T) {
+	repo := &fakeArticleRepository{}
+	service := mustArticleService(t, repo, nil)
+	err := service.SaveAdminArticle(context.Background(), ArticleSaveInput{
+		Article: entity.TArticle{
+			ArticleTitle: "A story", ArticleContentHTML: `<p>safe</p><script>alert(1)</script>`, Status: 3,
+		},
+		CategoryName: "Engineering", TagNames: []string{"go", "architecture"}, UserID: 7,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.saveCalls != 1 || repo.saveArticle.UserId != 7 || repo.saveArticle.ArticleContentHTML == "" || repo.saveArticle.ArticleContent != repo.saveArticle.ArticleContentHTML {
+		t.Fatalf("article fields were not normalized before persistence: calls=%d article=%+v", repo.saveCalls, repo.saveArticle)
+	}
+	if strings.Contains(repo.saveArticle.ArticleContentHTML, "<script") || repo.saveCategory != "Engineering" || len(repo.saveTags) != 2 {
+		t.Fatalf("unsafe or related article fields were not handled: article=%+v category=%q tags=%v", repo.saveArticle, repo.saveCategory, repo.saveTags)
+	}
 }
 
 func TestArticleServiceRejectsNonOwnerMutations(t *testing.T) {
 	repo := &fakeArticleRepository{record: entity.TArticle{Id: 9, UserId: 2, Status: 1}}
 	service := mustArticleService(t, repo, nil)
 
-	saveCtx := articleJSONContext(http.MethodPost, "/v1/admin/articles", `{"id":9,"articleTitle":"forbidden","articleContent":"body","status":1}`)
-	saveCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := service.SaveOrUpdateArticle(saveCtx); result.Flag || repo.saveCalls != 0 {
-		t.Fatalf("non-owner save must be forbidden before persistence: result=%+v calls=%d", result, repo.saveCalls)
+	if err := service.SaveAdminArticle(context.Background(), ArticleSaveInput{
+		Article: entity.TArticle{Id: 9, ArticleTitle: "forbidden", ArticleContent: "body", Status: 1}, UserID: 7,
+	}); err == nil || !apperrors.IsKind(err, apperrors.KindForbidden) || repo.saveCalls != 0 {
+		t.Fatalf("non-owner save must be forbidden before persistence: error=%v calls=%d", err, repo.saveCalls)
 	}
 
-	trashCtx := articleJSONContext(http.MethodPut, "/v1/admin/articles/trash", `{"ids":[9],"isDelete":1}`)
-	trashCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := service.UpdateArticleDelete(trashCtx); result.Flag || repo.trashCalls != 0 {
-		t.Fatalf("non-owner trash must be forbidden before persistence: result=%+v calls=%d", result, repo.trashCalls)
+	if err := service.TrashArticles(context.Background(), 7, []int{9}, 1); err == nil || !apperrors.IsKind(err, apperrors.KindForbidden) || repo.trashCalls != 0 {
+		t.Fatalf("non-owner trash must be forbidden before persistence: error=%v calls=%d", err, repo.trashCalls)
 	}
 
-	deleteCtx := articleJSONContext(http.MethodDelete, "/v1/admin/articles/batch-delete", `[9]`)
-	deleteCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := service.DeleteArticles(deleteCtx); result.Flag || repo.deleteCalls != 0 {
-		t.Fatalf("non-owner delete must be forbidden before persistence: result=%+v calls=%d", result, repo.deleteCalls)
+	if err := service.DeleteArticles(context.Background(), 7, []int{9}); err == nil || !apperrors.IsKind(err, apperrors.KindForbidden) || repo.deleteCalls != 0 {
+		t.Fatalf("non-owner delete must be forbidden before persistence: error=%v calls=%d", err, repo.deleteCalls)
 	}
 }
 
 func TestArticleServiceRejectsRecommendationForHiddenArticle(t *testing.T) {
 	repo := &fakeArticleRepository{record: entity.TArticle{Id: 9, UserId: 2, Status: 1, ModerationStatus: "hidden"}}
 	service := mustArticleService(t, repo, nil)
-	ctx := articleJSONContext(http.MethodPut, "/v1/admin/articles/featured", `{"id":9,"isTop":0,"isFeatured":1}`)
-	result := service.UpdateArticleTopAndFeatured(ctx)
-	if result.Flag || repo.updateCalls != 0 {
-		t.Fatalf("hidden article must not be recommended: result=%+v calls=%d", result, repo.updateCalls)
+	err := service.SetArticleTopAndFeatured(context.Background(), 9, 0, 1)
+	var adminErr *ArticleAdminError
+	if !errors.As(err, &adminErr) || adminErr.Failure != ArticleAdminPublicRequired || repo.updateCalls != 0 {
+		t.Fatalf("hidden article must not be recommended: error=%v calls=%d", err, repo.updateCalls)
 	}
 }

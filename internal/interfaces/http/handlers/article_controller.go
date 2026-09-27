@@ -1,12 +1,16 @@
 package api
 
 import (
+	"container/list"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 )
@@ -226,7 +230,28 @@ func ListArchives(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles [GET]
 func ListArticlesAdmin(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ListArticlesAdmin(c))
+	var query model.ConditionVO
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	current, size, ok := requestPageParams(c)
+	if !ok {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	page, err := articleAdminUseCases.ListAdminArticles(c.Request.Context(), port.ArticleFilter{
+		Current: current, Size: size, Keywords: query.Keywords, IsDelete: query.IsDelete,
+		Status: query.Status, ModerationStatus: query.ModerationStatus, Category: query.CategoryId,
+		Type: query.Type, Tag: query.TagId,
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOkWithData(model.PageResultDTO{
+		Records: page.Items, Count: page.Total, Page: page.Page, PageSize: page.PageSize,
+	}))
 }
 
 // SaveOrUpdateArticle
@@ -235,7 +260,21 @@ func ListArticlesAdmin(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles [POST]
 func SaveOrUpdateArticle(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.SaveOrUpdateArticle(c))
+	var request model.ArticleVO
+	if err := c.ShouldBind(&request); err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	userID, response, ok := articleSaveUserID(c)
+	if !ok {
+		c.JSON(http.StatusOK, response)
+		return
+	}
+	if err := articleAdminUseCases.SaveAdminArticle(c.Request.Context(), articleSaveInput(request, userID)); err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOk())
 }
 
 // UpdateArticleTopAndFeatured
@@ -244,7 +283,16 @@ func SaveOrUpdateArticle(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles/featured [PUT]
 func UpdateArticleTopAndFeatured(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.UpdateArticleTopAndFeatured(c))
+	var request model.ArticleTopFeaturedVO
+	if err := c.ShouldBind(&request); err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	if err := articleAdminUseCases.SetArticleTopAndFeatured(c.Request.Context(), request.Id, request.IsTop, request.IsFeatured); err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOk())
 }
 
 // UpdateArticleDelete
@@ -253,7 +301,21 @@ func UpdateArticleTopAndFeatured(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles/trash [PUT]
 func UpdateArticleDelete(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.UpdateArticleDelete(c))
+	var request model.DeleteVO
+	if err := c.ShouldBind(&request); err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	userID, ok := authenticatedUserInfoID(c)
+	if !ok {
+		c.JSON(http.StatusOK, model.ResultFailWithStatus(model.NO_LOGIN))
+		return
+	}
+	if err := articleAdminUseCases.TrashArticles(c.Request.Context(), userID, request.Ids, request.IsDelete); err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOk())
 }
 
 // DeleteArticles
@@ -262,7 +324,21 @@ func UpdateArticleDelete(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles/batch-delete [DELETE]
 func DeleteArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.DeleteArticles(c))
+	var ids []int
+	if err := c.ShouldBind(&ids); err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	userID, ok := authenticatedUserInfoID(c)
+	if !ok {
+		c.JSON(http.StatusOK, model.ResultFailWithStatus(model.NO_LOGIN))
+		return
+	}
+	if err := articleAdminUseCases.DeleteArticles(c.Request.Context(), userID, ids); err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOk())
 }
 
 // SaveArticleImages
@@ -271,7 +347,27 @@ func DeleteArticles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles/images [POST]
 func SaveArticleImages(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.SaveArticleImages(c))
+	file, err := c.FormFile("file")
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "read article image failed", "error", err)
+		c.JSON(http.StatusOK, model.ResultFail())
+		return
+	}
+	content, err := file.Open()
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "open article image failed", "error", err)
+		c.JSON(http.StatusOK, model.ResultFail())
+		return
+	}
+	defer content.Close()
+	ref, err := articleAdminUseCases.UploadArticleImage(c.Request.Context(), service.ArticleImageUpload{
+		Filename: file.Filename, ContentType: file.Header.Get("Content-Type"), Size: file.Size, Content: content,
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOkWithData(ref.URL))
 }
 
 // GetArticleBackById
@@ -280,7 +376,24 @@ func SaveArticleImages(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles/{articleId} [GET]
 func GetArticleBackById(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.GetArticleBackById(c))
+	id, err := strconv.Atoi(c.Param("articleId"))
+	if err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	article, found, err := articleAdminUseCases.GetAdminArticle(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	if !found {
+		c.JSON(http.StatusOK, model.ResultOkWithData(model.ArticleAdminViewDTO{}))
+		return
+	}
+	if tags, ok := article.TagNames.([]string); !ok || len(tags) == 0 {
+		article.TagNames = list.New()
+	}
+	c.JSON(http.StatusOK, model.ResultOkWithData(article))
 }
 
 // ImportArticles
@@ -289,7 +402,30 @@ func GetArticleBackById(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles/import [POST]
 func ImportArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ImportArticles(c))
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("参数格式不正确"))
+		return
+	}
+	content, err := file.Open()
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "open imported article failed", "error", err)
+		c.JSON(http.StatusOK, model.ResultFail())
+		return
+	}
+	defer content.Close()
+	userID, response, ok := articleSaveUserID(c)
+	if !ok {
+		c.JSON(http.StatusOK, response)
+		return
+	}
+	if err := articleAdminUseCases.ImportAdminArticle(c.Request.Context(), service.ArticleImportInput{
+		Filename: file.Filename, Content: content, UserID: userID,
+	}); err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOk())
 }
 
 // ExportArticles
@@ -298,7 +434,58 @@ func ImportArticles(c *gin.Context) {
 // @Success		 200	{object} model.ResultVO
 // @Router       /v1/admin/articles/export [POST]
 func ExportArticles(c *gin.Context) {
-	c.JSON(http.StatusOK, articleService.ExportArticles(c))
+	var ids []int
+	if err := c.ShouldBind(&ids); err != nil {
+		c.JSON(http.StatusOK, model.ResultFailWithMessage("导出文章失败"))
+		return
+	}
+	urls, err := articleAdminUseCases.ExportAdminArticles(c.Request.Context(), ids)
+	if err != nil {
+		c.JSON(http.StatusOK, articleAdminFailure(err))
+		return
+	}
+	c.JSON(http.StatusOK, model.ResultOkWithData(urls))
+}
+
+func articleSaveUserID(c *gin.Context) (int, model.ResultVO, bool) {
+	value, ok := c.Get("userInfo")
+	if !ok {
+		return 0, model.ResultFailWithMessage("用户未登录"), false
+	}
+	user, ok := value.(model.UserDetailsDTO)
+	if !ok {
+		return 0, model.ResultFailWithMessage("用户信息无效"), false
+	}
+	return user.UserInfoId, model.ResultVO{}, true
+}
+
+func articleSaveInput(request model.ArticleVO, userID int) service.ArticleSaveInput {
+	return service.ArticleSaveInput{
+		Article: entity.TArticle{
+			Id: request.Id, ArticleCover: request.ArticleCover, ArticleTitle: request.ArticleTitle,
+			ArticleContent: request.ArticleContent, ArticleContentHTML: request.ArticleContentHTML,
+			SeriesId: request.SeriesId, SeriesOrder: request.SeriesOrder, IsTop: request.IsTop,
+			IsFeatured: request.IsFeatured, Status: request.Status, Type: request.Type,
+			Password: request.Password, OriginalUrl: request.OriginalUrl,
+		},
+		CategoryName: request.CategoryName, TagNames: request.TagNames,
+		ScheduledAt: request.ScheduledAt, UserID: userID,
+	}
+}
+
+func articleAdminFailure(err error) model.ResultVO {
+	var adminErr *service.ArticleAdminError
+	if errors.As(err, &adminErr) {
+		switch adminErr.Failure {
+		case service.ArticleAdminContentRequired:
+			return model.ResultFailWithMessage("文章内容不能为空")
+		case service.ArticleAdminPublicRequired:
+			return model.ResultFailWithMessage("只有公开且审核可见的文章可以置顶或推荐")
+		case service.ArticleAdminImportRead:
+			return model.ResultFail()
+		}
+	}
+	return model.ResultFromError(err)
 }
 
 // ListArticlesBySearch
