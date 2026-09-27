@@ -48,7 +48,7 @@ func NewMeiliSearcherWithClient(client meilisearch.ServiceManager) *MeiliSearche
 // CheckHealth performs a read-only Meilisearch health request.
 func (s *MeiliSearcher) CheckHealth(ctx context.Context) error {
 	if s == nil || s.baseURL == "" {
-		return fmt.Errorf("Meilisearch health endpoint is not configured")
+		return fmt.Errorf("meilisearch health endpoint is not configured")
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, s.baseURL+"/health", nil)
 	if err != nil {
@@ -64,7 +64,7 @@ func (s *MeiliSearcher) CheckHealth(ctx context.Context) error {
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("Meilisearch health returned status %d", response.StatusCode)
+		return fmt.Errorf("meilisearch health returned status %d", response.StatusCode)
 	}
 	return nil
 }
@@ -491,7 +491,7 @@ func (s *MeiliSearcher) listSDKDocumentIDs(ctx context.Context) (map[int]struct{
 			var row struct {
 				ID int `json:"id"`
 			}
-			if err := hit.Decode(&row); err != nil {
+			if err := hit.DecodeInto(&row); err != nil {
 				return nil, errors.Unavailable("search.decode", err)
 			}
 			if row.ID > 0 {

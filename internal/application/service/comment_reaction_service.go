@@ -1,18 +1,16 @@
 package service
 
 import (
+	"context"
 	"strconv"
 	"time"
 
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
 type CommentReactionService interface {
-	ToggleCommentReaction(c *gin.Context) model.ResultVO
+	ToggleCommentReaction(context.Context, int, int, bool) (bool, int, error)
 }
 
 type MyCommentReactionService struct {
@@ -27,25 +25,21 @@ func NewCommentReactionService(deps CommentReactionServiceDeps) (*MyCommentReact
 	return &MyCommentReactionService{repo: deps.Repo, limiter: deps.Limiter}, nil
 }
 
-func (s *MyCommentReactionService) ToggleCommentReaction(c *gin.Context) model.ResultVO {
-	var vo model.CommentReactionToggleVO
-	if err := c.ShouldBind(&vo); err != nil || vo.CommentId <= 0 {
-		return model.ResultFromError(apperrors.Invalid("comment_reaction.toggle", "invalid comment"))
+func (s *MyCommentReactionService) ToggleCommentReaction(ctx context.Context, commentID, userInfoID int, active bool) (bool, int, error) {
+	if commentID <= 0 {
+		return false, 0, apperrors.Invalid("comment_reaction.toggle", "invalid comment")
 	}
-	userInfoID, ok := currentUserInfoID(c)
-	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "comment_reaction.user", nil))
+	if userInfoID <= 0 {
+		return false, 0, apperrors.New(apperrors.KindUnauthorized, "comment_reaction.user", nil)
 	}
-	if allowed, err := allowRateLimit(c.Request.Context(), s.limiter, "comment-reaction:", strconv.Itoa(userInfoID), 60, time.Minute); err != nil {
-		return model.ResultFromError(apperrors.Unavailable("comment_reaction.rate_limit", err))
-	} else if !allowed {
-		return model.ResultFromError(apperrors.Invalid("comment_reaction.rate_limit", "too many reactions"))
-	}
-	active, likeCount, err := s.repo.Set(c.Request.Context(), vo.CommentId, userInfoID, vo.Active)
+	allowed, err := allowRateLimit(ctx, s.limiter, "comment-reaction:", strconv.Itoa(userInfoID), 60, time.Minute)
 	if err != nil {
-		return model.ResultFromError(err)
+		return false, 0, apperrors.Unavailable("comment_reaction.rate_limit", err)
 	}
-	return model.ResultOkWithData(model.CommentReactionToggleDTO{Active: active, LikeCount: likeCount})
+	if !allowed {
+		return false, 0, apperrors.Invalid("comment_reaction.rate_limit", "too many reactions")
+	}
+	return s.repo.Set(ctx, commentID, userInfoID, active)
 }
 
 var _ CommentReactionService = (*MyCommentReactionService)(nil)

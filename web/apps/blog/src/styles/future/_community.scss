@@ -1,0 +1,107 @@
+/* Talk stream and image gallery */
+#App-Wrapper .talk-item {
+  display: flex;
+  gap: 16px;
+  padding: 22px 0;
+  border-top: 1px solid var(--border-hairline);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+#App-Wrapper .talk-item:hover {
+  transform: translateX(5px);
+  border-top-color: var(--accent);
+  box-shadow: none;
+}
+
+#App-Wrapper .talk-info {
+  margin-left: 0;
+}
+
+#App-Wrapper .user-nickname {
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+#App-Wrapper .time {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+#App-Wrapper .talk-content {
+  color: var(--text-normal);
+  font-size: 15px;
+}
+
+#App-Wrapper .talk-images {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 140px));
+  gap: 8px;
+}
+
+#App-Wrapper .talk-image {
+  height: auto;
+  min-height: 0;
+  border: 1px solid var(--border-hairline);
+  border-radius: 2px;
+}
+
+#App-Wrapper .images-talks {
+  height: auto;
+  max-height: 280px;
+  object-fit: contain;
+  object-position: center;
+}
+
+#App-Wrapper .photo-wrap {
+  display: block;
+  column-count: 4;
+  column-gap: 4px;
+  column-fill: balance;
+}
+
+#App-Wrapper .photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  margin: 0 0 4px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 0;
+  object-fit: contain;
+  object-position: center;
+  background: var(--background-secondary-alt);
+  break-inside: avoid;
+  filter: saturate(0.8);
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+/* Photos live inside the generic Markdown wrapper, whose image rule has a
+   larger selector than the gallery rule. Keep the masonry items from
+   inheriting article-image margins or intrinsic-width sizing. */
+#App-Wrapper .post-html .photo {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 4px;
+}
+
+#App-Wrapper .photo:hover {
+  position: relative;
+  z-index: 1;
+  filter: saturate(1);
+  transform: scale(1.015);
+}
+
+#App-Wrapper .friend-link-card {
+  border: 1px solid var(--border-hairline);
+  border-radius: 2px;
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+#App-Wrapper .friend-link-card:hover {
+  border-color: var(--accent);
+}

@@ -1,20 +1,19 @@
 package service
 
 import (
+	"context"
 	"strings"
 
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"github.com/gin-gonic/gin"
 )
 
 type TopicSubscriptionService interface {
-	Subscribe(c *gin.Context) model.ResultVO
-	Unsubscribe(c *gin.Context) model.ResultVO
-	SetMuted(c *gin.Context) model.ResultVO
-	ListSubscriptions(c *gin.Context) model.ResultVO
-	ListFeed(c *gin.Context) model.ResultVO
+	Subscribe(context.Context, int, string, string) error
+	Unsubscribe(context.Context, int, string, string) error
+	SetMuted(context.Context, int, string, string, bool) error
+	ListSubscriptions(context.Context, int, int, int) ([]port.TopicSubscription, int, error)
+	ListFeed(context.Context, int, int, int) ([]port.TopicFeedItem, int, error)
 }
 
 type MyTopicSubscriptionService struct {
@@ -25,104 +24,43 @@ func NewTopicSubscriptionService(repo port.TopicSubscriptionRepository) *MyTopic
 	return &MyTopicSubscriptionService{repo: repo}
 }
 
-// topicMuteRequest keeps the mute flag explicit: an absent field must not be
-// read as "unmute".
-type topicMuteRequest struct {
-	Muted *int `json:"muted" form:"muted"`
-}
-
-func topicParams(c *gin.Context) (string, string, bool) {
-	topicType := strings.ToLower(strings.TrimSpace(c.Param("topicType")))
-	topicKey := strings.TrimSpace(c.Param("topicKey"))
+func normalizeTopic(topicType, topicKey string) (string, string, error) {
+	topicType = strings.ToLower(strings.TrimSpace(topicType))
+	topicKey = strings.TrimSpace(topicKey)
 	if !port.ValidTopicType(topicType) || topicKey == "" {
-		return "", "", false
+		return "", "", apperrors.Invalid("topic_subscription.topic", "invalid topic")
 	}
-	return topicType, topicKey, true
+	return topicType, topicKey, nil
 }
 
-func (s *MyTopicSubscriptionService) Subscribe(c *gin.Context) model.ResultVO {
-	user, ok := currentUser(c)
-	if !ok {
-		return model.ResultFailWithStatus(model.NO_LOGIN)
-	}
-	topicType, topicKey, ok := topicParams(c)
-	if !ok {
-		return model.ResultFailWithMessage("话题参数不正确")
-	}
-	if err := s.repo.Subscribe(c.Request.Context(), user.UserInfoId, topicType, topicKey); err != nil {
-		if apperrors.IsKind(err, apperrors.KindNotFound) {
-			return model.ResultFailWithMessage("话题不存在或还没有公开内容")
-		}
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
-}
-
-func (s *MyTopicSubscriptionService) Unsubscribe(c *gin.Context) model.ResultVO {
-	user, ok := currentUser(c)
-	if !ok {
-		return model.ResultFailWithStatus(model.NO_LOGIN)
-	}
-	topicType, topicKey, ok := topicParams(c)
-	if !ok {
-		return model.ResultFailWithMessage("话题参数不正确")
-	}
-	if err := s.repo.Unsubscribe(c.Request.Context(), user.UserInfoId, topicType, topicKey); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
-}
-
-func (s *MyTopicSubscriptionService) SetMuted(c *gin.Context) model.ResultVO {
-	user, ok := currentUser(c)
-	if !ok {
-		return model.ResultFailWithStatus(model.NO_LOGIN)
-	}
-	topicType, topicKey, ok := topicParams(c)
-	if !ok {
-		return model.ResultFailWithMessage("话题参数不正确")
-	}
-	var vo topicMuteRequest
-	if err := c.ShouldBind(&vo); err != nil || vo.Muted == nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	if err := s.repo.SetMuted(c.Request.Context(), user.UserInfoId, topicType, topicKey, *vo.Muted == 1); err != nil {
-		if apperrors.IsKind(err, apperrors.KindNotFound) {
-			return model.ResultFailWithMessage("还没有订阅这个话题")
-		}
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
-}
-
-func (s *MyTopicSubscriptionService) ListSubscriptions(c *gin.Context) model.ResultVO {
-	user, ok := currentUser(c)
-	if !ok {
-		return model.ResultFailWithStatus(model.NO_LOGIN)
-	}
-	current, size, err := pageParams(c)
+func (s *MyTopicSubscriptionService) Subscribe(ctx context.Context, userID int, topicType, topicKey string) error {
+	topicType, topicKey, err := normalizeTopic(topicType, topicKey)
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return err
 	}
-	records, count, err := s.repo.ListSubscriptions(c.Request.Context(), user.UserInfoId, current, size)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: records, Count: count, Page: current, PageSize: size})
+	return s.repo.Subscribe(ctx, userID, topicType, topicKey)
 }
 
-func (s *MyTopicSubscriptionService) ListFeed(c *gin.Context) model.ResultVO {
-	user, ok := currentUser(c)
-	if !ok {
-		return model.ResultFailWithStatus(model.NO_LOGIN)
-	}
-	current, size, err := pageParams(c)
+func (s *MyTopicSubscriptionService) Unsubscribe(ctx context.Context, userID int, topicType, topicKey string) error {
+	topicType, topicKey, err := normalizeTopic(topicType, topicKey)
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return err
 	}
-	records, count, err := s.repo.ListTopicFeed(c.Request.Context(), user.UserInfoId, current, size)
+	return s.repo.Unsubscribe(ctx, userID, topicType, topicKey)
+}
+
+func (s *MyTopicSubscriptionService) SetMuted(ctx context.Context, userID int, topicType, topicKey string, muted bool) error {
+	topicType, topicKey, err := normalizeTopic(topicType, topicKey)
 	if err != nil {
-		return model.ResultFromError(err)
+		return err
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: records, Count: count, Page: current, PageSize: size})
+	return s.repo.SetMuted(ctx, userID, topicType, topicKey, muted)
+}
+
+func (s *MyTopicSubscriptionService) ListSubscriptions(ctx context.Context, userID, current, size int) ([]port.TopicSubscription, int, error) {
+	return s.repo.ListSubscriptions(ctx, userID, current, size)
+}
+
+func (s *MyTopicSubscriptionService) ListFeed(ctx context.Context, userID, current, size int) ([]port.TopicFeedItem, int, error) {
+	return s.repo.ListTopicFeed(ctx, userID, current, size)
 }

@@ -5,7 +5,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
 import { flattenMenuRoutes } from '@/router/menu'
 import ForbiddenView from '@/views/ForbiddenView.vue'
-import HomeView from '@/views/WorkplaceView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
@@ -18,7 +17,7 @@ const routes: RouteRecordRaw[] = [
     name: 'admin-shell',
     component: AdminLayout,
     children: [
-      { path: '', name: 'admin-home', component: HomeView, meta: { title: '首页' } }
+      { path: '', name: 'admin-home', component: () => import('@/views/WorkplaceView.vue'), meta: { title: '首页' } }
     ]
   },
   { path: '/403', name: 'forbidden', component: ForbiddenView, meta: { title: '无权访问' } },

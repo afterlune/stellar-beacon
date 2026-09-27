@@ -12,6 +12,12 @@ type CollectionReactionState struct {
 	Favorite bool `json:"favorite"`
 }
 
+type CollectionReactionResult struct {
+	Active        bool `json:"active"`
+	LikeCount     int  `json:"likeCount"`
+	FavoriteCount int  `json:"favoriteCount"`
+}
+
 // CollectionReactionRepository stores reader reactions to public or unlisted
 // reading lists. The explicit desired state keeps writes idempotent and
 // retry-safe.

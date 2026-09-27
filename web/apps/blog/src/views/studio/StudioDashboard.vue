@@ -176,7 +176,6 @@ import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
 import { notify } from '@/services/notifications'
 import api from '@/api/api'
 import type { StudioActivation, StudioActivationSync } from '@stellar-beacon/api-contract'
-import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import {
   isValidStudioHandle,
@@ -202,7 +201,6 @@ export default defineComponent({
   name: 'StudioDashboard',
   setup() {
     const userStore = useUserStore()
-    const appStore = useAppStore()
     const dashboard = ref<Record<string, number>>({})
     const scheduledArticles = ref<any[]>([])
     const scheduledTotal = ref(0)

@@ -1,0 +1,316 @@
+/* Stellar Beacon / Future Editorial System
+ *
+ * This layer deliberately replaces the old aurora/glass treatment without
+ * changing the Vue data flow. It is flat, precise and content-first: one
+ * luminous signal colour, one information colour, and a quiet instrument grid.
+ */
+
+:root {
+  --max-width: 1480px;
+  --page-max: 1480px;
+  --read-max: 48rem;
+  --banner-h: 226px;
+  --banner-h-sm: 164px;
+  --header-h: 76px;
+  --gap: 2.5rem;
+  --theme-transition: background-color 220ms ease, color 220ms ease, border-color 220ms ease;
+
+  --background-primary: #080b12;
+  --background-primary-alt: #080b12;
+  --background-secondary: #0e1320;
+  --background-secondary-alt: #121a2b;
+  --background-trans: rgba(255, 255, 255, 0.06);
+  --surface-1: rgba(14, 19, 32, 0.96);
+  --surface-2: rgba(18, 26, 43, 0.82);
+  --surface-solid: #0e1320;
+  --surface-hover: rgba(114, 230, 255, 0.09);
+  --glass-edge: rgba(255, 255, 255, 0.09);
+  --border-hairline: rgba(221, 232, 236, 0.13);
+  --border-strong: rgba(221, 232, 236, 0.28);
+  --background-modifier-border: var(--border-strong);
+
+  --text-bright: #f4f7fb;
+  --text-normal: #c4ccda;
+  --text-dim: #8f9bae;
+  --text-faint: #68758a;
+  --text-accent: #72e6ff;
+  --text-sub-accent: #ff4fa3;
+  --text-a: #72e6ff;
+  --text-a-hover: #b4f3ff;
+  --text-title-h1: #f4f7fb;
+  --text-title-h2: #f4f7fb;
+  --text-title-h3: #e4eaf5;
+  --text-title-h4: #e4eaf5;
+  --text-title-h5: #c4ccda;
+  --text-link: #8f9bae;
+
+  --accent: #72e6ff;
+  --accent-2: #ff4fa3;
+  --signal: #c8ff69;
+  --ok: #77e1ad;
+  --warn: #ffd166;
+  --danger: #ff7777;
+  --aurora-1: #72e6ff;
+  --aurora-2: #ff4fa3;
+  --aurora-3: #c8ff69;
+  --brand-gradient: linear-gradient(90deg, var(--accent), var(--accent-2));
+  --main-gradient: var(--brand-gradient);
+  --fx-grid: rgba(114, 230, 255, 0.075);
+  --fx-link: rgba(255, 79, 163, 0.14);
+  --fx-node: rgba(200, 255, 105, 0.64);
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-bleed: 8px;
+  --radius-pill: 999px;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-display: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  --shadow-card: 0 20px 44px -32px rgba(0, 0, 0, 0.85);
+  --elev-2: var(--shadow-card);
+  --search-modal-background: #0e1320;
+  --search-modal-highlight: rgba(114, 230, 255, 0.12);
+  --search-modal-muted-color: var(--text-dim);
+  --search-modal-spacing: 16px;
+  --search-modal-height: min(680px, calc(100vh - 64px));
+  --search-modal-footer-height: 48px;
+  --search-modal-searchbox-height: 58px;
+  --search-modal-key-gradient: #121a2b;
+  --search-modal-key-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+  --custom-quote-tip: var(--accent-2);
+  --custom-quote-warning: var(--warn);
+  --custom-quote-danger: var(--danger);
+}
+
+.theme-light,
+#App-Wrapper.theme-light {
+  --background-primary: #eef2f6;
+  --background-primary-alt: #e6edf4;
+  --background-secondary: #ffffff;
+  --background-secondary-alt: #e8eef6;
+  --background-trans: rgba(18, 28, 48, 0.06);
+  --surface-1: rgba(255, 255, 255, 0.96);
+  --surface-2: #e8eef6;
+  --surface-solid: #ffffff;
+  --surface-hover: rgba(18, 28, 48, 0.05);
+  --glass-edge: rgba(255, 255, 255, 0.92);
+  --border-hairline: rgba(18, 28, 48, 0.12);
+  --border-strong: rgba(18, 28, 48, 0.22);
+  --text-bright: #101727;
+  --text-normal: #2f3a4d;
+  --text-dim: #55617a;
+  --text-faint: #7b879b;
+  --text-accent: #0b6f85;
+  --text-sub-accent: #b02a72;
+  --text-a: #0b6f85;
+  --text-a-hover: #0b657c;
+  --text-title-h1: #101727;
+  --text-title-h2: #101727;
+  --text-title-h3: #1b2538;
+  --text-title-h4: #1b2538;
+  --text-title-h5: #2f3a4d;
+  --text-link: #657084;
+  --accent: #0b6f85;
+  --accent-2: #b02a72;
+  --signal: #4f7d20;
+  --ok: #2b8a60;
+  --warn: #a66b12;
+  --danger: #b64242;
+  --aurora-1: #24a8c9;
+  --aurora-2: #d8408f;
+  --aurora-3: #78b733;
+  --fx-grid: rgba(36, 168, 201, 0.1);
+  --fx-link: rgba(216, 64, 143, 0.12);
+  --fx-node: rgba(120, 183, 51, 0.5);
+  --shadow-card: 0 26px 70px rgba(36, 52, 78, 0.14);
+  --elev-2: var(--shadow-card);
+  --search-modal-background: #fafbf8;
+  --search-modal-highlight: rgba(36, 168, 201, 0.1);
+  --search-modal-key-gradient: #e5e9e3;
+  --search-modal-key-shadow: inset 0 -1px 0 rgba(19, 29, 25, 0.14);
+  --custom-quote-tip: var(--accent-2);
+  --custom-quote-warning: var(--warn);
+  --custom-quote-danger: var(--danger);
+}
+
+html {
+  background: var(--background-primary-alt);
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+body {
+  min-width: 320px;
+  background: var(--background-primary-alt);
+  color: var(--text-normal);
+  transition: var(--theme-transition);
+}
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--accent);
+  color: #09100a;
+}
+
+#App-Wrapper {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background: var(--background-primary);
+}
+
+#App-Wrapper .app-container {
+  position: relative;
+  z-index: 1;
+  width: min(100%, var(--page-max));
+  max-width: var(--page-max);
+  padding-inline: clamp(20px, 4vw, 64px);
+}
+
+#App-Wrapper .app-content {
+  position: relative;
+  z-index: 2;
+  padding-bottom: 72px;
+}
+
+#App-Wrapper .app-content > .flex.flex-col {
+  min-width: 0;
+}
+
+#App-Wrapper .app-banner.future-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: 100%;
+  height: var(--banner-h);
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-hairline);
+  background-color: var(--background-primary-alt);
+  background-image: linear-gradient(180deg, rgba(8, 12, 14, 0.2), var(--background-primary) 92%);
+  background-repeat: no-repeat;
+  background-blend-mode: screen;
+  opacity: 1;
+}
+
+#App-Wrapper .future-banner::before,
+#App-Wrapper .future-banner::after {
+  position: absolute;
+  content: '';
+  pointer-events: none;
+}
+
+#App-Wrapper .future-banner::before {
+  inset: 0;
+  background: linear-gradient(90deg, rgba(8, 12, 14, 0.88), rgba(8, 12, 14, 0.2) 56%, rgba(8, 12, 14, 0.75));
+  mix-blend-mode: multiply;
+}
+
+#App-Wrapper.theme-light .future-banner,
+.theme-light #App-Wrapper .future-banner {
+  background-color: var(--background-primary);
+  background-image: none;
+}
+
+#App-Wrapper.theme-light .future-banner::before,
+.theme-light #App-Wrapper .future-banner::before {
+  background: transparent;
+  mix-blend-mode: normal;
+}
+
+#App-Wrapper .future-banner::after {
+  right: 6vw;
+  bottom: 38px;
+  width: 34vw;
+  max-width: 420px;
+  height: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 24px rgba(181, 255, 99, 0.44);
+  opacity: 0.72;
+}
+
+.future-banner__scanline {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(180deg, transparent 0, transparent 5px, rgba(255, 255, 255, 0.025) 6px);
+  opacity: 0.38;
+}
+
+.future-banner__index,
+.future-banner__signal {
+  position: absolute;
+  bottom: 48px;
+  z-index: 1;
+  color: rgba(241, 245, 239, 0.62);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.future-banner__index {
+  left: clamp(20px, 4vw, 64px);
+}
+
+.future-banner__signal {
+  right: clamp(20px, 4vw, 64px);
+  color: var(--accent);
+}
+
+#loading-bar-wrapper #nprogress .bar {
+  z-index: 3000;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 14px rgba(181, 255, 99, 0.5);
+}
+
+#loading-bar-wrapper {
+  top: 0;
+  height: 2px;
+  width: 160px;
+  border-radius: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 0.18em;
+  transition: color 160ms ease, text-decoration-color 160ms ease, opacity 160ms ease;
+}
+
+a:hover {
+  color: var(--accent);
+  opacity: 1;
+  text-decoration-color: var(--accent);
+}
+
+button,
+input,
+textarea {
+  border-radius: var(--radius-md);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+#App-Wrapper .app-content:focus {
+  outline: none;
+}
+
+#App-Wrapper .app-content.keyboard-route-focus:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}

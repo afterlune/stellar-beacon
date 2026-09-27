@@ -64,8 +64,8 @@ const (
 )
 
 var TypeHM = map[int]map[string]string{
-	Article:    {"desc": "文章", "path": "/articles/"},
-	Talk:       {"desc": "说说", "path": "/talks/"},
-	Collection: {"desc": "书单", "path": "/collections/"},
+	Article:     {"desc": "文章", "path": "/articles/"},
+	Talk:        {"desc": "说说", "path": "/talks/"},
+	Collection:  {"desc": "书单", "path": "/collections/"},
 	ProfileWall: {"desc": "作者主页", "path": "/u/"},
 }

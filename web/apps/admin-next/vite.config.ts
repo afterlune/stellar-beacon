@@ -10,6 +10,9 @@ function manualChunks(id: string): string | undefined {
   if (!normalized.includes('/node_modules/')) return undefined
   if (normalized.includes('/node_modules/@arco-design/')) return 'vendor-arco'
   if (normalized.includes('/node_modules/vue')) return 'vendor-vue'
+  if (normalized.includes('/node_modules/@wangeditor-next/')) return 'vendor-editor'
+  if (normalized.includes('/node_modules/echarts/') || normalized.includes('/node_modules/zrender/')) return 'vendor-echarts'
+  if (normalized.includes('/node_modules/markdown-it') || normalized.includes('/node_modules/katex/')) return 'vendor-markdown'
   return 'vendor'
 }
 

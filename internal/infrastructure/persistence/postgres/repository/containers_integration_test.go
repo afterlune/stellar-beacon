@@ -75,7 +75,8 @@ CREATE TABLE t_user_info (
     id INTEGER PRIMARY KEY,
     handle VARCHAR(40) NOT NULL UNIQUE,
     email VARCHAR(50), nickname VARCHAR(50) NOT NULL, avatar VARCHAR(1024) NOT NULL,
-    intro VARCHAR(255), website VARCHAR(255), is_subscribe SMALLINT DEFAULT 0,
+    intro VARCHAR(255), website VARCHAR(255), about TEXT,
+    profile_links_json JSONB NOT NULL DEFAULT '[]'::jsonb, is_subscribe SMALLINT DEFAULT 0,
     notify_comment SMALLINT NOT NULL DEFAULT 1, notify_interaction SMALLINT NOT NULL DEFAULT 1, notify_topic SMALLINT NOT NULL DEFAULT 1,
     notify_collection SMALLINT NOT NULL DEFAULT 1, notify_studio_activation SMALLINT NOT NULL DEFAULT 1,
     is_disable SMALLINT DEFAULT 0, create_time TIMESTAMP, update_time TIMESTAMP
@@ -119,7 +120,7 @@ CREATE TABLE t_menu (id INTEGER PRIMARY KEY, name VARCHAR(50) NOT NULL, path VAR
 CREATE TABLE t_resource (id INTEGER PRIMARY KEY, resource_name VARCHAR(50) NOT NULL, url VARCHAR(255), request_method VARCHAR(10), parent_id INTEGER, is_anonymous SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_role_menu (id INTEGER PRIMARY KEY, role_id INTEGER, menu_id INTEGER);
 CREATE TABLE t_role_resource (id INTEGER PRIMARY KEY, role_id INTEGER, resource_id INTEGER);
-CREATE TABLE t_photo_album (id INTEGER PRIMARY KEY, album_name VARCHAR(50) NOT NULL, album_desc VARCHAR(100) NOT NULL, album_cover VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
+CREATE TABLE t_photo_album (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, album_name VARCHAR(50) NOT NULL, album_desc VARCHAR(100) NOT NULL, album_cover VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, status SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_photo (id INTEGER PRIMARY KEY, album_id INTEGER NOT NULL, photo_name VARCHAR(50) NOT NULL, photo_desc VARCHAR(100), photo_src VARCHAR(255) NOT NULL, is_delete SMALLINT NOT NULL, create_time TIMESTAMP, update_time TIMESTAMP);
 CREATE TABLE t_series (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL DEFAULT 0, series_name VARCHAR(50) NOT NULL, series_desc VARCHAR(255), cover VARCHAR(1024),
@@ -266,7 +267,7 @@ INSERT INTO t_menu (id, name, path, component, icon, order_num, parent_id, is_hi
 INSERT INTO t_resource (id, resource_name, url, request_method, parent_id, is_anonymous) VALUES (1, 'integration resource', '/integration', 'GET', 0, 0);
 INSERT INTO t_role_menu (id, role_id, menu_id) VALUES (1, 1, 1);
 INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1);
-INSERT INTO t_photo_album (id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 'integration album', 'integration', '', 0, 1);
+INSERT INTO t_photo_album (id, user_id, album_name, album_desc, album_cover, is_delete, status) VALUES (1, 1, 'integration album', 'integration', '', 0, 1);
 INSERT INTO t_photo (id, album_id, photo_name, photo_src, is_delete) VALUES (1, 1, 'integration photo', 'https://example.com/photo.jpg', 0);
 INSERT INTO t_series (id, user_id, series_name, is_delete, status) VALUES (10, 1, 'integration series', 0, 1);INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, is_top, is_featured, is_delete, status, type) VALUES (1, 1, 1, 'integration article', 'content', 10, 1, 0, 0, 0, 1, 1);
 INSERT INTO t_article (id, user_id, category_id, article_title, article_content, series_id, series_order, scheduled_at, is_top, is_featured, is_delete, status, type) VALUES (7, 1, 1, 'scheduled integration article', 'content', NULL, 0, CURRENT_TIMESTAMP - INTERVAL '1 minute', 0, 0, 0, 4, 1);
@@ -421,6 +422,9 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	dashboard, err := platformRepo.StudioDashboard(ctx, 1)
 	if err != nil || dashboard.Activation.CompletedAt == "" {
 		t.Fatalf("studio dashboard must include activation: dashboard=%+v err=%v", dashboard, err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE t_studio_activation SET started_at = $1 WHERE user_id = 1", time.Now()); err != nil {
+		t.Fatalf("reset studio activation timestamp for funnel window: %v", err)
 	}
 	funnel, err := NewGrowthRepo(xormEngine).StudioActivationFunnel(ctx, time.Now().Add(-time.Hour))
 	if err != nil || funnel.Started != 1 || funnel.IdentityCompleted != 1 || funnel.ContentCompleted != 1 || funnel.ProfileVisited != 1 || funnel.Completed != 1 {

@@ -5,13 +5,7 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeCategoryRepository struct {
@@ -74,66 +68,44 @@ func (f *fakeTagRepository) Delete(_ context.Context, userID int, ids []int) err
 	return f.err
 }
 
-func categoryTagTestContext(method, path string) *gin.Context {
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest(method, path, nil)
-	return c
-}
-
 func TestCategoryServicePreservesConflictMessage(t *testing.T) {
-	c := categoryTagTestContext(http.MethodGet, "/admin/categories?id=0&categoryName=test")
-	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	result := NewCategoryService(&fakeCategoryRepository{err: apperrors.Conflict("category.save", "duplicate")}).SaveOrUpdateCategory(c)
-	if result.Flag || result.Message != "分类名已存在" {
-		t.Fatalf("unexpected result: %+v", result)
+	err := NewCategoryService(&fakeCategoryRepository{err: apperrors.Conflict("category.save", "duplicate")}).SaveOrUpdateCategory(context.Background(), entity.TCategory{UserId: 7, CategoryName: "test"})
+	if !apperrors.IsKind(err, apperrors.KindConflict) {
+		t.Fatalf("expected category conflict, got %v", err)
 	}
 }
 
 func TestTagServiceMapsRepositoryFailure(t *testing.T) {
-	c := categoryTagTestContext(http.MethodGet, "/admin/tags?current=1&size=10")
-	result := NewTagService(&fakeTagRepository{err: apperrors.Unavailable("tag.count", testServiceError("secret"))}).ListTagsAdmin(c)
-	if result.Flag || result.Message != "系统繁忙，请稍后再试" {
-		t.Fatalf("unexpected result: %+v", result)
+	_, _, err := NewTagService(&fakeTagRepository{err: apperrors.Unavailable("tag.count", testServiceError("secret"))}).ListTagsAdmin(context.Background(), 1, 10, "")
+	if !apperrors.IsKind(err, apperrors.KindUnavailable) {
+		t.Fatalf("expected unavailable repository error, got %v", err)
 	}
-}
-
-func categoryTagJSONContext(method, path, body string) *gin.Context {
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest(method, path, strings.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	return c
 }
 
 func TestCategoryAndTagWritesUseCurrentOwner(t *testing.T) {
 	categoryRepo := &fakeCategoryRepository{}
-	categoryCtx := categoryTagJSONContext(http.MethodPost, "/v1/admin/categories", `{"categoryName":"私人分类"}`)
-	categoryCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := NewCategoryService(categoryRepo).SaveOrUpdateCategory(categoryCtx); !result.Flag || categoryRepo.saved.UserId != 7 {
-		t.Fatalf("category write must use the authenticated owner: result=%+v saved=%+v", result, categoryRepo.saved)
+	err := NewCategoryService(categoryRepo).SaveOrUpdateCategory(context.Background(), entity.TCategory{UserId: 7, CategoryName: "私人分类"})
+	if err != nil || categoryRepo.saved.UserId != 7 {
+		t.Fatalf("category write must use the authenticated owner: err=%v saved=%+v", err, categoryRepo.saved)
 	}
 
 	tagRepo := &fakeTagRepository{}
-	tagCtx := categoryTagJSONContext(http.MethodPost, "/v1/admin/tags", `{"tagName":"私人标签"}`)
-	tagCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := NewTagService(tagRepo).SaveOrUpdateTag(tagCtx); !result.Flag || tagRepo.saved.UserId != 7 {
-		t.Fatalf("tag write must use the authenticated owner: result=%+v saved=%+v", result, tagRepo.saved)
+	err = NewTagService(tagRepo).SaveOrUpdateTag(context.Background(), entity.TTag{UserId: 7, TagName: "私人标签"})
+	if err != nil || tagRepo.saved.UserId != 7 {
+		t.Fatalf("tag write must use the authenticated owner: err=%v saved=%+v", err, tagRepo.saved)
 	}
 }
 
 func TestCategoryAndTagDeletePassOwnerScope(t *testing.T) {
 	categoryRepo := &fakeCategoryRepository{}
-	categoryCtx := categoryTagJSONContext(http.MethodDelete, "/v1/admin/categories", `[3,4]`)
-	categoryCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := NewCategoryService(categoryRepo).DeleteCategories(categoryCtx); !result.Flag || categoryRepo.deleteUser != 7 || len(categoryRepo.deleteIDs) != 2 {
-		t.Fatalf("category delete must pass owner scope: result=%+v user=%d ids=%v", result, categoryRepo.deleteUser, categoryRepo.deleteIDs)
+	err := NewCategoryService(categoryRepo).DeleteCategories(context.Background(), 7, []int{3, 4})
+	if err != nil || categoryRepo.deleteUser != 7 || len(categoryRepo.deleteIDs) != 2 {
+		t.Fatalf("category delete must pass owner scope: err=%v user=%d ids=%v", err, categoryRepo.deleteUser, categoryRepo.deleteIDs)
 	}
 
 	tagRepo := &fakeTagRepository{}
-	tagCtx := categoryTagJSONContext(http.MethodDelete, "/v1/admin/tags", `[5,6]`)
-	tagCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := NewTagService(tagRepo).DeleteTag(tagCtx); !result.Flag || tagRepo.deleteUser != 7 || len(tagRepo.deleteIDs) != 2 {
-		t.Fatalf("tag delete must pass owner scope: result=%+v user=%d ids=%v", result, tagRepo.deleteUser, tagRepo.deleteIDs)
+	err = NewTagService(tagRepo).DeleteTag(context.Background(), 7, []int{5, 6})
+	if err != nil || tagRepo.deleteUser != 7 || len(tagRepo.deleteIDs) != 2 {
+		t.Fatalf("tag delete must pass owner scope: err=%v user=%d ids=%v", err, tagRepo.deleteUser, tagRepo.deleteIDs)
 	}
 }

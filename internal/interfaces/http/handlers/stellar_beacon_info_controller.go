@@ -73,12 +73,3 @@ func GetAbout(c *gin.Context) {
 func UpdateAbout(c *gin.Context) {
 	c.JSON(http.StatusOK, stellarBeaconService.UpdateAbout(c))
 }
-
-// SaveBlogPhotoAlbumCover
-// @Summary		 星际信标信息
-// @Description 上传博客配置图片
-// @Success		 200	{object} model.ResultVO
-// @Router       /v1/admin/site/images [POST]
-func SaveBlogPhotoAlbumCover(c *gin.Context) {
-	c.JSON(http.StatusOK, stellarBeaconService.SaveBlogPhotoAlbumCover(c))
-}

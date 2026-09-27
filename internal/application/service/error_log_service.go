@@ -1,16 +1,15 @@
 package service
 
 import (
-	"container/list"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"context"
 
-	"github.com/gin-gonic/gin"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 )
 
 type ErrorLogService interface {
-	ListErrorLogs(c *gin.Context) model.ResultVO
-	DeleteErrorLogs(c *gin.Context) model.ResultVO
+	ListErrorLogs(context.Context, int, int, string) ([]entity.TExceptionLog, int64, error)
+	DeleteErrorLogs(context.Context, []int) error
 }
 
 type MyErrorLogService struct{ repo port.ErrorLogRepository }
@@ -26,30 +25,10 @@ func (e *MyErrorLogService) errorLogRepository() port.ErrorLogRepository {
 	return errorLogRepo
 }
 
-func (e *MyErrorLogService) ListErrorLogs(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	logs, count, err := e.errorLogRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	var dtos []model.ExceptionLogDTO
-	StructCopy(logs, &dtos)
-	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
-	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
+func (e *MyErrorLogService) ListErrorLogs(ctx context.Context, current, size int, keywords string) ([]entity.TExceptionLog, int64, error) {
+	return e.errorLogRepository().List(ctx, current, size, keywords)
 }
 
-func (e *MyErrorLogService) DeleteErrorLogs(c *gin.Context) model.ResultVO {
-	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	if err := e.errorLogRepository().Delete(c.Request.Context(), ids); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+func (e *MyErrorLogService) DeleteErrorLogs(ctx context.Context, ids []int) error {
+	return e.errorLogRepository().Delete(ctx, ids)
 }

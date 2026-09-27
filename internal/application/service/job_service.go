@@ -1,30 +1,50 @@
 package service
 
 import (
-	"container/list"
 	"context"
-	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"github.com/gin-gonic/gin"
 )
 
 type JobService interface {
-	SaveJob(c *gin.Context) model.ResultVO
-	UpdateJob(c *gin.Context) model.ResultVO
-	DeleteJobById(c *gin.Context) model.ResultVO
-	GetJobById(c *gin.Context) model.ResultVO
-	ListJobs(c *gin.Context) model.ResultVO
-	UpdateJobStatus(c *gin.Context) model.ResultVO
-	RunJob(c *gin.Context) model.ResultVO
-	ListJobGroup(c *gin.Context) model.ResultVO
-	ListJobTargets(c *gin.Context) model.ResultVO
+	SaveJob(ctx context.Context, input JobInput) error
+	UpdateJob(ctx context.Context, input JobInput) error
+	DeleteJobs(ctx context.Context, ids []int) error
+	GetJob(ctx context.Context, id int) (JobDetail, error)
+	ListJobs(ctx context.Context, current, size int, filter port.JobFilter) ([]JobDetail, int, error)
+	UpdateJobStatus(ctx context.Context, id, status int) error
+	RunJob(ctx context.Context, id int) (JobRunOutcome, error)
+	ListJobGroups(ctx context.Context) ([]string, error)
+	ListJobTargets(ctx context.Context) ([]port.JobTarget, error)
+}
+
+type JobInput struct {
+	ID             int
+	JobName        string
+	JobGroup       string
+	InvokeTarget   string
+	CronExpression string
+	Concurrent     int
+	Status         int
+	Remark         string
+}
+
+type JobDetail struct {
+	Job           entity.TJob
+	CanRunOnce    bool
+	RunOnceReason string
+	NextValidTime *time.Time
+}
+
+type JobRunOutcome struct {
+	JobID     int
+	Target    string
+	Processed bool
+	Message   string
 }
 
 type MyJobService struct {
@@ -43,173 +63,109 @@ func (j *MyJobService) jobRepository() port.JobRepository {
 	return jobRepo
 }
 
-func (j *MyJobService) SaveJob(c *gin.Context) model.ResultVO {
-	var vo model.JobVO
-	if err := c.ShouldBind(&vo); err != nil {
-		slog.Error("bind job failed", "error", err)
-		return model.ResultFailWithMessage("参数格式不正确")
+func (j *MyJobService) SaveJob(ctx context.Context, input JobInput) error {
+	if err := j.validateJob(input); err != nil {
+		return err
 	}
-	if err := j.validateJob(vo); err != nil {
-		return model.ResultFromError(err)
+	if err := j.jobRepository().SaveOrUpdate(ctx, jobEntity(input)); err != nil {
+		return err
 	}
-	if err := j.jobRepository().SaveOrUpdate(c.Request.Context(), jobEntity(vo)); err != nil {
-		return model.ResultFromError(err)
-	}
-	if err := j.reload(c.Request.Context()); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+	return j.reload(ctx)
 }
 
-func (j *MyJobService) UpdateJob(c *gin.Context) model.ResultVO {
-	var vo model.JobVO
-	if err := c.ShouldBind(&vo); err != nil {
-		slog.Error("bind job failed", "error", err)
-		return model.ResultFailWithMessage("参数格式不正确")
+func (j *MyJobService) UpdateJob(ctx context.Context, input JobInput) error {
+	if input.ID == 0 {
+		return apperrors.Invalid("job.update", "job id is required")
 	}
-	if vo.Id == 0 {
-		return model.ResultFailWithMessage("参数格式不正确")
+	if err := j.validateJob(input); err != nil {
+		return err
 	}
-	if err := j.validateJob(vo); err != nil {
-		return model.ResultFromError(err)
+	if err := j.jobRepository().SaveOrUpdate(ctx, jobEntity(input)); err != nil {
+		return err
 	}
-	if err := j.jobRepository().SaveOrUpdate(c.Request.Context(), jobEntity(vo)); err != nil {
-		return model.ResultFromError(err)
-	}
-	if err := j.reload(c.Request.Context()); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+	return j.reload(ctx)
 }
 
-func (j *MyJobService) DeleteJobById(c *gin.Context) model.ResultVO {
-	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		slog.Error("bind job IDs failed", "error", err)
-		return model.ResultFailWithMessage("参数格式不正确")
+func (j *MyJobService) DeleteJobs(ctx context.Context, ids []int) error {
+	if err := j.jobRepository().Delete(ctx, ids); err != nil {
+		return err
 	}
-	if err := j.jobRepository().Delete(c.Request.Context(), ids); err != nil {
-		return model.ResultFromError(err)
-	}
-	if err := j.reload(c.Request.Context()); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+	return j.reload(ctx)
 }
 
-func (j *MyJobService) GetJobById(c *gin.Context) model.ResultVO {
-	id, err := strconv.Atoi(c.Param("id"))
+func (j *MyJobService) GetJob(ctx context.Context, id int) (JobDetail, error) {
+	job, err := j.jobRepository().Get(ctx, id)
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+		return JobDetail{}, err
 	}
-	job, err := j.jobRepository().Get(c.Request.Context(), id)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOkWithData(j.jobDTO(job))
+	return j.jobDetail(job), nil
 }
 
-func (j *MyJobService) ListJobs(c *gin.Context) model.ResultVO {
-	current, err := strconv.Atoi(c.Query("current"))
+func (j *MyJobService) ListJobs(ctx context.Context, current, size int, filter port.JobFilter) ([]JobDetail, int, error) {
+	jobs, count, err := j.jobRepository().List(ctx, current, size, filter)
 	if err != nil {
-		current = 1
+		return nil, 0, err
 	}
-	size, err := strconv.Atoi(c.Query("size"))
-	if err != nil {
-		size = 10
-	}
-	var vo model.JobSearchVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFail()
-	}
-	jobs, count, err := j.jobRepository().List(c.Request.Context(), current, size, port.JobFilter{
-		JobName: vo.JobName, JobGroup: vo.JobGroup, Status: vo.Status,
-	})
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	dtos := make([]model.JobDTO, 0, len(jobs))
+	details := make([]JobDetail, 0, len(jobs))
 	for _, job := range jobs {
-		dtos = append(dtos, j.jobDTO(job))
+		details = append(details, j.jobDetail(job))
 	}
-	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
-	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: count})
+	return details, count, nil
 }
 
-func (j *MyJobService) UpdateJobStatus(c *gin.Context) model.ResultVO {
-	var vo model.JobStatusVO
-	if err := c.ShouldBind(&vo); err != nil || vo.Id <= 0 || (vo.Status != 0 && vo.Status != 1) {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (j *MyJobService) UpdateJobStatus(ctx context.Context, id, status int) error {
+	if id <= 0 || (status != 0 && status != 1) {
+		return apperrors.Invalid("job.status", "job id or status is invalid")
 	}
-	if err := j.jobRepository().UpdateStatus(c.Request.Context(), vo.Id, vo.Status); err != nil {
-		return model.ResultFromError(err)
+	if err := j.jobRepository().UpdateStatus(ctx, id, status); err != nil {
+		return err
 	}
-	if err := j.reload(c.Request.Context()); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+	return j.reload(ctx)
 }
 
-func (j *MyJobService) RunJob(c *gin.Context) model.ResultVO {
-	var request model.JobRunVO
-	if err := c.ShouldBind(&request); err != nil || request.Id <= 0 {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (j *MyJobService) RunJob(ctx context.Context, id int) (JobRunOutcome, error) {
+	if id <= 0 {
+		return JobRunOutcome{}, apperrors.Invalid("job.run", "job id is invalid")
 	}
 	if j.scheduler == nil {
-		return model.ResultFromError(apperrors.Unavailable("job.run", nil))
+		return JobRunOutcome{}, apperrors.Unavailable("job.run", nil)
 	}
-	job, err := j.jobRepository().Get(c.Request.Context(), request.Id)
+	job, err := j.jobRepository().Get(ctx, id)
 	if err != nil {
-		return model.ResultFromError(err)
+		return JobRunOutcome{}, err
 	}
-	result, err := j.scheduler.Run(c.Request.Context(), job, "manual")
+	result, err := j.scheduler.Run(ctx, job, "manual")
 	if err != nil {
-		return model.ResultFromError(err)
+		return JobRunOutcome{}, err
 	}
-	return model.ResultOkWithData(model.JobRunOutcomeDTO{
-		JobId: job.Id, Target: job.InvokeTarget, Processed: result.Processed, Message: result.Message,
-	})
+	return JobRunOutcome{JobID: job.Id, Target: job.InvokeTarget, Processed: result.Processed, Message: result.Message}, nil
 }
 
-func (j *MyJobService) ListJobGroup(c *gin.Context) model.ResultVO {
-	groups, err := j.jobRepository().ListGroups(c.Request.Context())
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOkWithData(groups)
+func (j *MyJobService) ListJobGroups(ctx context.Context) ([]string, error) {
+	return j.jobRepository().ListGroups(ctx)
 }
 
-func (j *MyJobService) ListJobTargets(c *gin.Context) model.ResultVO {
+func (j *MyJobService) ListJobTargets(context.Context) ([]port.JobTarget, error) {
 	if j.scheduler == nil {
-		return model.ResultFromError(apperrors.Unavailable("job.targets", nil))
+		return nil, apperrors.Unavailable("job.targets", nil)
 	}
-	primitive := j.scheduler.Targets()
-	targets := make([]model.JobTargetDTO, 0, len(primitive))
-	for _, target := range primitive {
-		targets = append(targets, model.JobTargetDTO{
-			Target: target.Target, Name: target.Name,
-			Description: target.Description, CronExample: target.CronExample,
-		})
-	}
-	return model.ResultOkWithData(targets)
+	return j.scheduler.Targets(), nil
 }
 
-func (j *MyJobService) validateJob(vo model.JobVO) error {
-	if strings.TrimSpace(vo.JobName) == "" || strings.TrimSpace(vo.JobGroup) == "" || strings.TrimSpace(vo.InvokeTarget) == "" || strings.TrimSpace(vo.CronExpression) == "" {
+func (j *MyJobService) validateJob(input JobInput) error {
+	if strings.TrimSpace(input.JobName) == "" || strings.TrimSpace(input.JobGroup) == "" || strings.TrimSpace(input.InvokeTarget) == "" || strings.TrimSpace(input.CronExpression) == "" {
 		return apperrors.Invalid("job.validate", "job fields are required")
 	}
-	if vo.Status != 0 && vo.Status != 1 {
+	if input.Status != 0 && input.Status != 1 {
 		return apperrors.Invalid("job.validate", "job status is invalid")
 	}
-	if vo.Concurrent != 0 && vo.Concurrent != 1 {
+	if input.Concurrent != 0 && input.Concurrent != 1 {
 		return apperrors.Invalid("job.validate", "job concurrency is invalid")
 	}
-	if j.scheduler == nil || !j.scheduler.SupportsTarget(strings.TrimSpace(vo.InvokeTarget)) {
+	if j.scheduler == nil || !j.scheduler.SupportsTarget(strings.TrimSpace(input.InvokeTarget)) {
 		return apperrors.Invalid("job.validate", "job target is not registered")
 	}
-	if _, err := j.scheduler.NextRun(strings.TrimSpace(vo.CronExpression), time.Now()); err != nil {
+	if _, err := j.scheduler.NextRun(strings.TrimSpace(input.CronExpression), time.Now()); err != nil {
 		return err
 	}
 	return nil
@@ -222,42 +178,30 @@ func (j *MyJobService) reload(ctx context.Context) error {
 	return j.scheduler.Reload(ctx)
 }
 
-func (j *MyJobService) jobDTO(job entity.TJob) model.JobDTO {
-	dto := model.JobDTO{
-		Id:             job.Id,
-		JobName:        job.JobName,
-		JobGroup:       job.JobGroup,
-		InvokeTarget:   job.InvokeTarget,
-		CronExpression: job.CronExpression,
-		MisfirePolicy:  strconv.Itoa(job.MisfirePolicy),
-		Concurrent:     job.Concurrent,
-		Status:         job.Status,
-		CreateTime:     job.CreateTime,
-		Remark:         job.Remark,
-	}
+func (j *MyJobService) jobDetail(job entity.TJob) JobDetail {
+	detail := JobDetail{Job: job}
 	if j.scheduler == nil || !j.scheduler.SupportsTarget(job.InvokeTarget) {
-		dto.RunOnceReason = "job target is not registered"
-		return dto
+		detail.RunOnceReason = "job target is not registered"
+		return detail
 	}
-	dto.CanRunOnce = true
+	detail.CanRunOnce = true
 	next, err := j.scheduler.NextRun(job.CronExpression, time.Now())
-	if err != nil {
-		return dto
+	if err == nil {
+		detail.NextValidTime = &next
 	}
-	dto.NextValidTime = &next
-	return dto
+	return detail
 }
 
-func jobEntity(vo model.JobVO) entity.TJob {
+func jobEntity(input JobInput) entity.TJob {
 	return entity.TJob{
-		Id:             vo.Id,
-		JobName:        strings.TrimSpace(vo.JobName),
-		JobGroup:       strings.TrimSpace(vo.JobGroup),
-		InvokeTarget:   strings.TrimSpace(vo.InvokeTarget),
-		CronExpression: strings.TrimSpace(vo.CronExpression),
+		Id:             input.ID,
+		JobName:        strings.TrimSpace(input.JobName),
+		JobGroup:       strings.TrimSpace(input.JobGroup),
+		InvokeTarget:   strings.TrimSpace(input.InvokeTarget),
+		CronExpression: strings.TrimSpace(input.CronExpression),
 		MisfirePolicy:  3,
-		Concurrent:     vo.Concurrent,
-		Status:         vo.Status,
-		Remark:         strings.TrimSpace(vo.Remark),
+		Concurrent:     input.Concurrent,
+		Status:         input.Status,
+		Remark:         strings.TrimSpace(input.Remark),
 	}
 }

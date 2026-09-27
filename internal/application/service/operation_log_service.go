@@ -1,16 +1,15 @@
 package service
 
 import (
-	"container/list"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"context"
 
-	"github.com/gin-gonic/gin"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 )
 
 type OperationLogService interface {
-	ListOperationLogs(c *gin.Context) model.ResultVO
-	DeleteOperationLogs(c *gin.Context) model.ResultVO
+	ListOperationLogs(context.Context, int, int, string) ([]entity.TOperationLog, int64, error)
+	DeleteOperationLogs(context.Context, []int) error
 }
 
 type MyOperationLogService struct{ repo port.OperationLogRepository }
@@ -26,30 +25,10 @@ func (o *MyOperationLogService) operationLogRepository() port.OperationLogReposi
 	return operationLogRepo
 }
 
-func (o *MyOperationLogService) ListOperationLogs(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	logs, count, err := o.operationLogRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	var dtos []model.OperationLogDTO
-	StructCopy(logs, &dtos)
-	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
-	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: dtos, Count: int(count)})
+func (o *MyOperationLogService) ListOperationLogs(ctx context.Context, current, size int, keywords string) ([]entity.TOperationLog, int64, error) {
+	return o.operationLogRepository().List(ctx, current, size, keywords)
 }
 
-func (o *MyOperationLogService) DeleteOperationLogs(c *gin.Context) model.ResultVO {
-	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	if err := o.operationLogRepository().Delete(c.Request.Context(), ids); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+func (o *MyOperationLogService) DeleteOperationLogs(ctx context.Context, ids []int) error {
+	return o.operationLogRepository().Delete(ctx, ids)
 }

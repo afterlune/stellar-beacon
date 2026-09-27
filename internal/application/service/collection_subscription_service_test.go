@@ -2,14 +2,10 @@ package service
 
 import (
 	"context"
-	"net/http"
+	"errors"
 	"testing"
 
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeCollectionSubscriptionRepository struct {
@@ -38,38 +34,27 @@ func (f *fakeCollectionSubscriptionRepository) ListFeed(context.Context, int, in
 	return f.feed, len(f.feed), nil
 }
 
-func collectionSubscriptionContext(t *testing.T, method, target, body string, collectionID string) *gin.Context {
-	t.Helper()
-	c := seriesContext(t, method, target, body, gin.Params{{Key: "collectionId", Value: collectionID}})
-	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	return c
-}
-
-func TestCollectionSubscriptionServiceMapsSubscribeErrors(t *testing.T) {
-	repo := &fakeCollectionSubscriptionRepository{subscribeErr: apperrors.Invalid("collection_subscription.self", "self")}
-	service := NewCollectionSubscriptionService(repo)
-	result := service.Subscribe(collectionSubscriptionContext(t, http.MethodPut, "/v1/auth/me/collection-subscriptions/9", "", "9"))
-	if result.Flag || result.Message != "不能订阅自己的书单" {
-		t.Fatalf("unexpected self-subscription result: %+v", result)
-	}
-
-	repo.subscribeErr = apperrors.NotFound("collection_subscription.resolve")
-	result = service.Subscribe(collectionSubscriptionContext(t, http.MethodPut, "/v1/auth/me/collection-subscriptions/9", "", "9"))
-	if result.Flag || result.Message != "书单不存在或不可订阅" {
-		t.Fatalf("unexpected missing-subscription result: %+v", result)
-	}
-}
-
-func TestCollectionSubscriptionServiceMutesAndListsFeed(t *testing.T) {
+func TestCollectionSubscriptionServiceDelegatesTypedCommands(t *testing.T) {
+	ctx := context.Background()
 	repo := &fakeCollectionSubscriptionRepository{feed: []port.CollectionFeedItem{{EventId: 4, CollectionID: 9, ArticleID: 3}}}
-	service := NewCollectionSubscriptionService(repo)
-	muted := service.SetMuted(collectionSubscriptionContext(t, http.MethodPut, "/v1/auth/me/collection-subscriptions/9/mute", `{"muted":1}`, "9"))
-	if !muted.Flag || !repo.mutedSet {
-		t.Fatalf("unexpected mute result: result=%+v muted=%v", muted, repo.mutedSet)
+	svc := NewCollectionSubscriptionService(repo)
+
+	if err := svc.Subscribe(ctx, 7, 9); err != nil {
+		t.Fatalf("subscribe: %v", err)
 	}
-	feed := service.ListFeed(collectionSubscriptionContext(t, http.MethodGet, "/v1/auth/me/collection-feed", "", "9"))
-	page, ok := feed.Data.(model.PageResultDTO)
-	if !feed.Flag || !ok || page.Count != 1 {
-		t.Fatalf("unexpected collection feed result: %+v", feed)
+	if err := svc.SetMuted(ctx, 7, 9, true); err != nil || !repo.mutedSet {
+		t.Fatalf("set muted: err=%v muted=%v", err, repo.mutedSet)
+	}
+	feed, count, err := svc.ListFeed(ctx, 7, 1, 12)
+	if err != nil || count != 1 || len(feed) != 1 || feed[0].EventId != 4 {
+		t.Fatalf("unexpected feed: records=%+v count=%d err=%v", feed, count, err)
+	}
+}
+
+func TestCollectionSubscriptionServiceReturnsRepositoryErrors(t *testing.T) {
+	want := errors.New("repository unavailable")
+	svc := NewCollectionSubscriptionService(&fakeCollectionSubscriptionRepository{subscribeErr: want})
+	if err := svc.Subscribe(context.Background(), 7, 9); !errors.Is(err, want) {
+		t.Fatalf("expected repository error to be preserved, got %v", err)
 	}
 }

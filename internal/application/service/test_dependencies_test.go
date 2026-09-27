@@ -173,13 +173,6 @@ func (fakeStellarBeaconInfoService) GetAbout(context.Context) model.ResultVO {
 func (fakeStellarBeaconInfoService) UpdateAbout(*gin.Context) model.ResultVO {
 	return model.ResultOk()
 }
-func (fakeStellarBeaconInfoService) SaveBlogPhotoAlbumCover(*gin.Context) model.ResultVO {
-	return model.ResultOk()
-}
-func (fakeStellarBeaconInfoService) listArticleRank(context.Context, map[string]float64) ([]model.ArticleRankDTO, error) {
-	return nil, nil
-}
-
 func mustArticleService(t *testing.T, repo port.ArticleRepository, searcher port.ArticleSearcher) *MyArticleService {
 	t.Helper()
 	if searcher == nil {

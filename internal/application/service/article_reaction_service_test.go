@@ -3,18 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeReactionRepository struct {
@@ -85,22 +79,6 @@ func (denyingRateLimiter) Allow(context.Context, string, int64, time.Duration) (
 	return false, nil
 }
 
-func mustReactionContext(t *testing.T, method, target, body string, userInfoID int) *gin.Context {
-	t.Helper()
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	if body == "" {
-		c.Request = httptest.NewRequest(method, target, nil)
-	} else {
-		c.Request = httptest.NewRequest(method, target, strings.NewReader(body))
-		c.Request.Header.Set("Content-Type", "application/json")
-	}
-	if userInfoID > 0 {
-		c.Set("userInfo", model.UserDetailsDTO{Id: userInfoID, UserInfoId: userInfoID})
-	}
-	return c
-}
-
 func mustReactionService(t *testing.T, repo port.ArticleReactionRepository, articles port.ArticleRepository, limiter port.RateLimiter) *MyArticleReactionService {
 	t.Helper()
 	service, err := NewArticleReactionService(ArticleReactionServiceDeps{Repo: repo, Articles: articles, Limiter: limiter})
@@ -115,29 +93,25 @@ func TestToggleArticleReactionIsIdempotentForTheRequestedState(t *testing.T) {
 	articles := &fakeReactionArticles{record: entity.TArticle{Id: 7}}
 	service := mustReactionService(t, repo, articles, nil)
 
-	first := service.ToggleArticleReaction(mustReactionContext(t, http.MethodPut, "/v1/auth/me/reactions", `{"articleId":7,"reaction":"like","active":true}`, 3))
-	if !first.Flag {
-		t.Fatalf("expected success, got %+v", first)
-	}
-	dto, ok := first.Data.(model.ReactionToggleDTO)
-	if !ok || !dto.Active || dto.LikeCount != 1 {
-		t.Fatalf("unexpected payload: %+v", first.Data)
+	first, err := service.ToggleArticleReaction(context.Background(), 3, 7, port.ReactionLike, true)
+	if err != nil || !first.Active || first.LikeCount != 1 {
+		t.Fatalf("unexpected payload: %+v err=%v", first, err)
 	}
 
 	// The desired state is already present: no second ledger write.
-	second := service.ToggleArticleReaction(mustReactionContext(t, http.MethodPut, "/v1/auth/me/reactions", `{"articleId":7,"reaction":"like","active":true}`, 3))
-	if !second.Flag {
-		t.Fatalf("expected success, got %+v", second)
+	second, err := service.ToggleArticleReaction(context.Background(), 3, 7, port.ReactionLike, true)
+	if err != nil || !second.Active {
+		t.Fatalf("expected idempotent success, got %+v err=%v", second, err)
 	}
 	if repo.toggles != 1 {
 		t.Fatalf("expected exactly one ledger write, got %d", repo.toggles)
 	}
 
-	third := service.ToggleArticleReaction(mustReactionContext(t, http.MethodPut, "/v1/auth/me/reactions", `{"articleId":7,"reaction":"like","active":false}`, 3))
-	if !third.Flag {
-		t.Fatalf("expected success, got %+v", third)
+	third, err := service.ToggleArticleReaction(context.Background(), 3, 7, port.ReactionLike, false)
+	if err != nil {
+		t.Fatalf("expected successful removal, got %v", err)
 	}
-	if active := third.Data.(model.ReactionToggleDTO).Active; active {
+	if third.Active {
 		t.Fatal("expected the reaction to be removed")
 	}
 }
@@ -145,10 +119,10 @@ func TestToggleArticleReactionIsIdempotentForTheRequestedState(t *testing.T) {
 func TestToggleArticleReactionRejectsUnsupportedInput(t *testing.T) {
 	service := mustReactionService(t, &fakeReactionRepository{}, &fakeReactionArticles{record: entity.TArticle{Id: 7}}, nil)
 
-	if result := service.ToggleArticleReaction(mustReactionContext(t, http.MethodPut, "/v1/auth/me/reactions", `{"articleId":7,"reaction":"clap","active":true}`, 3)); result.Flag {
+	if _, err := service.ToggleArticleReaction(context.Background(), 3, 7, "clap", true); err == nil {
 		t.Fatal("unsupported reaction must fail")
 	}
-	if result := service.ToggleArticleReaction(mustReactionContext(t, http.MethodPut, "/v1/auth/me/reactions", `{"articleId":7,"reaction":"like","active":true}`, 0)); result.Flag {
+	if _, err := service.ToggleArticleReaction(context.Background(), 0, 7, port.ReactionLike, true); err == nil {
 		t.Fatal("anonymous requests must fail")
 	}
 }
@@ -157,8 +131,7 @@ func TestToggleArticleReactionRejectsMissingArticle(t *testing.T) {
 	articles := &fakeReactionArticles{record: entity.TArticle{Id: 0}}
 	service := mustReactionService(t, &fakeReactionRepository{}, articles, nil)
 
-	result := service.ToggleArticleReaction(mustReactionContext(t, http.MethodPut, "/v1/auth/me/reactions", `{"articleId":9,"reaction":"like","active":true}`, 3))
-	if result.Flag {
+	if _, err := service.ToggleArticleReaction(context.Background(), 3, 9, port.ReactionLike, true); err == nil {
 		t.Fatal("reactions on a missing article must fail")
 	}
 }
@@ -167,8 +140,7 @@ func TestToggleArticleReactionEnforcesRateLimit(t *testing.T) {
 	articles := &fakeReactionArticles{record: entity.TArticle{Id: 7}}
 	service := mustReactionService(t, &fakeReactionRepository{}, articles, denyingRateLimiter{})
 
-	result := service.ToggleArticleReaction(mustReactionContext(t, http.MethodPut, "/v1/auth/me/reactions", `{"articleId":7,"reaction":"like","active":true}`, 3))
-	if result.Flag {
+	if _, err := service.ToggleArticleReaction(context.Background(), 3, 7, port.ReactionLike, true); err == nil {
 		t.Fatal("rate-limited requests must fail")
 	}
 }

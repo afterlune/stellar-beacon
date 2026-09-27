@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -20,6 +21,20 @@ type fakeCollectionRepository struct {
 	addCalls        int
 	reorderCalls    int
 	lastCreateInput port.CollectionSaveInput
+}
+
+func collectionTestContext(t *testing.T, method, target, body string, params gin.Params) *gin.Context {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	if body == "" {
+		c.Request = httptest.NewRequest(method, target, nil)
+	} else {
+		c.Request = httptest.NewRequest(method, target, strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+	}
+	c.Params = params
+	return c
 }
 
 func (f *fakeCollectionRepository) ListPublic(context.Context, string, int, int) ([]*port.CollectionSummary, int, error) {
@@ -124,7 +139,7 @@ func TestCollectionPublicDetailFiltersUnavailableItems(t *testing.T) {
 	articles := &collectionArticles{cards: map[int]*port.ArticleCard{1: {Id: 1, ArticleTitle: "visible"}}}
 	service := mustCollectionService(t, repo, articles)
 
-	result := service.GetPublic(seriesContext(t, http.MethodGet, "/v1/public/collections/reading-path", "", gin.Params{{Key: "slug", Value: "reading-path"}}))
+	result := service.GetPublic(collectionTestContext(t, http.MethodGet, "/v1/public/collections/reading-path", "", gin.Params{{Key: "slug", Value: "reading-path"}}))
 	if !result.Flag {
 		t.Fatalf("unexpected public detail result: %+v", result)
 	}
@@ -137,7 +152,7 @@ func TestCollectionPublicDetailFiltersUnavailableItems(t *testing.T) {
 func TestCollectionCreateEnforcesLimit(t *testing.T) {
 	repo := &fakeCollectionRepository{ownedTotal: collectionMaxPerUser}
 	service := mustCollectionService(t, repo, &collectionArticles{})
-	c := seriesContext(t, http.MethodPost, "/v1/studio/collections", `{"title":"new list","visibility":"private"}`, nil)
+	c := collectionTestContext(t, http.MethodPost, "/v1/studio/collections", `{"title":"new list","visibility":"private"}`, nil)
 	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
 
 	result := service.Create(c)
@@ -150,7 +165,7 @@ func TestCollectionAddItemRequiresPublicVisibleArticle(t *testing.T) {
 	repo := &fakeCollectionRepository{record: port.CollectionRecord{Collection: port.CollectionSummary{ID: 9}}}
 	articles := &collectionArticles{record: entity.TArticle{Id: 3, Status: 2, ModerationStatus: "visible"}}
 	service := mustCollectionService(t, repo, articles)
-	c := seriesContext(t, http.MethodPut, "/v1/studio/collections/9/items/3", `{"note":"later"}`, gin.Params{
+	c := collectionTestContext(t, http.MethodPut, "/v1/studio/collections/9/items/3", `{"note":"later"}`, gin.Params{
 		{Key: "collectionId", Value: "9"}, {Key: "articleId", Value: "3"},
 	})
 	c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})

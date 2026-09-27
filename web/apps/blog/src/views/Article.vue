@@ -216,8 +216,7 @@ import {
   ref,
   toRefs,
   provide,
-  getCurrentInstance,
-  watch
+  getCurrentInstance
 } from 'vue'
 import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -245,18 +244,13 @@ import { useReaderStore } from '@/stores/reader'
 import { scrollToArticleHeading } from '@/utils/article-reader'
 import { applyArticleImageFallback } from '@/utils/article-image'
 import { normalizeArticleTags } from '@/utils/article-tags'
-import { API_BASE_URL } from '@stellar-beacon/api-client'
+import { useArticleEngagementTracking } from '@/composables/useArticleEngagementTracking'
 
 function normalizeArticleHeadings(html: string): string {
   return String(html || '')
     .replace(/<h1(\s[^>]*)?>/gi, '<h2$1>')
     .replace(/<\/h1>/gi, '</h2>')
 }
-function createReadingSessionId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  return `read-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
-}
-
 export default defineComponent({
   name: 'Article',
   components: { Sidebar, Comment, SubTitle, ArticleCard, ArticleFeedCard, Profile, Sticky, Navigator, NewsletterSubscribe, AddToCollectionButton },
@@ -300,6 +294,22 @@ export default defineComponent({
     const seriesArticles = ref<any[]>([])
     const seriesContextRef = ref<HTMLElement | null>(null)
     const relatedArticlesRef = ref<HTMLElement | null>(null)
+    const {
+      flushReadingSession,
+      resetReadingSession,
+      resetContinuationTracking,
+      scheduleSeriesCompletionCheck,
+      startReadingSession,
+      trackContinuationClick
+    } = useArticleEngagementTracking({
+      articleId: () => reactiveData.articleId,
+      article: () => reactiveData.article,
+      seriesInfo,
+      seriesArticles,
+      seriesContextRef,
+      relatedArticlesRef,
+      reader: readerStore
+    })
     const seriesIndex = computed(() => seriesArticles.value.findIndex((item) => Number(item?.id) === Number(reactiveData.articleId)))
     const seriesPrevious = computed(() => (seriesIndex.value > 0 ? seriesArticles.value[seriesIndex.value - 1] : null))
     const seriesNext = computed(() => (
@@ -312,216 +322,17 @@ export default defineComponent({
       current: 1,
       size: 7
     })
-    let readingSessionId = createReadingSessionId()
-    let readingActiveMs = 0
-    let readingStartedAt: number | null = null
-    let readingMaxScrollPercent = 0
-    let readingSessionSent = false
-    let continuationObserver: IntersectionObserver | null = null
     let tocObserver: IntersectionObserver | null = null
-    let readingCompletionTimer: number | null = null
-    let seriesCompletionMarked = false
-    const continuationTimers = new Map<Element, number>()
-    const continuationImpressions = new Set<string>()
 
-    const clearReadingCompletionTimer = () => {
-      if (readingCompletionTimer === null) return
-      window.clearTimeout(readingCompletionTimer)
-      readingCompletionTimer = null
-    }
-    const currentReadingActiveMs = () => (
-      readingActiveMs + (readingStartedAt === null ? 0 : performance.now() - readingStartedAt)
-    )
-    const maybeMarkSeriesCompleted = () => {
-      if (seriesCompletionMarked || readingMaxScrollPercent < 90) return
-      const seriesId = Number(seriesInfo.value?.id || 0)
-      const articleId = Number(reactiveData.articleId)
-      if (!seriesId || !articleId || currentReadingActiveMs() < 3000) return
-      readerStore.markCompleted(seriesId, articleId)
-      seriesCompletionMarked = true
-      clearReadingCompletionTimer()
-    }
-    const scheduleSeriesCompletionCheck = () => {
-      clearReadingCompletionTimer()
-      if (seriesCompletionMarked) return
-      const remaining = Math.max(0, 3000 - currentReadingActiveMs())
-      if (remaining === 0) {
-        maybeMarkSeriesCompleted()
-        return
-      }
-      readingCompletionTimer = window.setTimeout(maybeMarkSeriesCompleted, remaining)
-    }
-
-    const resetReadingSession = () => {
-      clearReadingCompletionTimer()
-      seriesCompletionMarked = false
-      readingSessionId = createReadingSessionId()
-      readingActiveMs = 0
-      readingStartedAt = null
-      readingMaxScrollPercent = 0
-      readingSessionSent = false
-    }
-    const pauseReadingSession = () => {
-      clearReadingCompletionTimer()
-      if (readingStartedAt === null) return
-      readingActiveMs += performance.now() - readingStartedAt
-      readingStartedAt = null
-    }
-    const startReadingSession = () => {
-      if (readingSessionSent || readingStartedAt !== null) return
-      readingStartedAt = performance.now()
-      scheduleSeriesCompletionCheck()
-      updateReadingScrollDepth()
-    }
-    const updateReadingScrollDepth = () => {
-      const root = document.documentElement
-      const scrollable = Math.max(1, root.scrollHeight - window.innerHeight)
-      const depth = Math.min(100, Math.max(0, ((window.scrollY + window.innerHeight) / (scrollable + window.innerHeight)) * 100))
-      readingMaxScrollPercent = Math.max(readingMaxScrollPercent, depth)
-      maybeMarkSeriesCompleted()
-      scheduleSeriesCompletionCheck()
-    }
-    const handleReadingVisibility = () => {
-      if (document.hidden) {
-        clearContinuationTimers()
-        continuationObserver?.disconnect()
-        pauseReadingSession()
-        return
-      }
-      startReadingSession()
-      scheduleContinuationTracking()
-    }
-    const flushReadingSession = () => {
-      maybeMarkSeriesCompleted()
-      if (readingSessionSent || !reactiveData.articleId) return
-      pauseReadingSession()
-      const activeMs = Math.min(7200000, Math.max(0, Math.round(readingActiveMs)))
-      readerStore.recordProgress(Number(reactiveData.articleId), readingMaxScrollPercent)
-      if (activeMs < 3000) return
-      readingSessionSent = true
-      const payload = JSON.stringify({
-        sessionId: readingSessionId,
-        activeMs,
-        maxScrollPercent: Math.round(readingMaxScrollPercent * 100) / 100
-      })
-      const url = `${API_BASE_URL}/public/articles/${encodeURIComponent(reactiveData.articleId)}/read-sessions`
-      if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) return
-      void fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true
-      }).catch(() => undefined)
-    }
-    const continuationEventUrl = (articleId: number) => `${API_BASE_URL}/public/articles/${encodeURIComponent(String(articleId))}/continuation-events`
-
-    const sendContinuationEvent = (
-      eventType: string,
-      targetType?: string,
-      targetId?: number,
-      placement?: string,
-      position?: number
-    ) => {
-      const articleId = Number(reactiveData.articleId)
-      if (!Number.isFinite(articleId) || articleId <= 0 || typeof navigator === 'undefined') return
-      const payload = JSON.stringify({ eventType, targetType, targetId, placement, position })
-      const url = continuationEventUrl(articleId)
-      if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) return
-      void fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true
-      }).catch(() => undefined)
-    }
-
-    const trackContinuationClick = (eventType: string, targetType: string, targetId: number, placement: string, position: number) => {
-      sendContinuationEvent(eventType, targetType, targetId, placement, position)
-    }
-
-    const clearContinuationTimers = () => {
-      for (const timer of continuationTimers.values()) window.clearTimeout(timer)
-      continuationTimers.clear()
-    }
-
-    const continuationImpressionKey = (element: Element) => `${reactiveData.articleId}:${element.getAttribute('data-continuation-event') || ''}`
-
-    const handleContinuationIntersection = (entries: IntersectionObserverEntry[]) => {
-      for (const entry of entries) {
-        const eventType = entry.target.getAttribute('data-continuation-event')
-        if (!eventType) continue
-        const key = continuationImpressionKey(entry.target)
-        if (continuationImpressions.has(key)) continue
-        if (entry.isIntersecting && !document.hidden) {
-          if (continuationTimers.has(entry.target)) continue
-          const timer = window.setTimeout(() => {
-            continuationTimers.delete(entry.target)
-            if (!continuationImpressions.has(key)) {
-              continuationImpressions.add(key)
-              sendContinuationEvent(eventType)
-            }
-            continuationObserver?.unobserve(entry.target)
-          }, 1000)
-          continuationTimers.set(entry.target, timer)
-          continue
-        }
-        const timer = continuationTimers.get(entry.target)
-        if (timer !== undefined) {
-          window.clearTimeout(timer)
-          continuationTimers.delete(entry.target)
-        }
-      }
-    }
-
-    const observeContinuationSection = (element: HTMLElement | null) => {
-      if (!element || !reactiveData.articleId) return
-      const eventType = element.getAttribute('data-continuation-event')
-      if (!eventType) return
-      const key = continuationImpressionKey(element)
-      if (continuationImpressions.has(key)) return
-      if (!continuationObserver) {
-        continuationImpressions.add(key)
-        sendContinuationEvent(eventType)
-        return
-      }
-      continuationObserver.observe(element)
-    }
-
-    const scheduleContinuationTracking = () => {
-      void nextTick(() => {
-        observeContinuationSection(seriesContextRef.value)
-        observeContinuationSection(relatedArticlesRef.value)
-      })
-    }
-
-    const resetContinuationTracking = () => {
-      clearContinuationTimers()
-      continuationImpressions.clear()
-      continuationObserver?.disconnect()
-    }
-
-    watch([() => reactiveData.article, seriesInfo, seriesArticles], scheduleContinuationTracking, { flush: 'post' })
     commentStore.type = 1
     commentStore.topicId = route.params.articleId
     onMounted(() => {
-      if (typeof IntersectionObserver !== 'undefined') {
-        continuationObserver = new IntersectionObserver(handleContinuationIntersection, { threshold: 0.5 })
-      }
-      document.addEventListener('visibilitychange', handleReadingVisibility)
-      window.addEventListener('scroll', updateReadingScrollDepth, { passive: true })
-      window.addEventListener('pagehide', flushReadingSession)
       reactiveData.articleId = route.params.articleId
       toPageTop()
       fetchArticle()
       fetchComments()
     })
     onUnmounted(() => {
-      flushReadingSession()
-      resetContinuationTracking()
-      document.removeEventListener('visibilitychange', handleReadingVisibility)
-      window.removeEventListener('scroll', updateReadingScrollDepth)
-      window.removeEventListener('pagehide', flushReadingSession)
-      clearReadingCompletionTimer()
       tocObserver?.disconnect()
       tocObserver = null
       readerStore.clearArticleContext()
@@ -933,168 +744,7 @@ export default defineComponent({
   }
 })
 </script>
-<style lang="scss">
-.post-html {
-  word-wrap: break-word;
-  word-break: break-all;
-}
-#toc1 > ol {
-  list-style: none;
-  counter-reset: li;
-  padding-left: 1.5rem;
-
-  > li {
-    @apply font-medium pb-1;
-    &.is-active-li > .node-name--H1 {
-      @apply text-ob;
-    }
-    &.is-active-li > .node-name--H2 {
-      @apply text-ob;
-    }
-    &.is-active-li > .node-name--H3 {
-      @apply text-ob;
-    }
-  }
-
-  ol li {
-    @apply font-medium mt-1.5 mb-1.5;
-    padding-left: 1.5rem;
-    &.is-active-li > .node-name--H2 {
-      @apply text-ob;
-    }
-    &.is-active-li > .node-name--H3 {
-      @apply text-ob;
-    }
-    ol li {
-      @apply font-medium mt-1.5 mb-1.5;
-      padding-left: 1.5rem;
-      &.is-active-li .node-name--H3 {
-        @apply text-ob;
-      }
-    }
-  }
-
-  ol,
-  ol ol {
-    position: relative;
-  }
-
-  > li::before,
-  ol > li::before,
-  ol ol > li::before,
-  ol ol ol > li::before,
-  ol ol ol ol > li::before {
-    content: '•';
-    color: var(--text-accent);
-    display: inline-block;
-    width: 1em;
-    margin-left: -1.15em;
-    padding: 0;
-    font-weight: medium;
-    text-shadow: 0 0 0.5em var(--accent-2);
-  }
-
-  > li::before {
-    @apply text-xl;
-  }
-
-  > li > ol::before,
-  > li > ol > li > ol::before {
-    content: '';
-    border-left: 1px solid var(--text-accent);
-    position: absolute;
-    opacity: 0.35;
-    left: -1em;
-    top: 0;
-    bottom: 0;
-  }
-
-  > li > ol::before {
-    left: -1.25em;
-    border-left: 2px solid var(--text-accent);
-  }
-}
-.pre-and-next-article {
-  .article-content {
-    p {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 5;
-      -webkit-box-orient: vertical;
-    }
-    .article-footer {
-      margin-top: 13px;
-    }
-  }
-}
-.article-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: .65rem;
-  margin: 1.5rem 0 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid color-mix(in srgb, var(--text-ob-dim) 22%, transparent);
-}
-.article-actions__label { margin-right: .35rem; font-size: .8rem; opacity: .58; }
-.article-actions button { padding: .5rem .85rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 28%, transparent); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
-.article-actions button:hover { border-color: var(--color-ob); color: var(--color-ob); }
-.article-actions__message { color: var(--color-ob); font-size: .82rem; }
-.article-reactions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: .6rem;
-  margin: -1rem 0 2rem;
-}
-.article-reaction {
-  display: inline-flex;
-  align-items: center;
-  gap: .45rem;
-  padding: .45rem .9rem;
-  border: 1px solid color-mix(in srgb, var(--text-ob-dim) 28%, transparent);
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition: border-color .2s ease, color .2s ease;
-}
-.article-reaction:hover:not(:disabled) { border-color: var(--color-ob); color: var(--color-ob); }
-.article-reaction:disabled { opacity: .6; cursor: progress; }
-.article-reaction--active { border-color: var(--color-ob); color: var(--color-ob); }
-.article-reaction__count { font-variant-numeric: tabular-nums; opacity: .7; }
-.article-reaction__link { font-size: .82rem; opacity: .7; text-decoration: underline; }
-.series-context {
-  margin: 2.5rem 0;
-  padding: 1rem 1.1rem;
-  border: 1px solid color-mix(in srgb, var(--text-ob-dim) 24%, transparent);
-  border-radius: .9rem;
-  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
-}
-.series-context__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
-.series-context__head strong { display: block; margin-top: .2rem; }
-.series-context__head > a { color: var(--color-ob); font-size: .82rem; white-space: nowrap; }
-.series-context__eyebrow { color: var(--text-ob-dim); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
-.series-context__nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
-.series-context__link { display: flex; min-height: 74px; flex-direction: column; justify-content: space-between; gap: .35rem; padding: .75rem .85rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 20%, transparent); border-radius: .7rem; color: inherit; text-decoration: none; }
-.series-context__link:hover { border-color: var(--color-ob); }
-.series-context__link small { color: var(--text-ob-dim); font-size: .7rem; }
-.series-context__link span { line-height: 1.4; }
-.series-context__link--next { text-align: right; }
-@media (max-width: 640px) {
-  .series-context__head { align-items: flex-start; }
-  .series-context__link--next { text-align: left; }
-}
-.related-articles { margin: 2.5rem 0; }
-.related-articles h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.45rem; }
-.related-articles__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
-.related-article { display: flex; min-height: 108px; flex-direction: column; justify-content: space-between; padding: 1rem; border: 1px solid color-mix(in srgb, var(--text-ob-dim) 22%, transparent); border-radius: .9rem; color: inherit; text-decoration: none; transition: transform .2s ease, border-color .2s ease; }
-.related-article:hover { transform: translateY(-3px); border-color: var(--color-ob); }
-.related-article span { font-size: .72rem; color: var(--color-ob); text-transform: uppercase; }
-.related-article strong { line-height: 1.45; }
-@media (max-width: 800px) { .related-articles__grid { grid-template-columns: 1fr; } }
-</style>
+<style lang="scss" src="./Article.scss"></style>
 <style lang="scss" scoped>
 .my-gap {
   gap: 1rem;

@@ -1,18 +1,18 @@
 package service
 
 import (
+	"context"
 	"strings"
 	"time"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"github.com/gin-gonic/gin"
 )
 
 type GrowthService interface {
-	Track(*gin.Context) model.ResultVO
-	Summary(*gin.Context) model.ResultVO
+	Track(ctx context.Context, eventName string, articleID int, path, clientIP string) (rateLimited bool, err error)
+	Summary(ctx context.Context, days int) ([]port.GrowthSummary, error)
 }
 
 type GrowthServiceDeps struct {
@@ -39,49 +39,36 @@ func NewGrowthService(deps GrowthServiceDeps) (*MyGrowthService, error) {
 	return &MyGrowthService{repo: deps.Repo, limiter: deps.Limiter}, nil
 }
 
-func (s *MyGrowthService) Track(c *gin.Context) model.ResultVO {
-	var request model.GrowthEventVO
-	if err := c.ShouldBindJSON(&request); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	request.EventName = strings.TrimSpace(request.EventName)
-	if _, ok := growthEvents[request.EventName]; !ok {
-		return model.ResultFailWithMessage("不支持的事件类型")
+func (s *MyGrowthService) Track(ctx context.Context, eventName string, articleID int, path, clientIP string) (bool, error) {
+	eventName = strings.TrimSpace(eventName)
+	if _, ok := growthEvents[eventName]; !ok {
+		return false, apperrors.Invalid("growth.track.event", "unsupported event type")
 	}
 	if s.limiter != nil {
-		allowed, err := allowRateLimit(c.Request.Context(), s.limiter, "growth:event:ip:", c.ClientIP(), 60, time.Minute)
+		allowed, err := allowRateLimit(ctx, s.limiter, "growth:event:ip:", clientIP, 60, time.Minute)
 		if err != nil {
-			return model.ResultFromError(err)
+			return false, err
 		}
 		if !allowed {
-			return model.ResultFailWithCodeAndMessage(42900, "请求过于频繁，请稍后再试")
+			return true, nil
 		}
 	}
-	path := strings.TrimSpace(request.Path)
+
+	path = strings.TrimSpace(path)
 	if len(path) > 255 {
 		path = path[:255]
 	}
-	if path == "" {
-		path = c.Request.URL.Path
+	if err := s.repo.RecordEvent(ctx, entity.TGrowthEvent{EventName: eventName, ArticleId: articleID, Path: path}); err != nil {
+		return false, err
 	}
-	if err := s.repo.RecordEvent(c.Request.Context(), entity.TGrowthEvent{EventName: request.EventName, ArticleId: request.ArticleId, Path: path}); err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+	return false, nil
 }
 
-func (s *MyGrowthService) Summary(c *gin.Context) model.ResultVO {
-	days := 30
-	if value := c.Query("days"); value != "" {
-		if parsed, err := parsePositiveID(value); err == nil && parsed <= 90 {
-			days = parsed
-		}
+func (s *MyGrowthService) Summary(ctx context.Context, days int) ([]port.GrowthSummary, error) {
+	if days < 1 || days > 90 {
+		days = 30
 	}
-	items, err := s.repo.Summary(c.Request.Context(), time.Now().AddDate(0, 0, -days))
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOkWithData(items)
+	return s.repo.Summary(ctx, time.Now().AddDate(0, 0, -days))
 }
 
 var _ GrowthService = (*MyGrowthService)(nil)

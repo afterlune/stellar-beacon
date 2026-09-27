@@ -2,12 +2,10 @@ package service
 
 import (
 	"context"
-	"net/http"
-	"strings"
+	"errors"
 	"testing"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/gin-gonic/gin"
 )
 
 type fakeTopicSubscriptionRepository struct {
@@ -19,6 +17,8 @@ type fakeTopicSubscriptionRepository struct {
 	lastTopicType    string
 	lastTopicKey     string
 	lastMuted        bool
+	lastCurrent      int
+	lastSize         int
 	subscribeErr     error
 	muteErr          error
 	subscriptions    []port.TopicSubscription
@@ -50,67 +50,21 @@ func (f *fakeTopicSubscriptionRepository) SetMuted(_ context.Context, userID int
 	return f.muteErr
 }
 
-func (f *fakeTopicSubscriptionRepository) ListSubscriptions(context.Context, int, int, int) ([]port.TopicSubscription, int, error) {
+func (f *fakeTopicSubscriptionRepository) ListSubscriptions(_ context.Context, userID, current, size int) ([]port.TopicSubscription, int, error) {
+	f.lastUserID, f.lastCurrent, f.lastSize = userID, current, size
 	return f.subscriptions, len(f.subscriptions), nil
 }
 
-func (f *fakeTopicSubscriptionRepository) ListTopicFeed(context.Context, int, int, int) ([]port.TopicFeedItem, int, error) {
+func (f *fakeTopicSubscriptionRepository) ListTopicFeed(_ context.Context, userID, current, size int) ([]port.TopicFeedItem, int, error) {
+	f.lastUserID, f.lastCurrent, f.lastSize = userID, current, size
 	return f.feed, len(f.feed), nil
-}
-
-func topicTestContext(method, target, body string, userID int) *gin.Context {
-	c := platformTestContext(method, target, body)
-	if userID <= 0 {
-		c.Set("userInfo", nil)
-		return c
-	}
-	c.Params = gin.Params{}
-	for _, segment := range topicPathSegments(target) {
-		c.Params = append(c.Params, gin.Param{Key: segment.key, Value: segment.value})
-	}
-	return c
-}
-
-type topicPathSegment struct{ key, value string }
-
-// topicPathSegments mirrors the router parameters for the subscription paths the
-// tests exercise, so a service test can drive the real handler logic.
-func topicPathSegments(target string) []topicPathSegment {
-	path := target
-	if index := strings.Index(path, "?"); index >= 0 {
-		path = path[:index]
-	}
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	for index, part := range parts {
-		if part != "topic-subscriptions" || index+1 >= len(parts) {
-			continue
-		}
-		if index+2 < len(parts) {
-			return []topicPathSegment{{"topicType", parts[index+1]}, {"topicKey", parts[index+2]}}
-		}
-		return []topicPathSegment{{"topicType", parts[index+1]}}
-	}
-	return nil
-}
-
-func TestTopicSubscriptionRequiresLogin(t *testing.T) {
-	repo := &fakeTopicSubscriptionRepository{}
-	service := NewTopicSubscriptionService(repo)
-	result := service.Subscribe(topicTestContext(http.MethodPut, "/v1/auth/me/topic-subscriptions/tag/go", "", 0))
-	if result.Flag {
-		t.Fatalf("anonymous subscribe must fail: %+v", result)
-	}
-	if repo.subscribeCalls != 0 {
-		t.Fatalf("anonymous subscribe must not reach the repository: %d", repo.subscribeCalls)
-	}
 }
 
 func TestTopicSubscriptionRejectsUnknownTopicType(t *testing.T) {
 	repo := &fakeTopicSubscriptionRepository{}
 	service := NewTopicSubscriptionService(repo)
-	result := service.Subscribe(topicTestContext(http.MethodPut, "/v1/auth/me/topic-subscriptions/series/go", "", 7))
-	if result.Flag {
-		t.Fatalf("series subscriptions are out of scope: %+v", result)
+	if err := service.Subscribe(context.Background(), 7, "series", "go"); err == nil {
+		t.Fatal("series subscriptions are out of scope")
 	}
 	if repo.subscribeCalls != 0 {
 		t.Fatalf("invalid topic type must not reach the repository: %d", repo.subscribeCalls)
@@ -120,34 +74,37 @@ func TestTopicSubscriptionRejectsUnknownTopicType(t *testing.T) {
 func TestTopicSubscriptionSubscribeAndUnsubscribeReachRepository(t *testing.T) {
 	repo := &fakeTopicSubscriptionRepository{}
 	service := NewTopicSubscriptionService(repo)
-	if result := service.Subscribe(topicTestContext(http.MethodPut, "/v1/auth/me/topic-subscriptions/tag/Go", "", 7)); !result.Flag {
-		t.Fatalf("subscribe failed: %+v", result)
+	if err := service.Subscribe(context.Background(), 7, " TAG ", " Go "); err != nil {
+		t.Fatalf("subscribe failed: %v", err)
 	}
 	if repo.lastUserID != 7 || repo.lastTopicType != "tag" || repo.lastTopicKey != "Go" {
 		t.Fatalf("unexpected subscribe call: %+v", repo)
 	}
-	if result := service.Unsubscribe(topicTestContext(http.MethodDelete, "/v1/auth/me/topic-subscriptions/tag/Go", "", 7)); !result.Flag {
-		t.Fatalf("unsubscribe failed: %+v", result)
+	if err := service.Unsubscribe(context.Background(), 7, "tag", "Go"); err != nil {
+		t.Fatalf("unsubscribe failed: %v", err)
 	}
 	if repo.unsubscribeCalls != 1 {
 		t.Fatalf("unsubscribe must reach the repository once, got %d", repo.unsubscribeCalls)
 	}
 }
 
-func TestTopicSubscriptionMuteRequiresExplicitValue(t *testing.T) {
+func TestTopicSubscriptionMutePassesDesiredState(t *testing.T) {
 	repo := &fakeTopicSubscriptionRepository{}
 	service := NewTopicSubscriptionService(repo)
-	if result := service.SetMuted(topicTestContext(http.MethodPut, "/v1/auth/me/topic-subscriptions/tag/go/mute", `{}`, 7)); result.Flag {
-		t.Fatal("mute without an explicit value must fail")
-	}
-	if repo.muteCalls != 0 {
-		t.Fatalf("invalid mute payload must not reach the repository: %d", repo.muteCalls)
-	}
-	if result := service.SetMuted(topicTestContext(http.MethodPut, "/v1/auth/me/topic-subscriptions/tag/go/mute", `{"muted":1}`, 7)); !result.Flag {
-		t.Fatalf("mute failed: %+v", result)
+	if err := service.SetMuted(context.Background(), 7, "tag", "go", true); err != nil {
+		t.Fatalf("mute failed: %v", err)
 	}
 	if repo.muteCalls != 1 || !repo.lastMuted {
 		t.Fatalf("unexpected mute call: %+v", repo)
+	}
+}
+
+func TestTopicSubscriptionPropagatesRepositoryErrors(t *testing.T) {
+	want := errors.New("repository unavailable")
+	repo := &fakeTopicSubscriptionRepository{subscribeErr: want}
+	service := NewTopicSubscriptionService(repo)
+	if err := service.Subscribe(context.Background(), 7, "tag", "go"); !errors.Is(err, want) {
+		t.Fatalf("expected repository error %v, got %v", want, err)
 	}
 }
 
@@ -157,12 +114,16 @@ func TestTopicSubscriptionListsArePaginated(t *testing.T) {
 		feed:          []port.TopicFeedItem{{Topics: []string{"Go"}}},
 	}
 	service := NewTopicSubscriptionService(repo)
-	list := service.ListSubscriptions(topicTestContext(http.MethodGet, "/v1/auth/me/topic-subscriptions?current=1&size=5", "", 7))
-	if !list.Flag {
-		t.Fatalf("list subscriptions failed: %+v", list)
+	if _, count, err := service.ListSubscriptions(context.Background(), 7, 2, 5); err != nil || count != 1 {
+		t.Fatalf("list subscriptions failed: count=%d err=%v", count, err)
 	}
-	feed := service.ListFeed(topicTestContext(http.MethodGet, "/v1/auth/me/topic-feed?current=1&size=5", "", 7))
-	if !feed.Flag {
-		t.Fatalf("list topic feed failed: %+v", feed)
+	if repo.lastUserID != 7 || repo.lastCurrent != 2 || repo.lastSize != 5 {
+		t.Fatalf("unexpected subscription pagination: %+v", repo)
+	}
+	if _, count, err := service.ListFeed(context.Background(), 7, 3, 9); err != nil || count != 1 {
+		t.Fatalf("list topic feed failed: count=%d err=%v", count, err)
+	}
+	if repo.lastUserID != 7 || repo.lastCurrent != 3 || repo.lastSize != 9 {
+		t.Fatalf("unexpected feed pagination: %+v", repo)
 	}
 }

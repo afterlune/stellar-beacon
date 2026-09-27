@@ -1,4 +1,4 @@
-import * as echarts from 'echarts'
+import { graphic, registerTheme } from '@/utils/echarts'
 
 /**
  * ECharts 主题桥接层。
@@ -68,7 +68,7 @@ const registered = new Set<ChartTheme>()
 /** 主题只注册一次；返回可直接传给 `echarts.init` 的主题名。 */
 export function ensureChartTheme(theme: ChartTheme): string {
   if (!registered.has(theme)) {
-    echarts.registerTheme(CHART_THEME_NAME[theme], buildTheme(theme))
+    registerTheme(CHART_THEME_NAME[theme], buildTheme(theme))
     registered.add(theme)
   }
   return CHART_THEME_NAME[theme]
@@ -93,8 +93,8 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /** 面积图的纵向渐变：顶部浓、底部透明，比纯色块更有体积感。 */
-export function verticalFade(color: string, from = 0.3, to = 0.01): echarts.graphic.LinearGradient {
-  return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+export function verticalFade(color: string, from = 0.3, to = 0.01): graphic.LinearGradient {
+  return new graphic.LinearGradient(0, 0, 0, 1, [
     { offset: 0, color: withAlpha(color, from) },
     { offset: 1, color: withAlpha(color, to) }
   ])

@@ -146,7 +146,6 @@ import {
   getAdminSeries,
   listAdminPage,
   moderateAdminContent,
-  type AdminSeries
 } from '@/api/http'
 import AdminBatchBar from '@/components/AdminBatchBar.vue'
 import AdminEmptyState from '@/components/AdminEmptyState.vue'

@@ -2,17 +2,11 @@ package service
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeSeriesRepository struct {
@@ -60,39 +54,21 @@ func (f *seriesArticles) ListArticleCardsBySeries(context.Context, int) ([]*port
 
 func mustSeriesService(t *testing.T, repo port.SeriesRepository, articles port.ArticleRepository) *MySeriesService {
 	t.Helper()
-	service, err := NewSeriesService(SeriesServiceDeps{Repo: repo, Articles: articles})
+	svc, err := NewSeriesService(SeriesServiceDeps{Repo: repo, Articles: articles})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return service
-}
-
-func seriesContext(t *testing.T, method, target, body string, params gin.Params) *gin.Context {
-	t.Helper()
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	if body == "" {
-		c.Request = httptest.NewRequest(method, target, nil)
-	} else {
-		c.Request = httptest.NewRequest(method, target, strings.NewReader(body))
-		c.Request.Header.Set("Content-Type", "application/json")
-	}
-	c.Params = params
-	return c
+	return svc
 }
 
 func TestSeriesPublicDetailReturnsOrderedArticles(t *testing.T) {
 	repo := &fakeSeriesRepository{record: entity.TSeries{Id: 3, SeriesName: "渲染管线", Status: 1, ModerationStatus: "visible"}}
 	articles := &seriesArticles{cards: []*port.ArticleCard{{Id: 1, ArticleTitle: "第一篇"}, {Id: 2, ArticleTitle: "第二篇"}}}
-	service := mustSeriesService(t, repo, articles)
+	svc := mustSeriesService(t, repo, articles)
 
-	result := service.GetPublicSeries(seriesContext(t, http.MethodGet, "/v1/public/series/3", "", gin.Params{{Key: "seriesId", Value: "3"}}))
-	if !result.Flag {
-		t.Fatalf("unexpected result: %+v", result)
-	}
-	detail, ok := result.Data.(SeriesDetailDTO)
-	if !ok {
-		t.Fatalf("unexpected payload: %+v", result.Data)
+	detail, err := svc.GetPublicSeries(context.Background(), 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if detail.Series.SeriesName != "渲染管线" || detail.Series.ArticleCount != 2 {
 		t.Fatalf("unexpected series payload: %+v", detail.Series)
@@ -102,52 +78,38 @@ func TestSeriesPublicDetailReturnsOrderedArticles(t *testing.T) {
 	}
 }
 
-func TestSeriesPublicDetailReportsMissingSeries(t *testing.T) {
-	service := mustSeriesService(t, &fakeSeriesRepository{}, &seriesArticles{})
-
-	result := service.GetPublicSeries(seriesContext(t, http.MethodGet, "/v1/public/series/9", "", gin.Params{{Key: "seriesId", Value: "9"}}))
-	if result.Flag || result.Message != "数据不存在" {
-		t.Fatalf("missing series must be reported: %+v", result)
+func TestSeriesPublicDetailReportsHiddenSeries(t *testing.T) {
+	repo := &fakeSeriesRepository{record: entity.TSeries{Id: 9, Status: 2, ModerationStatus: "visible"}}
+	svc := mustSeriesService(t, repo, &seriesArticles{})
+	_, err := svc.GetPublicSeries(context.Background(), 9)
+	if !apperrors.IsKind(err, apperrors.KindNotFound) || apperrors.Op(err) != "series.public.visibility" {
+		t.Fatalf("hidden series should be unavailable: %v", err)
 	}
 }
 
-func TestSeriesSaveValidatesName(t *testing.T) {
+func TestSeriesSaveValidatesAndNormalizesInput(t *testing.T) {
 	repo := &fakeSeriesRepository{}
-	service := mustSeriesService(t, repo, &seriesArticles{})
-
-	emptyCtx := seriesContext(t, http.MethodPost, "/v1/admin/series", `{"seriesName":"  "}`, nil)
-	emptyCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	empty := service.SaveOrUpdateSeries(emptyCtx)
-	if empty.Flag {
-		t.Fatal("an empty series name must fail")
+	svc := mustSeriesService(t, repo, &seriesArticles{})
+	if _, err := svc.SaveOrUpdateSeries(context.Background(), 7, SeriesSaveInput{Name: "  "}); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("an empty series name must fail validation: %v", err)
 	}
-
-	createdCtx := seriesContext(t, http.MethodPost, "/v1/admin/series", `{"seriesName":" 渲染管线 ","seriesDesc":"desc"}`, nil)
-	createdCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	created := service.SaveOrUpdateSeries(createdCtx)
-	if !created.Flag {
-		t.Fatalf("unexpected result: %+v", created)
+	created, err := svc.SaveOrUpdateSeries(context.Background(), 7, SeriesSaveInput{Name: " 渲染管线 ", Description: " desc ", Cover: " cover "})
+	if err != nil || created.Id != 12 {
+		t.Fatalf("unexpected save result: series=%+v err=%v", created, err)
 	}
-	if repo.saved.SeriesName != "渲染管线" {
-		t.Fatalf("series name must be trimmed: %q", repo.saved.SeriesName)
+	if repo.saved.UserId != 7 || repo.saved.SeriesName != "渲染管线" || repo.saved.SeriesDesc != "desc" || repo.saved.Cover != "cover" {
+		t.Fatalf("series input must be normalized and owner-scoped: %+v", repo.saved)
 	}
 }
 
-func TestSeriesDeleteReportsUnknownSeries(t *testing.T) {
+func TestSeriesDeleteRequiresIDsAndIgnoresAlreadyMissingRows(t *testing.T) {
 	repo := &fakeSeriesRepository{}
-	service := mustSeriesService(t, repo, &seriesArticles{})
-
-	missingCtx := seriesContext(t, http.MethodDelete, "/v1/admin/series", `[]`, nil)
-	missingCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	missing := service.DeleteSeries(missingCtx)
-	if missing.Flag {
-		t.Fatal("an empty id list must fail")
+	svc := mustSeriesService(t, repo, &seriesArticles{})
+	if err := svc.DeleteSeries(context.Background(), 7, nil); !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("empty ids must fail: %v", err)
 	}
-	okCtx := seriesContext(t, http.MethodDelete, "/v1/admin/series", `[4]`, nil)
-	okCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	ok := service.DeleteSeries(okCtx)
-	if !ok.Flag || len(repo.deleted) != 1 || repo.deleted[0] != 4 {
-		t.Fatalf("unexpected delete result: %+v %v", ok, repo.deleted)
+	if err := svc.DeleteSeries(context.Background(), 7, []int{4}); err != nil || len(repo.deleted) != 1 || repo.deleted[0] != 4 {
+		t.Fatalf("missing row should preserve idempotent delete behavior: deleted=%v err=%v", repo.deleted, err)
 	}
 }
 
@@ -159,17 +121,12 @@ func TestSeriesServiceRejectsMissingDependencies(t *testing.T) {
 
 func TestSeriesServiceRejectsNonOwnerMutations(t *testing.T) {
 	repo := &fakeSeriesRepository{record: entity.TSeries{Id: 4, UserId: 2, SeriesName: "owned by another user", Status: 1}}
-	service := mustSeriesService(t, repo, &seriesArticles{})
+	svc := mustSeriesService(t, repo, &seriesArticles{})
 
-	saveCtx := seriesContext(t, http.MethodPost, "/v1/admin/series", `{"id":4,"seriesName":"forbidden"}`, nil)
-	saveCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := service.SaveOrUpdateSeries(saveCtx); result.Flag || repo.saved.Id != 0 {
-		t.Fatalf("non-owner series save must be forbidden before persistence: result=%+v saved=%+v", result, repo.saved)
+	if _, err := svc.SaveOrUpdateSeries(context.Background(), 7, SeriesSaveInput{ID: 4, Name: "forbidden"}); !apperrors.IsKind(err, apperrors.KindForbidden) || repo.saved.Id != 0 {
+		t.Fatalf("non-owner series save must be forbidden: err=%v saved=%+v", err, repo.saved)
 	}
-
-	deleteCtx := seriesContext(t, http.MethodDelete, "/v1/admin/series", `[4]`, nil)
-	deleteCtx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	if result := service.DeleteSeries(deleteCtx); result.Flag || len(repo.deleted) != 0 {
-		t.Fatalf("non-owner series delete must be forbidden before persistence: result=%+v deleted=%v", result, repo.deleted)
+	if err := svc.DeleteSeries(context.Background(), 7, []int{4}); !apperrors.IsKind(err, apperrors.KindForbidden) || len(repo.deleted) != 0 {
+		t.Fatalf("non-owner series delete must be forbidden: err=%v deleted=%v", err, repo.deleted)
 	}
 }

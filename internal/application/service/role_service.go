@@ -1,21 +1,18 @@
 package service
 
 import (
-	"container/list"
 	"context"
+
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
 type RoleService interface {
-	ListUserRoles() model.ResultVO
-	ListRoles(c *gin.Context) model.ResultVO
-	SaveOrUpdateRole(c *gin.Context) model.ResultVO
-	DeleteRoles(c *gin.Context) model.ResultVO
+	ListUserRoles(context.Context) ([]entity.TRole, error)
+	ListRoles(context.Context, int, int, string) ([]port.RoleView, int64, error)
+	SaveOrUpdateRole(context.Context, int, string, []int, []int) error
+	DeleteRoles(context.Context, []int) error
 }
 
 type MyRoleService struct{ repo port.RoleRepository }
@@ -29,67 +26,35 @@ func (r *MyRoleService) roleRepository() port.RoleRepository {
 	return roleRepo
 }
 
-func (r *MyRoleService) ListUserRoles() model.ResultVO {
-	roles, err := r.roleRepository().ListUserRoles(context.Background())
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	var dtos []model.UserRoleDTO
-	StructCopy(roles, &dtos)
-	return model.ResultOkWithData(dtos)
+func (r *MyRoleService) ListUserRoles(ctx context.Context) ([]entity.TRole, error) {
+	return r.roleRepository().ListUserRoles(ctx)
 }
 
-func (r *MyRoleService) ListRoles(c *gin.Context) model.ResultVO {
-	var vo model.ConditionVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (r *MyRoleService) ListRoles(ctx context.Context, current, size int, keywords string) ([]port.RoleView, int64, error) {
+	count, err := r.roleRepository().Count(ctx, keywords)
+	if err != nil || count == 0 {
+		return []port.RoleView{}, count, err
 	}
-	count, err := r.roleRepository().Count(c.Request.Context(), vo.Keywords)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	if count == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: list.New(), Count: 0})
-	}
-	data, err := r.roleRepository().List(c.Request.Context(), vo.Current, vo.Size, vo.Keywords)
-	if err != nil {
-		return model.ResultFromError(err)
-	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: data, Count: int(count)})
+	roles, err := r.roleRepository().List(ctx, current, size, keywords)
+	return roles, count, err
 }
 
-func (r *MyRoleService) SaveOrUpdateRole(c *gin.Context) model.ResultVO {
-	var vo model.RoleVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	existing, err := r.roleRepository().FindByName(c.Request.Context(), vo.RoleName)
+func (r *MyRoleService) SaveOrUpdateRole(ctx context.Context, id int, name string, resourceIDs, menuIDs []int) error {
+	existing, err := r.roleRepository().FindByName(ctx, name)
 	if err != nil {
-		return model.ResultFromError(err)
+		return err
 	}
-	if existing.Id != 0 && existing.Id != vo.Id {
-		return model.ResultFailWithMessage("该角色存在")
+	if existing.Id != 0 && existing.Id != id {
+		return apperrors.Conflict("role.save", "该角色存在")
 	}
-	role := entity.TRole{Id: vo.Id, RoleName: vo.RoleName, IsDisable: False}
-	if err := r.roleRepository().SaveOrUpdate(c.Request.Context(), role, vo.ResourceIds, vo.MenuIds); err != nil {
-		if apperrors.IsKind(err, apperrors.KindConflict) {
-			return model.ResultFailWithMessage("该角色存在")
-		}
-		return model.ResultFromError(err)
+	role := entity.TRole{Id: id, RoleName: name, IsDisable: False}
+	if err := r.roleRepository().SaveOrUpdate(ctx, role, resourceIDs, menuIDs); err != nil && apperrors.IsKind(err, apperrors.KindConflict) {
+		return apperrors.Conflict("role.save", "该角色存在")
+	} else {
+		return err
 	}
-	return model.ResultOk()
 }
 
-func (r *MyRoleService) DeleteRoles(c *gin.Context) model.ResultVO {
-	var ids []int
-	if err := c.ShouldBind(&ids); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	if err := r.roleRepository().Delete(c.Request.Context(), ids); err != nil {
-		if apperrors.IsKind(err, apperrors.KindConflict) {
-			return model.ResultFailWithMessage("该角色下存在用户")
-		}
-		return model.ResultFromError(err)
-	}
-	return model.ResultOk()
+func (r *MyRoleService) DeleteRoles(ctx context.Context, ids []int) error {
+	return r.roleRepository().Delete(ctx, ids)
 }

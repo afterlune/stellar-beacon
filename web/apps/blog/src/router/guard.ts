@@ -13,17 +13,15 @@ document.addEventListener('pointerdown', () => {
   document.getElementById('main-content')?.classList.remove('keyboard-route-focus')
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach((to) => {
   const appStore = useAppStore()
   const userStore = useUserStore()
   appStore.startLoading()
   const token = sessionStorage.getItem('token')
   if (!token) userStore.clearSession()
   if (to.meta.requiresAuth && !token) {
-    next({ path: '/', query: { login: '1', redirect: to.fullPath } })
-    return
+    return { path: '/', query: { login: '1', redirect: to.fullPath } }
   }
-  next()
 })
 
 router.afterEach(() => {

@@ -4,10 +4,10 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as echarts from 'echarts'
 
 import { useThemeStore } from '@/stores/theme'
 import { ensureChartTheme } from '@/utils/chart-theme'
+import { init, type ECharts } from '@/utils/echarts'
 
 const props = withDefaults(defineProps<{ option: Record<string, unknown>; height?: string }>(), {
   height: '300px'
@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{ option: Record<string, unknown>; height
 const theme = useThemeStore()
 const container = ref<HTMLElement | null>(null)
 
-let chart: echarts.ECharts | null = null
+let chart: ECharts | null = null
 let observer: ResizeObserver | null = null
 
 /**
@@ -24,12 +24,12 @@ let observer: ResizeObserver | null = null
  * which would break the "console must stay clean" test contract. Defer the
  * first init until the element actually has a box.
  */
-function ensureChart(): echarts.ECharts | null {
+function ensureChart(): ECharts | null {
   if (chart) return chart
   const element = container.value
   if (!element || element.clientWidth === 0 || element.clientHeight === 0) return null
   // 用本站设计令牌注册的主题，而不是 ECharts 内置的那套高饱和彩虹色。
-  chart = echarts.init(element, ensureChartTheme(theme.theme))
+  chart = init(element, ensureChartTheme(theme.theme))
   chart.setOption(props.option, true)
   return chart
 }

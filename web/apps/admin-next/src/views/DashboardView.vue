@@ -140,7 +140,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import * as echarts from 'echarts'
 import {
   IconBarChart,
   IconBook,
@@ -163,11 +162,12 @@ import { useLatestRequest } from '@/composables/useAsyncList'
 import { t } from '@/i18n'
 import { useThemeStore } from '@/stores/theme'
 import { chartSeriesColor, verticalFade, withAlpha } from '@/utils/chart-theme'
+import { registerMap } from '@/utils/echarts'
 import { formatNumber } from '@/utils/format'
 import worldMap from '@/assets/world.json'
 import type { AdminDashboardAnalytics, DashboardRange } from '@stellar-beacon/api-contract'
 
-echarts.registerMap('world', worldMap as never)
+registerMap('world', worldMap as never)
 
 const range = ref<DashboardRange>('7d')
 const areaType = ref<'users' | 'visitors'>('users')

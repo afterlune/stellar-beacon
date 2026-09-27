@@ -3,6 +3,7 @@ package model
 import (
 	"container/list"
 	"encoding/json"
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"time"
 )
@@ -542,33 +543,7 @@ type UserAreaDTO struct {
 	Value int64  `json:"value"`
 }
 
-type UserDetailsDTO struct {
-	Id                     int       `json:"id"`
-	UserInfoId             int       `json:"userInfoId"`
-	Email                  string    `json:"email"`
-	LoginType              int       `json:"loginType"`
-	Username               string    `json:"username"`
-	Password               string    `json:"password"`
-	Roles                  []string  `json:"roles"`
-	Handle                 string    `json:"handle"`
-	Nickname               string    `json:"nickname"`
-	Avatar                 string    `json:"avatar"`
-	Intro                  string    `json:"intro"`
-	Website                string    `json:"website"`
-	IsDisable              int       `json:"isDisable"`
-	IpAddress              string    `json:"ipAddress"`
-	IpSource               string    `json:"ipSource"`
-	IsSubscribe            int       `json:"isSubscribe"`
-	NotifyComment          int       `json:"notifyComment"`
-	NotifyInteraction      int       `json:"notifyInteraction"`
-	NotifyTopic            int       `json:"notifyTopic"`
-	NotifyCollection       int       `json:"notifyCollection"`
-	NotifyStudioActivation int       `json:"notifyStudioActivation"`
-	Browser                string    `json:"browser"`
-	Os                     string    `json:"os"`
-	ExpireTime             time.Time `json:"expireTime"`
-	LastLoginTime          time.Time `json:"lastLoginTime"`
-}
+type UserDetailsDTO = entity.AuthSession
 
 type UserInfoDTO struct {
 	Id            int       `json:"id"`
@@ -625,19 +600,7 @@ type UserMenuDTO struct {
 	Children  []UserMenuDTO `json:"children"`
 }
 
-type WebsiteConfigDTO struct {
-	Name              string `json:"name"`
-	EnglishName       string `json:"englishName"`
-	Logo              string `json:"logo"`
-	MultiLanguage     int    `json:"multiLanguage"`
-	Notice            string `json:"notice"`
-	WebsiteCreateTime string `json:"websiteCreateTime"`
-	BeianNumber       string `json:"beianNumber"`
-	TouristAvatar     string `json:"touristAvatar"`
-	UserAvatar        string `json:"userAvatar"`
-	IsCommentReview   int    `json:"isCommentReview"`
-	IsEmailNotice     int    `json:"isEmailNotice"`
-}
+type WebsiteConfigDTO = entity.WebsiteConfig
 
 // ReactionToggleVO is the reader-interaction write payload. Active carries the
 // desired state rather than a blind toggle so retries stay idempotent.

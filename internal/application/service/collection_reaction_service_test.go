@@ -2,15 +2,9 @@ package service
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeCollectionReactionRepository struct {
@@ -54,32 +48,15 @@ func (fakeCollectionBatchReader) ListPublicByIDs(context.Context, []int) ([]*por
 	return []*port.CollectionSummary{{ID: 9, Slug: "saved-list", Title: "Saved"}}, nil
 }
 
-func collectionReactionContext(method, target, body string, userID int) (*gin.Context, *httptest.ResponseRecorder) {
-	gin.SetMode(gin.TestMode)
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
-	c.Request = httptest.NewRequest(method, target, strings.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	if userID > 0 {
-		c.Set("userInfo", model.UserDetailsDTO{Id: userID, UserInfoId: userID})
-	}
-	return c, recorder
-}
-
 func TestCollectionReactionServiceUsesExplicitState(t *testing.T) {
 	repo := &fakeCollectionReactionRepository{}
 	service, err := NewCollectionReactionService(CollectionReactionServiceDeps{Repo: repo, Collections: fakeCollectionBatchReader{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, _ := collectionReactionContext(http.MethodPut, "/auth/me/collection-reactions", `{"collectionId":1,"active":true}`, 7)
-	result := service.ToggleCollectionReaction(c)
-	if !result.Flag || !repo.active || repo.counts.LikeCount != 1 {
-		t.Fatalf("unexpected like result: result=%+v repo=%+v", result, repo)
-	}
-	data, ok := result.Data.(model.CollectionReactionToggleDTO)
-	if !ok || !data.Active || data.LikeCount != 1 {
-		t.Fatalf("unexpected reaction response: %#v", result.Data)
+	result, err := service.ToggleCollectionReaction(context.Background(), 7, 1, "", true)
+	if err != nil || !repo.active || repo.reaction != port.ReactionLike || repo.counts.LikeCount != 1 || !result.Active || result.LikeCount != 1 {
+		t.Fatalf("unexpected like result: result=%+v repo=%+v err=%v", result, repo, err)
 	}
 }
 
@@ -89,11 +66,9 @@ func TestCollectionReactionServiceReturnsCurrentState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, _ := collectionReactionContext(http.MethodGet, "/auth/me/collection-reactions/state?collectionId=9", "", 7)
-	result := service.GetCollectionReactionState(c)
-	data, ok := result.Data.(model.CollectionReactionStateDTO)
-	if !result.Flag || !ok || data.CollectionId != 9 || !data.Like || !data.Favorite {
-		t.Fatalf("unexpected state response: result=%+v data=%#v", result, result.Data)
+	state, err := service.GetCollectionReactionState(context.Background(), 7, 9)
+	if err != nil || !state.Like || !state.Favorite {
+		t.Fatalf("unexpected state response: state=%#v err=%v", state, err)
 	}
 }
 
@@ -103,10 +78,8 @@ func TestCollectionReactionServiceListsFavorites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, _ := collectionReactionContext(http.MethodGet, "/auth/me/collection-reactions?reaction=favorite&current=1&size=10", "", 7)
-	result := service.ListMyCollectionReactions(c)
-	page, ok := result.Data.(model.PageResultDTO)
-	if !result.Flag || !ok || page.Count != 1 || len(page.Records.([]*port.CollectionSummary)) != 1 {
-		t.Fatalf("unexpected favorites response: result=%+v data=%#v", result, result.Data)
+	records, count, err := service.ListMyCollectionReactions(context.Background(), 7, 1, 10, port.ReactionFavorite)
+	if err != nil || count != 1 || len(records) != 1 {
+		t.Fatalf("unexpected favorites response: records=%#v count=%d err=%v", records, count, err)
 	}
 }

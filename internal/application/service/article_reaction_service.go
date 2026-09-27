@@ -3,27 +3,19 @@ package service
 import (
 	"context"
 	"strconv"
-	"strings"
 	"time"
 
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
-// reactionStateLookupLimit bounds the batch size of the state endpoint so one
-// request cannot scan an unbounded id list.
+// reactionStateLookupLimit bounds one batch lookup to avoid an unbounded scan.
 const reactionStateLookupLimit = 100
 
-// ArticleReactionService owns the reader-interaction use cases. Every method
-// requires an authenticated account; the middleware enforces that for the
-// /v1/auth/me routes.
 type ArticleReactionService interface {
-	ToggleArticleReaction(c *gin.Context) model.ResultVO
-	ListMyArticleReactions(c *gin.Context) model.ResultVO
-	ListArticleReactionStates(c *gin.Context) model.ResultVO
+	ToggleArticleReaction(context.Context, int, int, string, bool) (port.ReactionToggleResult, error)
+	ListMyArticleReactions(context.Context, int, int, int, string) ([]*port.ArticleCard, int64, error)
+	ListArticleReactionStates(context.Context, int, []int) ([]port.ArticleReactionState, error)
 }
 
 type MyArticleReactionService struct {
@@ -39,116 +31,91 @@ func NewArticleReactionService(deps ArticleReactionServiceDeps) (*MyArticleReact
 	return &MyArticleReactionService{repo: deps.Repo, articles: deps.Articles, limiter: deps.Limiter}, nil
 }
 
-func (s *MyArticleReactionService) ToggleArticleReaction(c *gin.Context) model.ResultVO {
-	var vo model.ReactionToggleVO
-	if err := c.ShouldBind(&vo); err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
+func (s *MyArticleReactionService) ToggleArticleReaction(ctx context.Context, userInfoID, articleID int, reaction string, desired bool) (port.ReactionToggleResult, error) {
+	if articleID <= 0 || !port.IsReactionKind(reaction) {
+		return port.ReactionToggleResult{}, apperrors.Invalid("article_reaction.toggle", "unsupported reaction")
 	}
-	if vo.ArticleId <= 0 || !port.IsReactionKind(vo.Reaction) {
-		return model.ResultFromError(apperrors.Invalid("article_reaction.toggle", "unsupported reaction"))
+	if userInfoID <= 0 {
+		return port.ReactionToggleResult{}, apperrors.New(apperrors.KindUnauthorized, "article_reaction.user", nil)
 	}
-	userInfoID, ok := currentUserInfoID(c)
-	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "article_reaction.user", nil))
-	}
-	if allowed, err := allowRateLimit(c.Request.Context(), s.limiter, "article-reaction:", strconv.Itoa(userInfoID), 30, time.Minute); err != nil {
-		return model.ResultFromError(apperrors.Unavailable("article_reaction.rate_limit", err))
-	} else if !allowed {
-		return model.ResultFromError(apperrors.Invalid("article_reaction.rate_limit", "too many reactions"))
-	}
-	if err := s.ensureArticle(c.Request.Context(), vo.ArticleId); err != nil {
-		return model.ResultFromError(err)
-	}
-	states, err := s.repo.States(c.Request.Context(), userInfoID, []int{vo.ArticleId})
+	allowed, err := allowRateLimit(ctx, s.limiter, "article-reaction:", strconv.Itoa(userInfoID), 30, time.Minute)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ReactionToggleResult{}, apperrors.Unavailable("article_reaction.rate_limit", err)
 	}
-	// The client sends the state it wants, so a retry cannot flip the reaction
-	// back; only a real difference reaches the ledger.
-	active := states[vo.ArticleId][vo.Reaction]
-	if active != vo.Active {
-		if active, err = s.repo.Toggle(c.Request.Context(), vo.ArticleId, userInfoID, vo.Reaction); err != nil {
-			return model.ResultFromError(err)
+	if !allowed {
+		return port.ReactionToggleResult{}, apperrors.Invalid("article_reaction.rate_limit", "too many reactions")
+	}
+	if err := s.ensureArticle(ctx, articleID); err != nil {
+		return port.ReactionToggleResult{}, err
+	}
+	states, err := s.repo.States(ctx, userInfoID, []int{articleID})
+	if err != nil {
+		return port.ReactionToggleResult{}, err
+	}
+	active := states[articleID][reaction]
+	if active != desired {
+		if active, err = s.repo.Toggle(ctx, articleID, userInfoID, reaction); err != nil {
+			return port.ReactionToggleResult{}, err
 		}
 	}
-	counts, err := s.repo.Counts(c.Request.Context(), []int{vo.ArticleId})
+	counts, err := s.repo.Counts(ctx, []int{articleID})
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.ReactionToggleResult{}, err
 	}
-	totals := counts[vo.ArticleId]
-	return model.ResultOkWithData(model.ReactionToggleDTO{
-		Active:        active,
-		LikeCount:     totals.LikeCount,
-		FavoriteCount: totals.FavoriteCount,
-	})
+	totals := counts[articleID]
+	return port.ReactionToggleResult{Active: active, LikeCount: totals.LikeCount, FavoriteCount: totals.FavoriteCount}, nil
 }
 
-func (s *MyArticleReactionService) ListMyArticleReactions(c *gin.Context) model.ResultVO {
-	current, err := strconv.Atoi(c.Query("current"))
-	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	size, err := strconv.Atoi(c.Query("size"))
-	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	reaction := c.Query("reaction")
+func (s *MyArticleReactionService) ListMyArticleReactions(ctx context.Context, userInfoID, current, size int, reaction string) ([]*port.ArticleCard, int64, error) {
 	if !port.IsReactionKind(reaction) {
-		return model.ResultFromError(apperrors.Invalid("article_reaction.list", "unsupported reaction"))
+		return nil, 0, apperrors.Invalid("article_reaction.list", "unsupported reaction")
 	}
-	userInfoID, ok := currentUserInfoID(c)
-	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "article_reaction.user", nil))
+	if userInfoID <= 0 {
+		return nil, 0, apperrors.New(apperrors.KindUnauthorized, "article_reaction.user", nil)
 	}
-	articleIDs, total, err := s.repo.ListArticleIDsByUser(c.Request.Context(), userInfoID, reaction, current, size)
+	articleIDs, total, err := s.repo.ListArticleIDsByUser(ctx, userInfoID, reaction, current, size)
 	if err != nil {
-		return model.ResultFromError(err)
+		return nil, 0, err
 	}
 	if len(articleIDs) == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: []*port.ArticleCard{}, Count: 0})
+		return []*port.ArticleCard{}, 0, nil
 	}
-	cards, err := s.articles.ListArticleCardsByIDs(c.Request.Context(), articleIDs)
+	cards, err := s.articles.ListArticleCardsByIDs(ctx, articleIDs)
 	if err != nil {
-		return model.ResultFromError(err)
+		return nil, 0, err
 	}
 	ordered := orderArticleCards(articleIDs, cards)
-	if err := s.attachReactionCounts(c.Request.Context(), ordered); err != nil {
-		return model.ResultFromError(err)
+	if err := s.attachReactionCounts(ctx, ordered); err != nil {
+		return nil, 0, err
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: ordered, Count: int(total)})
+	return ordered, total, nil
 }
 
-func (s *MyArticleReactionService) ListArticleReactionStates(c *gin.Context) model.ResultVO {
-	raw := strings.TrimSpace(c.Query("articleIds"))
-	if raw == "" {
-		return model.ResultFromError(apperrors.Invalid("article_reaction.states", "articleIds is required"))
+func (s *MyArticleReactionService) ListArticleReactionStates(ctx context.Context, userInfoID int, articleIDs []int) ([]port.ArticleReactionState, error) {
+	if len(articleIDs) == 0 {
+		return nil, apperrors.Invalid("article_reaction.states", "articleIds is required")
 	}
-	parts := strings.Split(raw, ",")
-	if len(parts) > reactionStateLookupLimit {
-		return model.ResultFromError(apperrors.Invalid("article_reaction.states", "too many article ids"))
+	if len(articleIDs) > reactionStateLookupLimit {
+		return nil, apperrors.Invalid("article_reaction.states", "too many article ids")
 	}
-	articleIDs := make([]int, 0, len(parts))
-	for _, part := range parts {
-		id, err := strconv.Atoi(strings.TrimSpace(part))
-		if err != nil || id <= 0 {
-			return model.ResultFromError(apperrors.Invalid("article_reaction.states", "invalid article id"))
+	for _, id := range articleIDs {
+		if id <= 0 {
+			return nil, apperrors.Invalid("article_reaction.states", "invalid article id")
 		}
-		articleIDs = append(articleIDs, id)
 	}
-	userInfoID, ok := currentUserInfoID(c)
-	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "article_reaction.user", nil))
+	if userInfoID <= 0 {
+		return nil, apperrors.New(apperrors.KindUnauthorized, "article_reaction.user", nil)
 	}
-	states, err := s.repo.States(c.Request.Context(), userInfoID, articleIDs)
+	states, err := s.repo.States(ctx, userInfoID, articleIDs)
 	if err != nil {
-		return model.ResultFromError(err)
+		return nil, err
 	}
-	result := make([]model.ReactionStateDTO, 0, len(articleIDs))
+	result := make([]port.ArticleReactionState, 0, len(articleIDs))
 	for _, id := range articleIDs {
 		entry := states[id]
-		result = append(result, model.ReactionStateDTO{ArticleId: id, Like: entry[port.ReactionLike], Favorite: entry[port.ReactionFavorite]})
+		result = append(result, port.ArticleReactionState{ArticleId: id, Like: entry[port.ReactionLike], Favorite: entry[port.ReactionFavorite]})
 	}
-	return model.ResultOkWithData(result)
+	return result, nil
 }
 
 // ensureArticle rejects reactions on missing or recycled articles.
@@ -197,17 +164,4 @@ func orderArticleCards(articleIDs []int, cards []*port.ArticleCard) []*port.Arti
 		}
 	}
 	return ordered
-}
-
-// currentUserInfoID reads the profile id attached by the login middleware.
-func currentUserInfoID(c *gin.Context) (int, bool) {
-	value, ok := c.Get("userInfo")
-	if !ok {
-		return 0, false
-	}
-	dto, ok := value.(model.UserDetailsDTO)
-	if !ok || dto.UserInfoId <= 0 {
-		return 0, false
-	}
-	return dto.UserInfoId, true
 }

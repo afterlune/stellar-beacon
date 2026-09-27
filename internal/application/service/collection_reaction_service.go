@@ -1,21 +1,19 @@
 package service
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
 
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-
-	"github.com/gin-gonic/gin"
 )
 
 type CollectionReactionService interface {
-	ToggleCollectionReaction(c *gin.Context) model.ResultVO
-	GetCollectionReactionState(c *gin.Context) model.ResultVO
-	ListMyCollectionReactions(c *gin.Context) model.ResultVO
+	ToggleCollectionReaction(context.Context, int, int, string, bool) (port.CollectionReactionResult, error)
+	GetCollectionReactionState(context.Context, int, int) (port.CollectionReactionState, error)
+	ListMyCollectionReactions(context.Context, int, int, int, string) ([]*port.CollectionSummary, int, error)
 }
 
 type MyCollectionReactionService struct {
@@ -31,78 +29,66 @@ func NewCollectionReactionService(deps CollectionReactionServiceDeps) (*MyCollec
 	return &MyCollectionReactionService{repo: deps.Repo, collections: deps.Collections, limiter: deps.Limiter}, nil
 }
 
-func (s *MyCollectionReactionService) ToggleCollectionReaction(c *gin.Context) model.ResultVO {
-	var vo model.CollectionReactionToggleVO
-	if err := c.ShouldBind(&vo); err != nil || vo.CollectionId <= 0 {
-		return model.ResultFromError(apperrors.Invalid("collection_reaction.toggle", "invalid collection"))
+func (s *MyCollectionReactionService) ToggleCollectionReaction(ctx context.Context, userInfoID, collectionID int, reaction string, desired bool) (port.CollectionReactionResult, error) {
+	if collectionID <= 0 {
+		return port.CollectionReactionResult{}, apperrors.Invalid("collection_reaction.toggle", "invalid collection")
 	}
-	if strings.TrimSpace(vo.Reaction) == "" {
-		vo.Reaction = port.ReactionLike
+	if strings.TrimSpace(reaction) == "" {
+		reaction = port.ReactionLike
 	}
-	if !port.IsReactionKind(vo.Reaction) {
-		return model.ResultFromError(apperrors.Invalid("collection_reaction.toggle", "unsupported reaction"))
+	if !port.IsReactionKind(reaction) {
+		return port.CollectionReactionResult{}, apperrors.Invalid("collection_reaction.toggle", "unsupported reaction")
 	}
-	userInfoID, ok := currentUserInfoID(c)
-	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "collection_reaction.user", nil))
+	if userInfoID <= 0 {
+		return port.CollectionReactionResult{}, apperrors.New(apperrors.KindUnauthorized, "collection_reaction.user", nil)
 	}
-	if allowed, err := allowRateLimit(c.Request.Context(), s.limiter, "collection-reaction:", strconv.Itoa(userInfoID), 30, time.Minute); err != nil {
-		return model.ResultFromError(apperrors.Unavailable("collection_reaction.rate_limit", err))
-	} else if !allowed {
-		return model.ResultFromError(apperrors.Invalid("collection_reaction.rate_limit", "too many reactions"))
-	}
-	active, counts, err := s.repo.Set(c.Request.Context(), vo.CollectionId, userInfoID, vo.Reaction, vo.Active)
+	allowed, err := allowRateLimit(ctx, s.limiter, "collection-reaction:", strconv.Itoa(userInfoID), 30, time.Minute)
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.CollectionReactionResult{}, apperrors.Unavailable("collection_reaction.rate_limit", err)
 	}
-	return model.ResultOkWithData(model.CollectionReactionToggleDTO{
-		Active: active, LikeCount: counts.LikeCount, FavoriteCount: counts.FavoriteCount,
-	})
+	if !allowed {
+		return port.CollectionReactionResult{}, apperrors.Invalid("collection_reaction.rate_limit", "too many reactions")
+	}
+	active, counts, err := s.repo.Set(ctx, collectionID, userInfoID, reaction, desired)
+	if err != nil {
+		return port.CollectionReactionResult{}, err
+	}
+	return port.CollectionReactionResult{Active: active, LikeCount: counts.LikeCount, FavoriteCount: counts.FavoriteCount}, nil
 }
 
-func (s *MyCollectionReactionService) GetCollectionReactionState(c *gin.Context) model.ResultVO {
-	collectionID, err := strconv.Atoi(c.Query("collectionId"))
-	if err != nil || collectionID <= 0 {
-		return model.ResultFromError(apperrors.Invalid("collection_reaction.state", "invalid collection"))
+func (s *MyCollectionReactionService) GetCollectionReactionState(ctx context.Context, userInfoID, collectionID int) (port.CollectionReactionState, error) {
+	if collectionID <= 0 {
+		return port.CollectionReactionState{}, apperrors.Invalid("collection_reaction.state", "invalid collection")
 	}
-	userInfoID, ok := currentUserInfoID(c)
-	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "collection_reaction.user", nil))
+	if userInfoID <= 0 {
+		return port.CollectionReactionState{}, apperrors.New(apperrors.KindUnauthorized, "collection_reaction.user", nil)
 	}
-	states, err := s.repo.States(c.Request.Context(), userInfoID, []int{collectionID})
+	states, err := s.repo.States(ctx, userInfoID, []int{collectionID})
 	if err != nil {
-		return model.ResultFromError(err)
+		return port.CollectionReactionState{}, err
 	}
-	state := states[collectionID]
-	return model.ResultOkWithData(model.CollectionReactionStateDTO{
-		CollectionId: collectionID, Like: state.Like, Favorite: state.Favorite,
-	})
+	return states[collectionID], nil
 }
 
-func (s *MyCollectionReactionService) ListMyCollectionReactions(c *gin.Context) model.ResultVO {
-	if strings.TrimSpace(c.Query("reaction")) != port.ReactionFavorite {
-		return model.ResultFromError(apperrors.Invalid("collection_reaction.list", "unsupported reaction"))
+func (s *MyCollectionReactionService) ListMyCollectionReactions(ctx context.Context, userInfoID, current, size int, reaction string) ([]*port.CollectionSummary, int, error) {
+	if strings.TrimSpace(reaction) != port.ReactionFavorite {
+		return nil, 0, apperrors.Invalid("collection_reaction.list", "unsupported reaction")
 	}
-	userInfoID, ok := currentUserInfoID(c)
-	if !ok {
-		return model.ResultFromError(apperrors.New(apperrors.KindUnauthorized, "collection_reaction.user", nil))
+	if userInfoID <= 0 {
+		return nil, 0, apperrors.New(apperrors.KindUnauthorized, "collection_reaction.user", nil)
 	}
-	current, size, err := pageParams(c)
+	ids, total, err := s.repo.ListFavoriteCollectionIDsByUser(ctx, userInfoID, current, size)
 	if err != nil {
-		return model.ResultFailWithMessage("参数格式不正确")
-	}
-	ids, total, err := s.repo.ListFavoriteCollectionIDsByUser(c.Request.Context(), userInfoID, current, size)
-	if err != nil {
-		return model.ResultFromError(err)
+		return nil, 0, err
 	}
 	if len(ids) == 0 {
-		return model.ResultOkWithData(model.PageResultDTO{Records: []*port.CollectionSummary{}, Count: total, Page: current, PageSize: size})
+		return []*port.CollectionSummary{}, total, nil
 	}
-	records, err := s.collections.ListPublicByIDs(c.Request.Context(), ids)
+	records, err := s.collections.ListPublicByIDs(ctx, ids)
 	if err != nil {
-		return model.ResultFromError(err)
+		return nil, 0, err
 	}
-	return model.ResultOkWithData(model.PageResultDTO{Records: orderCollectionSummaries(ids, records), Count: total, Page: current, PageSize: size})
+	return orderCollectionSummaries(ids, records), total, nil
 }
 
 func orderCollectionSummaries(ids []int, records []*port.CollectionSummary) []*port.CollectionSummary {

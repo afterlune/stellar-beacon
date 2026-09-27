@@ -1,0 +1,37 @@
+/* Category strip on the home page. */
+#App-Wrapper .tab {
+  display: flex;
+  gap: 6px;
+  height: auto;
+  min-height: 52px;
+  margin-bottom: 10px;
+  padding: 8px;
+  overflow-x: auto;
+  border: 1px solid var(--border-hairline);
+  border-radius: 2px;
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+#App-Wrapper .tab li {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#App-Wrapper .tab li span,
+#App-Wrapper .tab li b {
+  padding: 8px 10px;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+#App-Wrapper .tab li.active span,
+#App-Wrapper .tab li.active b {
+  background: var(--accent);
+  color: #09100a;
+}

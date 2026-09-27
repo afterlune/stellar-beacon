@@ -29,6 +29,21 @@ type ReactionCounts struct {
 	FavoriteCount int `json:"favoriteCount"`
 }
 
+// ReactionToggleResult reports the requested state and current aggregate
+// counts after an idempotent reaction update.
+type ReactionToggleResult struct {
+	Active        bool `json:"active"`
+	LikeCount     int  `json:"likeCount"`
+	FavoriteCount int  `json:"favoriteCount"`
+}
+
+// ArticleReactionState is one account's reaction state for an article.
+type ArticleReactionState struct {
+	ArticleId int  `json:"articleId"`
+	Like      bool `json:"like"`
+	Favorite  bool `json:"favorite"`
+}
+
 // ArticleReactionRepository stores reader reactions and answers the two read
 // shapes the API needs: per-article totals and per-account state.
 type ArticleReactionRepository interface {

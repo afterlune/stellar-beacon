@@ -2,12 +2,10 @@ package service
 
 import (
 	"context"
-	"net/http"
 	"testing"
 
+	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"github.com/gin-gonic/gin"
 )
 
 type fakeFollowRepository struct {
@@ -48,36 +46,30 @@ func (f *fakeFollowRepository) MarkNotificationsRead(_ context.Context, _ int, c
 
 func TestFollowServiceFollowsTarget(t *testing.T) {
 	repo := &fakeFollowRepository{}
-	service := NewFollowService(repo)
-	ctx := platformTestContext(http.MethodPut, "/v1/auth/me/following/9", "")
-	ctx.Params = gin.Params{{Key: "authorId", Value: "9"}}
-	result := service.Follow(ctx)
-	if !result.Flag || repo.followCalls != 1 || repo.followerID != 7 || repo.authorID != 9 {
-		t.Fatalf("unexpected follow result: result=%+v repo=%+v", result, repo)
+	svc := NewFollowService(repo)
+	if err := svc.Follow(context.Background(), 7, 9); err != nil || repo.followCalls != 1 || repo.followerID != 7 || repo.authorID != 9 {
+		t.Fatalf("unexpected follow: err=%v repo=%+v", err, repo)
 	}
 }
 
 func TestFollowServiceRejectsSelfFollow(t *testing.T) {
 	repo := &fakeFollowRepository{}
-	service := NewFollowService(repo)
-	ctx := platformTestContext(http.MethodPut, "/v1/auth/me/following/7", "")
-	ctx.Params = gin.Params{{Key: "authorId", Value: "7"}}
-	ctx.Set("userInfo", model.UserDetailsDTO{UserInfoId: 7})
-	result := service.Follow(ctx)
-	if result.Flag || repo.followCalls != 0 {
-		t.Fatalf("self follow must fail: result=%+v repo=%+v", result, repo)
+	svc := NewFollowService(repo)
+	err := svc.Follow(context.Background(), 7, 7)
+	if !apperrors.IsKind(err, apperrors.KindValidation) || repo.followCalls != 0 {
+		t.Fatalf("self follow must fail before repository call: err=%v repo=%+v", err, repo)
 	}
 }
 
 func TestFollowServiceUnreadAndMarkRead(t *testing.T) {
 	repo := &fakeFollowRepository{unread: 3}
-	service := NewFollowService(repo)
-	unread := service.UnreadNotificationCount(platformTestContext(http.MethodGet, "/v1/auth/me/notifications/unread-count", ""))
-	if !unread.Flag || unread.Data.(map[string]int)["count"] != 3 {
-		t.Fatalf("unexpected unread result: %+v", unread)
+	svc := NewFollowService(repo)
+	unread, err := svc.UnreadNotificationCount(context.Background(), 7)
+	if err != nil || unread != 3 {
+		t.Fatalf("unexpected unread count: count=%d err=%v", unread, err)
 	}
-	read := service.MarkNotificationsRead(platformTestContext(http.MethodPost, "/v1/auth/me/notifications/read", `{"publishEventId":4,"interactionId":9}`))
-	if !read.Flag || repo.readCalls != 1 || repo.unread != 0 || repo.readCursor.PublishEventId != 4 || repo.readCursor.InteractionId != 9 {
-		t.Fatalf("unexpected mark read result: result=%+v repo=%+v", read, repo)
+	cursor := port.NotificationCursor{PublishEventId: 4, InteractionId: 9}
+	if err := svc.MarkNotificationsRead(context.Background(), 7, cursor); err != nil || repo.readCalls != 1 || repo.unread != 0 || repo.readCursor != cursor {
+		t.Fatalf("unexpected mark read: err=%v repo=%+v", err, repo)
 	}
 }

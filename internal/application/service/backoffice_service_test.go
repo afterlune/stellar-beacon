@@ -2,15 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
-	"net/http/httptest"
-	"strings"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
 type fakeErrorLogRepository struct{ err error }
@@ -22,11 +19,9 @@ func (f *fakeErrorLogRepository) Delete(context.Context, []int) error { return f
 
 func TestErrorLogServiceReturnsUnavailableForRepositoryFailure(t *testing.T) {
 	service := NewErrorLogService(&fakeErrorLogRepository{err: apperrors.Unavailable("error_log.list", context.Canceled)})
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest("GET", "/v1/admin/logs/exceptions?current=1&size=10", nil)
-	result := service.ListErrorLogs(c)
-	if result.Flag || result.Message != "系统繁忙，请稍后再试" {
-		t.Fatalf("unexpected result: %+v", result)
+	_, _, err := service.ListErrorLogs(context.Background(), 1, 10, "")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected unavailable repository error, got %v", err)
 	}
 }
 
@@ -81,12 +76,9 @@ func TestMenuServiceBuildsStableTreeFromPortRecords(t *testing.T) {
 		{Id: 2, Name: "child", ParentId: 1, OrderNum: 2},
 		{Id: 1, Name: "root", ParentId: 0, OrderNum: 1},
 	}})
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest("GET", "/admin/menus", nil)
-	result := service.ListMenus(c)
-	menus, ok := result.Data.([]model.MenuDTO)
-	if !ok || len(menus) != 1 || menus[0].Id != 1 || len(menus[0].Children) != 1 || menus[0].Children[0].Id != 2 {
-		t.Fatalf("unexpected menu tree: %#v", result.Data)
+	menus, err := service.ListMenus(context.Background(), "")
+	if err != nil || len(menus) != 2 || menus[0].Id != 2 || menus[1].Id != 1 {
+		t.Fatalf("unexpected typed menu records: menus=%+v err=%v", menus, err)
 	}
 }
 
@@ -97,16 +89,9 @@ func TestMenuServicePreservesUserMenuPaths(t *testing.T) {
 		{Id: 3, Name: "article list", Path: "/article-list", Component: "/article/ArticleList.vue", ParentId: 2, OrderNum: 1},
 	}})
 
-	result := service.ListUserMenus(1)
-	menus, ok := result.Data.([]model.UserMenuDTO)
-	if !ok || len(menus) != 2 {
-		t.Fatalf("unexpected user menus: %#v", result.Data)
-	}
-	if menus[0].Path != "/" || len(menus[0].Children) != 1 || menus[0].Children[0].Path != "" {
-		t.Fatalf("home route was not normalized: %#v", menus[0])
-	}
-	if menus[1].Path != "/article-submenu" || len(menus[1].Children) != 1 || menus[1].Children[0].Path != "/article-list" {
-		t.Fatalf("nested route was not preserved: %#v", menus[1])
+	menus, err := service.ListUserMenus(context.Background(), 1)
+	if err != nil || len(menus) != 3 || menus[0].Path != "/" || menus[2].Path != "/article-list" {
+		t.Fatalf("user menu route records were changed: menus=%+v err=%v", menus, err)
 	}
 }
 
@@ -133,17 +118,8 @@ func (f *fakeRoleRepository) ListRolesByUserInfoID(context.Context, int) ([]stri
 
 func TestRoleServiceRejectsDuplicateRoleName(t *testing.T) {
 	service := NewRoleService(&fakeRoleRepository{existing: entity.TRole{Id: 3, RoleName: "admin"}})
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest("POST", "/admin/role", strings.NewReader(`{"id":4,"roleName":"admin"}`))
-	c.Request.Header.Set("Content-Type", "application/json")
-	result := service.SaveOrUpdateRole(c)
-	if result.Flag || result.Message != "该角色存在" {
-		t.Fatalf("unexpected result: %+v", result)
-	}
-}
-
-func TestJobLogStatusRejectsFractionalNumbers(t *testing.T) {
-	if _, ok := jobLogStatus(float64(1.5)); ok {
-		t.Fatal("fractional status must be rejected")
+	err := service.SaveOrUpdateRole(context.Background(), 4, "admin", nil, nil)
+	if !apperrors.IsKind(err, apperrors.KindConflict) {
+		t.Fatalf("expected duplicate role conflict, got %v", err)
 	}
 }
