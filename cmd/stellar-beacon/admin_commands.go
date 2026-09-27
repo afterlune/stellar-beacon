@@ -163,7 +163,7 @@ func createFirstAdmin(ctx context.Context, engine *xorm.Engine, email string, pa
 
 	nickname := strings.SplitN(email, "@", 2)[0]
 	info := entity.TUserInfo{
-		Email: email, Nickname: nickname, Avatar: "", IsSubscribe: 0, IsDisable: 0,
+		Email: email, Nickname: nickname, Avatar: "", ProfileLinksJSON: "[]", IsSubscribe: 0, IsDisable: 0,
 	}
 	if _, err := session.Insert(&info); err != nil {
 		return fmt.Errorf("create administrator profile: %w", err)
