@@ -142,6 +142,7 @@ type RoleRepository interface {
 	Delete(ctx context.Context, ids []int) error
 	ListResourceRoles(ctx context.Context) ([]ResourceRoleView, error)
 	ListRolesByUserInfoID(ctx context.Context, userInfoID int) ([]string, error)
+	HasUserResourcePermission(ctx context.Context, userInfoID int, path, method string) (bool, error)
 }
 
 type PhotoAlbumAdmin struct {
@@ -195,5 +196,6 @@ type UserInfoRepository interface {
 	UpdateNotifyStudioActivation(ctx context.Context, id, notify int) error
 	UpdateRole(ctx context.Context, userInfoID int, nickname string, roleIDs []int) error
 	UpdateDisable(ctx context.Context, id, disabled int) error
+	IsEnabled(ctx context.Context, id int) (bool, error)
 	FindAuthByUserInfoID(ctx context.Context, id int) (entity.TUserAuth, error)
 }

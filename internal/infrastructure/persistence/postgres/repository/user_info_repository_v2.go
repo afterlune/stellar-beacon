@@ -122,6 +122,19 @@ func (r *MyUserInfoRepo) UpdateDisable(ctx context.Context, id, disabled int) er
 	})
 }
 
+func (r *MyUserInfoRepo) IsEnabled(ctx context.Context, id int) (bool, error) {
+	session, err := repoSession(r.engine, ctx, "user_info.is_enabled")
+	if err != nil {
+		return false, err
+	}
+	var info entity.TUserInfo
+	found, err := session.ID(id).Cols("id", "is_disable").Get(&info)
+	if err != nil {
+		return false, apperrors.Unavailable("user_info.is_enabled", err)
+	}
+	return found && info.IsDisable == 0, nil
+}
+
 func (r *MyUserInfoRepo) FindAuthByUserInfoID(ctx context.Context, id int) (entity.TUserAuth, error) {
 	session, err := repoSession(r.engine, ctx, "user_info.auth")
 	if err != nil {

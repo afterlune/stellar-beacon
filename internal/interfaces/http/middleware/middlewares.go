@@ -11,7 +11,6 @@ import (
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/shared"
 	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/visitor"
@@ -27,9 +26,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/casbin/casbin/v2"
-	model2 "github.com/casbin/casbin/v2/model"
-	xormadapter "github.com/casbin/xorm-adapter/v2"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )
@@ -613,6 +609,21 @@ func AuthorizationFilter() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("server error"))
 			return
 		}
+		if userDetailsDTO.UserInfoId <= 0 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithCode(41000))
+			return
+		}
+		enabled, err := isUserEnabled(c.Request.Context(), userDetailsDTO.UserInfoId)
+		if err != nil {
+			slog.Error("check authenticated user status failed", "error", err)
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, model.ResultFailWithMessage("服务暂不可用"))
+			return
+		}
+		if !enabled {
+			revokeCachedUserSession(c.Request.Context(), userAuthID)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, model.ResultFailWithCode(41000))
+			return
+		}
 		userDetailsDTO.LastLoginTime = time.Now()
 		c.Set("userInfo", userDetailsDTO)
 		c.Next()
@@ -647,7 +658,36 @@ func attachOptionalLoginUser(c *gin.Context) {
 	if userDetailsDTO.UserInfoId <= 0 {
 		return
 	}
+	enabled, err := isUserEnabled(c.Request.Context(), userDetailsDTO.UserInfoId)
+	if err != nil {
+		slog.Warn("check optional login user status failed", "error", err)
+		return
+	}
+	if !enabled {
+		revokeCachedUserSession(c.Request.Context(), userAuthID)
+		return
+	}
 	c.Set("userInfo", userDetailsDTO)
+}
+
+func isUserEnabled(ctx context.Context, userInfoID int) (bool, error) {
+	if userInfoRepo == nil {
+		return false, fmt.Errorf("user info repository is not configured")
+	}
+	enabled, err := userInfoRepo.IsEnabled(ctx, userInfoID)
+	if err != nil {
+		return false, err
+	}
+	return enabled, nil
+}
+
+func revokeCachedUserSession(ctx context.Context, userAuthID string) {
+	if err := shared.HDelCtx(ctx, shared.LOGIN_USER, userAuthID); err != nil {
+		slog.Warn("remove disabled user session failed", "error", err)
+	}
+	if err := shared.DelCtx(ctx, shared.REFRESH_TOKEN_PREFIX+userAuthID); err != nil {
+		slog.Warn("remove disabled user refresh token failed", "error", err)
+	}
 }
 
 func isAdminPath(path string) bool {
@@ -693,56 +733,17 @@ func permissionPath(path string) string {
 	return path
 }
 
-// getRolesByUserInfoId 获取用户角色，优先从缓存中获取
-func getRolesByUserInfoId(ctx context.Context, userInfoId int) []string {
-	cacheKey := fmt.Sprintf("roles:%d", userInfoId)
-	cachedRoles, err := shared.HGetCtx(ctx, "user_roles", cacheKey)
-	if err != nil {
-		slog.Warn("load cached roles failed", "error", err)
-	}
-	if cachedRoles != "" {
-		var roles []string
-		if err := json.Unmarshal([]byte(cachedRoles), &roles); err == nil {
-			return roles
-		}
-	}
-
+func checkUserResourcePermission(ctx context.Context, userInfoID int, path, method string) (bool, error) {
 	if roleRepo == nil {
-		slog.Error("role repository is not configured")
-		return nil
+		return false, fmt.Errorf("role repository is not configured")
 	}
-	roles, err := roleRepo.ListRolesByUserInfoID(ctx, userInfoId)
-	if err != nil {
-		slog.Error("load user roles failed", "error", err)
-		return nil
+	if userInfoID <= 0 {
+		return false, nil
 	}
-	rolesJson, _ := json.Marshal(roles)
-	if err := shared.HSetCtx(ctx, "user_roles", cacheKey, rolesJson, 1*time.Hour); err != nil {
-		slog.Warn("cache user roles failed", "error", err)
-	}
-	return roles
+	return roleRepo.HasUserResourcePermission(ctx, userInfoID, permissionPath(path), method)
 }
 
-// checkPermission 检查用户是否有权限访问资源
-func checkPermission(roles []string, uri, method string) (bool, string, error) {
-	enforcer, err := casbinEnforcer()
-	if err != nil {
-		return false, "", err
-	}
-	for _, role := range roles {
-		ok, err := enforcer.Enforce(role, uri, method)
-		if err != nil {
-			slog.Error("permission check failed", "error", err)
-			return false, "", err
-		}
-		if ok {
-			return true, "", nil
-		}
-	}
-	return false, fmt.Sprintf("用户角色 %v 没有权限访问 %s %s", roles, method, uri), nil
-}
-
-func CasbinResourceFilter() gin.HandlerFunc {
+func ResourceAuthorizationFilter() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if isAdminPath(c.Request.URL.Path) {
 			value, ok := c.Get("userInfo")
@@ -750,22 +751,24 @@ func CasbinResourceFilter() gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
 				return
 			}
-			dto := value.(model.UserDetailsDTO)
-			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
+			dto, ok := value.(model.UserDetailsDTO)
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
+				return
+			}
 			permissionResource, permissionMethod := permissionTarget(c.Request.URL.Path, c.Request.Method)
-			ok, deniedMessage, err := checkPermission(roles, permissionPath(permissionResource), permissionMethod)
+			allowed, err := checkUserResourcePermission(c.Request.Context(), dto.UserInfoId, permissionResource, permissionMethod)
 			if err != nil {
 				slog.Error("authorization check failed", "error", err)
 				c.AbortWithStatusJSON(http.StatusInternalServerError, model.ResultFailWithMessage("权限检查失败"))
 				return
 			}
-			if deniedMessage != "" {
-				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage(deniedMessage))
-				return
-			}
-			if !ok {
+			if !allowed {
 				c.AbortWithStatusJSON(http.StatusOK, model.ResultFailWithMessage("权限不足"))
 				return
+			}
+			if permissionResource == c.Request.URL.Path && permissionMethod == c.Request.Method {
+				c.Set("adminResourceAuthorized", true)
 			}
 		}
 		c.Next()
@@ -816,11 +819,16 @@ var (
 	ipLimiter       = make(map[string]*ipRateLimiters)
 	mutex           sync.Mutex
 	roleRepo        port.RoleRepository
+	userInfoRepo    port.UserInfoRepository
 	userAuthService service.UserAuthService = new(service.MyUserAuthService)
 )
 
 func ConfigureRoleRepository(repo port.RoleRepository) {
 	roleRepo = repo
+}
+
+func ConfigureUserInfoRepository(repo port.UserInfoRepository) {
+	userInfoRepo = repo
 }
 
 // ConfigureUserAuthService injects the application authentication service
@@ -834,15 +842,8 @@ func ConfigureUserAuthService(auth service.UserAuthService) {
 
 func AccessLimiter() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		value, ok := c.Get("userInfo")
-		if ok {
-			dto := value.(model.UserDetailsDTO)
-			roles := getRolesByUserInfoId(c.Request.Context(), dto.UserInfoId)
-			ok, _, err := checkPermission(roles, permissionPath(c.Request.URL.Path), c.Request.Method)
-			if err != nil {
-				slog.Error("permission check failed in access limiter", "error", err)
-				// 权限检查失败，继续进行速率限制
-			} else if ok {
+		if authorized, ok := c.Get("adminResourceAuthorized"); ok {
+			if allowed, isBool := authorized.(bool); isBool && allowed {
 				c.Next()
 				return
 			}
@@ -881,80 +882,4 @@ func AccessLimiter() gin.HandlerFunc {
 		}
 		c.Next()
 	}
-}
-
-var (
-	adapterOnce  sync.Once
-	enforcerOnce sync.Once
-	xormAdapter  *xormadapter.Adapter
-	enforcer     *casbin.Enforcer
-	adapterErr   error
-	enforcerErr  error
-)
-
-const (
-	text = `
-[request_definition]
-r = sub, obj, act
-
-[policy_definition]
-p = sub, obj, act
-
-[role_definition]
-g = _, _
-
-[policy_effect]
-e = some(where (p.eft == allow))
-
-[matchers]
-m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && r.act == p.act
-`
-)
-
-// casbinAdapter 外部存储，如果需要的话
-func casbinAdapter() (*xormadapter.Adapter, error) {
-	adapterOnce.Do(func() {
-		engine := ormInit.GetEngine()
-		if engine == nil {
-			adapterErr = fmt.Errorf("database engine is not initialized")
-			return
-		}
-		a, err := xormadapter.NewAdapterByEngine(engine)
-		if err != nil {
-			adapterErr = err
-			return
-		}
-		xormAdapter = a
-	})
-	return xormAdapter, adapterErr
-}
-
-func casbinEnforcer() (*casbin.Enforcer, error) {
-	enforcerOnce.Do(func() {
-		m, err := model2.NewModelFromString(text)
-		if err != nil {
-			enforcerErr = err
-			return
-		}
-
-		adapter, err := casbinAdapter()
-		if err != nil {
-			enforcerErr = err
-			return
-		}
-		e, err := casbin.NewEnforcer(m, adapter)
-		if err != nil {
-			enforcerErr = err
-			return
-		}
-
-		err = e.LoadPolicy()
-		if err != nil {
-			enforcerErr = err
-			return
-		}
-		enforcer = e
-	})
-
-	return enforcer, enforcerErr
 }

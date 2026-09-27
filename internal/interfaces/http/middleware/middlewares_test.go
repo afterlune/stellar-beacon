@@ -3,14 +3,45 @@ package middlewares
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 )
+
+type authorizationRoleRepository struct {
+	port.RoleRepository
+	userInfoID int
+	path       string
+	method     string
+	allowed    bool
+	err        error
+	calls      int
+}
+
+func (r *authorizationRoleRepository) HasUserResourcePermission(_ context.Context, userInfoID int, path, method string) (bool, error) {
+	r.userInfoID, r.path, r.method = userInfoID, path, method
+	r.calls++
+	return r.allowed, r.err
+}
+
+type authorizationUserInfoRepository struct {
+	port.UserInfoRepository
+	userInfoID int
+	enabled    bool
+	err        error
+}
+
+func (r *authorizationUserInfoRepository) IsEnabled(_ context.Context, userInfoID int) (bool, error) {
+	r.userInfoID = userInfoID
+	return r.enabled, r.err
+}
 
 // An aborted request must not be filed as an exception: the caller is gone, so
 // the failure is a consequence of the disconnect rather than a service fault.
@@ -96,6 +127,98 @@ func TestRequiresAuthentication(t *testing.T) {
 		if got := requiresAuthentication(tt.path); got != tt.want {
 			t.Errorf("requiresAuthentication(%q) = %v, want %v", tt.path, got, tt.want)
 		}
+	}
+}
+
+func TestCheckUserResourcePermissionMapsLegacyResourcePath(t *testing.T) {
+	previous := roleRepo
+	repository := &authorizationRoleRepository{allowed: true}
+	roleRepo = repository
+	t.Cleanup(func() { roleRepo = previous })
+
+	allowed, err := checkUserResourcePermission(context.Background(), 42, "/v1/admin/articles/trash", http.MethodPut)
+	if err != nil || !allowed {
+		t.Fatalf("permission check = (%v, %v), want (true, nil)", allowed, err)
+	}
+	if repository.userInfoID != 42 || repository.path != "/admin/articles" || repository.method != http.MethodPut {
+		t.Fatalf("permission request was not normalized: %+v", repository)
+	}
+}
+
+func TestCheckUserResourcePermissionUsesIncidentReadAudience(t *testing.T) {
+	previous := roleRepo
+	repository := &authorizationRoleRepository{allowed: true}
+	roleRepo = repository
+	t.Cleanup(func() { roleRepo = previous })
+
+	path, method := permissionTarget("/v1/admin/monitor/incidents/12/updates", http.MethodPost)
+	allowed, err := checkUserResourcePermission(context.Background(), 8, path, method)
+	if err != nil || !allowed {
+		t.Fatalf("permission check = (%v, %v), want (true, nil)", allowed, err)
+	}
+	if repository.path != "/admin/monitor/health" || repository.method != http.MethodGet {
+		t.Fatalf("incident update must use health-read permission: path=%q method=%q", repository.path, repository.method)
+	}
+}
+
+func TestResourceAuthorizationFilterAllowsDeniesAndFailsClosed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previous := roleRepo
+	t.Cleanup(func() { roleRepo = previous })
+
+	tests := []struct {
+		name       string
+		allowed    bool
+		repoErr    error
+		statusCode int
+		message    string
+	}{
+		{name: "granted resource", allowed: true, statusCode: http.StatusNoContent},
+		{name: "missing grant", statusCode: http.StatusOK, message: "权限不足"},
+		{name: "repository failure", repoErr: errors.New("database unavailable"), statusCode: http.StatusInternalServerError, message: "权限检查失败"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repository := &authorizationRoleRepository{allowed: tt.allowed, err: tt.repoErr}
+			roleRepo = repository
+			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Set("userInfo", model.UserDetailsDTO{UserInfoId: 17})
+				c.Next()
+			})
+			router.Use(ResourceAuthorizationFilter())
+			router.Use(AccessLimiter())
+			router.GET("/v1/admin/articles", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/admin/articles", nil))
+			if response.Code != tt.statusCode {
+				t.Fatalf("status = %d, want %d; body=%s", response.Code, tt.statusCode, response.Body.String())
+			}
+			if tt.message != "" && !strings.Contains(response.Body.String(), tt.message) {
+				t.Fatalf("response %q does not contain %q", response.Body.String(), tt.message)
+			}
+			if tt.allowed && repository.calls != 1 {
+				t.Fatalf("authorized request checked the database %d times, want once", repository.calls)
+			}
+		})
+	}
+}
+
+func TestIsUserEnabledUsesRepositoryAndReturnsErrors(t *testing.T) {
+	previous := userInfoRepo
+	repository := &authorizationUserInfoRepository{enabled: true}
+	userInfoRepo = repository
+	t.Cleanup(func() { userInfoRepo = previous })
+
+	enabled, err := isUserEnabled(context.Background(), 29)
+	if err != nil || !enabled || repository.userInfoID != 29 {
+		t.Fatalf("isUserEnabled = (%v, %v), repository user id = %d", enabled, err, repository.userInfoID)
+	}
+
+	repository.err = errors.New("database unavailable")
+	if enabled, err := isUserEnabled(context.Background(), 29); err == nil || enabled {
+		t.Fatalf("repository failure must not enable the user: enabled=%v err=%v", enabled, err)
 	}
 }
 

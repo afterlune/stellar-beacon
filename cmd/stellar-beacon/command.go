@@ -106,7 +106,7 @@ func runServer() error {
 	router.Use(middlewares.SpiderReject())
 	router.Use(middlewares.LoginFilter())
 	router.Use(middlewares.AuthorizationFilter())
-	router.Use(middlewares.CasbinResourceFilter())
+	router.Use(middlewares.ResourceAuthorizationFilter())
 	router.Use(middlewares.AccessLimiter())
 	router.Use(middlewares.Log())
 

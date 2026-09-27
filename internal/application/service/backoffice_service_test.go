@@ -115,6 +115,9 @@ func (f *fakeRoleRepository) ListResourceRoles(context.Context) ([]port.Resource
 func (f *fakeRoleRepository) ListRolesByUserInfoID(context.Context, int) ([]string, error) {
 	return nil, nil
 }
+func (f *fakeRoleRepository) HasUserResourcePermission(context.Context, int, string, string) (bool, error) {
+	return false, nil
+}
 
 func TestRoleServiceRejectsDuplicateRoleName(t *testing.T) {
 	service := NewRoleService(&fakeRoleRepository{existing: entity.TRole{Id: 3, RoleName: "admin"}})

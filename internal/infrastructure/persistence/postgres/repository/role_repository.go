@@ -304,6 +304,33 @@ func (r *MyRoleRepository) ListRolesByUserInfoID(ctx context.Context, userInfoID
 	return roles, nil
 }
 
+func (r *MyRoleRepository) HasUserResourcePermission(ctx context.Context, userInfoID int, path, method string) (bool, error) {
+	session, err := repoSession(r.engine, ctx, "role.user_resource_permission")
+	if err != nil {
+		return false, err
+	}
+	var resources []port.ResourceRoleView
+	if err := session.SQL(pgsql.ListUserResourcePermissions, userInfoID, method).Find(&resources); err != nil {
+		return false, apperrors.Unavailable("role.user_resource_permission", err)
+	}
+	for _, resource := range resources {
+		if resourcePathMatches(path, resource.Url) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// resourcePathMatches keeps the existing Casbin keyMatch wildcard behavior:
+// a pattern without '*' is exact, while '*' matches any remaining suffix.
+func resourcePathMatches(path, pattern string) bool {
+	wildcard := strings.IndexByte(pattern, '*')
+	if wildcard < 0 {
+		return path == pattern
+	}
+	return len(path) >= wildcard && path[:wildcard] == pattern[:wildcard]
+}
+
 func containsFilter(column, value string) (string, []interface{}) {
 	if strings.TrimSpace(value) == "" {
 		return "", nil

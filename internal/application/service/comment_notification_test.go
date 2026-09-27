@@ -75,6 +75,7 @@ func (f notificationUsers) UpdateNotifyCollection(context.Context, int, int) err
 func (f notificationUsers) UpdateNotifyStudioActivation(context.Context, int, int) error { return nil }
 func (f notificationUsers) UpdateRole(context.Context, int, string, []int) error         { return nil }
 func (f notificationUsers) UpdateDisable(context.Context, int, int) error                { return nil }
+func (f notificationUsers) IsEnabled(context.Context, int) (bool, error)                 { return true, nil }
 func (f notificationUsers) FindAuthByUserInfoID(context.Context, int) (entity.TUserAuth, error) {
 	return entity.TUserAuth{}, nil
 }

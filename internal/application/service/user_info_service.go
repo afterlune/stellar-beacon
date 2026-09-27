@@ -2,6 +2,7 @@ package service
 
 import (
 	"container/list"
+	"context"
 	"errors"
 	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
 	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
@@ -246,6 +247,12 @@ func (u *MyUserInfoService) UpdateUserDisable(c *gin.Context) model.ResultVO {
 	if err := u.userInfoRepository().UpdateDisable(c.Request.Context(), vo.Id, vo.IsDisable); err != nil {
 		return model.ResultFromError(err)
 	}
+	if vo.IsDisable != 0 {
+		if err := u.revokeUserSessions(c.Request.Context(), vo.Id); err != nil {
+			slog.ErrorContext(c.Request.Context(), "revoke disabled user sessions failed", "userInfoId", vo.Id, "error", err)
+			return model.ResultFromError(err)
+		}
+	}
 	return model.ResultOk()
 }
 
@@ -312,10 +319,37 @@ func (u *MyUserInfoService) RemoveOnlineUser(c *gin.Context) model.ResultVO {
 	if u.cache == nil {
 		return model.ResultFail()
 	}
-	if err := u.cache.HDel(c.Request.Context(), LoginUser, strconv.Itoa(auth.Id)); err != nil {
-		return model.ResultFail()
+	if err := u.revokeAuthSession(c.Request.Context(), auth.Id); err != nil {
+		slog.ErrorContext(c.Request.Context(), "revoke online user session failed", "userInfoId", id, "error", err)
+		return model.ResultFromError(err)
 	}
 	return model.ResultOk()
+}
+
+func (u *MyUserInfoService) revokeUserSessions(ctx context.Context, userInfoID int) error {
+	auth, err := u.userInfoRepository().FindAuthByUserInfoID(ctx, userInfoID)
+	if err != nil {
+		if apperrors.IsKind(err, apperrors.KindNotFound) {
+			return nil
+		}
+		return err
+	}
+	return u.revokeAuthSession(ctx, auth.Id)
+}
+
+func (u *MyUserInfoService) revokeAuthSession(ctx context.Context, authID int) error {
+	if u.cache == nil {
+		return apperrors.Unavailable("user_info.revoke_session", nil)
+	}
+	key := strconv.Itoa(authID)
+	var revokeErrors []error
+	if err := u.cache.HDel(ctx, LoginUser, key); err != nil {
+		revokeErrors = append(revokeErrors, err)
+	}
+	if err := u.cache.Delete(ctx, RefreshTokenPrefix+key); err != nil {
+		revokeErrors = append(revokeErrors, err)
+	}
+	return errors.Join(revokeErrors...)
 }
 
 func (u *MyUserInfoService) GetUserInfoById(c *gin.Context) model.ResultVO {

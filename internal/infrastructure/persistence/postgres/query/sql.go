@@ -46,9 +46,17 @@ const (
 	ListMenusByUserInfoId = "SELECT DISTINCT m.id, name, path, component, icon, order_num, parent_id, is_hidden FROM t_user_role ur JOIN t_role_menu rm ON ur.role_id = rm.role_id JOIN t_menu m ON rm.menu_id = m.id WHERE user_id = ?"
 
 	// role
-	ListResourceRoles     = "SELECT re.id AS id, url, request_method FROM t_resource re WHERE re.parent_id IS NOT NULL AND is_anonymous = 0 ORDER BY id ASC"
-	ResourceRoles         = "SELECT role_name FROM t_resource re LEFT JOIN t_role_resource rr ON re.id = rr.resource_id LEFT JOIN t_role ro ON rr.role_id = ro.id WHERE re.parent_id IS NOT NULL AND is_anonymous = 0 AND re.id = ?"
-	ListRolesByUserInfoId = "SELECT role_name FROM t_role r LEFT JOIN t_user_role ur ON r.id = ur.role_id WHERE ur.user_id = ?"
+	ListResourceRoles           = "SELECT re.id AS id, url, request_method FROM t_resource re WHERE re.parent_id IS NOT NULL AND is_anonymous = 0 ORDER BY id ASC"
+	ResourceRoles               = "SELECT role_name FROM t_resource re LEFT JOIN t_role_resource rr ON re.id = rr.resource_id LEFT JOIN t_role ro ON rr.role_id = ro.id WHERE re.parent_id IS NOT NULL AND is_anonymous = 0 AND re.id = ?"
+	ListRolesByUserInfoId       = "SELECT role_name FROM t_role r LEFT JOIN t_user_role ur ON r.id = ur.role_id WHERE ur.user_id = ?"
+	ListUserResourcePermissions = `SELECT DISTINCT re.url, re.request_method
+		FROM t_user_info ui
+		JOIN t_user_role ur ON ur.user_id = ui.id
+		JOIN t_role r ON r.id = ur.role_id
+		JOIN t_role_resource rr ON rr.role_id = r.id
+		JOIN t_resource re ON re.id = rr.resource_id
+		WHERE ui.id = ? AND ui.is_disable = 0 AND r.is_disable = 0 AND re.is_anonymous = 0
+			AND upper(re.request_method) = upper(?)`
 
 	// tag
 	ListTags       = "SELECT min(t.id) AS id, min(t.tag_name) AS tag_name, COUNT(DISTINCT aat.article_id) AS count FROM t_tag t LEFT JOIN t_article_tag aat ON t.id = aat.tag_id LEFT JOIN t_article a ON a.id = aat.article_id AND a.is_delete = 0 AND a.status = 1 AND a.moderation_status = 'visible' GROUP BY lower(btrim(t.tag_name)) HAVING COUNT(DISTINCT aat.article_id) > 0 ORDER BY count DESC, min(t.tag_name)"

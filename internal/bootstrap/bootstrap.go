@@ -409,6 +409,7 @@ func Initialize(parent context.Context) (*Runtime, error) {
 		SystemMonitor:      service.NewSystemMonitorService(monitorCollector),
 	})
 	middlewares.ConfigureRoleRepository(role)
+	middlewares.ConfigureUserInfoRepository(userInfo)
 	middlewares.ConfigureUserAuthService(userAuthService)
 	newsletterDone := make(chan struct{})
 	go func() {

@@ -615,6 +615,91 @@ SELECT setval(pg_get_serial_sequence('t_talk', 'id'), (SELECT MAX(id) FROM t_tal
 	if err != nil || len(roles) != 1 || roles[0] != "user" {
 		t.Fatalf("unexpected role repository result: roles=%v err=%v", roles, err)
 	}
+	roleRepo := NewRoleRepository(xormEngine)
+	allowed, err := roleRepo.HasUserResourcePermission(ctx, 1, "/integration", "GET")
+	if err != nil || !allowed {
+		t.Fatalf("assigned resource must grant its method: allowed=%v err=%v", allowed, err)
+	}
+	allowed, err = roleRepo.HasUserResourcePermission(ctx, 1, "/integration", "POST")
+	if err != nil || allowed {
+		t.Fatalf("resource grant must be method-specific: allowed=%v err=%v", allowed, err)
+	}
+	allowed, err = roleRepo.HasUserResourcePermission(ctx, 2, "/integration", "GET")
+	if err != nil || allowed {
+		t.Fatalf("unassigned user must not inherit a resource grant: allowed=%v err=%v", allowed, err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM t_role_resource WHERE id = 1`); err != nil {
+		t.Fatalf("remove test resource grant: %v", err)
+	}
+	allowed, err = roleRepo.HasUserResourcePermission(ctx, 1, "/integration", "GET")
+	if err != nil || allowed {
+		t.Fatalf("resource revocation must take effect on the next check: allowed=%v err=%v", allowed, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (1, 1, 1)`); err != nil {
+		t.Fatalf("restore test resource grant: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_resource SET url = '/integration/*' WHERE id = 1`); err != nil {
+		t.Fatalf("set wildcard resource path: %v", err)
+	}
+	allowed, err = roleRepo.HasUserResourcePermission(ctx, 1, "/integration/item", "GET")
+	if err != nil || !allowed {
+		t.Fatalf("resource wildcard must match descendant paths: allowed=%v err=%v", allowed, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_role SET is_disable = 1 WHERE id = 1`); err != nil {
+		t.Fatalf("disable test role: %v", err)
+	}
+	allowed, err = roleRepo.HasUserResourcePermission(ctx, 1, "/integration/item", "GET")
+	if err != nil || allowed {
+		t.Fatalf("disabled role must not grant a resource: allowed=%v err=%v", allowed, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_role SET is_disable = 0 WHERE id = 1`); err != nil {
+		t.Fatalf("restore test role: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_user_info SET is_disable = 1 WHERE id = 1`); err != nil {
+		t.Fatalf("disable test user: %v", err)
+	}
+	allowed, err = roleRepo.HasUserResourcePermission(ctx, 1, "/integration/item", "GET")
+	if err != nil || allowed {
+		t.Fatalf("disabled user must not retain resource grants: allowed=%v err=%v", allowed, err)
+	}
+	enabled, err := NewUserInfoRepo(xormEngine).IsEnabled(ctx, 1)
+	if err != nil || enabled {
+		t.Fatalf("disabled user status query = (%v, %v), want (false, nil)", enabled, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_user_info SET is_disable = 0 WHERE id = 1`); err != nil {
+		t.Fatalf("restore test user: %v", err)
+	}
+	enabled, err = NewUserInfoRepo(xormEngine).IsEnabled(ctx, 1)
+	if err != nil || !enabled {
+		t.Fatalf("enabled user status query = (%v, %v), want (true, nil)", enabled, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE t_resource SET url = '/integration' WHERE id = 1`); err != nil {
+		t.Fatalf("restore resource path: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO t_role (id, role_name, is_disable) VALUES (90, 'admin', 0);
+INSERT INTO t_user_role (id, user_id, role_id) VALUES (90, 2, 90);
+INSERT INTO t_resource (id, resource_name, url, request_method, parent_id, is_anonymous) VALUES
+    (90, 'admin GET', '/admin/*', 'GET', 1, 0),
+    (91, 'admin POST', '/admin/*', 'POST', 1, 0),
+    (92, 'admin PUT', '/admin/*', 'PUT', 1, 0),
+    (93, 'admin DELETE', '/admin/*', 'DELETE', 1, 0);
+INSERT INTO t_role_resource (id, role_id, resource_id) VALUES (90, 90, 90), (91, 90, 91), (92, 90, 92), (93, 90, 93);`); err != nil {
+		t.Fatalf("seed admin wildcard resource grants: %v", err)
+	}
+	for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
+		allowed, err := roleRepo.HasUserResourcePermission(ctx, 2, "/admin/articles/42", method)
+		if err != nil || !allowed {
+			t.Fatalf("default admin wildcard must grant %s: allowed=%v err=%v", method, allowed, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `
+DELETE FROM t_role_resource WHERE role_id = 90;
+DELETE FROM t_user_role WHERE id = 90;
+DELETE FROM t_resource WHERE id BETWEEN 90 AND 93;
+DELETE FROM t_role WHERE id = 90;`); err != nil {
+		t.Fatalf("remove admin wildcard fixtures: %v", err)
+	}
 	menus, err := NewMenuRepo(xormEngine).ListByUserInfoID(ctx, 1)
 	if err != nil || len(menus) != 1 || menus[0].Name != "integration menu" {
 		t.Fatalf("unexpected menu repository result: menus=%v err=%v", menus, err)
