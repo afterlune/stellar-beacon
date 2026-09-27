@@ -1,0 +1,323 @@
+/* Header */
+#App-Wrapper .header-container {
+  z-index: 40;
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  border-bottom: 1px solid transparent;
+  background: transparent;
+}
+
+#App-Wrapper .header-container .site-header {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  width: min(100%, calc(var(--page-max) + 200px));
+  min-height: var(--header-h);
+  max-width: calc(var(--page-max) + 200px);
+  margin: 0 auto;
+  padding: 14px clamp(20px, 2vw, 32px);
+}
+
+#App-Wrapper .site-header > a {
+  flex: 0 1 280px;
+  min-width: 0;
+  max-width: 280px;
+}
+
+#App-Wrapper .site-header > a .logo-mark,
+#App-Wrapper .site-header > a .logo-copy {
+  width: 100%;
+  min-width: 0;
+}
+
+#App-Wrapper .site-header > a .logo-copy {
+  overflow: hidden;
+}
+
+#App-Wrapper .site-header > a .logo-name,
+#App-Wrapper .site-header > a .logo-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#App-Wrapper .site-header > nav {
+  min-width: 0;
+}
+
+#App-Wrapper .site-navigation {
+  container-name: primary-navigation;
+  container-type: inline-size;
+}
+
+#App-Wrapper .header-container.is-stuck {
+  border-bottom-color: var(--border-hairline);
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+/* Inner pages start below the header instead of letting the page heading
+   visually run underneath a transparent navigation bar. */
+#App-Wrapper .header-container.is-inner {
+  border-bottom-color: var(--border-hairline);
+  background: var(--surface-solid);
+}
+
+#App-Wrapper .header-container.is-inner .site-header {
+  background: var(--surface-solid);
+  border-bottom-color: transparent;
+}
+
+#App-Wrapper .logo-mark {
+  gap: 12px;
+  padding: 0;
+}
+
+#App-Wrapper .logo-name {
+  color: var(--header-fg);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
+#App-Wrapper .logo-sub {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  line-height: 1.5;
+}
+
+#App-Wrapper .brand-mark {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+#App-Wrapper.theme-light .header-container:not(.is-stuck),
+.theme-light #App-Wrapper .header-container:not(.is-stuck) {
+  --header-fg: var(--text-bright);
+}
+
+#App-Wrapper.theme-light .future-banner__index,
+#App-Wrapper.theme-light .future-banner__signal,
+.theme-light #App-Wrapper .future-banner__index,
+.theme-light #App-Wrapper .future-banner__signal {
+  color: var(--text-dim);
+}
+
+#App-Wrapper .nav-list {
+  gap: 6px;
+  min-width: 0;
+  padding-inline: 0;
+  color: var(--header-fg);
+  text-shadow: none;
+  overflow: visible;
+  list-style: none;
+}
+
+#App-Wrapper .nav-list > li {
+  padding: 0;
+}
+
+#App-Wrapper .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--header-fg) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--header-fg) 6%, transparent);
+  color: var(--header-fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  backdrop-filter: blur(12px);
+}
+
+#App-Wrapper .nav-link::before {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--header-fg) 9%, transparent);
+}
+
+#App-Wrapper .nav-link-active {
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--header-fg) 8%, transparent));
+  color: var(--header-fg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 0 20px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+#App-Wrapper .nav-link-active::after {
+  right: 12px;
+  bottom: 1px;
+  left: 12px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+
+#App-Wrapper .nav-index {
+  color: color-mix(in srgb, var(--header-fg) 52%, transparent);
+  font-size: 8px;
+  letter-spacing: .08em;
+}
+
+#App-Wrapper .nav-icon {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
+
+#App-Wrapper .nav-label { position: relative; z-index: 1; }
+
+@media (min-width: 1280px) {
+  #App-Wrapper .nav-label { display: none; }
+  #App-Wrapper .nav-index { display: none; }
+  #App-Wrapper .nav-link { gap: 0; padding-inline: 7px; }
+}
+
+@container primary-navigation (min-width: 744px) {
+  #App-Wrapper .site-navigation:not(.is-english) .nav-label,
+  #App-Wrapper .site-navigation:not(.is-english) .nav-index {
+    display: initial;
+  }
+}
+
+@container primary-navigation (min-width: 1000px) {
+  #App-Wrapper .site-navigation.is-english .nav-label,
+  #App-Wrapper .site-navigation.is-english .nav-index {
+    display: initial;
+  }
+}
+
+@container primary-navigation (min-width: 744px) {
+  #App-Wrapper .nav-list {
+    justify-content: center;
+    gap: 6px;
+  }
+  #App-Wrapper .nav-link { gap: 4px; padding-inline: 6px; }
+}
+
+#App-Wrapper .header-controls {
+  position: static;
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-left: auto;
+}
+
+#App-Wrapper .header-controls > .ob-dropdown {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--header-fg);
+}
+
+#App-Wrapper .header-controls > .ob-dropdown:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+#App-Wrapper .header-controls .svg-icon {
+  width: 17px;
+  height: 17px;
+}
+
+@media (min-width: 1280px) {
+  #App-Wrapper .header-controls .header-control-menu {
+    display: none;
+  }
+}
+
+@media (min-width: 1280px) and (max-width: 1439px) {
+  #App-Wrapper .header-container .site-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 20px;
+    row-gap: 8px;
+  }
+
+  #App-Wrapper .site-header > a {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #App-Wrapper .site-header > nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  #App-Wrapper .site-header > .header-controls {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 1440px) and (max-width: 1599px) {
+  #App-Wrapper .header-container .site-header { gap: 16px; }
+  #App-Wrapper .site-header > a { flex: 0 0 160px; max-width: 160px; }
+  #App-Wrapper .header-controls { gap: 4px; }
+}
+
+.article-feed-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 1024px) {
+  .article-feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .article-feed-grid { grid-template-columns: 1fr; gap: 14px; }
+}
+
+#App-Wrapper ~ .App-Mobile-sidebar,
+.App-Mobile-sidebar {
+  z-index: 60;
+  /* The drawer stays mounted while closed. Painting a background here covers
+     the page behind it on mobile, so the panel look lives on the inner
+     wrapper and the container is only revealed while open. */
+  background: transparent;
+  visibility: hidden;
+}
+
+#App-Wrapper ~ .App-Mobile-sidebar.is-open,
+.App-Mobile-sidebar.is-open {
+  visibility: visible;
+}
+
+.App-Mobile-wrapper {
+  width: min(320px, 86vw);
+  padding: 28px 20px 0;
+  border-right: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+}
+
+.App-Mobile-wrapper .circle-avatar,
+.App-Mobile-wrapper .ob-avatar {
+  width: 88px;
+  height: 88px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 50%;
+  box-shadow: none;
+}

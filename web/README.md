@@ -1,42 +1,36 @@
-# Web 前端
+# 前端工作区
 
-本目录包含两个独立的 Vue 应用：
+`apps/blog` 是博客前台，`apps/admin-next` 是管理台；`packages/` 放共享 API 契约和请求客户端。
 
-- `blog`：Vue 3 博客前台
-- `admin`：Vue 2 管理后台
+## 安装与构建
 
-两个应用均使用相对路径访问 `/api`。本地开发时，`vue.config.js` 默认将 `/api` 代理到后端的自签名 HTTPS 地址 `https://localhost:7777`，并跳过本地证书校验，也可以通过 `VUE_APP_API_TARGET` 覆盖。
+在 `web` 目录执行：
+
+```shell
+npm ci
+npm run build:blog
+npm run build:admin
+```
+
+构建结果位于 `apps/blog/dist` 和 `apps/admin-next/dist`，不提交到 Git。
 
 ## 本地开发
 
-在项目根目录分别执行：
-
 ```shell
-cd web/blog
-npm ci
-npm run serve
+npm run serve --workspace=@stellar-beacon/blog
+npm run serve --workspace=@stellar-beacon/admin-next
 ```
 
-```shell
-cd web/admin
-npm ci
-npm run serve
+博客前台默认使用 8080 端口，管理台默认使用 8082 端口。前台 API 代理地址由 `VITE_API_TARGET` 设置；管理台优先读取 `VITE_ADMIN_API_TARGET`，未设置时使用 `VITE_API_TARGET`。代理保留 `/api/v1` 路径。
+
+前台样式令牌和组件基元位于 `apps/blog/src/styles/`，设计约定见 [`docs/design/blog-frontend.md`](../docs/design/blog-frontend.md)。
+
+## 隔离联调
+
+从仓库根目录运行：
+
+```powershell
+pwsh ./scripts/integration/verify.ps1
 ```
 
-## 构建
-
-```shell
-cd web/blog
-npm ci
-npm run build
-```
-
-```shell
-cd web/admin
-npm ci
-npm run build
-```
-
-构建结果分别位于 `web/blog/dist` 和 `web/admin/dist`。生产部署时，将它们复制到现有 Caddy 静态目录约定的 `blog` 和 `admin` 目录；本仓库不包含构建产物，也不执行远程 SSH 部署。
-
-完整联调请使用仓库根目录的 `scripts/integration-up.ps1`、`integration-seed.ps1` 和 `integration-smoke.ps1`。这些脚本只操作隔离的 `benetnasch-integration` Compose 项目，不会改动现有 Caddy 或容器。
+脚本会重建隔离联调栈、迁移并准备测试数据，然后运行前后台集成流程和前台视觉检查。该栈使用独立 Compose 项目；详细说明见[部署手册](../docs/runbooks/deployment.md#隔离联调)。

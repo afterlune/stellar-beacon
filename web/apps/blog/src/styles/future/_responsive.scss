@@ -1,0 +1,188 @@
+@media (max-width: 1023px) {
+  #App-Wrapper .home-hero {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+    padding: 72px 36px 48px;
+  }
+
+  #App-Wrapper .home-hero__copy {
+    width: 100%;
+  }
+
+  #App-Wrapper .home-hero__console {
+    margin-top: 12px;
+  }
+
+  #App-Wrapper .header-container .site-header {
+    gap: 16px;
+  }
+
+  #App-Wrapper .header-container .header-control-menu {
+    display: flex;
+  }
+
+  #App-Wrapper .main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #App-Wrapper .main-grid > :last-child {
+    display: none;
+  }
+
+  #App-Wrapper .photo-wrap {
+    column-count: 3;
+  }
+}
+
+@media (max-width: 767px) {
+  #App-Wrapper .app-container {
+    padding-inline: 16px;
+  }
+
+  #App-Wrapper .header-container {
+    margin-inline: -16px;
+    width: calc(100% + 32px);
+  }
+
+  #App-Wrapper .app-banner.future-banner {
+    height: var(--banner-h-sm);
+  }
+
+  .future-banner__index,
+  .future-banner__signal {
+    bottom: 24px;
+    font-size: 9px;
+  }
+
+  #App-Wrapper .post-header {
+    min-height: 132px;
+    padding: 30px 0 22px;
+  }
+
+  #App-Wrapper .post-title {
+    font-size: clamp(2.25rem, 13vw, 4rem);
+  }
+
+  #App-Wrapper .article,
+  #App-Wrapper .feature-article {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 14px;
+    padding: 18px 0;
+  }
+
+  #App-Wrapper .article-thumbnail,
+  #App-Wrapper .feature-thumbnail,
+  #App-Wrapper .article-thumbnail-fallback {
+    min-height: 92px;
+  }
+
+  #App-Wrapper .article-thumbnail img,
+  #App-Wrapper .feature-thumbnail img {
+    min-height: 0;
+  }
+
+  #App-Wrapper .article-content .article-title,
+  #App-Wrapper .feature-content .article-title {
+    margin-top: 9px;
+    font-size: 17px;
+  }
+
+  #App-Wrapper .article-content > p,
+  #App-Wrapper .feature-content > p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    font-size: 13px;
+  }
+
+  #App-Wrapper .article-footer {
+    display: none;
+  }
+
+  #App-Wrapper .surface-panel {
+    padding: 18px;
+  }
+
+  #App-Wrapper .photo-wrap {
+    column-count: 2;
+  }
+
+  #App-Wrapper .photo {
+    min-height: 0;
+  }
+
+  #App-Wrapper .talk-item {
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Light-theme readable header, mobile tap targets, footer hairline
+   --------------------------------------------------------------------------- */
+
+/* Inner pages in the light theme show the page background behind the header,
+   so the dark-banner treatment (white meta text + dark scrim) must flip. */
+#App-Wrapper.theme-light .post-header::before {
+  background: radial-gradient(
+    130% 120% at 4% 40%,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 255, 255, 0.34) 54%,
+    rgba(255, 255, 255, 0) 80%
+  );
+}
+
+#App-Wrapper.theme-light .post-header .post-labels > b,
+#App-Wrapper.theme-light .post-header .post-labels ul li,
+#App-Wrapper.theme-light .post-header .post-footer,
+#App-Wrapper.theme-light .post-header .post-footer .text-ob-dim,
+#App-Wrapper.theme-light .post-header .post-stats > span {
+  color: var(--text-normal) !important;
+  text-shadow: none !important;
+}
+
+#App-Wrapper.theme-light .post-title {
+  color: var(--text-title-h1) !important;
+  text-shadow: none !important;
+}
+
+/* Code-copy controls and light-theme primary text need readable foregrounds. */
+#App-Wrapper.theme-light .post-html .copy-to-clipboard-button {
+  color: #55617a;
+}
+
+#App-Wrapper.theme-light .home-hero__action,
+#App-Wrapper.theme-light .first-tab {
+  color: #ffffff !important;
+}
+
+#App-Wrapper.theme-light .post-header .post-footer strong,
+#App-Wrapper.theme-light .post-header .post-footer span {
+  color: var(--text-normal) !important;
+  text-shadow: none !important;
+}
+/* Touch comfort: discovery pills and quick links must clear 44px on mobile. */
+@media (max-width: 700px) {
+  .home-discovery__links a,
+  .home-discovery__quick a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 14px;
+  }
+
+  .article-title a {
+    min-height: 44px;
+  }
+}

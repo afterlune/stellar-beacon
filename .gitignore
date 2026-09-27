@@ -25,7 +25,8 @@ go.work
 .env.*
 !.env.example
 !.env.integration.example
-resource/config-*.local.yaml
+!.env.production.example
+deploy/config/*.local.yaml
 
 # Local integration stack state
 .integration/
@@ -33,10 +34,14 @@ docker-compose.integration.env
 
 # Runtime logs
 *.log
-resource/log/
+resources/log/
 
 # Frontend dependencies, local env files, and build output
 web/**/node_modules/
 web/**/dist/
+web/**/test-results/
 web/**/.env.local
 web/**/.env.*.local
+
+# Local UI review scratch space (CDP plans and screenshots)
+.screenshots/

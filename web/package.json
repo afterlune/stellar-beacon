@@ -1,0 +1,15 @@
+{
+  "name": "@stellar-beacon/web",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "build:blog": "npm run build --workspace=@stellar-beacon/blog",
+    "build:admin": "npm run build --workspace=@stellar-beacon/admin-next",
+    "test:admin": "npm run test:e2e:baseline --workspace=@stellar-beacon/admin-next",
+    "test:integration": "npm run test:e2e:integration --workspace=@stellar-beacon/admin-next"
+  }
+}

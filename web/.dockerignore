@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+**/.env
+
+# 注意：`**/.env.*` 会连带匹配 package-lock.json（`.env` 后跟任意字符），
+# 而生产镜像构建（Dockerfile.production 的 `npm ci`）依赖这个锁文件。
+# 否定规则必须排在最后才生效，否则会被上面的通配符覆盖回去。
+!package-lock.json
+**/.env.*
+*.log

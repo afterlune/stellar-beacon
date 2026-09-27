@@ -1,0 +1,461 @@
+package model
+
+import (
+	"time"
+
+	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+)
+
+type AboutVO struct {
+	Content string `json:"content"`
+}
+
+type ArticlePasswordVO struct {
+	ArticleId       int    `json:"articleId"`
+	ArticlePassword string `json:"articlePassword"`
+}
+
+// ArticleReadSessionVO is the privacy-minimal browser reading report. It has
+// no account, IP, user-agent or referrer field by design.
+type ArticleReadSessionVO struct {
+	SessionID        string  `json:"sessionId"`
+	ActiveMs         int     `json:"activeMs"`
+	MaxScrollPercent float64 `json:"maxScrollPercent"`
+}
+
+// ArticleContinuationEventVO is an anonymous aggregate event from one of the
+// article page's continuation surfaces. It deliberately carries no target,
+// account or browser identifier.
+type ArticleContinuationEventVO struct {
+	EventType  string `json:"eventType"`
+	TargetType string `json:"targetType,omitempty"`
+	TargetId   int    `json:"targetId,omitempty"`
+	Placement  string `json:"placement,omitempty"`
+	Position   int    `json:"position,omitempty"`
+}
+
+type ArticleTopFeaturedVO struct {
+	Id         int `json:"id" form:"id"`
+	IsTop      int `json:"isTop" form:"isTop"`
+	IsFeatured int `json:"isFeatured" form:"isFeatured"`
+}
+
+type ArticleVO struct {
+	Id                 int      `json:"id" form:"id"`
+	CategoryName       string   `json:"categoryName" form:"categoryName"`
+	ArticleCover       string   `json:"articleCover" form:"articleCover"`
+	ArticleTitle       string   `json:"articleTitle" form:"articleTitle"`
+	ArticleContent     string   `json:"articleContent" from:"articleContent"`
+	ArticleContentHTML string   `json:"articleContentHtml" form:"articleContentHtml"`
+	SeriesId           int      `json:"seriesId" form:"seriesId"`
+	SeriesOrder        int      `json:"seriesOrder" form:"seriesOrder"`
+	ScheduledAt        string   `json:"scheduledAt,omitempty" form:"scheduledAt"`
+	TagNames           []string `json:"tagNames" form:"tagNames"`
+	IsTop              int      `json:"isTop" from:"isTop"`
+	IsFeatured         int      `json:"isFeatured" form:"isFeatured"`
+	Status             int      `json:"status" from:"status"`
+	Type               int      `json:"type" form:"type"`
+	Password           string   `json:"password" form:"password"`
+	OriginalUrl        string   `json:"originalUrl" from:"originalUrl"`
+}
+
+type StudioProfileVO struct {
+	Handle   string             `json:"handle"`
+	Nickname string             `json:"nickname"`
+	Intro    string             `json:"intro"`
+	Website  string             `json:"website"`
+	About    string             `json:"about"`
+	Links    []port.ProfileLink `json:"links"`
+}
+
+type StudioActivationVO struct {
+	Started          bool `json:"started"`
+	Collapsed        bool `json:"collapsed"`
+	IdentityComplete bool `json:"identityComplete"`
+	ContentComplete  bool `json:"contentComplete"`
+	ProfileVisited   bool `json:"profileVisited"`
+	Completed        bool `json:"completed"`
+}
+
+type StudioArticleVO struct {
+	Id                 int    `json:"id"`
+	CategoryId         int    `json:"categoryId"`
+	TagIds             []int  `json:"tagIds"`
+	ArticleCover       string `json:"articleCover"`
+	ArticleTitle       string `json:"articleTitle"`
+	ArticleContent     string `json:"articleContent"`
+	ArticleContentHTML string `json:"articleContentHtml"`
+	SeriesId           int    `json:"seriesId"`
+	SeriesOrder        int    `json:"seriesOrder"`
+	ScheduledAt        string `json:"scheduledAt"`
+	Visibility         string `json:"visibility"`
+	Type               int    `json:"type"`
+	Password           string `json:"password"`
+	OriginalUrl        string `json:"originalUrl"`
+}
+
+type StudioTalkVO struct {
+	Id         int    `json:"id"`
+	Content    string `json:"content"`
+	Images     string `json:"images"`
+	IsTop      int    `json:"isTop"`
+	Visibility string `json:"visibility"`
+}
+
+type StudioSeriesVO struct {
+	Id         int    `json:"id"`
+	SeriesName string `json:"seriesName"`
+	SeriesDesc string `json:"seriesDesc"`
+	Cover      string `json:"cover"`
+	Visibility string `json:"visibility"`
+}
+
+type StudioBatchScopeVO struct {
+	Mode          string `json:"mode"`
+	Ids           []int  `json:"ids"`
+	Status        int    `json:"status"`
+	Keywords      string `json:"keywords"`
+	SeriesId      int    `json:"seriesId"`
+	MaxId         int    `json:"maxId"`
+	ExcludeIds    []int  `json:"excludeIds"`
+	ExpectedCount int    `json:"expectedCount"`
+}
+
+type StudioBatchPreviewVO struct {
+	Kind     string `json:"kind"`
+	Status   int    `json:"status"`
+	Keywords string `json:"keywords"`
+	SeriesId int    `json:"seriesId"`
+}
+
+type StudioBatchStatusVO struct {
+	Kind       string             `json:"kind"`
+	Scope      StudioBatchScopeVO `json:"scope"`
+	Visibility string             `json:"visibility"`
+}
+
+type StudioBatchDeleteVO struct {
+	Kind  string             `json:"kind"`
+	Scope StudioBatchScopeVO `json:"scope"`
+}
+
+type ContentAuditFilterVO struct {
+	Current     int    `form:"current"`
+	Size        int    `form:"size"`
+	ContentType string `form:"contentType"`
+	Operation   string `form:"operation"`
+	Result      string `form:"result"`
+	Keywords    string `form:"keywords"`
+	StartDate   string `form:"startDate"`
+	EndDate     string `form:"endDate"`
+}
+
+type StudioTaxonomyVO struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type ModerationVO struct {
+	ContentType string `json:"contentType"`
+	Id          int    `json:"id"`
+	Hidden      bool   `json:"hidden"`
+	Reason      string `json:"reason"`
+}
+
+type DistributionVO struct {
+	Featured   bool `json:"featured"`
+	Newsletter bool `json:"newsletter"`
+}
+type CategoryVO struct {
+	Id           int    `json:"id"`
+	CategoryName string `json:"categoryName"`
+}
+
+// SeriesVO is the admin write payload for an article collection.
+type SeriesVO struct {
+	Id         int    `json:"id" form:"id"`
+	SeriesName string `json:"seriesName" form:"seriesName"`
+	SeriesDesc string `json:"seriesDesc" form:"seriesDesc"`
+	Cover      string `json:"cover" form:"cover"`
+}
+
+// FriendLinkApplyVO is the public application payload. Honeypot is a hidden
+// field: bots fill it, readers never see it.
+type FriendLinkApplyVO struct {
+	LinkName    string `json:"linkName" form:"linkName"`
+	LinkAvatar  string `json:"linkAvatar" form:"linkAvatar"`
+	LinkAddress string `json:"linkAddress" form:"linkAddress"`
+	LinkIntro   string `json:"linkIntro" form:"linkIntro"`
+	Email       string `json:"email" form:"email"`
+	Honeypot    string `json:"website" form:"website"`
+}
+
+// FriendLinkReviewVO approves or rejects pending applications.
+type FriendLinkReviewVO struct {
+	Ids    []int `json:"ids" form:"ids"`
+	Status int   `json:"status" form:"status"`
+}
+
+type CommentVO struct {
+	TopicId        string `json:"topicId" form:"topicId"`
+	CommentContent string `json:"commentContent" form:"commentContent"`
+	ReplyUserId    int    `json:"replyUserId" form:"replyUserId"`
+	ParentId       int    `json:"parentId" form:"parentId"`
+	Type           int    `json:"type" form:"type"`
+}
+
+type ConditionVO struct {
+	Current          int       `json:"current" form:"current"`
+	Size             int       `json:"size" form:"size"`
+	Keywords         string    `json:"keywords" form:"keywords"`
+	CategoryId       int       `json:"categoryId" form:"categoryId"`
+	TagId            int       `json:"tagId" form:"tagId"`
+	AlbumId          int       `json:"albumId" form:"albumId"`
+	LoginType        int       `json:"loginType" form:"loginType"`
+	Type             int       `json:"type" form:"type"`
+	Status           int       `json:"status" form:"status"`
+	ModerationStatus string    `json:"moderationStatus" form:"moderationStatus"`
+	StartTime        time.Time `json:"startTime" form:"startTime"`
+	EndTime          time.Time `json:"endTime" form:"endTime"`
+	IsDelete         int       `json:"isDelete" form:"isDelete"`
+	IsReview         int       `json:"isReview" form:"isReview"`
+	IsTop            int       `json:"isTop" form:"isTop"`
+	IsFeatured       int       `json:"isFeatured" form:"isFeatured"`
+}
+
+type DeleteVO struct {
+	Ids      []int `json:"ids" form:"ids"`
+	IsDelete int   `json:"isDelete" form:"isDelete"`
+}
+
+type EmailVO struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+type FriendLinkVO struct {
+	Id          int    `json:"id"`
+	LinkName    string `json:"linkName"`
+	LinkAvatar  string `json:"linkAvatar"`
+	LinkAddress string `json:"linkAddress"`
+	LinkIntro   string `json:"linkIntro"`
+}
+
+type IsHiddenVO struct {
+	Id       int `json:"id"`
+	IsHidden int `json:"isHidden"`
+}
+
+type JobLogSearchVO struct {
+	JobId     int    `json:"jobId"`
+	JobName   string `json:"jobName"`
+	JobGroup  string `json:"jobGroup"`
+	Status    any    `json:"status"`
+	StartTime string `json:"startTime"`
+	EndTime   string `json:"endTime"`
+}
+
+type JobRunVO struct {
+	Id       int    `json:"id"`
+	JobGroup string `json:"jobGroup"`
+}
+
+type JobSearchVO struct {
+	JobName  string `json:"jobName"`
+	JobGroup string `json:"jobGroup"`
+	Status   *int   `json:"status" form:"status"`
+}
+
+type JobTargetDTO struct {
+	Target      string `json:"target"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CronExample string `json:"cronExample"`
+}
+
+type JobRunOutcomeDTO struct {
+	JobId     int    `json:"jobId"`
+	Target    string `json:"target"`
+	Processed bool   `json:"processed"`
+	Message   string `json:"message"`
+}
+
+type JobStatusVO struct {
+	Id     int `json:"id"`
+	Status int `json:"status"`
+}
+
+type JobVO struct {
+	Id             int    `json:"id"`
+	JobName        string `json:"jobName"`
+	JobGroup       string `json:"jobGroup"`
+	InvokeTarget   string `json:"invokeTarget"`
+	CronExpression string `json:"cronExpression"`
+	MisfirePolicy  int    `json:"misfirePolicy"`
+	Concurrent     int    `json:"concurrent"`
+	Status         int    `json:"status"`
+	Remark         string `json:"remark"`
+}
+
+type MenuVO struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Component string `json:"component"`
+	Icon      string `json:"icon"`
+	OrderNum  int    `json:"orderNum"`
+	ParentId  int    `json:"parentId"`
+	IsHidden  int    `json:"IsHidden"`
+}
+
+type PasswordVO struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
+}
+
+type PhotoVO struct {
+	AlbumId   string   `json:"albumId"`
+	PhotoUrls []string `json:"photoUrls"`
+	PhotoIds  []int    `json:"photoIds"`
+}
+
+type PhotoVO1 struct {
+	AlbumId   int      `json:"albumId"`
+	PhotoUrls []string `json:"photoUrls"`
+	PhotoIds  []int    `json:"photoIds"`
+}
+
+type PhotoAlbumVO struct {
+	Id         int    `json:"id"`
+	AlbumName  string `json:"albumName"`
+	AlbumDesc  string `json:"albumDesc"`
+	AlbumCover string `json:"albumCover"`
+	Status     int    `json:"status"`
+}
+
+type StudioPhotosVO struct {
+	AlbumId   int      `json:"albumId"`
+	PhotoUrls []string `json:"photoUrls"`
+}
+
+type StudioDeletePhotosVO struct {
+	Ids []int `json:"ids"`
+}
+
+type PhotoInfoVO struct {
+	Id        int    `json:"id"`
+	PhotoName string `json:"photoName"`
+	PhotoDesc string `json:"photoDesc"`
+}
+
+type ResourceVO struct {
+	Id            int    `json:"id"`
+	ResourceName  string `json:"resourceName"`
+	Url           string `json:"url"`
+	RequestMethod string `json:"requestMethod"`
+	ParentId      int    `json:"parentId"`
+	IsAnonymous   int    `json:"isAnonymous"`
+}
+
+type ReviewVO struct {
+	Ids      []int `json:"ids"`
+	IsReview int   `json:"isReview"`
+}
+
+type RoleVO struct {
+	Id          int    `json:"id"`
+	RoleName    string `json:"roleName"`
+	ResourceIds []int  `json:"resourceIds"`
+	MenuIds     []int  `json:"menuIds"`
+}
+
+type SubscribeVO struct {
+	UserId      int `json:"userId"`
+	IsSubscribe int `json:"isSubscribe"`
+}
+
+type NewsletterSubscribeVO struct {
+	Email string `json:"email"`
+}
+
+type NewsletterTokenVO struct {
+	Token string `json:"token"`
+}
+
+type NewsletterFilterVO struct {
+	Current int    `form:"current" json:"current"`
+	Size    int    `form:"size" json:"size"`
+	Status  string `form:"status" json:"status"`
+	Keyword string `form:"keyword" json:"keyword"`
+}
+
+type NewsletterStatusVO struct {
+	Id     int    `json:"id"`
+	Status string `json:"status"`
+}
+
+type NewsletterDeliveryFilterVO struct {
+	Current int    `form:"current" json:"current"`
+	Size    int    `form:"size" json:"size"`
+	Status  string `form:"status" json:"status"`
+}
+
+type NewsletterDeliveryRetryVO struct {
+	Id int `json:"id"`
+}
+
+type GrowthEventVO struct {
+	EventName string `json:"eventName"`
+	ArticleId int    `json:"articleId"`
+	Path      string `json:"path"`
+}
+
+type TagVO struct {
+	Id      int    `json:"id"`
+	TagName string `json:"tagName"`
+}
+
+type TalkVO struct {
+	Id      int    `json:"id"`
+	Content string `json:"content"`
+	Images  string `json:"images"`
+	IsTop   int    `json:"isTop"`
+	Status  int    `json:"status"`
+}
+
+type UserDisableVO struct {
+	Id        int `json:"id"`
+	IsDisable int `json:"isDisable"`
+}
+
+type UserInfoVO struct {
+	Nickname string `json:"nickname"`
+	Intro    string `json:"intro"`
+	Website  string `json:"website"`
+}
+
+type UserRoleVO struct {
+	UserInfoId int    `json:"userInfoId"`
+	NickName   string `json:"nickname"`
+	RoleIds    []int  `json:"roleIds"`
+}
+
+type UserVO struct {
+	Username string `json:"username" form:"username"`
+	Password string `json:"password" form:"password"`
+	Code     string `json:"code" form:"code"`
+}
+
+type WebsiteConfigVO struct {
+	Name              string `json:"name"`
+	EnglishName       string `json:"englishName"`
+	Logo              string `json:"logo"`
+	MultiLanguage     int    `json:"multiLanguage"`
+	Notice            string `json:"notice"`
+	WebsiteCreateTime string `json:"websiteCreateTime"`
+	BeianNumber       string `json:"beianNumber"`
+	TouristAvatar     string `json:"touristAvatar"`
+	UserAvatar        string `json:"userAvatar"`
+	IsCommentReview   int    `json:"isCommentReview"`
+	IsEmailNotice     int    `json:"isEmailNotice"`
+}

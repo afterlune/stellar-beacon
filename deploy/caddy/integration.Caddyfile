@@ -1,0 +1,116 @@
+{
+    auto_https off
+}
+
+:80 {
+    handle_path /api {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle_path /api/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle /healthz {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle /readyz {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    @seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|applebot)
+    handle @seoCrawler {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle /sitemap.xml {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+    handle /robots.txt {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+    handle /feed.xml {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle {
+        root * /srv/vue/blog
+        try_files {path} {path}/ /index.html
+        file_server
+        encode gzip zstd
+    }
+}
+
+:8008 {
+    handle_path /api {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle_path /api/* {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle /healthz {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle /readyz {
+        reverse_proxy https://backend:7777 {
+            transport http {
+                tls_insecure_skip_verify
+            }
+        }
+    }
+
+    handle {
+        root * /srv/vue/admin
+        try_files {path} {path}/ /index.html
+        file_server
+        encode gzip zstd
+    }
+}

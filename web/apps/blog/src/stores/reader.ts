@@ -1,0 +1,278 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+
+export interface ReaderTocItem {
+  id: string
+  text: string
+  level: number
+}
+
+export interface ReaderSeriesLink {
+  id: number
+  articleTitle: string
+}
+
+export interface ReaderSeriesContext {
+  id: number
+  name: string
+  articleIds: number[]
+  currentArticleId: number
+  currentIndex: number
+  total: number
+  previous: ReaderSeriesLink | null
+  next: ReaderSeriesLink | null
+}
+
+export interface SeriesProgressEntry {
+  lastArticleId: number | null
+  completedArticleIds: number[]
+  updatedAt: string
+}
+
+export interface SeriesProgressSummary {
+  total: number
+  completedCount: number
+  percent: number
+  lastArticleId: number | null
+  continueArticleId: number | null
+  completedArticleIds: number[]
+}
+
+type SeriesProgressMap = Record<string, SeriesProgressEntry>
+
+export interface ReadingHistoryEntry {
+  articleId: number
+  articleTitle: string
+  seriesId: number | null
+  visitedAt: string
+  progressPercent: number
+}
+
+export const SERIES_PROGRESS_STORAGE_KEY = 'stellar-beacon.reader.series-progress.v1'
+export const READING_HISTORY_STORAGE_KEY = 'stellar-beacon.reader.history.v1'
+export const READING_HISTORY_LIMIT = 50
+
+function readStoredProgress(): SeriesProgressMap {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(SERIES_PROGRESS_STORAGE_KEY)
+    if (!raw) return {}
+    return normalizeProgress(JSON.parse(raw))
+  } catch {
+    return {}
+  }
+}
+
+function normalizeProgress(value: unknown): SeriesProgressMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const result: SeriesProgressMap = {}
+  for (const [seriesId, rawEntry] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^\d+$/.test(seriesId) || !rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue
+    const entry = rawEntry as Record<string, unknown>
+    const lastArticleId = Number(entry.lastArticleId)
+    const completedArticleIds = Array.isArray(entry.completedArticleIds)
+      ? Array.from(new Set(entry.completedArticleIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)))
+      : []
+    result[seriesId] = {
+      lastArticleId: Number.isInteger(lastArticleId) && lastArticleId > 0 ? lastArticleId : null,
+      completedArticleIds,
+      updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : ''
+    }
+  }
+  return result
+}
+
+function readStoredHistory(): ReadingHistoryEntry[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(READING_HISTORY_STORAGE_KEY)
+    if (!raw) return []
+    return normalizeHistory(JSON.parse(raw))
+  } catch {
+    return []
+  }
+}
+
+function normalizeHistory(value: unknown): ReadingHistoryEntry[] {
+  const list = Array.isArray(value) ? value : []
+  const byArticle = new Map<number, ReadingHistoryEntry>()
+  for (const rawEntry of list) {
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue
+    const entry = rawEntry as Record<string, unknown>
+    const articleId = Number(entry.articleId)
+    if (!Number.isInteger(articleId) || articleId <= 0) continue
+    const seriesId = Number(entry.seriesId)
+    const progress = Number(entry.progressPercent)
+    const normalized: ReadingHistoryEntry = {
+      articleId,
+      articleTitle: typeof entry.articleTitle === 'string' ? entry.articleTitle : '',
+      seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null,
+      visitedAt: typeof entry.visitedAt === 'string' ? entry.visitedAt : '',
+      progressPercent: Number.isFinite(progress) ? Math.min(100, Math.max(0, progress)) : 0
+    }
+    const existing = byArticle.get(articleId)
+    if (!existing || normalized.visitedAt >= existing.visitedAt) {
+      byArticle.set(articleId, {
+        ...normalized,
+        progressPercent: Math.max(normalized.progressPercent, existing?.progressPercent || 0)
+      })
+    }
+  }
+  return Array.from(byArticle.values())
+    .sort((left, right) => right.visitedAt.localeCompare(left.visitedAt))
+    .slice(0, READING_HISTORY_LIMIT)
+}
+
+export const useReaderStore = defineStore('readerStore', () => {
+  const tocItems = ref<ReaderTocItem[]>([])
+  const activeHeadingId = ref('')
+  const seriesContext = ref<ReaderSeriesContext | null>(null)
+  const seriesProgress = ref<SeriesProgressMap>(readStoredProgress())
+  const historyEntries = ref<ReadingHistoryEntry[]>(readStoredHistory())
+
+  function persistProgress(): void {
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.setItem(SERIES_PROGRESS_STORAGE_KEY, JSON.stringify(seriesProgress.value))
+    } catch {
+      // Private browsing or a full storage quota must not block reading.
+    }
+  }
+
+  function persistHistory(): void {
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.setItem(READING_HISTORY_STORAGE_KEY, JSON.stringify(historyEntries.value))
+    } catch {
+      // Private browsing or a full storage quota must not block reading.
+    }
+  }
+
+  function recordVisit(visit: { articleId: number; articleTitle: string; seriesId?: number | null }): void {
+    const articleId = Number(visit.articleId)
+    if (!Number.isInteger(articleId) || articleId <= 0) return
+    const seriesId = Number(visit.seriesId)
+    const existing = historyEntries.value.find((entry) => entry.articleId === articleId)
+    const entry: ReadingHistoryEntry = {
+      articleId,
+      articleTitle: String(visit.articleTitle || existing?.articleTitle || ''),
+      seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null,
+      visitedAt: new Date().toISOString(),
+      progressPercent: existing?.progressPercent || 0
+    }
+    historyEntries.value = [entry, ...historyEntries.value.filter((item) => item.articleId !== articleId)]
+      .slice(0, READING_HISTORY_LIMIT)
+    persistHistory()
+  }
+
+  function recordProgress(articleId: number, percent: number): void {
+    const id = Number(articleId)
+    const value = Number(percent)
+    if (!Number.isInteger(id) || id <= 0 || !Number.isFinite(value)) return
+    const clamped = Math.min(100, Math.max(0, value))
+    const existing = historyEntries.value.find((entry) => entry.articleId === id)
+    if (!existing || existing.progressPercent >= clamped) return
+    historyEntries.value = historyEntries.value.map((entry) => (
+      entry.articleId === id ? { ...entry, progressPercent: clamped } : entry
+    ))
+    persistHistory()
+  }
+
+  function clearHistory(): void {
+    historyEntries.value = []
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.removeItem(READING_HISTORY_STORAGE_KEY)
+    } catch {
+      // Private browsing or a full storage quota must not block reading.
+    }
+  }
+
+  function setTocItems(items: ReaderTocItem[]): void {
+    tocItems.value = items
+    activeHeadingId.value = items[0]?.id || ''
+  }
+
+  function setActiveHeading(id: string): void {
+    if (id) activeHeadingId.value = id
+  }
+
+  function setSeriesContext(context: ReaderSeriesContext | null): void {
+    seriesContext.value = context
+  }
+
+  function clearArticleContext(): void {
+    tocItems.value = []
+    activeHeadingId.value = ''
+    seriesContext.value = null
+  }
+
+  function updateEntry(seriesId: number, update: (current: SeriesProgressEntry) => SeriesProgressEntry): void {
+    if (!Number.isInteger(seriesId) || seriesId <= 0) return
+    const key = String(seriesId)
+    const current = seriesProgress.value[key] || { lastArticleId: null, completedArticleIds: [], updatedAt: '' }
+    seriesProgress.value = {
+      ...seriesProgress.value,
+      [key]: update(current)
+    }
+    persistProgress()
+  }
+
+  function markOpened(seriesId: number, articleId: number): void {
+    if (!Number.isInteger(articleId) || articleId <= 0) return
+    updateEntry(seriesId, (current) => ({
+      ...current,
+      lastArticleId: articleId,
+      updatedAt: new Date().toISOString()
+    }))
+  }
+
+  function markCompleted(seriesId: number, articleId: number): void {
+    if (!Number.isInteger(articleId) || articleId <= 0) return
+    updateEntry(seriesId, (current) => ({
+      lastArticleId: articleId,
+      completedArticleIds: Array.from(new Set([...current.completedArticleIds, articleId])),
+      updatedAt: new Date().toISOString()
+    }))
+  }
+
+  function seriesSummary(seriesId: number, articleIds: number[]): SeriesProgressSummary {
+    const orderedIds = Array.from(new Set(articleIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)))
+    const entry = seriesProgress.value[String(seriesId)]
+    const completedSet = new Set(entry?.completedArticleIds || [])
+    const completedArticleIds = orderedIds.filter((id) => completedSet.has(id))
+    const lastArticleId = entry?.lastArticleId && orderedIds.includes(entry.lastArticleId) ? entry.lastArticleId : null
+    const firstUnread = orderedIds.find((id) => !completedSet.has(id)) || null
+    const continueArticleId = lastArticleId && !completedSet.has(lastArticleId)
+      ? lastArticleId
+      : firstUnread || orderedIds[orderedIds.length - 1] || null
+    const total = orderedIds.length
+    const completedCount = completedArticleIds.length
+    return {
+      total,
+      completedCount,
+      percent: total ? Math.round((completedCount / total) * 100) : 0,
+      lastArticleId,
+      continueArticleId,
+      completedArticleIds
+    }
+  }
+
+  return {
+    tocItems,
+    activeHeadingId,
+    seriesContext,
+    seriesProgress,
+    historyEntries,
+    recordVisit,
+    recordProgress,
+    clearHistory,
+    setTocItems,
+    setActiveHeading,
+    setSeriesContext,
+    clearArticleContext,
+    markOpened,
+    markCompleted,
+    seriesSummary
+  }
+})

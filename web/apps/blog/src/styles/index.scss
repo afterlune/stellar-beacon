@@ -1,0 +1,136 @@
+@import './theme-variables.scss';
+
+/* Base css */
+@import 'tailwindcss/base';
+
+/* Components css */
+@import 'tailwindcss/components';
+@import './components/article.scss';
+@import './components/sidebar-box.scss';
+@import './components/search-modal.scss';
+
+/* Utilities css */
+@import 'tailwindcss/utilities';
+
+@import './transitions.scss';
+
+.stroke-ob-bright {
+  stroke: var(--text-bright) !important;
+}
+
+/* Brand utility classes. */
+.brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+.brand-rule {
+  background-image: var(--brand-gradient);
+  height: 3px;
+  border-radius: var(--radius-pill);
+}
+
+/* Surface roles: media, content cards, and recessed controls. */
+.surface-bleed {
+  border-radius: var(--radius-bleed);
+  overflow: hidden;
+}
+
+.surface-card {
+  background-color: var(--surface-1);
+  border: none;
+  border-radius: var(--radius-xl);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
+}
+
+@supports (backdrop-filter: blur(2px)) {
+  /* Limit backdrop blur to short cards; long content uses .surface-panel. */
+  .surface-card {
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  }
+}
+
+.surface-sunken {
+  background-color: var(--surface-2);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+/* Long content surfaces omit backdrop blur. */
+.surface-panel {
+  background-color: var(--surface-1);
+  border: none;
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
+}
+
+.dropdown-menu-panel {
+  background-color: var(--surface-solid);
+  border: none;
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-card);
+}
+
+/* Theme-aware comment surface. */
+.comment-bubble {
+  background-color: var(--surface-2);
+  border: none;
+  color: var(--text-normal);
+}
+
+.diamond-clip-path {
+  clip-path: polygon(50% 3%, 91% 25%, 91% 75%, 50% 97%, 9% 75%, 9% 25%);
+  background: var(--background-trans);
+}
+
+.diamond-icon {
+  @apply w-12 h-12 text-xl flex items-center justify-center text-ob-bright hover:opacity-50 transition cursor-pointer;
+}
+
+html {
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+html::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+html::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 16px;
+}
+
+html::-webkit-scrollbar-track {
+  border: none;
+  background: transparent;
+}
+
+div::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+div::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 16px;
+}
+
+div::-webkit-scrollbar-track {
+  border: none;
+  background: transparent !important;
+}
+
+.is-collapsible {
+  max-height: 1000px;
+  overflow: hidden;
+  transition: all 300ms ease-in-out;
+}
+
+.is-collapsed {
+  max-height: 0;
+}
+
+/* The current front-end visual system. It intentionally loads last so the
+   legacy utility-driven selectors remain functional while the new shell owns
+   the final presentation. */
+@import './future.scss';

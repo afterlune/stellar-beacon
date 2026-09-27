@@ -1,0 +1,3825 @@
+/* ============================================================================
+   星际信标编辑台 · Stellar Beacon — 设计系统
+   ----------------------------------------------------------------------------
+   1. 令牌层 (tokens)       —— 颜色 / 字号 / 间距 / 圆角 / 阴影 / 动效
+   2. 基础层 (base)         —— reset、排版、焦点可见性
+   3. 应用外壳 (shell)      —— 侧边导航、顶栏、内容区
+   4. 页面骨架 (page)       —— 页头、面板、工具栏、栅格
+   5. 数据展示 (table)      —— 表格、列表、图片、标签
+   6. 表单与反馈 (forms)    —— 输入、按钮、弹窗、提示
+   7. 业务组件 (modules)    —— 工作台、仪表盘、监控、登录、媒体
+   8. 暗色主题 (dark)       —— 覆盖层
+   9. 响应式与动效          —— 断点与关键帧
+   ========================================================================== */
+
+/* ============================ 1. 令牌层 ================================== */
+
+:root {
+  font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* 必须走令牌：写死浅色会让暗色主题下 <html> 露出白底
+     （内容比视口短或页面发生滚动时会在顶部/底部露出来）。 */
+  color: var(--admin-ink);
+  background: var(--admin-bg);
+
+  /* — 星空与毛玻璃 —
+     星点用内联 SVG 平铺（零请求、可无限循环），两层不同密度叠出景深。
+     浅色主题默认用墨蓝星点（白色星点在浅底上等于看不见），
+     深色主题再换成亮白星点，见第 8 节。 */
+  --admin-star-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Cg fill='%232a3557'%3E%3Ccircle cx='22' cy='31' r='.9' opacity='.5'/%3E%3Ccircle cx='78' cy='12' r='.7' opacity='.34'/%3E%3Ccircle cx='141' cy='52' r='1' opacity='.46'/%3E%3Ccircle cx='198' cy='25' r='.7' opacity='.3'/%3E%3Ccircle cx='252' cy='66' r='.9' opacity='.42'/%3E%3Ccircle cx='316' cy='38' r='.7' opacity='.32'/%3E%3Ccircle cx='44' cy='94' r='.7' opacity='.3'/%3E%3Ccircle cx='110' cy='122' r='.9' opacity='.4'/%3E%3Ccircle cx='176' cy='92' r='.7' opacity='.28'/%3E%3Ccircle cx='232' cy='136' r='1' opacity='.38'/%3E%3Ccircle cx='294' cy='108' r='.7' opacity='.3'/%3E%3Ccircle cx='28' cy='172' r='.9' opacity='.44'/%3E%3Ccircle cx='90' cy='202' r='.7' opacity='.3'/%3E%3Ccircle cx='154' cy='180' r='.9' opacity='.36'/%3E%3Ccircle cx='214' cy='222' r='.7' opacity='.28'/%3E%3Ccircle cx='272' cy='190' r='1' opacity='.4'/%3E%3Ccircle cx='334' cy='214' r='.7' opacity='.3'/%3E%3Ccircle cx='52' cy='252' r='.7' opacity='.32'/%3E%3Ccircle cx='122' cy='266' r='.9' opacity='.38'/%3E%3Ccircle cx='186' cy='248' r='.7' opacity='.26'/%3E%3Ccircle cx='244' cy='288' r='.9' opacity='.4'/%3E%3Ccircle cx='306' cy='262' r='.7' opacity='.28'/%3E%3Ccircle cx='36' cy='318' r='.9' opacity='.36'/%3E%3Ccircle cx='102' cy='338' r='.7' opacity='.3'/%3E%3Ccircle cx='168' cy='312' r='.9' opacity='.34'/%3E%3Ccircle cx='228' cy='342' r='.7' opacity='.26'/%3E%3Ccircle cx='290' cy='324' r='.9' opacity='.38'/%3E%3Ccircle cx='350' cy='300' r='.7' opacity='.3'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-star-bright: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='820' height='820'%3E%3Cg fill='%23222c4e'%3E%3Ccircle cx='118' cy='88' r='1.5' opacity='.5'/%3E%3Ccircle cx='436' cy='58' r='1.1' opacity='.34'/%3E%3Ccircle cx='678' cy='164' r='1.7' opacity='.48'/%3E%3Ccircle cx='246' cy='228' r='1.2' opacity='.38'/%3E%3Ccircle cx='572' cy='318' r='1.4' opacity='.44'/%3E%3Ccircle cx='86' cy='348' r='1.1' opacity='.32'/%3E%3Ccircle cx='338' cy='420' r='1.6' opacity='.48'/%3E%3Ccircle cx='722' cy='452' r='1.2' opacity='.34'/%3E%3Ccircle cx='172' cy='512' r='1.4' opacity='.42'/%3E%3Ccircle cx='492' cy='566' r='1.1' opacity='.32'/%3E%3Ccircle cx='296' cy='646' r='1.5' opacity='.46'/%3E%3Ccircle cx='36' cy='612' r='1.2' opacity='.32'/%3E%3Ccircle cx='644' cy='702' r='1.3' opacity='.4'/%3E%3Ccircle cx='398' cy='762' r='1.1' opacity='.34'/%3E%3Ccircle cx='128' cy='726' r='1.4' opacity='.42'/%3E%3Ccircle cx='772' cy='268' r='1.2' opacity='.34'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-glass-blur: blur(20px) saturate(150%);
+  --admin-glass-edge: inset 0 1px 0 rgb(255 255 255 / 55%);
+
+  /* — 表面与文字 —（层级：bg < soft < sunken/surface） */
+  --admin-bg: #f4f6fb;
+  --admin-surface: #ffffff;
+  --admin-surface-soft: #f2f5fa;
+  --admin-surface-sunken: #eaeff7;
+  --admin-surface-raised: #ffffff;
+  --admin-ink: #1e2b3f;
+  --admin-ink-strong: #0f1a2e;
+  --admin-muted: #64748b;
+  --admin-subtle: #94a3b8;
+  --admin-readable-subtle: #5f6b7a;
+  --admin-border: #e4e9f2;
+  --admin-border-strong: #ccd6e5;
+  --admin-border-hover: #b6c2d6;
+  --admin-row-hover: #f7f9fe;
+
+  /* — 侧边导航：常态透明，只有悬停/选中才落色 —
+     浅色主题下侧栏本身是蓝底毛玻璃，菜单行若各带一块白底，
+     就会变成一串互不相干的圆角白条；这里统一压成"玻璃上的字"。 */
+  --admin-nav-hover: rgb(79 107 216 / 8%);
+  --admin-nav-active: rgb(79 107 216 / 13%);
+  --admin-nav-active-ring: rgb(79 107 216 / 26%);
+
+  /* — 品牌色阶（靛蓝） — */
+  --admin-brand: #4f6bd8;
+  --admin-brand-hover: #4359c6;
+  --admin-brand-soft: #eef1ff;
+  --admin-brand-soft-strong: #dde4ff;
+  --admin-brand-ink: #35459b;
+
+  /* — 语义色 — */
+  --admin-sage: #2f9e77;
+  --admin-sage-soft: #e7f6ef;
+  --admin-warm: #d9803f;
+  --admin-warm-soft: #fdf1e4;
+  --admin-danger: #d9584a;
+  --admin-danger-soft: #fdeeeb;
+  --admin-info: #3b82c4;
+  --admin-info-soft: #e9f2fb;
+  --admin-violet: #7a5cd6;
+  --admin-violet-soft: #f1ecfd;
+
+  /* — 圆角 — */
+  --admin-radius-xs: 6px;
+  --admin-radius-control: 9px;
+  --admin-radius-card: 14px;
+  --admin-radius-panel: 18px;
+  --admin-radius-pill: 999px;
+
+  /* — 阴影：三级高度，越靠前越"贴桌面" — */
+  --admin-shadow-xs: 0 1px 2px rgb(15 23 42 / 5%);
+  --admin-shadow-card: 0 1px 2px rgb(15 23 42 / 4%), 0 10px 28px -18px rgb(15 23 42 / 22%);
+  --admin-shadow-hover: 0 2px 4px -1px rgb(15 23 42 / 6%), 0 18px 34px -22px rgb(15 23 42 / 32%);
+  --admin-shadow-float: 0 28px 56px -18px rgb(15 23 42 / 26%);
+  --admin-shadow-focus: 0 0 0 3px rgb(79 107 216 / 18%);
+  --admin-overlay: rgb(15 23 42 / 46%);
+
+  /* — 间距节奏 — */
+  --admin-gap-xs: 6px;
+  --admin-gap-sm: 10px;
+  --admin-gap: 16px;
+  --admin-gap-lg: 22px;
+  --admin-gap-xl: 32px;
+
+  /* — 动效 — */
+  --admin-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  /* 与 Arco 侧栏 `width .2s cubic-bezier(.34,.69,.1,1)` 对齐，
+     侧栏内所有跟随收缩的过渡都用这条曲线，动画才是一个整体。 */
+  --admin-ease-sider: cubic-bezier(0.34, 0.69, 0.1, 1);
+  --admin-duration-fast: 140ms;
+  --admin-duration: 200ms;
+  --admin-sider-duration: 200ms;
+
+  /* — 布局尺寸 — */
+  --admin-sider-width: 236px;
+  --admin-sider-collapsed: 72px;
+  --admin-menu-row: 40px;
+  --admin-menu-radius: 9px;
+  --admin-menu-sub-indent: 30px;
+  --admin-topbar-height: 64px;
+  --admin-content-max: 1440px;
+}
+
+/* ============================ 2. 基础层 ================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100dvh;
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  font-size: 14px;
+  line-height: 1.6;
+
+  /* Arco 设计令牌映射：让第三方组件跟随本站语义色 */
+  --gray-1: 249, 250, 252;
+  --gray-2: 243, 245, 249;
+  --gray-3: 230, 234, 241;
+  --gray-4: 211, 218, 230;
+  --gray-5: 152, 162, 179;
+  --gray-6: 102, 112, 133;
+  --gray-7: 71, 84, 103;
+  --gray-8: 52, 64, 84;
+  --gray-9: 29, 41, 57;
+  --gray-10: 16, 24, 40;
+  --arcoblue-1: 238, 241, 255;
+  --arcoblue-2: 224, 230, 255;
+  --arcoblue-3: 202, 212, 255;
+  --arcoblue-4: 168, 184, 250;
+  --arcoblue-5: 122, 145, 236;
+  --arcoblue-6: 79, 107, 216;
+  --arcoblue-7: 63, 87, 186;
+  --arcoblue-8: 49, 69, 155;
+  --arcoblue-9: 36, 52, 122;
+  --arcoblue-10: 24, 35, 88;
+  --primary-1: var(--arcoblue-1);
+  --primary-2: var(--arcoblue-2);
+  --primary-3: var(--arcoblue-3);
+  --primary-4: var(--arcoblue-4);
+  --primary-5: var(--arcoblue-5);
+  --primary-6: var(--arcoblue-6);
+  --primary-7: var(--arcoblue-7);
+  --primary-8: var(--arcoblue-8);
+  --primary-9: var(--arcoblue-9);
+  --primary-10: var(--arcoblue-10);
+  --color-bg-1: var(--admin-bg);
+  --color-bg-2: var(--admin-surface);
+  --color-bg-3: var(--admin-surface-soft);
+  --color-bg-4: #e9edf4;
+  --color-bg-5: var(--admin-surface);
+  --color-bg-white: var(--admin-surface);
+  --color-text-1: var(--admin-ink);
+  --color-text-2: #475467;
+  --color-text-3: var(--admin-muted);
+  --color-text-4: var(--admin-subtle);
+  --color-border: var(--admin-border);
+  --color-border-1: #f0f2f6;
+  --color-border-2: var(--admin-border);
+  --color-border-3: var(--admin-border-strong);
+  --color-border-4: #c1cad9;
+  --color-fill-1: #f9fafc;
+  --color-fill-2: #f3f5f9;
+  --color-fill-3: #e9edf4;
+  --color-fill-4: #dfe5ee;
+  --color-menu-light-bg: var(--admin-surface);
+  --color-secondary: #f0f2f7;
+  --color-secondary-hover: #e8ebf2;
+  --color-secondary-active: #dee3ec;
+  --color-primary-light-1: rgb(var(--primary-1));
+  --color-primary-light-2: rgb(var(--primary-2));
+  --color-primary-light-3: rgb(var(--primary-3));
+  --color-primary-light-4: rgb(var(--primary-4));
+  --color-success-light-1: var(--admin-sage-soft);
+  --color-success-light-2: #d5efe3;
+  --color-warning-light-1: var(--admin-warm-soft);
+  --color-warning-light-2: #fbe3cb;
+  --color-danger-light-1: var(--admin-danger-soft);
+  --color-danger-light-2: #fbdcd7;
+  --border-radius-small: var(--admin-radius-xs);
+  --border-radius-medium: var(--admin-radius-control);
+  --border-radius-large: var(--admin-radius-card);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+:where(button, input, textarea, select, a, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--primary-6) / 55%);
+  outline-offset: 2px;
+  border-radius: var(--admin-radius-xs);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--admin-subtle);
+}
+
+a {
+  color: var(--admin-brand);
+  text-decoration: none;
+  transition: color var(--admin-duration-fast) var(--admin-ease);
+}
+
+a:hover {
+  color: var(--admin-brand-hover);
+}
+
+::selection {
+  background: rgb(var(--primary-3) / 60%);
+}
+
+/* 滚动条：细而克制，避免抢视觉 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--admin-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--admin-radius-pill);
+  background: var(--admin-border-strong);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--admin-subtle);
+  background-clip: content-box;
+}
+
+/* 屏幕阅读器专用文本 */
+.admin-sr-only {
+  width: 1px;
+  height: 1px;
+  position: absolute;
+  overflow: hidden;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ========================= 3. 应用外壳 =================================== */
+
+.admin-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  /* 夜空：柔和的靛蓝天幕 + 两层星点。星点用 background-attachment: fixed，
+     这样滚动内容时星空不动，只有卡片在滑。 */
+  background-color: #e6ecfa;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(120% 95% at 88% -18%, rgb(140 164 255 / 46%) 0%, rgb(140 164 255 / 0%) 58%),
+    radial-gradient(105% 85% at 4% 106%, rgb(116 200 232 / 38%) 0%, rgb(116 200 232 / 0%) 56%),
+    linear-gradient(158deg, #e4eafa 0%, #dce5f8 46%, #d7e2f6 100%);
+  background-attachment: fixed, fixed, fixed, fixed, fixed;
+  background-size: 820px 820px, 360px 360px, auto, auto, auto;
+}
+
+.admin-sider {
+  height: 100dvh;
+  border-right: 1px solid var(--admin-border);
+  background: rgb(255 255 255 / 56%) !important;
+  backdrop-filter: var(--admin-glass-blur);
+  box-shadow: var(--admin-glass-edge);
+  transition: width var(--admin-duration) var(--admin-ease);
+}
+
+.admin-sider .arco-layout-sider-children {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-sider .arco-layout-sider-trigger {
+  display: none;
+}
+
+.admin-shell > .arco-layout {
+  min-width: 0;
+  min-height: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* — 品牌区 — */
+.admin-brand {
+  height: var(--admin-topbar-height);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 0 0 auto;
+  padding: 0 18px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--admin-border);
+  color: var(--admin-ink-strong);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  transition: padding var(--admin-sider-duration) var(--admin-ease-sider),
+    gap var(--admin-sider-duration) var(--admin-ease-sider);
+}
+
+/* 收缩后 32px 的 logo 在 72px 轨道里居中：18px → 20px，只挪 2px */
+.admin-sider.arco-layout-sider-collapsed .admin-brand {
+  gap: 0;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.admin-brand-text {
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  line-height: 1.2;
+  transition: opacity var(--admin-sider-duration) var(--admin-ease-sider),
+    max-width var(--admin-sider-duration) var(--admin-ease-sider);
+}
+
+.admin-sider.arco-layout-sider-collapsed .admin-brand-text {
+  max-width: 0;
+  opacity: 0;
+}
+
+.admin-brand-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-brand-tagline {
+  display: block;
+  margin-top: 2px;
+  color: var(--admin-subtle);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* 摇光：斗柄末星。图标本体是 SVG（components/BrandMark.vue），
+   这里只管尺寸、圆角与投影；深浅主题各有一版配色。 */
+.admin-brand-mark {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 9px;
+  box-shadow: 0 6px 16px -7px rgb(79 107 216 / 48%), 0 1px 2px rgb(15 23 42 / 10%);
+}
+
+.admin-sider.arco-layout-sider-collapsed .admin-brand-mark {
+  box-shadow: 0 4px 10px -5px rgb(79 107 216 / 45%);
+}
+
+.admin-login-brand .admin-brand-mark {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  border-radius: 11px;
+}
+
+/* — 侧边导航滚动区 — */
+.admin-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* 细滚动条：展开态菜单很长、收缩态不需要滚动，
+     滚动条越细，切换时行宽的变化就越小（图标 x 不受影响，始终是 27px）。 */
+  scrollbar-width: thin;
+  padding: 12px 12px 16px;
+}
+
+.admin-sider .arco-menu {
+  /* 始终跟随侧栏宽度。Arco 收缩态把菜单硬编码成 48px，
+     点击瞬间内部就会被“吸”到左边，而外层侧栏还在做 200ms 宽度动画，
+     两者不同步正是割裂感的来源。 */
+  width: 100%;
+  padding: 0;
+  /* 菜单本身完全透明：底纹交给侧栏那块毛玻璃，
+     否则 Arco 会把 --color-menu-light-bg（= 纯白画布色）铺上来，
+     在蓝底上切出一条与内容区无关的白带。 */
+  background: transparent;
+}
+
+/* Arco 用这一组变量给菜单行/子菜单头/弹层上色，一并置空，
+   浅色主题下才不会再出现“每行一个白圆角块”。 */
+.admin-sider {
+  --color-menu-light-bg: transparent;
+  --color-menu-dark-bg: transparent;
+  --color-menu-light-bg-hover: transparent;
+  --color-menu-light-bg-selected: transparent;
+  --color-menu-dark-bg-hover: transparent;
+  --color-menu-dark-bg-selected: transparent;
+}
+
+.admin-sider .arco-menu-item,
+.admin-sider .arco-menu-inline-header,
+.admin-sider .arco-menu-pop-header,
+.admin-sider .arco-menu-inline,
+.admin-sider .arco-menu-inline > div,
+.admin-sider .arco-menu-group,
+.admin-sider .arco-menu-group-title,
+.admin-sider .arco-menu-item-inner,
+.admin-sider .arco-menu-title {
+  background: transparent;
+}
+
+/* 菜单内边距两态一致（Arco 收缩态会改成 4px），保证行左边缘不跳 */
+.admin-sider .arco-menu-inner {
+  padding: 0;
+}
+
+.admin-nav-label {
+  margin: 14px 10px 6px;
+  color: var(--admin-subtle);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  max-height: 18px;
+  overflow: hidden;
+  transition: opacity var(--admin-sider-duration) var(--admin-ease-sider),
+    max-height var(--admin-sider-duration) var(--admin-ease-sider),
+    margin var(--admin-sider-duration) var(--admin-ease-sider);
+}
+
+/* 收缩态下收起分组标题，让“工作区”这行平滑让位，而不是整块消失 */
+.admin-sider.arco-layout-sider-collapsed .admin-nav-label {
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+}
+
+.admin-nav-label:first-child {
+  margin-top: 2px;
+}
+
+/* 行的盒模型：叶子项 / 子菜单父项 / 收缩态弹层父项三者完全一致。
+   收缩时 Arco 会把父项的 class 从 arco-menu-inline-header 换成
+   arco-menu-pop-header，如果只样式化前者，切换那一帧高度、间距、
+   圆角、配色都会瞬间变化 —— 这也是“前后割裂”的来源之一。 */
+.admin-sider .arco-menu-item,
+.admin-sider .arco-menu-inline-header,
+.admin-sider .arco-menu-pop-header {
+  height: var(--admin-menu-row);
+  /* 行距两态一致：收缩态若单独加大间距，菜单行会整列跳动（节点是重建的） */
+  margin: 2px 0;
+  /* 左右内边距两态一致（15px）：收缩后 72px 轨道里行宽 48px，
+     图标正好居中；展开态同样 15px，图标 x 全程不变，收缩/展开都不会横向跳动 */
+  padding: 0 15px;
+  overflow: hidden;
+  border-radius: var(--admin-menu-radius);
+  color: #5a6779;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: var(--admin-menu-row);
+  white-space: nowrap;
+  transition: color var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease),
+    margin var(--admin-sider-duration) var(--admin-ease-sider),
+    padding var(--admin-sider-duration) var(--admin-ease-sider);
+}
+
+/* 中层分组头：比子项更“实”，靠字重与颜色分层，不靠底色块 */
+.admin-sider .arco-menu-inline-header,
+.admin-sider .arco-menu-pop-header {
+  color: var(--admin-ink);
+  font-weight: 650;
+}
+
+/* 悬停：只给一层极淡的品牌色，不做成按钮 */
+.admin-sider .arco-menu-item:hover,
+.admin-sider .arco-menu-inline-header:hover,
+.admin-sider .arco-menu-pop-header:hover {
+  color: var(--admin-brand);
+  background: var(--admin-nav-hover);
+}
+
+/* 选中项：整行淡品牌底 + 外圈细边，是整份菜单里唯一"有实体"的行 */
+.admin-sider .arco-menu-item.arco-menu-selected {
+  color: var(--admin-brand-ink);
+  font-weight: 650;
+  background: var(--admin-nav-active);
+  box-shadow: inset 0 0 0 1px var(--admin-nav-active-ring);
+}
+
+.admin-sider .arco-menu-item.arco-menu-selected::before {
+  content: "";
+  width: 3px;
+  height: 16px;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  border-radius: 0 3px 3px 0;
+  background: var(--admin-brand);
+  transform: translateY(-50%);
+}
+
+/* — 菜单图标：叶子项 / 子菜单父项 / 子项必须落在同一条图标竖线上 —
+   这一层曾经出过两个错位来源，都会让收缩态下的图标看起来“歪”：
+   1) Arco 给 .arco-icon 预留了 16px 右边距，而我们把图标放进固定 18px 的槽，
+      外边距溢出槽位后被 flex 居中挤向左侧；
+   2) 给固定宽度的槽再加 margin-right，留白被算进槽宽，同样把图标挤偏。
+   因此：槽宽交给内容决定，槽内 svg 的 margin 一律清零，间距只由 .admin-menu-icon 提供。 */
+
+/* 顶层项与分组头的左右内边距由上面的盒模型规则统一给出（两态一致），
+   这里只保留注释以免以后又加回不一致的值。 */
+
+/* 子项缩进：父级行内边距 15px + 图标 18px + 间距 10px = 43px，
+   子项同样从 43px 起排，两级图标落在同一条竖线上（父项没有图标时
+   文字也与父项标题对齐）。 */
+.admin-sider .arco-menu .arco-menu-inline .arco-menu-item {
+  padding-left: var(--admin-menu-sub-indent);
+}
+
+/* Arco 自带的图标容器（仅叶子项会生成）：宽度自适应内容 */
+.admin-sider .arco-menu .arco-menu-item .arco-menu-icon,
+.admin-sider .arco-menu .arco-menu-inline-header .arco-menu-icon,
+.admin-sider .arco-menu .arco-menu-pop-header .arco-menu-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 18px;
+  margin-right: 0;
+  color: inherit;
+  line-height: 1;
+}
+
+/* Arco 的 .arco-icon 右边距必须清零，否则图标会被挤出 18px 槽位 */
+.admin-sider .arco-menu .admin-menu-icon .arco-icon {
+  margin-right: 0;
+}
+
+/* 图标槽：18px 图标 + 固定不收缩，父级 flex 压缩时也不会把图标挤扁 */
+.admin-menu-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  border-radius: 0;
+  color: var(--admin-muted);
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  vertical-align: middle;
+  transition: color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-menu-icon svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.admin-sider .arco-menu-inline-header .admin-menu-icon {
+  color: var(--admin-ink);
+}
+
+.admin-sider .arco-menu-item:hover .admin-menu-icon,
+.admin-sider .arco-menu-inline-header:hover .admin-menu-icon,
+.admin-sider .arco-menu-pop-header:hover .admin-menu-icon {
+  color: var(--admin-brand);
+}
+
+.admin-sider .arco-menu-item.arco-menu-selected .admin-menu-icon {
+  color: var(--admin-brand);
+}
+
+/* 收缩前后行的盒模型完全一致（高度、行距、左右内边距都不变），
+   视觉上只发生“宽度收窄 + 文字淡出”。这是刻意为之：
+   菜单行在收缩时会被 Vue 重建节点，行上的 transition 不会触发，
+   任何两态不同的间距都会表现为整列跳动。 */
+.admin-sider.arco-layout-sider-collapsed .arco-menu .arco-menu-item,
+.admin-sider.arco-layout-sider-collapsed .arco-menu .arco-menu-inline-header,
+.admin-sider.arco-layout-sider-collapsed .arco-menu .arco-menu-pop-header {
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
+.admin-sider.arco-layout-sider-collapsed .arco-menu-item.arco-menu-selected {
+  /* 收缩态行宽只有 48px，内描边会贴着图标，改用纯色块 */
+  box-shadow: none;
+}
+
+/* 菜单文字：独立包裹（子菜单标题原本是裸文本节点，无法参与过渡）。
+   关键：收缩时不要让文字瞬间消失，而是让它跟着行宽被“挤”出去 ——
+   行宽由侧栏宽度驱动、是连续变化的，文字因此会连续收窄到 0；
+   行内边距 15/15 + 图标 18 恰好占满收缩后的 48px，文字最终宽度为 0，
+   不会残留省略号或半个字。Arco 自带的 opacity:0 会破坏这个过程。 */
+.admin-menu-text {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+/* Arco 的标题容器：允许收缩到 0（默认 min-width:auto 会撑住最小内容宽度） */
+.admin-sider .arco-menu-item-inner,
+.admin-sider .arco-menu-title {
+  min-width: 0;
+}
+
+.admin-sider.arco-layout-sider-collapsed .admin-menu-text,
+.admin-sider.arco-layout-sider-collapsed .arco-menu-title,
+.admin-sider.arco-layout-sider-collapsed .arco-menu-item-inner {
+  /* 收缩时菜单行是新建节点，transition 不会触发；用 animation 让标题在
+     120ms 内淡出，与 200ms 的侧栏宽度动画同步收尾，避免中途出现
+     “半个字”的夹生状态，也不会在末尾残留省略号。 */
+  animation: admin-menu-text-out 120ms var(--admin-ease) forwards;
+}
+
+/* 收缩态的父项（弹层头）在 Arco 里是 block，文字不会跟着缩，
+   这里改成 flex，让标题与图标共享同一条收缩逻辑 */
+.admin-sider .arco-menu-pop-header {
+  display: flex;
+  align-items: center;
+}
+
+/* 父项的折叠箭头在收缩态直接隐藏（本身也只剩 0 宽） */
+.admin-sider.arco-layout-sider-collapsed .arco-menu-icon-suffix {
+  display: none;
+}
+
+.admin-sider-collapsed .admin-menu-icon,
+.admin-sider.arco-layout-sider-collapsed .admin-menu-icon {
+  margin-right: 0;
+}
+
+/* — 侧栏账号卡片 — */
+.admin-nav-footer {
+  flex: 0 0 auto;
+  max-height: 150px;
+  margin: 0 12px 14px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface-soft);
+  transition: max-height var(--admin-sider-duration) var(--admin-ease-sider),
+    margin var(--admin-sider-duration) var(--admin-ease-sider),
+    padding var(--admin-sider-duration) var(--admin-ease-sider),
+    opacity var(--admin-sider-duration) var(--admin-ease-sider),
+    border-width var(--admin-sider-duration) var(--admin-ease-sider);
+}
+
+/* 收缩态收起账号信息：用高度过渡让它“让位”，而不是整块瞬间消失 */
+.admin-sider.arco-layout-sider-collapsed .admin-nav-footer {
+  max-height: 0;
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  opacity: 0;
+}
+
+.admin-nav-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.admin-nav-avatar {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--admin-brand-ink);
+  background: var(--admin-brand-soft-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-nav-user-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.admin-nav-user-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-ink);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-nav-user-copy span {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-readable-subtle);
+  font-size: 10.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* — 顶栏 — */
+.admin-topbar {
+  min-height: var(--admin-topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-gap);
+  flex: 0 0 auto;
+  padding: 0 clamp(16px, 2.2vw, 26px);
+  position: relative;
+  z-index: 20;
+  border-bottom: 1px solid var(--admin-border);
+  background: rgb(255 255 255 / 62%);
+  backdrop-filter: var(--admin-glass-blur);
+  box-shadow: var(--admin-glass-edge);
+}
+
+.admin-topbar-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-topbar-context {
+  min-width: 0;
+}
+
+.admin-topbar-title h1 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--admin-ink-strong);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  color: var(--admin-subtle);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.admin-breadcrumb-link {
+  padding: 0;
+  border: 0;
+  color: var(--admin-subtle);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-breadcrumb-link:hover {
+  color: var(--admin-brand);
+}
+
+.admin-breadcrumb-sep {
+  color: var(--admin-subtle);
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.admin-breadcrumb-current {
+  color: var(--admin-brand);
+  font-weight: 650;
+}
+
+.admin-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-icon-button {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--admin-muted);
+  background: transparent;
+  font-size: 17px;
+  cursor: pointer;
+  transition: color var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease),
+    border-color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-icon-button:hover {
+  border-color: var(--admin-border);
+  color: var(--admin-brand);
+  background: var(--admin-surface-soft);
+}
+
+.admin-icon-button[aria-expanded="true"],
+.admin-icon-button.is-active {
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+}
+
+/* — 主题 / 语言切换（AdminShellControls）—
+   顶栏用纯图标；登录页 labelled 时展开成「EN English」这样的胶囊。 */
+.admin-shell-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-lang-label {
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
+.admin-shell-controls.is-labelled .admin-icon-button {
+  width: auto;
+  min-width: 34px;
+  height: 34px;
+  grid-auto-flow: column;
+  gap: 7px;
+  padding: 0 11px;
+  border-color: var(--admin-border);
+  background: var(--admin-surface-soft);
+}
+
+.admin-control-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.admin-search-trigger {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px 0 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  color: var(--admin-readable-subtle);
+  background: var(--admin-surface-soft);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color var(--admin-duration-fast) var(--admin-ease),
+    color var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease),
+    box-shadow var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-search-trigger:hover {
+  border-color: var(--admin-border-strong);
+  color: var(--admin-muted);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-xs);
+}
+
+.admin-search-trigger kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--admin-border);
+  border-radius: 5px;
+  color: var(--admin-readable-subtle);
+  background: var(--admin-surface);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.admin-user {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--admin-ink);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--admin-duration-fast) var(--admin-ease),
+    border-color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-user:hover {
+  border-color: var(--admin-border);
+  background: var(--admin-surface-soft);
+}
+
+.admin-user-meta {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.admin-user-name {
+  max-width: 170px;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-role {
+  color: var(--admin-subtle);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.admin-user-chevron {
+  color: var(--admin-subtle);
+  font-size: 13px;
+}
+
+.admin-user-menu-header {
+  min-width: 210px;
+  padding: 4px 2px 8px;
+  border-bottom: 1px solid var(--admin-border);
+  margin-bottom: 6px;
+}
+
+.admin-user-menu-header strong {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-menu-header span {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--admin-subtle);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* — 内容区 — */
+.admin-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(18px, 2.2vw, 28px) clamp(16px, 2.4vw, 34px) 56px;
+  background:
+    radial-gradient(58rem 30rem at 94% -14%, rgb(224 230 255 / 52%), transparent 60%),
+    radial-gradient(44rem 24rem at 2% 2%, rgb(215 244 233 / 34%), transparent 58%),
+    var(--admin-bg);
+}
+
+.admin-content > * {
+  width: min(100%, var(--admin-content-max));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.admin-page {
+  display: flow-root;
+}
+
+/* 路由切换过渡 */
+.admin-route-fade-enter-active {
+  transition: opacity var(--admin-duration) var(--admin-ease),
+    transform var(--admin-duration) var(--admin-ease);
+}
+
+.admin-route-fade-leave-active {
+  transition: opacity 100ms var(--admin-ease);
+}
+
+.admin-route-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.admin-route-fade-leave-to {
+  opacity: 0;
+}
+
+/* ========================= 4. 页面骨架 =================================== */
+
+/* 页头与内容之间用一条实线分开：管理台每个页面都是"标题 + 操作 + 内容"，
+   没有这条线时，标题和下面第一张卡片会糊成一片。 */
+.admin-page-header {
+  min-height: 56px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--admin-gap-lg);
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-page-header-copy {
+  min-width: 0;
+}
+
+.admin-page-eyebrow {
+  margin-bottom: 7px;
+  color: var(--admin-brand);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.admin-page-header h2 {
+  margin: 0;
+  color: var(--admin-ink-strong);
+  font-size: clamp(20px, 1.9vw, 25px);
+  font-weight: 720;
+  letter-spacing: -0.022em;
+  line-height: 1.24;
+}
+
+.admin-page-header p {
+  max-width: 680px;
+  margin: 7px 0 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.admin-page-actions {
+  flex: 0 0 auto;
+}
+
+/* — 面板与卡片 — */
+.admin-panel,
+.admin-form-panel,
+.admin-card {
+  border: 1px solid var(--admin-border) !important;
+  border-radius: var(--admin-radius-card) !important;
+  background: var(--admin-surface) !important;
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-panel .arco-card-header,
+.admin-form-panel .arco-card-header,
+.admin-card .arco-card-header {
+  min-height: 56px;
+  padding: 0 20px;
+  border-bottom-color: var(--admin-border);
+}
+
+.admin-panel .arco-card-body,
+.admin-form-panel .arco-card-body,
+.admin-card .arco-card-body {
+  padding: 20px;
+}
+
+.arco-card {
+  border-color: var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  box-shadow: var(--admin-shadow-card);
+  transition: box-shadow var(--admin-duration) var(--admin-ease);
+}
+
+.arco-card-header {
+  border-bottom-color: var(--admin-border);
+}
+
+.arco-card-header-title {
+  display: flex;
+  align-items: center;
+  color: var(--admin-ink-strong);
+  font-size: 14.5px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+/* 卡片标题前的品牌色短竖条：给每张卡片一个统一的"起笔"位置 */
+.arco-card-header-title::before {
+  content: "";
+  width: 3px;
+  height: 13px;
+  flex: 0 0 auto;
+  margin-right: 9px;
+  border-radius: var(--admin-radius-pill);
+  background: var(--admin-brand);
+}
+
+.arco-card-body {
+  color: var(--admin-ink);
+}
+
+/* — 统计卡片 — */
+.admin-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--admin-gap);
+  margin-bottom: var(--admin-gap-lg);
+}
+
+.admin-stat-card {
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 顶部语义色描边：六张卡片并排时，颜色本身就是分组信息 */
+.admin-stat-card::before {
+  content: "";
+  height: 2px;
+  position: absolute;
+  inset: 0 0 auto;
+  background: var(--admin-brand);
+  opacity: 0.85;
+}
+
+.admin-stat-tone-green::before { background: var(--admin-sage); }
+.admin-stat-tone-warm::before { background: var(--admin-warm); }
+.admin-stat-tone-violet::before { background: var(--admin-violet); }
+.admin-stat-tone-info::before { background: var(--admin-info); }
+.admin-stat-tone-danger::before { background: var(--admin-danger); }
+
+.admin-stat-card .arco-card-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 17px 18px 18px;
+}
+
+.admin-stat-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 19px;
+}
+
+.admin-stat-copy {
+  min-width: 0;
+}
+
+.admin-stat-label {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-stat-value {
+  display: block;
+  margin: 5px 0 4px;
+  color: var(--admin-ink-strong);
+  font-size: 25px;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-stat-caption {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-subtle);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 语义色调 */
+.admin-tone-blue { color: var(--admin-brand); background: var(--admin-brand-soft); }
+.admin-tone-green { color: var(--admin-sage); background: var(--admin-sage-soft); }
+.admin-tone-warm { color: var(--admin-warm); background: var(--admin-warm-soft); }
+.admin-tone-violet { color: var(--admin-violet); background: var(--admin-violet-soft); }
+.admin-tone-info { color: var(--admin-info); background: var(--admin-info-soft); }
+.admin-tone-danger { color: var(--admin-danger); background: var(--admin-danger-soft); }
+
+/* ========================= 5. 数据展示 =================================== */
+
+/* 工具栏做成卡片内的一条浅色带：筛选控件、统计文字、列设置因此成为一个整体，
+   而不是散落在白色卡片顶部的一排孤立控件。 */
+.admin-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: var(--admin-gap);
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface-soft);
+}
+
+.admin-table-toolbar-main,
+.admin-table-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--admin-gap-sm);
+}
+
+/* 筛选区吃满整行。默认的 `flex: 0 1 auto` 会按内容收缩，结果把最后一个筛选挤到
+   第二行、只剩一个孤立的下拉框——看起来像是没做完的页面。 */
+.admin-table-toolbar-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-table-toolbar-actions {
+  margin-left: auto;
+}
+
+.admin-filter-input {
+  width: min(280px, 100%);
+}
+
+.admin-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface-soft);
+}
+
+.admin-filter-button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--admin-readable-subtle);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease),
+    box-shadow var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-filter-button:hover {
+  color: var(--admin-ink);
+  background: var(--admin-surface);
+}
+
+.admin-filter-button.is-active {
+  color: var(--admin-brand-ink);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-xs);
+}
+
+.admin-filter-select {
+  display: inline-flex;
+  align-items: center;
+}
+
+.admin-filter-select select {
+  min-height: 30px;
+  max-width: 220px;
+  padding: 0 28px 0 9px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  color: var(--admin-ink);
+  background: var(--admin-surface-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.admin-filter-button:focus-visible,
+.admin-filter-select select:focus-visible {
+  outline: 2px solid var(--admin-brand);
+  outline-offset: 2px;
+}
+
+.admin-toolbar-caption {
+  color: var(--admin-readable-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--admin-border);
+}
+
+/* — 批量操作条 — */
+
+.admin-batch-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--admin-gap-sm);
+  margin-bottom: var(--admin-gap);
+  padding: 8px 10px 8px 14px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--admin-brand-soft-strong);
+  border-radius: 12px;
+  background: var(--admin-brand-soft);
+  animation: admin-batch-bar-in var(--admin-duration) var(--admin-ease) both;
+}
+
+.admin-batch-bar::before {
+  content: "";
+  width: 3px;
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--admin-brand);
+}
+
+.admin-batch-bar-count {
+  color: var(--admin-brand-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-batch-bar-count strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.admin-batch-bar-hint {
+  margin-left: 6px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.admin-batch-bar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--admin-gap-xs);
+  margin-left: auto;
+}
+
+.admin-batch-bar-clear {
+  flex: none;
+}
+
+@keyframes admin-batch-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* — 列显示设置 — */
+
+.admin-column-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 6px;
+  min-width: 252px;
+  max-height: 280px;
+  padding: 4px 2px;
+  overflow-y: auto;
+}
+
+/* Arco 会把下拉内容限制在 ~200px 高度，单列排 9 个列名会被裁掉一半；
+   两列排布让完整列表落在限制之内，列再多也只是内部滚动。 */
+.admin-column-settings-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px 8px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-column-settings .arco-checkbox {
+  padding: 3px 4px;
+  border-radius: var(--admin-radius-xs);
+}
+
+.admin-column-settings .arco-checkbox:hover {
+  background: var(--admin-surface-soft);
+}
+
+.admin-column-settings .arco-checkbox-label {
+  color: var(--admin-ink);
+  font-size: 13px;
+}
+
+.admin-table-shell {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-xs);
+}
+
+.arco-table-container {
+  border-radius: var(--admin-radius-card);
+}
+
+.arco-table-th {
+  height: 44px;
+  color: var(--admin-muted);
+  background: var(--admin-surface-soft);
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 12px;
+  font-weight: 680;
+  letter-spacing: 0.02em;
+}
+
+/* 单元格内边距收到 12px：9 列的表格每列省 8px，整行就能多出 70px 给正文列，
+   1440 宽的笔记本上「标题」「操作」才不会被固定列宽挤没。 */
+.arco-table-td {
+  min-height: 56px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: #38455c;
+  border-bottom-color: #eef1f6;
+  font-size: 13px;
+}
+
+.admin-table-shell .arco-table-th,
+.admin-table-shell .arco-table-td {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+/* 列多于容器宽度时 Arco 用自己的滚动条容器，默认几乎不可见；
+   给缩略块一点对比度，用户才知道右侧还有内容。 */
+.admin-table-shell .arco-scrollbar-thumb {
+  background: var(--admin-border-strong);
+  opacity: 0.9;
+}
+
+.admin-table-shell .arco-scrollbar-thumb:hover,
+.admin-table-shell .arco-scrollbar-thumb-dragging {
+  background: var(--admin-subtle);
+}
+
+.admin-table-shell .arco-scrollbar-track {
+  background: transparent;
+}
+
+/* 数据密集视图：单元格默认单行 + 省略号。
+   否则 “2026-09-12 01:37:23” / “integration-admin” 会被挤成两行，
+   行高失控且数字被拆开（…01:37:2 / 3）。需要多行的正文请加 .admin-cell-wrap。 */
+.arco-table-td .arco-table-cell,
+.arco-table-th .arco-table-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arco-table-td .admin-cell-wrap,
+.arco-table-td .admin-cell-wrap .arco-table-cell {
+  white-space: normal;
+  overflow: visible;
+}
+
+/* 时间列使用等宽数字，纵向对齐更稳 */
+.admin-cell-nowrap {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.arco-table-tr:hover .arco-table-td {
+  background: var(--admin-row-hover);
+}
+
+.arco-table-tr.arco-table-tr-checked .arco-table-td {
+  background: var(--admin-brand-soft);
+}
+
+.arco-pagination {
+  margin-top: var(--admin-gap);
+  padding-top: 14px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-table-empty {
+  padding: 40px 16px;
+}
+
+/* — 单元格内容 — */
+.admin-cover-cell {
+  width: 88px;
+  height: 60px;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+  font-size: 20px;
+  vertical-align: middle;
+}
+
+.admin-cover-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-title-cell {
+  display: inline-block;
+  max-width: 340px;
+  overflow: hidden;
+  color: var(--admin-ink-strong);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.admin-mono-cell {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.admin-muted-cell {
+  color: var(--admin-muted);
+}
+
+.admin-num-cell {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.admin-action-space .arco-btn {
+  padding-right: 6px;
+  padding-left: 6px;
+}
+
+.admin-status-tag {
+  min-width: 56px;
+  justify-content: center;
+}
+
+.admin-id-cell {
+  color: var(--admin-readable-subtle);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+.admin-table-shell .arco-table-th .arco-table-th-title,
+.admin-table-shell .arco-table-th .arco-auto-tooltip-content {
+  color: var(--admin-readable-subtle);
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-green {
+  color: #166534;
+  background-color: #dcfce7;
+  border-color: #86efac;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-orange {
+  color: #9a3412;
+  background-color: #ffedd5;
+  border-color: #fdba74;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-arcoblue {
+  color: #1e40af;
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-gray {
+  color: #475569;
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-red {
+  color: #991b1b;
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-purple {
+  color: #6b21a8;
+  background-color: #f3e8ff;
+  border-color: #d8b4fe;
+}
+
+html:not([data-theme="dark"]) .admin-status-tag.arco-tag-cyan {
+  color: #155e75;
+  background-color: #cffafe;
+  border-color: #67e8f9;
+}
+
+.arco-tag {
+  border-radius: var(--admin-radius-pill);
+  font-weight: 600;
+}
+
+/* — 树形层级 — */
+.admin-tree-toggle {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  margin-right: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--admin-subtle);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-tree-toggle:hover {
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+}
+
+.admin-tree-toggle-spacer {
+  width: 18px;
+  flex: 0 0 auto;
+  margin-right: 7px;
+}
+
+.admin-tree-name {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--admin-ink-strong);
+  font-weight: 620;
+  vertical-align: middle;
+}
+
+.admin-tree-branch {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.admin-tree-depth {
+  width: 2px;
+  align-self: stretch;
+  flex: 0 0 auto;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: var(--admin-border);
+}
+
+/* — 图片 — */
+.admin-image-thumb,
+.album-cover,
+.photo-thumb {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  object-fit: cover;
+  background: var(--admin-surface-soft);
+}
+
+.album-cover,
+.photo-thumb {
+  width: 58px;
+  height: 42px;
+}
+
+.link-avatar {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--admin-surface);
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--admin-border);
+}
+
+/* — 文本截断工具 — */
+.comment-content,
+.talk-content,
+.ellipsis,
+.link-address,
+.link-intro {
+  display: block;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail {
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  color: #384457;
+  background: var(--admin-surface-soft);
+  font: 12px/1.75 ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ======================= 6. 表单与反馈 =================================== */
+
+.arco-btn {
+  border-radius: var(--admin-radius-control);
+  font-weight: 600;
+  transition: color var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease),
+    border-color var(--admin-duration-fast) var(--admin-ease),
+    box-shadow var(--admin-duration-fast) var(--admin-ease),
+    transform var(--admin-duration-fast) var(--admin-ease);
+}
+
+.arco-btn:not(.arco-btn-disabled):active {
+  transform: translateY(1px);
+}
+
+.arco-btn-primary {
+  box-shadow: 0 6px 16px -8px rgb(var(--primary-6) / 68%);
+}
+
+.arco-btn-primary:not(.arco-btn-disabled):hover {
+  box-shadow: 0 10px 22px -10px rgb(var(--primary-6) / 72%);
+}
+
+.arco-btn-text {
+  font-weight: 600;
+}
+
+.arco-input-wrapper,
+.arco-select-view,
+.arco-picker,
+.arco-textarea-wrapper,
+.arco-input-number {
+  border-radius: var(--admin-radius-control);
+  border-color: var(--admin-border-strong);
+  background: var(--admin-surface);
+  transition: border-color var(--admin-duration-fast) var(--admin-ease),
+    box-shadow var(--admin-duration-fast) var(--admin-ease),
+    background-color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.arco-input-wrapper:hover,
+.arco-select-view:hover,
+.arco-picker:hover,
+.arco-textarea-wrapper:hover,
+.arco-input-number:hover {
+  border-color: var(--admin-border-hover);
+  background: var(--admin-surface);
+}
+
+.arco-input-wrapper.arco-input-focus,
+.arco-select-view.arco-select-view-focus,
+.arco-textarea-wrapper.arco-textarea-focus,
+.arco-input-number.arco-input-number-focused {
+  border-color: var(--admin-brand);
+  box-shadow: var(--admin-shadow-focus);
+  background: var(--admin-surface);
+}
+
+.arco-form-item-label-col > .arco-form-item-label {
+  color: #475467;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.arco-form-item {
+  margin-bottom: 18px;
+}
+
+.arco-alert {
+  margin-bottom: var(--admin-gap);
+  border-radius: var(--admin-radius-control);
+}
+
+.arco-alert-info {
+  border-color: #dbe3ff;
+  background: #f5f7ff;
+}
+
+.arco-alert-warning {
+  border-color: #f6dfba;
+  background: #fffaf1;
+}
+
+.arco-alert-error {
+  border-color: #f3cec8;
+  background: #fff7f5;
+}
+
+.arco-alert-success {
+  border-color: #cbe9dc;
+  background: #f4fbf8;
+}
+
+.arco-modal-mask {
+  background: var(--admin-overlay);
+  backdrop-filter: blur(2px);
+}
+
+.arco-modal {
+  border-radius: var(--admin-radius-panel);
+  box-shadow: var(--admin-shadow-float);
+}
+
+.arco-modal-header {
+  height: 58px;
+  border-bottom-color: var(--admin-border);
+}
+
+.arco-modal-title {
+  color: var(--admin-ink-strong);
+  font-size: 15.5px;
+  font-weight: 680;
+}
+
+.arco-modal-footer {
+  border-top-color: var(--admin-border);
+}
+
+.arco-dropdown,
+.arco-select-dropdown {
+  border-radius: 12px;
+  box-shadow: var(--admin-shadow-float);
+}
+
+.arco-doption:hover {
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+}
+
+.arco-empty-description {
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.arco-spin-tip,
+.arco-result-subtitle {
+  color: var(--admin-muted);
+}
+
+/* — 页面级状态 — */
+.admin-menu-state {
+  margin: 14px;
+  padding: 14px;
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-muted);
+  background: var(--admin-surface-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-page-loading {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.admin-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.admin-empty-state-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+  border: 1px solid var(--admin-brand-soft-strong);
+  border-radius: 18px;
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+  font-size: 26px;
+}
+
+.admin-empty-state strong {
+  color: var(--admin-ink-strong);
+  font-size: 15px;
+  font-weight: 680;
+}
+
+.admin-empty-state p {
+  max-width: 380px;
+  margin: 2px 0 10px;
+  color: var(--admin-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.admin-empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+/* — 加载失败态 — */
+
+.admin-error-state {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: var(--admin-gap);
+  padding: 14px 16px;
+  border: 1px solid var(--admin-danger-soft);
+  border-radius: var(--admin-radius-card);
+  background: var(--admin-danger-soft);
+}
+
+.admin-error-state-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  color: var(--admin-danger);
+  background: var(--admin-surface);
+  font-size: 18px;
+}
+
+.admin-error-state-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-error-state-copy strong {
+  color: var(--admin-ink-strong);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.admin-error-state-copy p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.admin-error-state .arco-btn {
+  flex: none;
+  margin-left: auto;
+}
+
+/* — 实时状态徽标 — */
+.admin-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #cbe9dc;
+  border-radius: var(--admin-radius-pill);
+  color: #25775a;
+  background: var(--admin-sage-soft);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 28px;
+}
+
+.admin-live-dot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--admin-sage);
+  box-shadow: 0 0 0 4px rgb(47 158 119 / 14%);
+  animation: admin-pulse 2s ease-in-out infinite;
+}
+
+[data-theme="dark"] .admin-live-badge {
+  border-color: rgb(52 211 153 / 28%);
+  color: var(--admin-sage);
+  background: var(--admin-sage-soft);
+}
+
+/* 骨架屏 */
+.admin-skeleton {
+  overflow: hidden;
+  position: relative;
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface-soft);
+}
+
+.admin-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 62%), transparent);
+  transform: translateX(-100%);
+  animation: admin-shimmer 1.5s infinite;
+}
+
+.admin-skeleton-row {
+  height: 44px;
+  margin-bottom: 10px;
+}
+
+/* — 表单布局 — */
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+
+.admin-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--admin-gap-sm);
+  flex-wrap: wrap;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-form-section {
+  margin-bottom: 8px;
+}
+
+.admin-form-section-title {
+  margin: 0 0 4px;
+  color: var(--admin-ink-strong);
+  font-size: 14px;
+  font-weight: 680;
+}
+
+.admin-form-section-hint {
+  margin: 0 0 18px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-field-hint,
+.field-hint,
+.hint {
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-form-card {
+  max-width: 1180px;
+}
+
+/* ======================= 7. 业务组件 ===================================== */
+
+/* — 快捷入口 — */
+.admin-quick-link {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  color: var(--admin-ink);
+  background: var(--admin-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--admin-duration) var(--admin-ease),
+    background-color var(--admin-duration) var(--admin-ease),
+    transform var(--admin-duration) var(--admin-ease),
+    box-shadow var(--admin-duration) var(--admin-ease);
+}
+
+.admin-quick-link:hover {
+  border-color: var(--admin-brand-soft-strong);
+  background: var(--admin-brand-soft);
+  box-shadow: var(--admin-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.admin-quick-link-copy {
+  min-width: 0;
+}
+
+.admin-quick-link-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+  font-size: 17px;
+}
+
+.admin-quick-link-title {
+  display: block;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-quick-link-caption {
+  display: block;
+  margin-top: 4px;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.admin-quick-link-arrow {
+  flex: 0 0 auto;
+  color: var(--admin-brand);
+}
+
+/* — 排行榜 — */
+.admin-rank-list {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-rank-item {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 6px 8px;
+  border-radius: var(--admin-radius-control);
+  transition: background-color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-rank-item:hover {
+  background: var(--admin-surface-soft);
+}
+
+.admin-rank-index {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--admin-muted);
+  background: var(--admin-surface-soft);
+  font-size: 11px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-rank-item:nth-child(1) .admin-rank-index { color: #7a5600; background: #fdf3dd; }
+.admin-rank-item:nth-child(2) .admin-rank-index { color: #475569; background: #eef1f5; }
+.admin-rank-item:nth-child(3) .admin-rank-index { color: #7c4714; background: #fbeee2; }
+
+.admin-rank-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--admin-ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-rank-metric {
+  flex: 0 0 auto;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* — 图表容器 — */
+.admin-chart-wrap {
+  position: relative;
+}
+
+.admin-chart-empty {
+  min-height: 200px;
+  display: grid;
+  place-items: center;
+}
+
+/* — 时间线列表 — */
+.admin-feed-list {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-feed-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-height: 50px;
+  padding: 9px 8px;
+  border-radius: var(--admin-radius-control);
+  transition: background-color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-feed-item:hover {
+  background: var(--admin-surface-soft);
+}
+
+.admin-feed-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  margin-top: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgb(102 112 133 / 10%);
+}
+
+.admin-feed-dot-success { background: var(--admin-sage); box-shadow: 0 0 0 4px rgb(47 158 119 / 12%); }
+.admin-feed-dot-danger { background: var(--admin-danger); box-shadow: 0 0 0 4px rgb(217 88 74 / 12%); }
+.admin-feed-dot-info { background: var(--admin-info); box-shadow: 0 0 0 4px rgb(59 130 196 / 12%); }
+
+.admin-feed-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-feed-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-ink);
+  font-size: 13px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-feed-copy small {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--admin-subtle);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* — 空状态占位 — */
+.admin-placeholder {
+  max-width: 760px;
+  margin: 8vh auto 0;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-card);
+}
+
+/* — 登录页 — */
+.admin-login-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  padding: 28px;
+  background-color: #e8edfa;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(circle at 8% 12%, rgb(147 170 255 / 40%) 0, transparent 26rem),
+    radial-gradient(circle at 92% 88%, rgb(126 205 235 / 34%) 0, transparent 24rem);
+  background-size: 820px 820px, 360px 360px, auto, auto;
+  background-repeat: repeat, repeat, no-repeat, no-repeat;
+  background-attachment: fixed, fixed, fixed, fixed;
+}
+
+.admin-login-page::before,
+.admin-login-page::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+/* 北斗七星：斗柄末端的摇光被点亮成品牌色。
+   用 background-image 而不是 <svg>：尺寸随页面线性缩放，且不占 DOM。
+
+   摇光刻意避开两种写法：
+   1) 同心圆（r=30/13/8/5）——叠出来是一枚边缘生硬的圆贴纸，中间那个深色点还会读成瞳孔；
+   2) 十字星芒——直线在高对比背景上会变成一根清晰的加号，而且会顶到 viewBox 外。
+   最终用「一个大而极淡的环境辉光 + 一颗小而亮的核」：层次靠半径和透明度拉开，
+   边界靠 radial-gradient 的衰减抹掉，读起来是一点星光，而不是一个图形。 */
+.admin-login-page::before {
+  width: min(40vw, 460px);
+  height: min(32vw, 372px);
+  bottom: 12%;
+  right: 0;
+  opacity: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 440 356'%3E%3Cdefs%3E%3CradialGradient id='a'%3E%3Cstop offset='0' stop-color='%237c5cff' stop-opacity='.26'/%3E%3Cstop offset='.3' stop-color='%237c5cff' stop-opacity='.1'/%3E%3Cstop offset='.65' stop-color='%236f8bff' stop-opacity='.025'/%3E%3Cstop offset='1' stop-color='%236f8bff' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cfilter id='f' x='-120%25' y='-120%25' width='340%25' height='340%25'%3E%3CfeGaussianBlur stdDeviation='2'/%3E%3C/filter%3E%3C/defs%3E%3Cg fill='none' stroke='%2327305a' stroke-opacity='.28' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M46 244 L150 272 L248 208 L286 264 L334 244'/%3E%3Cpath d='M334 244 L400 122'/%3E%3C/g%3E%3Cg fill='%2327305a'%3E%3Ccircle cx='46' cy='244' r='3.4' opacity='.5'/%3E%3Ccircle cx='150' cy='272' r='3.4' opacity='.5'/%3E%3Ccircle cx='248' cy='208' r='3.4' opacity='.5'/%3E%3Ccircle cx='286' cy='264' r='3.4' opacity='.5'/%3E%3Ccircle cx='334' cy='244' r='3' opacity='.34'/%3E%3Ccircle cx='379' cy='168' r='3' opacity='.3'/%3E%3C/g%3E%3Cg%3E%3Ccircle cx='400' cy='122' r='88' fill='url(%23a)'/%3E%3Cg filter='url(%23f)'%3E%3Ccircle cx='400' cy='122' r='13' fill='%237c5cff' fill-opacity='.16'/%3E%3Ccircle cx='400' cy='122' r='7' fill='%238e78ff' fill-opacity='.2'/%3E%3Ccircle cx='400' cy='122' r='4' fill='%23ffffff' fill-opacity='.55'/%3E%3C/g%3E%3Ccircle cx='400' cy='122' r='3' fill='%23ffffff'/%3E%3Ccircle cx='400' cy='122' r='1.4' fill='%23ffffff'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.admin-login-page::after {
+  width: 300px;
+  height: 300px;
+  bottom: -180px;
+  left: -100px;
+  border: 1px solid rgb(79 107 216 / 14%);
+  border-radius: 50%;
+}
+
+/* 登录页右上角：与顶栏同一组控件（主题 + 语言），
+   登录页没有顶栏，但这两件事应该在登录前就能改。 */
+.admin-login-controls {
+  position: absolute;
+  top: clamp(14px, 2.4vw, 26px);
+  right: clamp(14px, 2.4vw, 26px);
+  z-index: 3;
+}
+
+.admin-login-layout {
+  width: min(100%, 980px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 420px);
+  align-items: stretch;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 52%);
+  box-shadow: 0 30px 90px -30px rgb(52 72 117 / 40%), var(--admin-glass-edge);
+  backdrop-filter: blur(26px) saturate(160%);
+}
+
+.admin-login-art {
+  min-height: 580px;
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+  overflow: hidden;
+  padding: 40px;
+  background:
+    radial-gradient(circle at 70% 22%, rgb(255 255 255 / 80%) 0, transparent 12rem),
+    linear-gradient(145deg, #e9efff 0%, #f7fbff 55%, #eaf7f2 100%);
+}
+
+/* 左侧品牌栏 = 一块夜空。
+   之前这里只有一个居中的装饰圆 + 底部品牌，上半栏是空的、中间是一枚"占位符圆圈"，
+   所以看着单调。现在换成一对真正的图层：
+   1) 星空底纹（两层内联 SVG 平铺，与全站同一个 --admin-star-* 令牌）；
+   2) 大幅北斗七星（斗魁落在左上，斗柄甩到右下，viewBox 440×356 撑满整栏）。
+   文案（品牌）留在斗魁下方的空档里，不与星线打架。 */
+.admin-login-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--admin-star-fine), var(--admin-star-bright);
+  background-size: 360px 360px, 820px 820px;
+  opacity: 0.9;
+}
+
+/* 北斗：同一个 viewBox 坐标同时要能映射到 LTR 与 RTL，所以用 inset 定位不用 right。
+   星点与星线都带一点高斯模糊（feGaussianBlur）——纯 1px 实线在这个尺寸下太"工程图"，
+   模糊过的线读起来才像光。摇光的星云留在 viewBox 内部（cx427 r68），否则会被
+   contain 缩放的边界裁成一块紫斑。 */
+.admin-login-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 0 0 0);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 440 356'%3E%3Cdefs%3E%3Cfilter id='f' x='-150%25' y='-150%25' width='400%25' height='400%25'%3E%3CfeGaussianBlur stdDeviation='2.4'/%3E%3C/filter%3E%3Cfilter id='l' x='-60%25' y='-60%25' width='220%25' height='220%25'%3E%3CfeGaussianBlur stdDeviation='.7'/%3E%3C/filter%3E%3CradialGradient id='a'%3E%3Cstop offset='0' stop-color='%237c5cff' stop-opacity='.22'/%3E%3Cstop offset='.34' stop-color='%237c5cff' stop-opacity='.09'/%3E%3Cstop offset='1' stop-color='%236f8bff' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='427' cy='300' r='68' fill='url(%23a)'/%3E%3Cg filter='url(%23f)'%3E%3Ccircle cx='80' cy='430' r='18' fill='%237c5cff' fill-opacity='.07'/%3E%3C/g%3E%3Cg stroke='%2356648c' fill='none' filter='url(%23l)'%3E%3Cpath d='M132 100 L208 158' stroke-opacity='.3' stroke-width='1.15'/%3E%3Cpath d='M208 158 L232 219' stroke-opacity='.28' stroke-width='1.15'/%3E%3Cpath d='M232 219 L331 128' stroke-opacity='.28' stroke-width='1.15'/%3E%3Cpath d='M331 128 L314 236' stroke-opacity='.3' stroke-width='1.15'/%3E%3Cpath d='M314 236 L346 287' stroke-opacity='.26' stroke-width='1.15'/%3E%3Cpath d='M346 287 L427 300' stroke-opacity='.24' stroke-width='1.15'/%3E%3C/g%3E%3Cg filter='url(%23f)'%3E%3Ccircle cx='132' cy='100' r='11' fill='%2327305a' fill-opacity='.14'/%3E%3Ccircle cx='331' cy='128' r='11' fill='%2327305a' fill-opacity='.14'/%3E%3Ccircle cx='28' cy='536' r='9' fill='%2327305a' fill-opacity='.12'/%3E%3Ccircle cx='208' cy='158' r='9' fill='%2327305a' fill-opacity='.12'/%3E%3Ccircle cx='232' cy='219' r='9' fill='%2327305a' fill-opacity='.12'/%3E%3Ccircle cx='314' cy='236' r='9' fill='%2327305a' fill-opacity='.12'/%3E%3Ccircle cx='346' cy='287' r='9' fill='%2327305a' fill-opacity='.12'/%3E%3C/g%3E%3Ccircle cx='132' cy='100' r='3' fill='%2327305a' opacity='.52'/%3E%3Ccircle cx='331' cy='128' r='3' fill='%2327305a' opacity='.52'/%3E%3Ccircle cx='28' cy='536' r='2.6' fill='%2327305a' opacity='.42'/%3E%3Ccircle cx='208' cy='158' r='2.6' fill='%2327305a' opacity='.42'/%3E%3Ccircle cx='232' cy='219' r='2.6' fill='%2327305a' opacity='.42'/%3E%3Ccircle cx='314' cy='236' r='2.6' fill='%2327305a' opacity='.42'/%3E%3Ccircle cx='346' cy='287' r='2.6' fill='%2327305a' opacity='.42'/%3E%3Ccircle cx='427' cy='300' r='4.6' fill='%23ffffff'/%3E%3Ccircle cx='427' cy='300' r='2.4' fill='%237c5cff' opacity='.55'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+}
+
+/* 品牌签名留在斗魁下方的空档里。 */
+.admin-login-art-copy {
+  max-width: 400px;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--admin-ink-strong);
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.admin-login-panel {
+  display: flex;
+  align-items: center;
+  padding: 42px;
+  background: rgb(255 255 255 / 95%);
+}
+
+.admin-login-card {
+  width: 100%;
+}
+
+.admin-login-heading {
+  margin-bottom: 24px;
+}
+
+/* 标题不再有副标题，但仍与上方表单留出呼吸。 */
+.admin-login-heading h2 {
+  margin: 0 0 8px;
+  color: var(--admin-ink-strong);
+  font-size: 26px;
+  font-weight: 720;
+  letter-spacing: -0.028em;
+}
+
+.admin-login-heading p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.admin-login-panel .arco-form-item {
+  margin-bottom: 18px;
+}
+
+.admin-login-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--admin-ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.admin-login-control {
+  width: 100%;
+}
+
+.admin-login-panel .arco-btn-primary {
+  height: 42px;
+  margin-top: 4px;
+}
+
+/* — 编辑类表单 — */
+.article-form,
+.talk-form,
+.config-form {
+  margin-top: 18px;
+}
+
+.article-form-grid,
+.config-grid,
+.policy-grid,
+.ai-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+
+.article-content-editor,
+.talk-content-editor {
+  min-height: 300px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.article-cover-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.article-cover-actions {
+  min-width: 0;
+  display: grid;
+  flex: 1;
+  gap: 10px;
+}
+
+.article-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--admin-gap);
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface-soft);
+}
+
+.article-meta-label {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+/* — 图片资源网格 — */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--admin-gap);
+}
+
+.media-card {
+  min-width: 0;
+  position: relative;
+  padding: 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  background: var(--admin-surface);
+  transition: border-color var(--admin-duration) var(--admin-ease),
+    box-shadow var(--admin-duration) var(--admin-ease),
+    transform var(--admin-duration) var(--admin-ease);
+}
+
+.media-card:hover {
+  border-color: var(--admin-brand-soft-strong);
+  box-shadow: var(--admin-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.media-card-selected {
+  border-color: var(--admin-brand);
+  box-shadow: var(--admin-shadow-focus);
+}
+
+.media-card-check {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: var(--admin-shadow-xs);
+  cursor: pointer;
+}
+
+.media-card .admin-image-preview {
+  width: 100% !important;
+  height: 150px !important;
+}
+
+.media-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  margin: 10px 2px;
+}
+
+.media-card-copy strong,
+.media-card-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-card-copy strong {
+  color: var(--admin-ink-strong);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.media-card-copy small {
+  color: var(--admin-subtle);
+  font-size: 11px;
+}
+
+.media-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.media-pagination {
+  margin-top: 22px;
+}
+
+/* — 照片墙 — */
+.photo-masonry {
+  column-count: 4;
+  column-gap: var(--admin-gap);
+}
+
+.photo-tile {
+  display: inline-block;
+  width: 100%;
+  margin: 0 0 var(--admin-gap);
+  padding: 10px;
+  break-inside: avoid;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  background: var(--admin-surface);
+}
+
+.photo-tile .admin-image-preview {
+  width: 100% !important;
+  border-radius: var(--admin-radius-control);
+}
+
+.photo-tile-copy {
+  display: grid;
+  gap: 3px;
+  margin: 10px 2px;
+}
+
+.photo-tile-copy strong {
+  overflow: hidden;
+  color: var(--admin-ink-strong);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-tile-copy span {
+  overflow: hidden;
+  color: var(--admin-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-tile-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.photo-pagination {
+  margin-top: var(--admin-gap);
+}
+
+/* — 说说图片 — */
+.talk-images {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.talk-image-count {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+/* — 个人中心 — */
+.profile-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(190px, 0.65fr);
+  align-items: center;
+  gap: 26px;
+  margin-bottom: var(--admin-gap-lg);
+  padding: 26px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background:
+    radial-gradient(circle at 88% 12%, rgb(255 255 255 / 76%) 0, transparent 22rem),
+    linear-gradient(125deg, #eef2ff 0%, #f9fbff 58%, #ecf8f3 100%);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.profile-avatar-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.profile-hero-copy h3 {
+  margin: 0;
+  color: var(--admin-ink-strong);
+  font-size: 25px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.profile-hero-copy p {
+  max-width: 620px;
+  margin: 8px 0 13px;
+  color: #4c5a70;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.profile-meta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 11px 18px;
+  padding-left: 22px;
+  border-left: 1px solid rgb(79 107 216 / 16%);
+}
+
+.profile-meta span {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.profile-meta strong {
+  overflow: hidden;
+  color: var(--admin-ink);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--admin-gap-lg);
+}
+
+/* — 工作台 — */
+.workplace-welcome {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: var(--admin-gap-lg);
+  padding: 28px 30px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background:
+    radial-gradient(circle at 90% 10%, rgb(255 255 255 / 74%) 0, transparent 22rem),
+    linear-gradient(125deg, #eef2ff 0%, #f9fbff 58%, #ecf8f3 100%);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.workplace-welcome::after {
+  content: "";
+  width: 320px;
+  height: 320px;
+  position: absolute;
+  top: -170px;
+  right: -90px;
+  border: 1px solid rgb(79 107 216 / 12%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.workplace-welcome h2 {
+  margin: 0;
+  color: var(--admin-ink-strong);
+  font-size: clamp(23px, 2.4vw, 30px);
+  font-weight: 740;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.workplace-welcome p {
+  max-width: 560px;
+  margin: 9px 0 0;
+  color: #4c5a70;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.workplace-grid-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr);
+  gap: var(--admin-gap-lg);
+  margin-bottom: var(--admin-gap-lg);
+}
+
+.workplace-grid-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
+  gap: var(--admin-gap-lg);
+}
+
+.workplace-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--admin-gap-sm);
+}
+
+.workplace-shortcut {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  color: var(--admin-ink);
+  background: var(--admin-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--admin-duration) var(--admin-ease),
+    background-color var(--admin-duration) var(--admin-ease),
+    transform var(--admin-duration) var(--admin-ease),
+    box-shadow var(--admin-duration) var(--admin-ease);
+}
+
+.workplace-shortcut:hover {
+  border-color: var(--admin-brand-soft-strong);
+  background: var(--admin-brand-soft);
+  transform: translateY(-2px);
+  box-shadow: var(--admin-shadow-hover);
+}
+
+.workplace-shortcut-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+  font-size: 16px;
+}
+
+.workplace-shortcut-copy {
+  min-width: 0;
+}
+
+.workplace-shortcut strong,
+.workplace-shortcut small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workplace-shortcut strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.workplace-shortcut small {
+  margin-top: 2px;
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+
+.workplace-status-list {
+  display: grid;
+  gap: 0;
+}
+
+.workplace-status-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 13px;
+}
+
+.workplace-status-list > div:last-child {
+  border-bottom: 0;
+}
+
+.workplace-status-list > div > span:first-child {
+  color: var(--admin-muted);
+}
+
+/* — 仪表盘 — */
+.dashboard-grid {
+  display: grid;
+  gap: var(--admin-gap-lg);
+  margin-bottom: var(--admin-gap-lg);
+}
+
+.dashboard-grid-wide {
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr);
+}
+
+.dashboard-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-region-list {
+  display: grid;
+  gap: 7px;
+  max-height: 140px;
+  overflow: auto;
+  margin-top: 12px;
+  padding-right: 4px;
+}
+
+.dashboard-region-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.dashboard-region-item strong {
+  color: var(--admin-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* — 监控 — */
+.monitor-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #cbe9dc;
+  border-radius: var(--admin-radius-pill);
+  color: #25775a;
+  background: var(--admin-sage-soft);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 28px;
+}
+
+.monitor-live-dot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--admin-sage);
+  box-shadow: 0 0 0 4px rgb(47 158 119 / 14%);
+  animation: admin-pulse 2s ease-in-out infinite;
+}
+
+/* — 角色权限选择 — */
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 16px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface-soft);
+}
+
+.permission-grid .arco-checkbox {
+  margin-right: 0;
+}
+
+.permission-group {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  color: var(--admin-subtle);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* — 命令面板 — */
+.admin-command-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 20px 20px;
+  background: var(--admin-overlay);
+  backdrop-filter: blur(3px);
+}
+
+.admin-command {
+  width: min(100%, 560px);
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-float);
+  animation: admin-command-in var(--admin-duration) var(--admin-ease);
+}
+
+.admin-command-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  color: var(--admin-subtle);
+}
+
+.admin-command-input input {
+  width: 100%;
+  height: 46px;
+  border: 0;
+  outline: none;
+  color: var(--admin-ink);
+  background: transparent;
+  font-size: 14px;
+}
+
+.admin-command-list {
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.admin-command-group {
+  margin: 8px 10px 4px;
+  color: var(--admin-subtle);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-command-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-ink);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--admin-duration-fast) var(--admin-ease),
+    color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.admin-command-item.is-active {
+  color: var(--admin-brand);
+  background: var(--admin-brand-soft);
+}
+
+.admin-command-item-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  color: currentColor;
+  background: rgb(79 107 216 / 9%);
+  font-size: 15px;
+}
+
+.admin-command-item-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-command-item-copy strong {
+  display: block;
+  overflow: hidden;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-command-item-copy small {
+  display: block;
+  overflow: hidden;
+  color: var(--admin-subtle);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-command-empty {
+  padding: 32px 16px;
+  color: var(--admin-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.admin-command-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--admin-border);
+  color: var(--admin-subtle);
+  background: var(--admin-surface-soft);
+  font-size: 11px;
+}
+
+.admin-command-footer kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  background: var(--admin-surface);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+/* ========================= 8. 暗色主题 =================================== */
+
+[data-theme="dark"] {
+  --admin-bg: #070b14;
+  --admin-surface: #0e1424;
+  --admin-surface-soft: #151d31;
+  --admin-surface-sunken: #0a1020;
+  --admin-surface-raised: #17203a;
+  --admin-ink: #dbe3f5;
+  --admin-ink-strong: #f3f6ff;
+  --admin-muted: #8b97ba;
+  --admin-subtle: #5f6b8f;
+  --admin-readable-subtle: #9aa7c7;
+  --admin-border: #1d2740;
+  --admin-border-strong: #2b3757;
+  --admin-border-hover: #3a4770;
+  --admin-row-hover: rgb(125 149 255 / 5%);
+  --admin-brand: #7d95ff;
+  --admin-brand-hover: #94a8ff;
+  --admin-brand-soft: rgb(125 149 255 / 14%);
+  --admin-brand-soft-strong: rgb(125 149 255 / 28%);
+  --admin-brand-ink: #b6c3ff;
+  --admin-sage: #34d399;
+  --admin-sage-soft: rgb(52 211 153 / 13%);
+  --admin-warm: #fbbf24;
+  --admin-warm-soft: rgb(251 191 36 / 13%);
+  --admin-danger: #f87171;
+  --admin-danger-soft: rgb(248 113 113 / 13%);
+  --admin-info: #38bdf8;
+  --admin-info-soft: rgb(56 189 248 / 13%);
+  --admin-violet: #a78bfa;
+  --admin-violet-soft: rgb(167 139 250 / 14%);
+  --admin-shadow-xs: 0 1px 2px rgb(0 0 0 / 40%);
+  --admin-shadow-card: 0 1px 2px rgb(0 0 0 / 34%), 0 14px 34px -20px rgb(0 0 0 / 76%);
+  --admin-shadow-hover: 0 2px 6px -1px rgb(0 0 0 / 40%), 0 22px 44px -24px rgb(0 0 0 / 82%);
+  --admin-shadow-float: 0 28px 64px -16px rgb(0 0 0 / 78%);
+  --admin-shadow-focus: 0 0 0 3px rgb(125 149 255 / 22%);
+  --admin-overlay: rgb(4 7 14 / 62%);
+}
+
+[data-theme="dark"] body {
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  --gray-1: 17, 22, 42;
+  --gray-2: 21, 27, 50;
+  --gray-3: 30, 38, 70;
+  --gray-4: 46, 56, 94;
+  --gray-5: 90, 102, 137;
+  --gray-6: 139, 151, 186;
+  --gray-7: 170, 180, 208;
+  --gray-8: 200, 209, 232;
+  --gray-9: 224, 230, 248;
+  --gray-10: 242, 245, 255;
+  --arcoblue-1: 22, 28, 55;
+  --arcoblue-2: 27, 36, 75;
+  --arcoblue-3: 36, 50, 108;
+  --arcoblue-4: 58, 80, 158;
+  --arcoblue-5: 96, 122, 210;
+  --arcoblue-6: 125, 149, 255;
+  --arcoblue-7: 152, 172, 255;
+  --arcoblue-8: 182, 195, 255;
+  --arcoblue-9: 210, 218, 255;
+  --arcoblue-10: 234, 238, 255;
+  --primary-1: var(--arcoblue-1);
+  --primary-2: var(--arcoblue-2);
+  --primary-3: var(--arcoblue-3);
+  --primary-4: var(--arcoblue-4);
+  --primary-5: var(--arcoblue-5);
+  --primary-6: var(--arcoblue-6);
+  --primary-7: var(--arcoblue-7);
+  --primary-8: var(--arcoblue-8);
+  --primary-9: var(--arcoblue-9);
+  --primary-10: var(--arcoblue-10);
+  --color-bg-1: var(--admin-bg);
+  --color-bg-2: var(--admin-surface);
+  --color-bg-3: var(--admin-surface-soft);
+  --color-bg-4: #1a2244;
+  --color-bg-5: var(--admin-surface);
+  --color-bg-white: var(--admin-surface);
+  --color-text-1: var(--admin-ink-strong);
+  --color-text-2: #b3bee0;
+  --color-text-3: var(--admin-muted);
+  --color-text-4: var(--admin-subtle);
+  --color-border: var(--admin-border);
+  --color-border-1: #171e3a;
+  --color-border-2: var(--admin-border);
+  --color-border-3: var(--admin-border-strong);
+  --color-border-4: #3a4678;
+  --color-fill-1: #10162c;
+  --color-fill-2: #141b33;
+  --color-fill-3: #1a2244;
+  --color-fill-4: #202a52;
+  --color-menu-light-bg: var(--admin-surface);
+  --color-secondary: #1a2244;
+  --color-secondary-hover: #202a52;
+  --color-secondary-active: #26305e;
+  --color-primary-light-1: rgb(var(--primary-1));
+  --color-primary-light-2: rgb(var(--primary-2));
+  --color-primary-light-3: rgb(var(--primary-3));
+  --color-primary-light-4: rgb(var(--primary-4));
+  --color-success-light-1: var(--admin-sage-soft);
+  --color-success-light-2: rgb(52 211 153 / 24%);
+  --color-warning-light-1: var(--admin-warm-soft);
+  --color-warning-light-2: rgb(251 191 36 / 24%);
+  --color-danger-light-1: var(--admin-danger-soft);
+  --color-danger-light-2: rgb(248 113 113 / 24%);
+}
+
+/* 深色主题的星点换成亮白 / 冷蓝，比浅色主题更亮更显眼。 */
+[data-theme="dark"] {
+  --admin-star-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='22' cy='31' r='.9' opacity='.5'/%3E%3Ccircle cx='78' cy='12' r='.7' opacity='.34'/%3E%3Ccircle cx='141' cy='52' r='1' opacity='.46'/%3E%3Ccircle cx='198' cy='25' r='.7' opacity='.3'/%3E%3Ccircle cx='252' cy='66' r='.9' opacity='.42'/%3E%3Ccircle cx='316' cy='38' r='.7' opacity='.32'/%3E%3Ccircle cx='44' cy='94' r='.7' opacity='.3'/%3E%3Ccircle cx='110' cy='122' r='.9' opacity='.4'/%3E%3Ccircle cx='176' cy='92' r='.7' opacity='.28'/%3E%3Ccircle cx='232' cy='136' r='1' opacity='.38'/%3E%3Ccircle cx='294' cy='108' r='.7' opacity='.3'/%3E%3Ccircle cx='28' cy='172' r='.9' opacity='.44'/%3E%3Ccircle cx='90' cy='202' r='.7' opacity='.3'/%3E%3Ccircle cx='154' cy='180' r='.9' opacity='.36'/%3E%3Ccircle cx='214' cy='222' r='.7' opacity='.28'/%3E%3Ccircle cx='272' cy='190' r='1' opacity='.4'/%3E%3Ccircle cx='334' cy='214' r='.7' opacity='.3'/%3E%3Ccircle cx='52' cy='252' r='.7' opacity='.32'/%3E%3Ccircle cx='122' cy='266' r='.9' opacity='.38'/%3E%3Ccircle cx='186' cy='248' r='.7' opacity='.26'/%3E%3Ccircle cx='244' cy='288' r='.9' opacity='.4'/%3E%3Ccircle cx='306' cy='262' r='.7' opacity='.28'/%3E%3Ccircle cx='36' cy='318' r='.9' opacity='.36'/%3E%3Ccircle cx='102' cy='338' r='.7' opacity='.3'/%3E%3Ccircle cx='168' cy='312' r='.9' opacity='.34'/%3E%3Ccircle cx='228' cy='342' r='.7' opacity='.26'/%3E%3Ccircle cx='290' cy='324' r='.9' opacity='.38'/%3E%3Ccircle cx='350' cy='300' r='.7' opacity='.3'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-star-bright: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='820' height='820'%3E%3Cg fill='%23eaf2ff'%3E%3Ccircle cx='118' cy='88' r='1.5' opacity='.9'/%3E%3Ccircle cx='436' cy='58' r='1.1' opacity='.6'/%3E%3Ccircle cx='678' cy='164' r='1.7' opacity='.85'/%3E%3Ccircle cx='246' cy='228' r='1.2' opacity='.66'/%3E%3Ccircle cx='572' cy='318' r='1.4' opacity='.76'/%3E%3Ccircle cx='86' cy='348' r='1.1' opacity='.54'/%3E%3Ccircle cx='338' cy='420' r='1.6' opacity='.84'/%3E%3Ccircle cx='722' cy='452' r='1.2' opacity='.58'/%3E%3Ccircle cx='172' cy='512' r='1.4' opacity='.7'/%3E%3Ccircle cx='492' cy='566' r='1.1' opacity='.56'/%3E%3Ccircle cx='296' cy='646' r='1.5' opacity='.8'/%3E%3Ccircle cx='36' cy='612' r='1.2' opacity='.52'/%3E%3Ccircle cx='644' cy='702' r='1.3' opacity='.66'/%3E%3Ccircle cx='398' cy='762' r='1.1' opacity='.58'/%3E%3Ccircle cx='128' cy='726' r='1.4' opacity='.7'/%3E%3Ccircle cx='772' cy='268' r='1.2' opacity='.6'/%3E%3C/g%3E%3C/svg%3E");
+  --admin-glass-edge: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+[data-theme="dark"] .admin-shell {
+  background-color: #070a14;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(120% 95% at 88% -18%, rgb(109 75 255 / 26%) 0%, rgb(109 75 255 / 0%) 58%),
+    radial-gradient(105% 85% at 4% 106%, rgb(34 211 238 / 14%) 0%, rgb(34 211 238 / 0%) 56%),
+    linear-gradient(168deg, #0b1020 0%, #080b16 52%, #0a0d1a 100%);
+}
+
+[data-theme="dark"] .admin-content {
+  background: transparent;
+}
+
+[data-theme="dark"] .admin-topbar {
+  border-bottom-color: rgb(29 39 64 / 74%);
+  background: rgb(9 13 25 / 52%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+[data-theme="dark"] .admin-sider {
+  background: rgb(12 17 32 / 56%) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+[data-theme="dark"] .admin-nav-footer {
+  background: rgb(21 29 49 / 72%);
+}
+
+[data-theme="dark"] .admin-nav-avatar {
+  color: var(--admin-brand-ink);
+  background: var(--admin-brand-soft-strong);
+}
+
+[data-theme="dark"] .admin-sider .arco-menu-item,
+[data-theme="dark"] .admin-sider .arco-menu-inline-header {
+  color: var(--admin-muted);
+}
+
+[data-theme="dark"] .admin-sider .arco-menu-inline-header {
+  color: var(--admin-ink);
+}
+
+/* 悬停 / 选中的底色由 --admin-nav-* 令牌给出（深色主题同一组值），
+   这里只把默认文字色换成暗色主题的层级。 */
+[data-theme="dark"] .admin-sider .arco-menu-item:hover,
+[data-theme="dark"] .admin-sider .arco-menu-inline-header:hover {
+  color: var(--admin-brand);
+}
+
+[data-theme="dark"] .admin-sider .arco-menu-item.arco-menu-selected {
+  color: var(--admin-brand-ink);
+}
+
+[data-theme="dark"] .admin-sider.arco-layout-sider-collapsed .arco-menu-item.arco-menu-selected {
+  box-shadow: none;
+}
+
+[data-theme="dark"] .arco-table-th {
+  color: var(--admin-muted);
+  background: #10162c;
+  border-bottom-color: var(--admin-border);
+}
+
+[data-theme="dark"] .arco-table-td {
+  color: #c3cde9;
+  border-bottom-color: #171e3a;
+}
+
+[data-theme="dark"] .arco-table-tr:hover .arco-table-td {
+  background: var(--admin-row-hover);
+}
+
+[data-theme="dark"] .arco-table-tr.arco-table-tr-checked .arco-table-td {
+  background: rgb(125 149 255 / 9%);
+}
+
+[data-theme="dark"] .admin-table-shell {
+  background: var(--admin-surface);
+}
+
+[data-theme="dark"] .admin-table-toolbar {
+  background: rgb(21 29 49 / 62%);
+}
+
+[data-theme="dark"] .arco-input-wrapper,
+[data-theme="dark"] .arco-select-view,
+[data-theme="dark"] .arco-picker,
+[data-theme="dark"] .arco-textarea-wrapper,
+[data-theme="dark"] .arco-input-number {
+  background: #10162c;
+}
+
+[data-theme="dark"] .arco-input-wrapper:hover,
+[data-theme="dark"] .arco-select-view:hover,
+[data-theme="dark"] .arco-picker:hover,
+[data-theme="dark"] .arco-textarea-wrapper:hover,
+[data-theme="dark"] .arco-input-number:hover {
+  border-color: var(--admin-border-hover);
+  background: #141b33;
+}
+
+[data-theme="dark"] .arco-input-wrapper.arco-input-focus,
+[data-theme="dark"] .arco-select-view.arco-select-view-focus,
+[data-theme="dark"] .arco-textarea-wrapper.arco-textarea-focus,
+[data-theme="dark"] .arco-input-number.arco-input-number-focused {
+  background: #141b33;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--admin-subtle);
+}
+
+[data-theme="dark"] .arco-form-item-label-col > .arco-form-item-label {
+  color: #b3bee0;
+}
+
+[data-theme="dark"] .arco-alert-info {
+  border-color: rgb(125 149 255 / 26%);
+  background: rgb(125 149 255 / 9%);
+}
+
+[data-theme="dark"] .arco-alert-warning {
+  border-color: rgb(251 191 36 / 26%);
+  background: rgb(251 191 36 / 9%);
+}
+
+[data-theme="dark"] .arco-alert-error {
+  border-color: rgb(248 113 113 / 26%);
+  background: rgb(248 113 113 / 9%);
+}
+
+[data-theme="dark"] .arco-alert-success {
+  border-color: rgb(52 211 153 / 26%);
+  background: rgb(52 211 153 / 9%);
+}
+
+[data-theme="dark"] .detail {
+  color: #c3cde9;
+  background: #10162c;
+}
+
+[data-theme="dark"] .admin-skeleton {
+  background: #141b33;
+}
+
+[data-theme="dark"] .admin-skeleton::after {
+  background: linear-gradient(90deg, transparent, rgb(125 149 255 / 8%), transparent);
+}
+
+[data-theme="dark"] .admin-empty-state-icon {
+  border-color: var(--admin-brand-soft-strong);
+}
+
+[data-theme="dark"] .admin-brand-mark {
+  border-radius: 9px;
+  box-shadow: 0 6px 18px -7px rgb(109 75 255 / 62%), 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+[data-theme="dark"] .admin-quick-link:hover,
+[data-theme="dark"] .workplace-shortcut:hover,
+[data-theme="dark"] .media-card:hover {
+  border-color: var(--admin-brand-soft-strong);
+  box-shadow: var(--admin-shadow-hover);
+}
+
+[data-theme="dark"] .admin-rank-item:nth-child(1) .admin-rank-index { color: #fbbf24; background: rgb(251 191 36 / 14%); }
+[data-theme="dark"] .admin-rank-item:nth-child(2) .admin-rank-index { color: #cbd5e1; background: rgb(203 213 225 / 12%); }
+[data-theme="dark"] .admin-rank-item:nth-child(3) .admin-rank-index { color: #f0a868; background: rgb(240 168 104 / 14%); }
+
+[data-theme="dark"] .admin-search-trigger {
+  background: #10162c;
+}
+
+[data-theme="dark"] .admin-search-trigger:hover {
+  background: #141b33;
+}
+
+/* 极光氛围 + 星尘 */
+[data-theme="dark"] body::before,
+[data-theme="dark"] body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+[data-theme="dark"] body::before {
+  width: 62vw;
+  height: 62vw;
+  top: -22vw;
+  left: -14vw;
+  background: radial-gradient(circle, rgb(125 149 255 / 16%), transparent 70%);
+  animation: aurora-drift-a 28s ease-in-out infinite alternate;
+}
+
+[data-theme="dark"] body::after {
+  width: 56vw;
+  height: 56vw;
+  right: -12vw;
+  bottom: -20vw;
+  background: radial-gradient(circle, rgb(139 92 246 / 12%), transparent 70%);
+  animation: aurora-drift-b 34s ease-in-out infinite alternate;
+}
+
+/* 星空换成真实星点图（原来的 radial-gradient 星点太少、太规整）。 */
+[data-theme="dark"] .admin-shell::before {
+  content: none;
+}
+
+[data-theme="dark"] .workplace-welcome,
+[data-theme="dark"] .profile-hero {
+  border-color: var(--admin-border);
+  background:
+    radial-gradient(circle at 88% 12%, rgb(56 189 248 / 12%) 0, transparent 26%),
+    radial-gradient(circle at 12% 88%, rgb(167 139 250 / 14%) 0, transparent 30%),
+    linear-gradient(125deg, rgb(125 149 255 / 11%) 0%, rgb(14 19 39 / 72%) 58%, rgb(52 211 153 / 10%) 100%);
+}
+
+[data-theme="dark"] .workplace-welcome p,
+[data-theme="dark"] .profile-hero-copy p {
+  color: var(--admin-muted);
+}
+
+[data-theme="dark"] .workplace-welcome::after {
+  border-color: rgb(125 149 255 / 14%);
+}
+
+[data-theme="dark"] .profile-meta {
+  border-left-color: rgb(125 149 255 / 18%);
+}
+
+[data-theme="dark"] .admin-login-page {
+  background-color: #070a14;
+  background-image:
+    var(--admin-star-bright),
+    var(--admin-star-fine),
+    radial-gradient(circle at 8% 12%, rgb(109 75 255 / 24%) 0, transparent 30rem),
+    radial-gradient(circle at 92% 88%, rgb(34 211 238 / 15%) 0, transparent 26rem);
+  background-size: 820px 820px, 360px 360px, auto, auto;
+  background-attachment: fixed, fixed, fixed, fixed;
+}
+
+[data-theme="dark"] .admin-login-layout {
+  border-color: var(--admin-border);
+  background: rgb(11 16 32 / 46%);
+  box-shadow: 0 30px 90px -30px rgb(0 0 0 / 84%), inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+[data-theme="dark"] .admin-login-art {
+  background:
+    radial-gradient(circle at 70% 22%, rgb(125 149 255 / 15%) 0, transparent 14rem),
+    linear-gradient(145deg, rgb(125 149 255 / 10%) 0%, rgb(11 16 32 / 34%) 55%, rgb(52 211 153 / 8%) 100%);
+}
+
+/* 深色主题下左栏的北斗换成亮线 + 极光色的摇光（结构与浅色版逐点一致）。 */
+[data-theme="dark"] .admin-login-art::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 440 356'%3E%3Cdefs%3E%3Cfilter id='f' x='-150%25' y='-150%25' width='400%25' height='400%25'%3E%3CfeGaussianBlur stdDeviation='2.4'/%3E%3C/filter%3E%3Cfilter id='l' x='-60%25' y='-60%25' width='220%25' height='220%25'%3E%3CfeGaussianBlur stdDeviation='.7'/%3E%3C/filter%3E%3CradialGradient id='a'%3E%3Cstop offset='0' stop-color='%23ff2d95' stop-opacity='.26'/%3E%3Cstop offset='.34' stop-color='%23c15cf0' stop-opacity='.11'/%3E%3Cstop offset='1' stop-color='%237ff0ff' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='427' cy='300' r='68' fill='url(%23a)'/%3E%3Cg filter='url(%23f)'%3E%3Ccircle cx='80' cy='430' r='18' fill='%23a78bfa' fill-opacity='.08'/%3E%3C/g%3E%3Cg stroke='%23b9cdf0' fill='none' filter='url(%23l)'%3E%3Cpath d='M132 100 L208 158' stroke-opacity='.34' stroke-width='1.15'/%3E%3Cpath d='M208 158 L232 219' stroke-opacity='.32' stroke-width='1.15'/%3E%3Cpath d='M232 219 L331 128' stroke-opacity='.32' stroke-width='1.15'/%3E%3Cpath d='M331 128 L314 236' stroke-opacity='.34' stroke-width='1.15'/%3E%3Cpath d='M314 236 L346 287' stroke-opacity='.3' stroke-width='1.15'/%3E%3Cpath d='M346 287 L427 300' stroke-opacity='.26' stroke-width='1.15'/%3E%3C/g%3E%3Cg filter='url(%23f)'%3E%3Ccircle cx='132' cy='100' r='12' fill='%23dbe4fb' fill-opacity='.16'/%3E%3Ccircle cx='331' cy='128' r='12' fill='%23dbe4fb' fill-opacity='.16'/%3E%3Ccircle cx='28' cy='536' r='10' fill='%23dbe4fb' fill-opacity='.13'/%3E%3Ccircle cx='208' cy='158' r='10' fill='%23dbe4fb' fill-opacity='.13'/%3E%3Ccircle cx='232' cy='219' r='10' fill='%23dbe4fb' fill-opacity='.13'/%3E%3Ccircle cx='314' cy='236' r='10' fill='%23dbe4fb' fill-opacity='.13'/%3E%3Ccircle cx='346' cy='287' r='10' fill='%23dbe4fb' fill-opacity='.13'/%3E%3C/g%3E%3Ccircle cx='132' cy='100' r='3.2' fill='%23e8f1ff' opacity='.8'/%3E%3Ccircle cx='331' cy='128' r='3.2' fill='%23e8f1ff' opacity='.8'/%3E%3Ccircle cx='28' cy='536' r='2.8' fill='%23e8f1ff' opacity='.72'/%3E%3Ccircle cx='208' cy='158' r='2.8' fill='%23e8f1ff' opacity='.72'/%3E%3Ccircle cx='232' cy='219' r='2.8' fill='%23e8f1ff' opacity='.72'/%3E%3Ccircle cx='314' cy='236' r='2.8' fill='%23dbe4fb' opacity='.5'/%3E%3Ccircle cx='346' cy='287' r='2.8' fill='%23dbe4fb' opacity='.5'/%3E%3Ccircle cx='427' cy='300' r='4.8' fill='%23ffffff'/%3E%3Ccircle cx='427' cy='300' r='2.6' fill='%237ff0ff' opacity='.85'/%3E%3C/svg%3E");
+}
+
+/* 深色主题下的北斗：线更亮、摇光换成极光色（同一套「环境辉光 + 亮核」结构）。 */
+[data-theme="dark"] .admin-login-page::before {
+  opacity: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 440 356'%3E%3Cdefs%3E%3CradialGradient id='a'%3E%3Cstop offset='0' stop-color='%23ff2d95' stop-opacity='.28'/%3E%3Cstop offset='.28' stop-color='%23c15cf0' stop-opacity='.12'/%3E%3Cstop offset='.64' stop-color='%237ff0ff' stop-opacity='.03'/%3E%3Cstop offset='1' stop-color='%237ff0ff' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cfilter id='f' x='-120%25' y='-120%25' width='340%25' height='340%25'%3E%3CfeGaussianBlur stdDeviation='2'/%3E%3C/filter%3E%3C/defs%3E%3Cg fill='none' stroke='%23cfe0ff' stroke-opacity='.34' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M46 244 L150 272 L248 208 L286 264 L334 244'/%3E%3Cpath d='M334 244 L400 122'/%3E%3C/g%3E%3Cg fill='%23e8f1ff'%3E%3Ccircle cx='46' cy='244' r='3.4' opacity='.7'/%3E%3Ccircle cx='150' cy='272' r='3.4' opacity='.7'/%3E%3Ccircle cx='248' cy='208' r='3.4' opacity='.7'/%3E%3Ccircle cx='286' cy='264' r='3.4' opacity='.7'/%3E%3Ccircle cx='334' cy='244' r='3' opacity='.5'/%3E%3Ccircle cx='379' cy='168' r='3' opacity='.44'/%3E%3C/g%3E%3Cg%3E%3Ccircle cx='400' cy='122' r='88' fill='url(%23a)'/%3E%3Cg filter='url(%23f)'%3E%3Ccircle cx='400' cy='122' r='14' fill='%23ff4fa8' fill-opacity='.22'/%3E%3Ccircle cx='400' cy='122' r='7.5' fill='%23a78bfa' fill-opacity='.28'/%3E%3Ccircle cx='400' cy='122' r='4' fill='%237ff0ff' fill-opacity='.45'/%3E%3C/g%3E%3Ccircle cx='400' cy='122' r='3' fill='%23ffffff'/%3E%3Ccircle cx='400' cy='122' r='1.4' fill='%23ffffff'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .admin-login-panel {
+  background: rgb(12 17 35 / 92%);
+}
+
+[data-theme="dark"] .monitor-live-badge {
+  border-color: rgb(52 211 153 / 28%);
+  color: var(--admin-sage);
+  background: var(--admin-sage-soft);
+}
+
+/* 卡片入场 */
+.admin-card,
+.admin-panel,
+.admin-form-panel {
+  animation: admin-fade-up 0.4s var(--admin-ease) both;
+}
+
+.admin-stat-grid > *:nth-child(2) { animation-delay: 0.04s; }
+.admin-stat-grid > *:nth-child(3) { animation-delay: 0.08s; }
+.admin-stat-grid > *:nth-child(4) { animation-delay: 0.12s; }
+.admin-stat-grid > *:nth-child(5) { animation-delay: 0.16s; }
+.admin-stat-grid > *:nth-child(6) { animation-delay: 0.2s; }
+
+/* ==================== 9. 响应式与动效 ==================================== */
+
+@media (max-width: 1240px) {
+  .dashboard-grid-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1080px) {
+  .workplace-grid-main,
+  .workplace-grid-bottom,
+  .dashboard-grid-wide,
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  .admin-login-layout {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+  }
+
+  .admin-login-art {
+    min-height: 140px;
+    padding: 26px;
+  }
+
+  /* 窄屏下栏高只有 140px，居中的大圆会被裁成一块白斑，索性收掉装饰只留底色。 */
+  .admin-login-art::before,
+  .admin-login-art::after {
+    display: none;
+  }
+
+  .admin-login-panel {
+    padding: 30px;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-topbar {
+    min-height: 60px;
+  }
+
+  .admin-brand {
+    height: 60px;
+  }
+
+  .admin-breadcrumb {
+    display: none;
+  }
+
+  .admin-topbar-title h1 {
+    font-size: 15.5px;
+  }
+
+  .admin-search-trigger span,
+  .admin-user-meta {
+    display: none;
+  }
+
+  .admin-content {
+    min-height: 0;
+    padding: 16px 14px 40px;
+  }
+
+  .admin-page-header {
+    display: block;
+    margin-bottom: var(--admin-gap);
+    padding-bottom: 14px;
+  }
+
+  .admin-page-actions {
+    margin-top: 14px;
+  }
+
+  .admin-page-actions .arco-space,
+  .admin-page-actions .arco-space-item {
+    max-width: 100%;
+  }
+
+  .admin-panel .arco-card-header,
+  .admin-form-panel .arco-card-header,
+  .admin-card .arco-card-header,
+  .arco-card-header {
+    min-height: 52px;
+    padding: 0 16px;
+  }
+
+  .admin-panel .arco-card-body,
+  .admin-form-panel .arco-card-body,
+  .admin-card .arco-card-body,
+  .arco-card-body {
+    padding: 16px;
+  }
+
+  .admin-table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .admin-table-toolbar-main,
+  .admin-table-toolbar-actions {
+    width: 100%;
+  }
+
+  .admin-table-toolbar-actions {
+    margin-left: 0;
+  }
+
+  .admin-filter-input {
+    width: 100%;
+  }
+
+  .admin-form-grid,
+  .article-form-grid,
+  .config-grid,
+  .policy-grid,
+  .ai-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workplace-welcome {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 22px;
+  }
+
+  .dashboard-grid-three {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-hero {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    padding: 22px;
+  }
+
+  .profile-meta {
+    width: 100%;
+    padding-top: 16px;
+    padding-left: 0;
+    border-top: 1px solid var(--admin-border);
+    border-left: 0;
+  }
+
+  .article-cover-control {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .photo-masonry {
+    column-count: 2;
+  }
+
+  .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 460px) {
+  .photo-masonry {
+    column-count: 1;
+  }
+
+  .admin-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workplace-shortcuts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes aurora-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(8vw, 6vh, 0) scale(1.12); }
+}
+
+@keyframes aurora-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.08); }
+  to { transform: translate3d(-7vw, -5vh, 0) scale(1); }
+}
+
+@keyframes star-drift {
+  from { background-position: 0 0; }
+  to { background-position: 480px 480px; }
+}
+
+@keyframes admin-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes admin-shimmer {
+  to { transform: translateX(100%); }
+}
+
+@keyframes admin-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes admin-command-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 侧栏收缩时菜单标题淡出（菜单行是重建节点，只能用 animation） */
+@keyframes admin-menu-text-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

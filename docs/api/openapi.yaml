@@ -1,0 +1,1074 @@
+openapi: 3.0.3
+info:
+  title: Stellar Beacon API
+  version: 1.0.0
+  description: Versioned HTTP contract for the Stellar Beacon blog and administration apps.
+servers:
+  - url: /api/v1
+tags:
+  - name: public
+  - name: auth
+  - name: admin
+paths:
+  /public/:
+    get: { tags: [public], summary: Get blog home information, operationId: getBlogHomeInfo, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/about:
+    get: { tags: [public], summary: Get about page, operationId: getAbout, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles:
+    get: { tags: [public], summary: List public articles, operationId: listArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/featured:
+    get: { tags: [public], summary: Get top and featured articles, operationId: listFeaturedArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/by-category:
+    get:
+      tags: [public]
+      summary: List articles by category
+      description: Passing `categoryName` (or `name`) aggregates every author that uses the same normalised category name; `categoryId` keeps the original single-row behaviour.
+      operationId: listArticlesByCategory
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/articles/by-tag:
+    get:
+      tags: [public]
+      summary: List articles by tag
+      description: Passing `tagName` aggregates every author that uses the same normalised tag name; `tagId` keeps the original single-row behaviour.
+      operationId: listArticlesByTag
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/articles/search:
+    get: { tags: [public], summary: Search articles, operationId: searchArticles, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/{articleId}:
+    get: { tags: [public], summary: Get article detail, operationId: getArticle, parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/{articleId}/access:
+    post: { tags: [public], summary: Verify article password, operationId: accessArticle, parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/articles/{articleId}/read-sessions:
+    post:
+      tags: [public]
+      summary: Record an anonymous article reading session
+      description: Accepts only a session id, active milliseconds and maximum scroll percentage. It does not accept or persist account, IP, User-Agent or referrer data.
+      operationId: trackArticleReadSession
+      parameters: [{ $ref: '#/components/parameters/ArticleId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArticleReadSession' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/articles/{articleId}/continuation-events:
+    post:
+      tags: [public]
+      summary: Record an anonymous article continuation event
+      description: Accepts one allow-listed series or related-reading impression/click event. Clicks include the public target and placement; the endpoint does not accept account, session, IP, User-Agent or referrer data.
+      operationId: trackArticleContinuationEvent
+      parameters: [{ $ref: '#/components/parameters/ArticleId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArticleContinuationEvent' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/archives:
+    get: { tags: [public], summary: List article archives, operationId: listArchives, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/categories:
+    get: { tags: [public], summary: List categories, operationId: listCategories, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/tags:
+    get: { tags: [public], summary: List tags, operationId: listTags, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/tags/top:
+    get: { tags: [public], summary: List popular tags, operationId: listPopularTags, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/comments:
+    get: { tags: [public], summary: List comments, operationId: listComments, parameters: [{ name: focusCommentId, in: query, required: false, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [public], summary: Create comment, operationId: createComment, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/comments/top:
+    get: { tags: [public], summary: List recent comments, operationId: listRecentComments, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/comments/{commentId}/replies:
+    get: { tags: [public], summary: List comment replies, operationId: listCommentReplies, parameters: [{ $ref: '#/components/parameters/CommentId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/links:
+    get: { tags: [public], summary: List friend links, operationId: listFriendLinks, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/links/applications:
+    post: { tags: [public], summary: Submit a friend link application, operationId: applyFriendLink, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/series:
+    get: { tags: [public], summary: List article collections, operationId: listPublicSeries, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/series/{seriesId}:
+    get: { tags: [public], summary: Get one collection with its ordered articles, operationId: getPublicSeries, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/albums:
+    get: { tags: [public], summary: List photo albums, operationId: listAlbums, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/albums/{albumId}/photos:
+    get: { tags: [public], summary: List album photos, operationId: listAlbumPhotos, parameters: [{ $ref: '#/components/parameters/AlbumId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/talks:
+    get: { tags: [public], summary: List talks, operationId: listTalks, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/talks/{talkId}:
+    get: { tags: [public], summary: Get talk detail, operationId: getTalk, parameters: [{ $ref: '#/components/parameters/TalkId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/users/{userInfoId}:
+    get: { tags: [public], summary: Get public user information, operationId: getPublicUser, parameters: [{ $ref: '#/components/parameters/UserInfoId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/feed:
+    get:
+      tags: [public]
+      summary: List the public community feed
+      description: |
+        Returns public articles or talks. `sort=latest` (the default) keeps the
+        historical recency ordering, `sort=hot` ranks articles by the reader
+        signals of the last seven days (favourites, approved comments, likes and
+        unique readers) and `sort=featured` returns featured articles only.
+        Talks always use the recency ordering. Private, draft, scheduled, deleted
+        and moderated content is never returned.
+      operationId: listPublicFeed
+      parameters:
+        - { name: type, in: query, required: false, schema: { type: string, enum: [article, talk] } }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [latest, hot, featured] } }
+        - { name: featured, in: query, required: false, description: 'Legacy featured-only filter; still honoured for sort=latest.', schema: { type: integer, enum: [0, 1] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/topics:
+    get:
+      tags: [public]
+      summary: List the public topic plaza
+      description: Groups public categories, tags and series, each ranked by the same seven-day reader signal the hot feed uses. Empty groups are dropped; `size` defaults to 12 and is capped at 30.
+      operationId: listPublicTopics
+      parameters:
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 30, default: 12 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/authors:
+    get:
+      tags: [public]
+      summary: List public authors
+      description: Ranks authors that still have public content. `sort=articles` (the default) orders by public article count, `sort=followers` by follower count and `sort=active` by the most recent public publish.
+      operationId: listPlatformAuthors
+      parameters:
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [articles, followers, active] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/authors/{handle}:
+    get: { tags: [public], summary: Get a public author profile, operationId: getAuthorByHandle, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/authors/{handle}/articles:
+    get:
+      tags: [public]
+      summary: List an author's public articles
+      description: '`sort=latest` (the default) is recency ordered; `sort=hot` ranks the author''s articles by the seven-day reader signal.'
+      operationId: listAuthorArticles
+      parameters:
+        - { name: handle, in: path, required: true, schema: { type: string } }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [latest, hot] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/authors/{handle}/talks:
+    get: { tags: [public], summary: List an author's public talks, operationId: listAuthorTalks, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/authors/{handle}/series:
+    get: { tags: [public], summary: List an author's public series, operationId: listAuthorSeries, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/collections:
+    get:
+      tags: [public]
+      summary: List public reading lists
+      description: Only public, moderation-visible lists with at least one currently public article are returned. Since each member article is an immutable reference rather than a content snapshot, private, deleted, draft or hidden articles disappear immediately.
+      operationId: listPublicCollections
+      parameters:
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [latest, hot], default: latest } }
+        - { name: current, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/collections/{slug}:
+    get:
+      tags: [public]
+      summary: Get a public or unlisted reading list by slug
+      description: Private and moderated lists are absent. An unlisted list is reachable by its stable slug but never appears in discovery.
+      operationId: getPublicCollection
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /public/authors/{handle}/collections:
+    get: { tags: [public], summary: List an author's public reading lists, operationId: listAuthorCollections, parameters: [{ name: handle, in: path, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/reports/visit:
+    post: { tags: [public], summary: Report a visit, operationId: reportVisit, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /public/diagnostics/business-error:
+    get: { tags: [public], summary: Trigger a business error for diagnostics, operationId: triggerBusinessError, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/login:
+    post: { tags: [auth], summary: Sign in, operationId: login, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/logout:
+    post: { tags: [auth], summary: Sign out, operationId: logout, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/register:
+    post: { tags: [auth], summary: Register, operationId: register, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/verification-code:
+    get: { tags: [auth], summary: Send verification code, operationId: sendVerificationCode, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/password:
+    put: { tags: [auth], summary: Update password, operationId: updatePassword, responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me:
+    put: { tags: [auth], summary: Update current user, operationId: updateCurrentUser, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/avatar:
+    post: { tags: [auth], summary: Update current user avatar, operationId: updateCurrentAvatar, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/email:
+    put: { tags: [auth], summary: Bind current user email, operationId: bindCurrentEmail, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/subscription:
+    put: { tags: [auth], summary: Update subscription, operationId: updateSubscription, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notifications:
+    put: { tags: [auth], summary: Set the comment email notification preference, operationId: updateCommentNotice, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get: { tags: [auth], summary: List unified publish and interaction notifications, operationId: listFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notifications/unread-count:
+    get: { tags: [auth], summary: Count unified unread notifications, operationId: getUnreadFollowNotifications, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notifications/read:
+    post: { tags: [auth], summary: Mark unified notifications read through a cursor, operationId: markFollowNotificationsRead, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/notification-preferences:
+    put:
+      tags: [auth]
+      summary: Set the in-app notification preferences
+      description: |
+        `notifyInteraction` keeps its historical meaning and is always written.
+        `notifyTopic` is optional: when the field is omitted the stored topic
+        preference stays untouched, so older clients cannot reset it.
+      operationId: updateNotificationPreferences
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/topic-subscriptions:
+    get: { tags: [auth], summary: List the topics subscribed by the current account, operationId: listTopicSubscriptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/topic-subscriptions/{topicType}/{topicKey}:
+    put:
+      tags: [auth]
+      summary: Subscribe to a normalised topic
+      description: '`topicType` is `category` or `tag`; `topicKey` is the trimmed lower-cased topic name. A topic with no public article yet is rejected.'
+      operationId: subscribeTopic
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: topicType, in: path, required: true, schema: { type: string, enum: [category, tag] } }
+        - { name: topicKey, in: path, required: true, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    delete:
+      tags: [auth]
+      summary: Unsubscribe from a normalised topic
+      operationId: unsubscribeTopic
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: topicType, in: path, required: true, schema: { type: string, enum: [category, tag] } }
+        - { name: topicKey, in: path, required: true, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/topic-subscriptions/{topicType}/{topicKey}/mute:
+    put:
+      tags: [auth]
+      summary: Mute or unmute one topic subscription
+      description: A muted subscription keeps appearing in the topic feed but never reaches the notification inbox.
+      operationId: muteTopicSubscription
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: topicType, in: path, required: true, schema: { type: string, enum: [category, tag] } }
+        - { name: topicKey, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [muted]
+              properties:
+                muted: { type: integer, enum: [0, 1] }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/topic-feed:
+    get:
+      tags: [auth]
+      summary: List published articles matching the account topic subscriptions
+      description: Only articles count, because talks carry no category or tag. The feed includes the reader's own articles; the notification inbox excludes them.
+      operationId: listTopicSubscriptionFeed
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/collection-subscriptions/{collectionId}:
+    get: { tags: [auth], summary: Get collection subscription status, operationId: getCollectionSubscriptionStatus, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [auth], summary: Subscribe to a public or unlisted collection, operationId: subscribeCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [auth], summary: Unsubscribe from a collection, operationId: unsubscribeCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/collection-subscriptions/{collectionId}/mute:
+    put:
+      tags: [auth]
+      summary: Mute or unmute one collection subscription
+      operationId: muteCollectionSubscription
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [muted]
+              properties:
+                muted: { type: integer, enum: [0, 1] }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/collection-subscriptions:
+    get: { tags: [auth], summary: List the current account's collection subscriptions, operationId: listCollectionSubscriptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/collection-feed:
+    get: { tags: [auth], summary: List collection updates since each subscription began, operationId: listCollectionSubscriptionFeed, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/collection-reactions:
+    get:
+      tags: [auth]
+      summary: List collections saved by the current account
+      operationId: listMyCollectionReactions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reaction, in: query, required: true, schema: { type: string, enum: [favorite] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    put:
+      tags: [auth]
+      summary: Set the current account's like or favorite state for a public or unlisted collection
+      operationId: setCollectionReaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionReactionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/collection-reactions/state:
+    get:
+      tags: [auth]
+      summary: Read the current account's like and favorite state for one collection
+      operationId: getCollectionReactionState
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: collectionId, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/comment-reactions:
+    put:
+      tags: [auth]
+      summary: Set the current account's like state for a visible comment or reply
+      operationId: setCommentReaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [commentId, active]
+              properties:
+                commentId: { type: integer, format: int64, minimum: 1 }
+                active: { type: boolean }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/recommendations/query:
+    post:
+      tags: [auth]
+      summary: Query the personalized public-article feed
+      description: Uses follows, topic subscriptions, reactions and at most twenty transient local reading seed ids. Seed ids are request-only, are not persisted, and the result never includes self-authored or already-followed authors.
+      operationId: queryRecommendations
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cursor: { type: string }
+                size: { type: integer, minimum: 1, maximum: 24, default: 12 }
+                seedArticleIds:
+                  type: array
+                  maxItems: 20
+                  items: { type: integer, format: int64 }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/recommendation-feedback:
+    get:
+      tags: [auth]
+      summary: List recommendation preferences
+      operationId: listRecommendationFeedback
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    put:
+      tags: [auth]
+      summary: Hide an article or reduce an author/topic
+      operationId: saveRecommendationFeedback
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetType]
+              properties:
+                targetType: { type: string, enum: [article, author, topic] }
+                articleId: { type: integer, format: int64 }
+                authorId: { type: integer, format: int64 }
+                topicType: { type: string, enum: [category, tag] }
+                topicKey: { type: string }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/recommendation-feedback/{feedbackId}:
+    delete:
+      tags: [auth]
+      summary: Restore an article, author or topic recommendation preference
+      operationId: deleteRecommendationFeedback
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: feedbackId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/following/{authorId}:
+    put: { tags: [auth], summary: Follow an author, operationId: followAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [auth], summary: Unfollow an author, operationId: unfollowAuthor, security: [{ bearerAuth: [] }], parameters: [{ name: authorId, in: path, required: true, schema: { type: integer, format: int64 } }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/following:
+    get: { tags: [auth], summary: List authors followed by the current account, operationId: listFollowingAuthors, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/followers:
+    get: { tags: [auth], summary: List followers of the current account, operationId: listAuthorFollowers, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/following-feed:
+    get: { tags: [auth], summary: List content from followed authors, operationId: listFollowingFeed, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/reactions:
+    put: { tags: [auth], summary: Set the like or favourite state of an article, operationId: toggleArticleReaction, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    get: { tags: [auth], summary: List the current account reactions, operationId: listMyArticleReactions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/reactions/state:
+    get: { tags: [auth], summary: Read reaction state for a set of articles, operationId: listArticleReactionStates, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /studio/collections:
+    get: { tags: [auth], summary: List reading lists owned by the current account, operationId: listStudioCollections, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post:
+      tags: [auth]
+      summary: Create a reading list
+      operationId: createStudioCollection
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionSaveInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}:
+    get: { tags: [auth], summary: Get an owned reading list with ordered items, operationId: getStudioCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put:
+      tags: [auth]
+      summary: Update owned reading-list metadata
+      operationId: updateStudioCollection
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionSaveInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    delete: { tags: [auth], summary: Soft-delete an owned reading list, operationId: deleteStudioCollection, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /studio/collections/{collectionId}/items/{articleId}:
+    put:
+      tags: [auth]
+      summary: Add or update one article in an owned reading list
+      operationId: addStudioCollectionItem
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { $ref: '#/components/parameters/ArticleId' }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionItemInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    delete: { tags: [auth], summary: Remove one article from an owned reading list, operationId: removeStudioCollectionItem, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/CollectionId' }, { $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /studio/collections/{collectionId}/order:
+    put:
+      tags: [auth]
+      summary: Replace the complete manual order of an owned reading list
+      operationId: reorderStudioCollection
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionOrderInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/{commentId}/pin:
+    put:
+      tags: [auth]
+      summary: Pin or unpin one root comment on an owned reading list
+      description: >-
+        Only the reading-list owner may moderate. The comment must be an approved,
+        undeleted root comment that belongs to the reading list. Pinning a second
+        root comment automatically unpins the previous one; at most one root comment
+        is pinned per reading list. Replies cannot be pinned.
+      operationId: pinCollectionComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { $ref: '#/components/parameters/CommentId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentPinInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments:
+    get:
+      tags: [auth]
+      summary: List comments of an owned reading list for governance
+      description: >-
+        Owner-only. Returns approved comments including soft-deleted ones, each
+        with isTop, isDelete, replyCount and the number of pending reports.
+      operationId: listOwnedCollectionComments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { name: current, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 12 } }
+        - { name: keywords, in: query, schema: { type: string } }
+        - { name: includeDeleted, in: query, schema: { type: string, enum: ['1', 'true'] } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/batch:
+    post:
+      tags: [auth]
+      summary: Batch delete, pin or unpin reading-list comments
+      description: >-
+        Owner-only. Action must be delete, pin or unpin. When several root
+        comments are pinned in one request only the newest stays pinned; other
+        roots are unpinned automatically. Items that cannot be moderated are
+        returned per comment in failed[].message instead of failing the request.
+      operationId: batchModerateCollectionComments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentBatchInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/restore:
+    post:
+      tags: [auth]
+      summary: Restore soft-deleted reading-list comments
+      description: >-
+        Owner-only. Restores the selected comments. Restoring a root comment also
+        restores only the replies hidden by the same deletion, never replies the
+        owner deleted separately.
+      operationId: restoreOwnedCollectionComments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentRestoreInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comments/{commentId}:
+    delete:
+      tags: [auth]
+      summary: Soft-delete one comment or reply on an owned reading list
+      description: >-
+        Only the reading-list owner may moderate. Deleting a root comment hides the
+        comment together with all of its replies; deleting a reply hides only that
+        reply. Deleted comments stay hidden from public listings, counts and
+        notifications, and cannot be restored by the owner.
+      operationId: deleteOwnedCollectionComment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { $ref: '#/components/parameters/CommentId' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/dashboard:
+    get: { tags: [admin], summary: Get dashboard information, operationId: getAdminDashboard, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/content/analytics:
+    get:
+      tags: [admin]
+      summary: Get site-wide content performance
+      operationId: getContentAnalytics
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AnalyticsRange' }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/content/analytics/articles:
+    get:
+      tags: [admin]
+      summary: List article performance with cross-day unique readers
+      operationId: listContentAnalyticsArticles
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AnalyticsRange' }
+        - { name: sort, in: query, schema: { type: string, enum: [views, uniqueReaders, effectiveSessions, avgActiveMs, completionRate], default: views } }
+        - { name: current, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/content/analytics/continuation-targets:
+    get:
+      tags: [admin]
+      summary: List attributed continuation targets
+      operationId: listContentContinuationTargets
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: range, in: query, schema: { type: string, enum: [7d, 30d, 90d, 12m] } }
+        - { name: sort, in: query, schema: { type: string, enum: [clicks, clickRate] } }
+        - { name: sourceArticleId, in: query, schema: { type: integer, minimum: 1 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/content/analytics/articles/{articleId}:
+    get:
+      tags: [admin]
+      summary: Get one article's performance detail
+      operationId: getContentAnalyticsArticle
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ArticleId' }
+        - { $ref: '#/components/parameters/AnalyticsRange' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/articles:
+    get: { tags: [admin], summary: List admin articles, operationId: listAdminArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save an article, operationId: saveAdminArticle, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/{articleId}:
+    get: { tags: [admin], summary: Get admin article, operationId: getAdminArticle, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/ArticleId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/images:
+    post: { tags: [admin], summary: Upload article image, operationId: uploadArticleImage, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/import:
+    post: { tags: [admin], summary: Import articles, operationId: importArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/export:
+    post: { tags: [admin], summary: Export articles, operationId: exportArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/featured:
+    put: { tags: [admin], summary: Update article flags, operationId: updateArticleFlags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/trash:
+    put: { tags: [admin], summary: Move articles to or from trash, operationId: updateArticleTrash, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/articles/batch-delete:
+    delete: { tags: [admin], summary: Permanently delete articles, operationId: deleteArticles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/site:
+    get: { tags: [admin], summary: Get website configuration, operationId: getSite, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update website configuration, operationId: updateSite, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/site/images:
+    post: { tags: [admin], summary: Upload website image, operationId: uploadSiteImage, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/about:
+    put: { tags: [admin], summary: Update about page, operationId: updateAbout, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/categories:
+    get: { tags: [admin], summary: List admin categories, operationId: listAdminCategories, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save category, operationId: saveCategory, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete categories, operationId: deleteCategories, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/categories/search:
+    get: { tags: [admin], summary: Search admin categories, operationId: searchAdminCategories, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/tags:
+    get: { tags: [admin], summary: List admin tags, operationId: listAdminTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/series:
+    get: { tags: [admin], summary: List article collections, operationId: listAdminSeries, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Create or update an article collection, operationId: saveSeries, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete article collections, operationId: deleteSeries, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/series/options:
+    get: { tags: [admin], summary: List article collection options, operationId: listSeriesOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/collections:
+    get: { tags: [admin], summary: List reading lists for moderation, operationId: listAdminCollections, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save tag, operationId: saveTag, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete tags, operationId: deleteTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/tags/search:
+    get: { tags: [admin], summary: Search admin tags, operationId: searchAdminTags, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/comment-reports:
+    post:
+      tags: [auth]
+      summary: Report a reading-list comment
+      description: >-
+        Signed-in readers report a visible approved reading-list comment or reply.
+        One reader may hold a single pending report per comment; reporting your own
+        comment is rejected. Reasons are spam, harassment, porn, illegal, privacy
+        or other, with an optional 200-character detail.
+      operationId: reportComment
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentReportInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /auth/me/comment-appeals:
+    post:
+      tags: [auth]
+      summary: Appeal a hidden reading-list comment
+      description: >-
+        Only the author of a hidden comment may appeal, and only while the comment
+        stays hidden. One pending appeal per comment and appellant is allowed.
+      operationId: appealComment
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentAppealInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+    get: { tags: [auth], summary: List the current account's appeals, operationId: listMyCommentAppeals, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /auth/me/comment-appeals/{appealId}/escalate:
+    post:
+      tags: [auth]
+      summary: Escalate a rejected appeal to an administrator
+      description: >-
+        Allowed only for the appellant, after the reading-list owner rejected an
+        owner-stage appeal. The appeal returns to the administrator queue.
+      operationId: escalateCommentAppeal
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: appealId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-reports:
+    get:
+      tags: [auth]
+      summary: List pending reports grouped by comment for an owned reading list
+      operationId: listOwnerCommentReports
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-reports/{commentId}:
+    put:
+      tags: [auth]
+      summary: Resolve every pending report on one comment as the reading-list owner
+      description: Decision is dismiss, hide or restore; hide soft-deletes the comment, restore revives it.
+      operationId: resolveOwnerCommentReports
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }, { $ref: '#/components/parameters/CommentId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-appeals:
+    get:
+      tags: [auth]
+      summary: List pending appeals for an owned reading list
+      operationId: listOwnerCommentAppeals
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CollectionId' }]
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /studio/collections/{collectionId}/comment-appeals/{appealId}:
+    put:
+      tags: [auth]
+      summary: Restore or reject an appeal as the reading-list owner
+      description: A rejection keeps the appeal at the owner stage so the reader can escalate it.
+      operationId: resolveOwnerCommentAppeal
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { name: appealId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/comment-reports:
+    get: { tags: [admin], summary: List every pending comment report, operationId: listAdminCommentReports, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/comment-reports/{commentId}:
+    put:
+      tags: [admin]
+      summary: Resolve every pending report on one comment as an administrator
+      operationId: resolveAdminCommentReports
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CommentId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/comment-appeals:
+    get: { tags: [admin], summary: List appeals escalated to administrators, operationId: listAdminCommentAppeals, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/comment-appeals/{appealId}:
+    put:
+      tags: [admin]
+      summary: Decide an escalated comment appeal
+      operationId: resolveAdminCommentAppeal
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: appealId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentModerationDecisionInput' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/collections/{collectionId}/comments:
+    get:
+      tags: [admin]
+      summary: List reading-list comments for governance
+      description: >-
+        Admin view of one reading list's comments. Soft-deleted comments stay
+        visible with isDelete = 1 so they can be restored; each row also carries
+        isTop and the number of pending reader reports.
+      operationId: listCollectionCommentsAdmin
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CollectionId' }
+        - { name: keywords, in: query, schema: { type: string } }
+        - { name: isReview, in: query, schema: { type: integer, enum: [0, 1, 2] } }
+        - { name: current, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 12 } }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/comments/{commentId}/restore:
+    put:
+      tags: [admin]
+      summary: Restore a soft-deleted reading-list comment
+      description: >-
+        Administrators may restore a soft-deleted comment and the replies hidden
+        by the same deletion. Administrators cannot pin or unpin comments; pinning
+        stays with the reading-list owner.
+      operationId: restoreCommentsAdmin
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CommentId' }
+      responses: { '200': { $ref: '#/components/responses/Result' } }
+  /admin/comments:
+    get: { tags: [admin], summary: List admin comments, operationId: listAdminComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete comments, operationId: deleteComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/comments/review:
+    put: { tags: [admin], summary: Review comments, operationId: reviewComments, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/friend-links:
+    get: { tags: [admin], summary: List friend links, operationId: listAdminFriendLinks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save friend link, operationId: saveFriendLink, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete friend links, operationId: deleteFriendLinks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/friend-links/review:
+    put: { tags: [admin], summary: Approve or reject friend link applications, operationId: reviewFriendLinks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums:
+    get: { tags: [admin], summary: List albums, operationId: listAdminAlbums, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save album, operationId: saveAlbum, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums/{albumId}:
+    get: { tags: [admin], summary: Get album, operationId: getAdminAlbum, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/AlbumId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete album, operationId: deleteAlbum, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/AlbumId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums/options:
+    get: { tags: [admin], summary: List album options, operationId: listAlbumOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/albums/cover:
+    post: { tags: [admin], summary: Upload album cover, operationId: uploadAlbumCover, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos:
+    get: { tags: [admin], summary: List photos, operationId: listAdminPhotos, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save photos, operationId: savePhotos, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update photo, operationId: updatePhoto, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete photos, operationId: deletePhotos, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos/trash:
+    put: { tags: [admin], summary: Update photo trash status, operationId: updatePhotoTrash, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos/album:
+    put: { tags: [admin], summary: Move photos to an album, operationId: movePhotosToAlbum, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/photos/upload:
+    post: { tags: [admin], summary: Upload photo, operationId: uploadPhoto, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/talks:
+    get: { tags: [admin], summary: List admin talks, operationId: listAdminTalks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save talk, operationId: saveTalk, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete talks, operationId: deleteTalks, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/talks/{talkId}:
+    get: { tags: [admin], summary: Get admin talk, operationId: getAdminTalk, security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/TalkId' }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/talks/images:
+    post: { tags: [admin], summary: Upload talk image, operationId: uploadTalkImage, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/permissions:
+    get: { tags: [admin], summary: List permissions, operationId: listPermissions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save permission, operationId: savePermission, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/permissions/{resourceId}:
+    delete: { tags: [admin], summary: Delete permission, operationId: deletePermission, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/roles:
+    get: { tags: [admin], summary: List roles, operationId: listRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save role, operationId: saveRole, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete roles, operationId: deleteRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/roles/resource-options:
+    get: { tags: [admin], summary: List role resource options, operationId: listRoleResourceOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/roles/menu-options:
+    get: { tags: [admin], summary: List role menu options, operationId: listRoleMenuOptions, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/menus:
+    get: { tags: [admin], summary: List menus, operationId: listMenus, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Save menu, operationId: saveMenu, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/menus/{menuId}/visibility:
+    put: { tags: [admin], summary: Update menu visibility, operationId: updateMenuVisibility, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/menus/{menuId}:
+    delete: { tags: [admin], summary: Delete menu, operationId: deleteMenu, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/me/menu:
+    get: { tags: [admin], summary: Get current user menu, operationId: getCurrentUserMenu, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users:
+    get: { tags: [admin], summary: List users, operationId: listUsers, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/roles:
+    get: { tags: [admin], summary: List user role options, operationId: listUserRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update user roles, operationId: updateUserRoles, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/disable:
+    put: { tags: [admin], summary: Disable or enable user, operationId: updateUserDisable, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/areas:
+    get: { tags: [admin], summary: Get user areas, operationId: listUserAreas, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/online:
+    get: { tags: [admin], summary: List online users, operationId: listOnlineUsers, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/{userInfoId}/online:
+    delete: { tags: [admin], summary: Remove online user, operationId: removeOnlineUser, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/users/password:
+    put: { tags: [admin], summary: Update admin password, operationId: updateAdminPassword, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs:
+    get: { tags: [admin], summary: List jobs, operationId: listJobs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    post: { tags: [admin], summary: Create job, operationId: createJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    put: { tags: [admin], summary: Update job, operationId: updateJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete job, operationId: deleteJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/{id}:
+    get: { tags: [admin], summary: Get job, operationId: getJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/groups:
+    get: { tags: [admin], summary: List job groups, operationId: listJobGroups, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/targets:
+    get: { tags: [admin], summary: List executable job targets, operationId: listJobTargets, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/status:
+    put: { tags: [admin], summary: Update job status, operationId: updateJobStatus, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/jobs/run:
+    put: { tags: [admin], summary: Run job once, operationId: runJob, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/jobs:
+    get: { tags: [admin], summary: List job logs, operationId: listJobLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete job logs, operationId: deleteJobLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/jobs/clean:
+    delete: { tags: [admin], summary: Clean job logs, operationId: cleanJobLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/jobs/groups:
+    get: { tags: [admin], summary: List job log groups, operationId: listJobLogGroups, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/operations:
+    get: { tags: [admin], summary: List operation logs, operationId: listOperationLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete operation logs, operationId: deleteOperationLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+  /admin/logs/exceptions:
+    get: { tags: [admin], summary: List exception logs, operationId: listExceptionLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+    delete: { tags: [admin], summary: Delete exception logs, operationId: deleteExceptionLogs, security: [{ bearerAuth: [] }], responses: { '200': { $ref: '#/components/responses/Result' } } }
+components:
+  parameters:
+    ArticleId: { name: articleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    AlbumId: { name: albumId, in: path, required: true, schema: { type: integer, format: int64 } }
+    CommentId: { name: commentId, in: path, required: true, schema: { type: integer, format: int64 } }
+    CollectionId: { name: collectionId, in: path, required: true, schema: { type: integer, format: int64 } }
+    TalkId: { name: talkId, in: path, required: true, schema: { type: integer, format: int64 } }
+    UserInfoId: { name: userInfoId, in: path, required: true, schema: { type: integer, format: int64 } }
+    AnalyticsRange: { name: range, in: query, schema: { type: string, enum: [7d, 30d, 90d, 12m], default: 7d } }
+  responses:
+    Result:
+      description: Versioned API response
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiResponse' }
+  schemas:
+    ApiResponse:
+      type: object
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: OK }
+        message: { type: string, example: 操作成功 }
+        data: { nullable: true }
+    Page:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items: { type: array, items: {} }
+        total: { type: integer, format: int64 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 0 }
+    PublicAuthorSummary:
+      type: object
+      required: [id, handle, nickname, avatar]
+      properties:
+        id: { type: integer, format: int64 }
+        handle: { type: string }
+        nickname: { type: string }
+        avatar: { type: string }
+        intro: { type: string }
+        website: { type: string }
+    CollectionSaveInput:
+      type: object
+      required: [title, visibility]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 500, default: '' }
+        visibility: { type: string, enum: [private, unlisted, public] }
+    CollectionItemInput:
+      type: object
+      properties:
+        note: { type: string, maxLength: 280, default: '' }
+    CollectionOrderInput:
+      type: object
+      required: [articleIds]
+      properties:
+        articleIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items: { type: integer, format: int64 }
+    CommentPinInput:
+      type: object
+      required: [pinned]
+      properties:
+        pinned: { type: boolean, description: true pins the root comment and unpins any other pinned root comment on the same reading list }
+    CommentReportInput:
+      type: object
+      required: [commentId, reason]
+      properties:
+        commentId: { type: integer, format: int64, minimum: 1 }
+        reason: { type: string, enum: [spam, harassment, porn, illegal, privacy, other] }
+        detail: { type: string, maxLength: 200 }
+    CommentAppealInput:
+      type: object
+      required: [commentId, reason]
+      properties:
+        commentId: { type: integer, format: int64, minimum: 1 }
+        reason: { type: string, maxLength: 500 }
+    CommentModerationDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [dismiss, hide, restore, reject] }
+        reason: { type: string, maxLength: 255 }
+    CommentBatchInput:
+      type: object
+      required: [action, commentIds]
+      properties:
+        action: { type: string, enum: [delete, pin, unpin] }
+        commentIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          items: { type: integer, format: int64 }
+    CommentRestoreInput:
+      type: object
+      required: [commentIds]
+      properties:
+        commentIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          items: { type: integer, format: int64 }
+    CollectionSubscriptionStatus:
+      type: object
+      required: [subscribed, muted]
+      properties:
+        subscribed: { type: boolean }
+        muted: { type: boolean }
+    CollectionReactionInput:
+      type: object
+      required: [collectionId, active]
+      properties:
+        collectionId: { type: integer, format: int64, minimum: 1 }
+        reaction: { type: string, enum: [like, favorite], default: like }
+        active: { type: boolean }
+    CollectionReactionToggle:
+      type: object
+      required: [active, likeCount, favoriteCount]
+      properties:
+        active: { type: boolean }
+        likeCount: { type: integer, minimum: 0 }
+        favoriteCount: { type: integer, minimum: 0 }
+    CollectionReactionState:
+      type: object
+      required: [collectionId, like, favorite]
+      properties:
+        collectionId: { type: integer, format: int64 }
+        like: { type: boolean }
+        favorite: { type: boolean }
+    CollectionSubscription:
+      type: object
+      required: [collectionId, slug, title, articleCount, muted, unreadCount, subscribedAt]
+      properties:
+        collectionId: { type: integer, format: int64 }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        cover: { type: string }
+        articleCount: { type: integer }
+        owner: { $ref: '#/components/schemas/PublicAuthorSummary' }
+        muted: { type: boolean }
+        unreadCount: { type: integer }
+        subscribedAt: { type: string, format: date-time }
+    CollectionFeedItem:
+      type: object
+      required: [eventId, collectionId, slug, collectionTitle, articleId, articleTitle, publishedAt]
+      properties:
+        eventId: { type: integer, format: int64 }
+        collectionId: { type: integer, format: int64 }
+        slug: { type: string }
+        collectionTitle: { type: string }
+        articleId: { type: integer, format: int64 }
+        articleTitle: { type: string }
+        excerpt: { type: string }
+        cover: { type: string }
+        owner: { $ref: '#/components/schemas/PublicAuthorSummary' }
+        publishedAt: { type: string, format: date-time }
+    ArticleReadSession:
+      type: object
+      required: [sessionId, activeMs, maxScrollPercent]
+      properties:
+        sessionId: { type: string, minLength: 8, maxLength: 128, example: 2ef87de3-6b32-4a86-a726-f3aed96b4a7d }
+        activeMs: { type: integer, minimum: 3000, maximum: 7200000 }
+        maxScrollPercent: { type: number, minimum: 0, maximum: 100 }
+    ArticleContinuationEvent:
+      type: object
+      required: [eventType]
+      properties:
+        eventType:
+          type: string
+          enum: [series_impression, series_click, related_impression, related_click]
+        targetType: { type: string, enum: [article, series] }
+        targetId: { type: integer, minimum: 1 }
+        placement: { type: string, enum: [related, series_previous, series_next, series_index] }
+        position: { type: integer, minimum: 0, maximum: 3 }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

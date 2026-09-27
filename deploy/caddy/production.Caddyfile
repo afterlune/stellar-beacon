@@ -1,0 +1,183 @@
+{
+    log {
+        level WARN
+        output file /var/log/caddy.log {
+            roll_size 10MB
+            roll_keep 10
+            roll_keep_for 720h
+        }
+    }
+}
+# Configuration for HTTPS server on port 443
+https://example.com {
+    @options_preflight {
+        method OPTIONS
+    }
+    handle @options_preflight {
+        respond * 204 {
+            close
+        }
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "*"
+        header Access-Control-Expose-Headers "*"
+        header Access-Control-Allow-Credentials "true"
+    }
+	
+    handle_path /api {
+        reverse_proxy https://172.17.0.1:7777 {
+            transport http {
+                tls
+                tls_insecure_skip_verify
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
+	
+	handle_path /api/* {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	handle /healthz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /readyz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|applebot)
+	handle @seoCrawler {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+	@seoAssets path /sitemap.xml /robots.txt /feed.xml
+	handle @seoAssets {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle {
+		root * /srv/vue/blog
+		file_server
+		try_files {path} {path}/ /index.html
+		encode gzip zstd
+	}
+
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "*"
+        Access-Control-Expose-Headers "*"
+        Access-Control-Allow-Credentials "true"
+    }
+}
+
+# Configuration for HTTP server on port 8008
+https://example.com:8008 {
+    @options_preflight {
+        method OPTIONS
+    }
+    handle @options_preflight {
+        respond * 204 {
+            close
+        }
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "*"
+        header Access-Control-Expose-Headers "*"
+        header Access-Control-Allow-Credentials "true"
+	}
+
+	handle /healthz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /readyz {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	@seoCrawler header_regexp User-Agent (?i)(googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|skypeuripreview|pinterest|applebot)
+	handle @seoCrawler {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+	@seoAssets path /sitemap.xml /robots.txt /feed.xml
+	handle @seoAssets {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle_path /api/* {
+		reverse_proxy https://172.17.0.1:7777 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	handle {
+		root * /srv/vue/admin
+		file_server
+		try_files {path} {path}/ /index.html
+		encode gzip zstd
+	}
+
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "*"
+        Access-Control-Expose-Headers "*"
+        Access-Control-Allow-Credentials "true"
+    }
+}

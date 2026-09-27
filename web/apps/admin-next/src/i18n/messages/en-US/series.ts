@@ -1,0 +1,22 @@
+export default {
+  'series.title': 'Collections',
+  'series.description': 'Group articles of one topic into an ordered collection readers can follow.',
+  'series.create': 'New collection',
+  'series.edit': 'Edit collection',
+  'series.name': 'Name',
+  'series.namePlaceholder': 'For example: Building a render pipeline',
+  'series.nameRequired': 'A collection name is required',
+  'series.desc': 'Description',
+  'series.cover': 'Cover',
+  'series.coverPlaceholder': 'Cover image URL (optional)',
+  'series.articleCount': 'Articles',
+  'series.updatedAt': 'Updated',
+  'series.total': '{total} collections',
+  'series.searchPlaceholder': 'Search collections',
+  'series.saved': 'Collection saved',
+  'series.deleted': 'Collection deleted',
+  'series.deleteConfirm': 'Delete "{name}"? Its articles stay and are detached.',
+  'series.loadFailed': 'Could not load collections',
+  'series.saveFailed': 'Could not save the collection',
+  'series.deleteFailed': 'Could not delete the collection'
+}

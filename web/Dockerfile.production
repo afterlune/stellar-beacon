@@ -1,0 +1,14 @@
+FROM node:22-alpine AS build
+
+WORKDIR /workspace
+
+COPY . .
+
+RUN npm ci \
+    && npm run build:blog \
+    && npm run build:admin
+
+FROM caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+
+COPY --from=build /workspace/apps/blog/dist/ /srv/vue/blog/
+COPY --from=build /workspace/apps/admin-next/dist/ /srv/vue/admin/
