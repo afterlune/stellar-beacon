@@ -1004,6 +1004,25 @@ INSERT INTO t_comment (user_id, topic_id, comment_content, type, is_delete, is_r
 	if !foundSubscribed || !foundArchive {
 		t.Fatalf("subscription and archive fallback must appear: %+v", fullPage.Items)
 	}
+	seededPage, err := recommendationRepo.ListRecommendations(ctx, port.RecommendationRequest{
+		UserID: 5, SeedArticleIDs: []int{archiveArticle}, Size: 20, Snapshot: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("list recommendations from a reading seed: %v", err)
+	}
+	foundSeededTopic := false
+	seededTopicArticles := map[int]bool{recArticleA: true, recArticleB: true, recArticleC: true}
+	for _, item := range seededPage.Items {
+		if item.Id == archiveArticle {
+			t.Fatalf("reading seed must not recommend itself: %+v", item)
+		}
+		if seededTopicArticles[item.Id] && item.Reason.Type == port.RecommendationReasonReading {
+			foundSeededTopic = true
+		}
+	}
+	if !seededPage.Personalized || !foundSeededTopic {
+		t.Fatalf("reading seed must recommend a related article with an explanation: %+v", seededPage)
+	}
 	hidden, err := recommendationRepo.UpsertFeedback(ctx, 2, port.RecommendationFeedbackInput{
 		TargetType: port.RecommendationTargetArticle, ArticleID: recArticleA,
 	})

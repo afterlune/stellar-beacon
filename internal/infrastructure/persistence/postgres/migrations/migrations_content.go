@@ -192,6 +192,49 @@ func applyArticleReactionSchema(ctx context.Context, engine *xorm.Engine) error 
 	return nil
 }
 
+// applyArticleReactionUniquenessSchema repairs databases where XORM created
+// t_article_reaction before migration 6. In that case CREATE TABLE IF NOT
+// EXISTS did not add the composite uniqueness required by reaction toggles.
+func applyArticleReactionUniquenessSchema(ctx context.Context, engine *xorm.Engine) error {
+	checkSession := engine.NewSession().Context(ctx)
+	defer checkSession.Close()
+	var applied bool
+	if _, err := checkSession.SQL("SELECT EXISTS (SELECT 1 FROM " + migrationTable + " WHERE version = 35)").Get(&applied); err != nil {
+		return fmt.Errorf("check article reaction uniqueness migration: %w", err)
+	}
+	if applied {
+		return nil
+	}
+
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	if err := session.Begin(); err != nil {
+		return fmt.Errorf("begin article reaction uniqueness migration: %w", err)
+	}
+	defer session.Rollback()
+	if _, err := session.Exec(`
+		DELETE FROM t_article_reaction duplicate
+		USING t_article_reaction keeper
+		WHERE duplicate.article_id = keeper.article_id
+		  AND duplicate.user_info_id = keeper.user_info_id
+		  AND duplicate.reaction = keeper.reaction
+		  AND duplicate.id > keeper.id`); err != nil {
+		return fmt.Errorf("deduplicate article reactions: %w", err)
+	}
+	if _, err := session.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_article_reaction_user_article_kind
+		ON t_article_reaction (article_id, user_info_id, reaction)`); err != nil {
+		return fmt.Errorf("create article reaction uniqueness index: %w", err)
+	}
+	if _, err := session.Exec("INSERT INTO "+migrationTable+" (version, name) VALUES (?, ?)", 35, "article-reaction-uniqueness"); err != nil {
+		return fmt.Errorf("record article reaction uniqueness migration: %w", err)
+	}
+	if err := session.Commit(); err != nil {
+		return fmt.Errorf("commit article reaction uniqueness migration: %w", err)
+	}
+	return nil
+}
+
 // applyCommentNotificationSchema adds the per-account opt-out used by comment
 // notification emails. The site-wide switch already lives in the website
 // configuration, so only the account preference needs a column.

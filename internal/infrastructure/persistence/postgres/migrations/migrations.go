@@ -55,6 +55,9 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyArticleReactionSchema(ctx, engine); err != nil {
 		return err
 	}
+	if err := applyArticleReactionUniquenessSchema(ctx, engine); err != nil {
+		return err
+	}
 	if err := applyCommentNotificationSchema(ctx, engine); err != nil {
 		return err
 	}

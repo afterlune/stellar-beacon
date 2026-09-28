@@ -115,9 +115,13 @@ func (s *MyRecommendationService) Query(c *gin.Context) model.ResultVO {
 	if err != nil {
 		return model.ResultFailWithMessage("推荐游标不正确")
 	}
-	snapshot := time.Now().UTC()
+	// Content timestamps use PostgreSQL TIMESTAMP WITHOUT TIME ZONE and are
+	// written in the application/database local timezone. Keep the ranking
+	// snapshot in that same wall-clock timezone so today's content is not
+	// treated as future-dated when the process timezone is not UTC.
+	snapshot := time.Now()
 	if cursor != nil {
-		snapshot = cursor.Snapshot
+		snapshot = cursor.Snapshot.In(time.Local)
 	}
 	page, err := s.repo.ListRecommendations(c.Request.Context(), port.RecommendationRequest{
 		UserID: user.UserInfoId, SeedArticleIDs: seeds, Size: vo.Size, Snapshot: snapshot, Cursor: cursor,

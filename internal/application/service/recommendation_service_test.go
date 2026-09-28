@@ -57,6 +57,9 @@ func TestRecommendationQueryNormalizesSeedsAndAttachesCounts(t *testing.T) {
 	if repo.request.UserID != 7 || repo.request.Size != 6 || len(repo.request.SeedArticleIDs) != 2 || repo.request.SeedArticleIDs[0] != 4 {
 		t.Fatalf("unexpected recommendation request: %+v", repo.request)
 	}
+	if repo.request.Snapshot.Location() != time.Local {
+		t.Fatalf("recommendation snapshot must use the local database wall-clock timezone: %s", repo.request.Snapshot.Location())
+	}
 	page, ok := result.Data.(model.RecommendationFeedDTO)
 	if !ok || page.Items[0].LikeCount != 3 || page.Items[0].FavoriteCount != 2 || page.NextCursor == "" {
 		t.Fatalf("unexpected recommendation response: %+v", result.Data)

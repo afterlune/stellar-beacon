@@ -93,10 +93,6 @@ test.describe('admin-next real read-only integration', () => {
 
     const menuItems = flattenMenuItems(menuPayload.data)
     const visibleItems = menuItems.filter((item) => !item.hidden)
-    const parentPaths = [...new Set(visibleItems
-      .filter((item) => item.parentPath && item.path !== item.parentPath)
-      .map((item) => item.parentPath)
-      .filter((path): path is string => Boolean(path)))]
     const hiddenLabels = menuItems
       .filter((item) => item.hidden)
       .map((item) => item.name)
@@ -114,9 +110,12 @@ test.describe('admin-next real read-only integration', () => {
       if (menuItem.parentPath) {
         const parent = visibleItems.find((item) => item.path === menuItem.parentPath)
         if (!parent) throw new Error(`parent menu is missing for ${menu.path}: ${menuItem.parentPath}`)
-        const parentIndex = parentPaths.indexOf(parent.path)
-        if (parentIndex < 0) throw new Error(`parent menu order is missing for ${menu.path}: ${parent.path}`)
-        menuScope = sidebar.locator('.arco-menu-inline').nth(parentIndex)
+        const matchingChild = page.locator('.arco-menu-item').filter({
+          has: page.getByText(displayName, { exact: true })
+        })
+        const parentMenus = sidebar.locator('.arco-menu-inline').filter({ has: matchingChild })
+        await expect(parentMenus, `parent menu ${parent.path} (${parent.name})`).toHaveCount(1)
+        menuScope = parentMenus.first()
         const parentItem = menuScope.locator('.arco-menu-inline-header')
         await parentItem.scrollIntoViewIfNeeded()
         const childItem = menuScope.locator('.arco-menu-item').filter({ hasText: displayName })
@@ -209,7 +208,7 @@ test.describe('admin-next real read-only integration', () => {
     const menuItems = flattenMenuItems(menuPayload.data)
 
     const routes = [
-      { path: `/articles/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/articles')}`, menuPaths: ['/articles/*'], marker: '修改文章', contentSelector: '.article-form' },
+      { path: `/articles/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/articles')}`, menuPaths: ['/articles/:articleId'], marker: '修改文章', contentSelector: '.article-form' },
       { path: '/quartz/log/85', menuPaths: ['/quartz/log/:quartzId'], marker: '任务日志' },
       { path: `/talks/${await firstAdminRecordID(page, adminToken, '/api/v1/admin/talks')}`, menuPaths: ['/talks/*', '/talks/:talkId'], marker: '编辑说说', contentSelector: '.talk-form' }
     ]
@@ -291,6 +290,7 @@ function flattenMenuItems(value: unknown, parentPath = ''): Array<{ name: string
 const menuDisplayNames: Record<string, string> = {
   '/monitor': '监控',
   '/media': '媒体库',
+  '/website': '网站管理',
   '/talk-list': '说说管理',
   '/users': '用户管理',
   '/resources': '资源管理'

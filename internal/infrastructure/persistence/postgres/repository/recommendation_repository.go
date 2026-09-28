@@ -95,7 +95,7 @@ func (r *MyRecommendationRepo) ListRecommendations(ctx context.Context, request 
 		return result, err
 	}
 	if request.Snapshot.IsZero() {
-		request.Snapshot = time.Now().UTC()
+		request.Snapshot = time.Now()
 	}
 	interestStart := recommendationLookback(request.Snapshot)
 	var signals int
@@ -201,9 +201,12 @@ const recommendationAffinityCTE = `,
 		FROM recent_reactions reaction
 		JOIN article_topics topics ON topics.article_id = reaction.article_id
 		UNION ALL
-		SELECT topics.article_id, topics.topic_type, topics.topic_key, topics.topic_name, 15, 'seed'
+		SELECT candidate_topics.article_id, candidate_topics.topic_type, candidate_topics.topic_key, candidate_topics.topic_name, 15, 'seed'
 		FROM seed_ids seed
-		JOIN article_topics topics ON topics.article_id = seed.article_id
+		JOIN article_topics seed_topics ON seed_topics.article_id = seed.article_id
+		JOIN article_topics candidate_topics
+			ON candidate_topics.topic_type = seed_topics.topic_type
+			AND candidate_topics.topic_key = seed_topics.topic_key
 		UNION ALL
 		SELECT topics.article_id, topics.topic_type, topics.topic_key, topics.topic_name, 10, 'follow'
 		FROM t_user_follow follow
@@ -298,9 +301,9 @@ const recommendationCursorSQL = `
 func (r *MyRecommendationRepo) loadRecommendationBatch(ctx context.Context, session *xorm.Session, request port.RecommendationRequest, cursor *port.RecommendationCursor, limit int) ([]recommendationCandidateRow, error) {
 	windowStart, windowDate := discoveryWindow(request.Snapshot)
 	interestStart := recommendationLookback(request.Snapshot)
-	args := []interface{}{windowDate, windowStart, windowStart, request.UserID, interestStart}
+	args := []interface{}{windowDate, windowStart, windowStart, request.UserID, interestStart, request.UserID}
 	seedCTE := recommendationSeedCTE(request.SeedArticleIDs, &args)
-	args = append(args, request.UserID, request.UserID, interestStart, request.UserID, interestStart, request.Snapshot, request.UserID, request.UserID, request.UserID)
+	args = append(args, request.UserID, interestStart, request.UserID, windowStart, request.Snapshot, request.UserID, request.UserID, request.UserID)
 	args = append(args, recommendationCursorArgs(cursor)...)
 	args = append(args, limit)
 	queryText := "WITH " + discoveryScoredCTE + recommendationArticleTopicsCTE + seedCTE + recommendationAffinityCTE + recommendationRankedCTE + recommendationCursorSQL

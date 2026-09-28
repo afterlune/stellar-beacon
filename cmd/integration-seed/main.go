@@ -94,6 +94,9 @@ func main() {
 	if err := ensureTopicFixture(ctx, db, userIDs[0], userIDs[1]); err != nil {
 		fail("seed topic fixture: %v", err)
 	}
+	if err := ensureTalkFixture(ctx, db, userIDs[0]); err != nil {
+		fail("seed talk fixture: %v", err)
+	}
 	fmt.Println("integration users, public fixture and notification preferences are ready")
 }
 
@@ -300,6 +303,35 @@ func ensureIntegrationFixture(ctx context.Context, db *sql.DB, authorID, readerI
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit fixture transaction: %w", err)
+	}
+	return nil
+}
+
+func ensureTalkFixture(ctx context.Context, db *sql.DB, authorID int) error {
+	const content = "Integration readonly talk fixture"
+	var talkID int
+	err := db.QueryRowContext(ctx, `
+		SELECT id FROM t_talk
+		WHERE user_id = $1 AND content = $2
+		ORDER BY id ASC LIMIT 1`, authorID, content).Scan(&talkID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if err := db.QueryRowContext(ctx, `
+			INSERT INTO t_talk
+				(user_id, content, images, is_top, status, moderation_status, create_time, update_time)
+			VALUES ($1, $2, '', 0, 1, 'visible', NOW(), NOW())
+			RETURNING id`, authorID, content).Scan(&talkID); err != nil {
+			return fmt.Errorf("insert readonly talk fixture: %w", err)
+		}
+	case err != nil:
+		return fmt.Errorf("find readonly talk fixture: %w", err)
+	default:
+		if _, err := db.ExecContext(ctx, `
+			UPDATE t_talk
+			SET status = 1, moderation_status = 'visible', update_time = NOW()
+			WHERE id = $1`, talkID); err != nil {
+			return fmt.Errorf("refresh readonly talk fixture: %w", err)
+		}
 	}
 	return nil
 }

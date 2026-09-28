@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/afterlune/stellar-beacon/internal/domain/entity"
 	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
@@ -36,14 +37,17 @@ func (r *MyArticleReactionRepo) Toggle(ctx context.Context, articleID, userInfoI
 			articleID, userInfoID, reaction,
 		)
 		if err != nil {
+			slog.ErrorContext(ctx, "insert article reaction failed", "error", err)
 			return apperrors.Unavailable("article_reaction.toggle", err)
 		}
 		inserted, err := result.RowsAffected()
 		if err != nil {
+			slog.ErrorContext(ctx, "read inserted article reaction count failed", "error", err)
 			return apperrors.Unavailable("article_reaction.toggle", err)
 		}
 		if inserted > 0 {
 			if err := recordReactionNotification(session, articleID, userInfoID, reaction); err != nil {
+				slog.ErrorContext(ctx, "record article reaction notification failed", "error", err)
 				return err
 			}
 			active = true
