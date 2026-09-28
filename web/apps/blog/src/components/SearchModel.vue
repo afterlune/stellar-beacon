@@ -177,12 +177,6 @@
           <div class="search-logo">
             <a href="" target="_blank" rel="noopener noreferrer">
               <span class="search-label">{{ t('settings.searched-by') }}</span>
-              <img
-                class="mr-1.5"
-                src="https://example-bucket.oss-cn-shanghai.aliyuncs.com/config/20210313122054101.png"
-                alt="ObsidianNext Logo"
-                height="20"
-                width="20" />
               <span class="text-ob">MeiliSearch</span>
             </a>
           </div>

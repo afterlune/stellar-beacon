@@ -9,10 +9,6 @@ import (
 )
 
 const (
-	FILEURL = "http://i.example.invalid/"
-)
-
-const (
 	ONE               = 1
 	ZERO              = 0
 	FALSE             = 0

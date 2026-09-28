@@ -18,7 +18,5 @@ if (-not $NoBuild) {
 }
 Invoke-IntegrationCompose -Arguments $upArgs
 Wait-IntegrationHttp -Uri 'http://127.0.0.1:18080/'
-
-Write-Host 'Applying versioned database migrations...' -ForegroundColor Cyan
-Invoke-IntegrationCompose -Arguments @('run', '--rm', '--no-deps', 'backend', '/app/stellar-beacon', 'migrate')
+Wait-IntegrationHttp -Uri 'http://127.0.0.1:18080/readyz'
 Write-Host 'Isolated integration stack is up.' -ForegroundColor Green

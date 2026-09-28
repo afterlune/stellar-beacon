@@ -139,6 +139,40 @@ func Apply(ctx context.Context, engine *xorm.Engine) error {
 	if err := applyPerUserLegacyContentSchema(ctx, engine); err != nil {
 		return err
 	}
+	return applyTimestampDefaults(ctx, engine)
+}
+
+// applyTimestampDefaults restores database defaults for conventional audit
+// timestamps. XORM creates the baseline tables before the SQL migrations, so
+// CREATE TABLE IF NOT EXISTS statements cannot add their declared defaults to
+// those existing tables. Raw SQL inserts rely on these defaults.
+func applyTimestampDefaults(ctx context.Context, engine *xorm.Engine) error {
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+	_, err := session.Exec(`
+		DO $$
+		DECLARE timestamp_column RECORD;
+		BEGIN
+			FOR timestamp_column IN
+				SELECT table_schema, table_name, column_name
+				FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND column_name IN ('create_time', 'update_time', 'created_at', 'updated_at')
+				  AND data_type IN ('timestamp with time zone', 'timestamp without time zone')
+				  AND column_default IS NULL
+			LOOP
+				EXECUTE format(
+					'ALTER TABLE %I.%I ALTER COLUMN %I SET DEFAULT CURRENT_TIMESTAMP',
+					timestamp_column.table_schema,
+					timestamp_column.table_name,
+					timestamp_column.column_name
+				);
+			END LOOP;
+		END $$;
+	`)
+	if err != nil {
+		return fmt.Errorf("apply audit timestamp defaults: %w", err)
+	}
 	return nil
 }
 

@@ -248,10 +248,10 @@ func ensureIntegrationFixture(ctx context.Context, db *sql.DB, authorID, readerI
 	// comparable across runs, even before the E2E flow adds reactions.
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO t_article_daily_metric
-			(article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions)
-		VALUES ($1, CURRENT_DATE, 3, 2, 2, 40000, 1)
+			(article_id, metric_date, views, unique_readers, effective_sessions, total_active_ms, completed_sessions, create_time, update_time)
+		VALUES ($1, CURRENT_DATE, 3, 2, 2, 40000, 1, NOW(), NOW())
 		ON CONFLICT (article_id, metric_date)
-		DO UPDATE SET unique_readers = 2, effective_sessions = 2`, articleID); err != nil {
+		DO UPDATE SET unique_readers = 2, effective_sessions = 2, update_time = NOW()`, articleID); err != nil {
 		return fmt.Errorf("seed fixture discovery metric: %w", err)
 	}
 

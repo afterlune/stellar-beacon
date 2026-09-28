@@ -77,7 +77,7 @@ const displaySrc = computed(() => {
   try {
     const parsed = new URL(value, window.location.origin)
     const hostname = parsed.hostname.toLowerCase()
-    if (hostname.endsWith('.aliyuncs.com') || hostname === 'i.example.invalid') {
+    if (hostname.endsWith('.aliyuncs.com')) {
       return `${API_BASE_URL}/public/media/proxy?url=${encodeURIComponent(value)}`
     }
   } catch {
