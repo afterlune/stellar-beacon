@@ -3,18 +3,14 @@ import { expect, test } from '@playwright/test'
 let cleanJobLogsCalled = false
 let jobLogQueryJobId = ''
 let runJobCalled = false
-let photoRestoreCalled = false
-let friendLinkSavedCalled = false
-let friendLinkDeletedCalled = false
+let mediaDeleteKeys: string[] = []
 let websiteConfigUpdatedCalled = false
-let aboutUpdatedCalled = false
 let profileUpdatedCalled = false
 let returnEmptyMenus = false
 let articleImported = false
 let articleImportHasFile = false
 let articleExportedIds: number[] = []
 let articleExported = false
-let photoMovePayload: { photoIds?: number[]; albumId?: number } | null = null
 let jobGroupsRequested = false
 let jobLogGroupsRequested = false
 let contentAnalyticsRange = ''
@@ -43,34 +39,27 @@ const defaultWebsiteConfig = {
   gitee: 'https://gitee.com/example',
   notice: '欢迎来到星际信标'
 }
-const defaultAboutContent = '关于星际信标的介绍'
 let websiteConfig = { ...defaultWebsiteConfig }
-let aboutContent = defaultAboutContent
 let profile = { nickname: '测试管理员', intro: '保持公开资料边界', website: 'https://example.com/admin' }
 
 test.beforeEach(async ({ page }) => {
   cleanJobLogsCalled = false
   jobLogQueryJobId = ''
   runJobCalled = false
-  photoRestoreCalled = false
-  friendLinkSavedCalled = false
-  friendLinkDeletedCalled = false
+  mediaDeleteKeys = []
   websiteConfigUpdatedCalled = false
-  aboutUpdatedCalled = false
   profileUpdatedCalled = false
   returnEmptyMenus = false
   articleImported = false
   articleImportHasFile = false
   articleExportedIds = []
   articleExported = false
-  photoMovePayload = null
   jobGroupsRequested = false
   jobLogGroupsRequested = false
   contentAnalyticsRange = ''
   contentAnalyticsSort = ''
   articlePerformanceRange = ''
   websiteConfig = { ...defaultWebsiteConfig }
-  aboutContent = defaultAboutContent
   profile = { nickname: '测试管理员', intro: '保持公开资料边界', website: 'https://example.com/admin' }
   await page.route('**/*', async (route) => {
     const requestURL = new URL(route.request().url())
@@ -197,22 +186,10 @@ test.beforeEach(async ({ page }) => {
                   hidden: false
                 },
                 {
-                  name: '相册管理',
-                  path: '/albums',
-                  component: '/album/Album.vue',
+                  name: '图片资源',
+                  path: '/media',
+                  component: '/media/Media.vue',
                   hidden: false
-                },
-                {
-                  name: '照片管理',
-                  path: '/albums/*',
-                  component: '/album/Photo.vue',
-                  hidden: true
-                },
-                {
-                  name: '照片回收站',
-                  path: '/photos/delete',
-                  component: '/album/Delete.vue',
-                  hidden: true
                 },
                 {
                   name: '说说管理',
@@ -428,25 +405,6 @@ test.beforeEach(async ({ page }) => {
       return
     }
 
-    if (requestURL.pathname === '/api/v1/public/about') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { content: aboutContent } })
-      })
-      return
-    }
-
-    if (requestURL.pathname === '/api/v1/admin/about') {
-      if (route.request().method() === 'PUT') {
-        const payload = route.request().postDataJSON() as { content?: unknown }
-        if (typeof payload.content === 'string') aboutContent = payload.content
-        aboutUpdatedCalled = true
-      }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
-      return
-    }
-
     if (requestURL.pathname === '/api/v1/auth/me') {
       if (route.request().method() === 'PUT') {
         const payload = route.request().postDataJSON() as Partial<typeof profile>
@@ -504,30 +462,6 @@ test.beforeEach(async ({ page }) => {
           code: 20000,
           message: '操作成功',
           data: ['https://example.com/export/传统后台路线.md']
-        })
-      })
-      return
-    }
-
-    if (requestURL.pathname === '/api/v1/admin/photos/album') {
-      photoMovePayload = route.request().postDataJSON() as { photoIds?: number[]; albumId?: number }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null })
-      })
-      return
-    }
-
-    if (requestURL.pathname === '/api/v1/admin/albums/options') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          flag: true,
-          code: 20000,
-          message: '操作成功',
-          data: [{ id: 5, albumName: '项目截图' }, { id: 6, albumName: '旅行相册' }]
         })
       })
       return
@@ -737,42 +671,24 @@ test.beforeEach(async ({ page }) => {
       return
     }
 
-    if (requestURL.pathname === '/api/v1/admin/albums') {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 5, albumName: '项目截图', albumDesc: '联调素材', albumCover: 'album-cover', photoCount: 2, status: 1 }], count: 1 } })
-        })
-      } else {
+    if (requestURL.pathname === '/api/v1/admin/media') {
+      if (route.request().method() === 'DELETE') {
+        mediaDeleteKeys = route.request().postDataJSON() as string[]
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
+        return
       }
-      return
-    }
-
-    if (requestURL.pathname === '/api/v1/admin/albums/5') {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 5, albumName: '项目截图', albumDesc: '联调素材', albumCover: 'album-cover', photoCount: 1, status: 1 } })
-      })
-      return
-    }
-
-    if (requestURL.pathname === '/api/v1/admin/photos/trash') {
-      if (route.request().method() === 'PUT') {
-        const body = route.request().postDataJSON() as { isDelete?: number }
-        if (body.isDelete === 0) photoRestoreCalled = true
-      }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
-      return
-    }
-
-    if (requestURL.pathname === '/api/v1/admin/photos') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 13, photoName: '首页截图', photoDesc: '测试图片', photoSrc: 'photo-key' }], count: 1 } })
+        body: JSON.stringify({
+          flag: true,
+          code: 20000,
+          message: '操作成功',
+          data: {
+            records: [{ key: 'images/home.gif', url: 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=', name: '首页截图', size: 43, contentType: 'image/gif', lastModified: '2026-08-29T10:00:00Z', deletable: true }],
+            count: 1
+          }
+        })
       })
       return
     }
@@ -796,25 +712,6 @@ test.beforeEach(async ({ page }) => {
         contentType: 'application/json',
         body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { id: 7, userId: 1, content: '一次完整的前后端联调', images: '[]', imgs: [], isTop: 0, status: 1 } })
       })
-      return
-    }
-
-    if (requestURL.pathname === '/api/v1/admin/friend-links') {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: { records: [{ id: 6, linkName: '项目友链', linkAvatar: 'https://example.com/avatar.png', linkAddress: 'https://example.com', linkIntro: '工程化参考', createTime: '2026-08-29T10:00:00Z' }], count: 1 } })
-        })
-      } else if (route.request().method() === 'POST') {
-        friendLinkSavedCalled = true
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
-      } else if (route.request().method() === 'DELETE') {
-        friendLinkDeletedCalled = true
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flag: true, code: 20000, message: '操作成功', data: null }) })
-      } else {
-        await route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ flag: false, code: 40500, message: '不支持的请求方法', data: null }) })
-      }
       return
     }
 
@@ -958,30 +855,10 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await page.getByRole('button', { name: '清空任务日志' }).click()
   await page.locator('.arco-popconfirm:visible').getByRole('button', { name: '确定' }).click()
   await expect.poll(() => cleanJobLogsCalled).toBe(true)
-  await page.getByText('相册管理').click()
-  await expect(page).toHaveURL(/\/albums$/)
-  await expect(page.getByText('项目截图')).toBeVisible()
-  await page.getByRole('button', { name: '新增' }).click()
-  const albumDialog = page.locator('.arco-modal:visible')
-  const albumTextInputs = albumDialog.locator('input[type="text"]')
-  await albumTextInputs.nth(0).fill('新相册')
-  await albumDialog.locator('textarea').fill('新相册描述')
-  await albumTextInputs.nth(1).fill('new-album-cover')
-  await albumDialog.getByRole('button', { name: '确定' }).click()
-  await page.getByRole('button', { name: '回收站' }).click()
-  await expect(page).toHaveURL(/\/photos\/delete$/)
-  await expect(page.getByRole('main').getByText('照片回收站')).toBeVisible()
-  await expect(page.getByText('首页截图')).toBeVisible()
-  await page.getByRole('row', { name: /首页截图/ }).getByRole('checkbox').locator('..').click()
-  await expect(page.getByRole('button', { name: '批量恢复' })).toBeEnabled()
-  await page.getByRole('button', { name: '批量恢复' }).click()
-  await expect.poll(() => photoRestoreCalled).toBe(true)
-  await page.reload()
-  await expect(page.getByRole('main').getByText('照片回收站')).toBeVisible()
-  await page.goto('/albums/5')
-  await expect(page).toHaveURL(/\/albums\/5$/)
-  await expect(page.getByRole('main').getByText('项目截图 · 照片')).toBeVisible()
-  await expect(page.getByText('首页截图')).toBeVisible()
+  await page.getByText('媒体库', { exact: true }).click()
+  await expect(page).toHaveURL(/\/media$/)
+  await expect(page.getByRole('main').getByText('图片资源')).toBeVisible()
+  await expect(page.getByRole('main').locator('.media-card').getByText('首页截图', { exact: true })).toBeVisible()
   await page.getByText('说说管理').click()
   await expect(page).toHaveURL(/\/talk-list$/)
   await expect(page.getByText('一次完整的前后端联调')).toBeVisible()
@@ -1003,45 +880,17 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   await page.getByText('在线用户').click()
   await expect(page).toHaveURL(/\/online\/users$/)
   await expect(page.getByRole('main').getByText('在线用户')).toBeVisible()
+  // The backend exposes this menu, but its component path is not registered in admin-next.
   await page.getByText('友链管理').click()
   await expect(page).toHaveURL(/\/links$/)
-  await expect(page.getByRole('main').getByText('友链管理')).toBeVisible()
-  await expect(page.getByText('项目友链', { exact: true })).toBeVisible()
-  const friendLinkRow = page.getByRole('row', { name: /项目友链/ })
-  await friendLinkRow.getByRole('button', { name: '编辑' }).click()
-  const friendLinkEditDialog = page.locator('.arco-modal:visible')
-  await expect(friendLinkEditDialog).toContainText('编辑友链')
-  await expect(friendLinkEditDialog.locator('input').nth(0)).toHaveValue('项目友链')
-  await friendLinkEditDialog.getByRole('button', { name: '确定' }).click()
-  await expect.poll(() => friendLinkSavedCalled).toBe(true)
-  friendLinkSavedCalled = false
-  await page.getByRole('button', { name: '新增', exact: true }).click()
-  const friendLinkCreateDialog = page.locator('.arco-modal:visible')
-  const friendLinkInputs = friendLinkCreateDialog.locator('input')
-  await friendLinkInputs.nth(0).fill('新友链')
-  await friendLinkInputs.nth(1).fill('https://example.com/new-avatar.png')
-  await friendLinkInputs.nth(2).fill('https://example.com/new')
-  await friendLinkCreateDialog.locator('textarea').fill('新友链介绍')
-  await friendLinkCreateDialog.getByRole('button', { name: '确定' }).click()
-  await expect.poll(() => friendLinkSavedCalled).toBe(true)
-  await page.reload()
-  await expect(page).toHaveURL(/\/links$/)
-  await expect(page.getByRole('main').getByText('友链管理')).toBeVisible()
-  await friendLinkRow.getByRole('button', { name: '删除' }).click()
-  await page.locator('.arco-popconfirm:visible').getByRole('button', { name: '确定' }).click()
-  await expect.poll(() => friendLinkDeletedCalled).toBe(true)
+  const friendLinksPage = page.getByRole('main')
+  await expect(friendLinksPage).toContainText('这个菜单指向的视图还没有在前端注册')
+  await expect(friendLinksPage).toContainText('/friendLink/FriendLink.vue')
   await page.getByText('关于我').click()
   await expect(page).toHaveURL(/\/about$/)
-  const aboutMain = page.getByRole('main')
-  await expect(aboutMain.getByText('关于我')).toBeVisible()
-  const aboutTextarea = aboutMain.locator('textarea')
-  await expect(aboutTextarea).toHaveValue(defaultAboutContent)
-  await aboutTextarea.fill('关于星际信标的 E2E 更新')
-  await aboutMain.getByRole('button', { name: '保存', exact: true }).click()
-  await expect.poll(() => aboutUpdatedCalled).toBe(true)
-  aboutUpdatedCalled = false
-  await page.reload()
-  await expect(aboutMain.locator('textarea')).toHaveValue('关于星际信标的 E2E 更新')
+  const aboutPage = page.getByRole('main')
+  await expect(aboutPage).toContainText('这个菜单指向的视图还没有在前端注册')
+  await expect(aboutPage).toContainText('/about/About.vue')
 
   await page.getByText('网站管理').click()
   await expect(page).toHaveURL(/\/website$/)
@@ -1083,7 +932,7 @@ test('logs in, installs backend menu routes, and avoids blank pages', async ({ p
   expect(pageErrors()).toEqual([])
 })
 
-test('imports and exports articles, moves photos, and keeps filters in the URL', async ({ page }) => {
+test('imports and exports articles, keeps filters in the URL, and manages media assets', async ({ page }) => {
   test.setTimeout(120_000)
   const pageErrors = capturePageErrors(page)
   await page.goto('/login')
@@ -1135,18 +984,16 @@ test('imports and exports articles, moves photos, and keeps filters in the URL',
   await page.reload()
   await expect(page.locator('.arco-input-search').getByRole('textbox')).toHaveValue('联调')
 
-  // 照片批量移动相册：PUT 的请求体要同时带 photoIds 与 albumId。
-  await page.goto('/albums/5')
-  await expect(page.getByRole('main').getByText('项目截图 · 照片')).toBeVisible()
-  await page.getByRole('row', { name: /首页截图/ }).getByRole('checkbox').locator('..').click()
-  await page.getByRole('button', { name: '移动到相册' }).click()
-  const moveDialog = page.locator('.arco-modal:visible')
-  await expect(moveDialog).toContainText('目标相册')
-  await moveDialog.locator('.arco-select').click()
-  await page.locator('.arco-select-option').filter({ hasText: '旅行相册' }).click()
-  await moveDialog.getByRole('button', { name: '确定' }).click()
-  await expect.poll(() => photoMovePayload?.albumId).toBe(6)
-  expect(photoMovePayload?.photoIds).toEqual([13])
+  // 当前后台提供的是媒体库，不再提供相册详情或照片移动页面。
+  await page.goto('/media')
+  await expect(page.getByRole('main').getByText('图片资源')).toBeVisible()
+  await expect(page.getByRole('main').locator('.media-card').getByText('首页截图', { exact: true })).toBeVisible()
+  await page.getByRole('checkbox', { name: '选择 首页截图' }).check()
+  await page.getByRole('button', { name: '删除选中' }).click()
+  const deleteConfirm = page.locator('.arco-popconfirm:visible')
+  await expect(deleteConfirm).toContainText('确定永久删除选中的 1 张图片吗？')
+  await deleteConfirm.getByRole('button', { name: '确定' }).click()
+  await expect.poll(() => mediaDeleteKeys).toEqual(['images/home.gif'])
 
   // 任务分组：列表接口返回数组，日志接口返回字符串，两者都要能被解析成选项。
   await page.goto('/quartz')
@@ -1163,6 +1010,8 @@ test('imports and exports articles, moves photos, and keeps filters in the URL',
 test('keeps a direct unknown route on an explicit 404 page', async ({ page }) => {
   const pageErrors = capturePageErrors(page)
   await page.addInitScript(() => sessionStorage.setItem('token', 'e2e-token'))
+  await page.goto('/albums/5')
+  await expect(page.getByText('页面不存在')).toBeVisible()
   await page.goto('/unknown-page')
   await expect(page.getByText('页面不存在')).toBeVisible()
   expect(pageErrors()).toEqual([])
@@ -1206,7 +1055,7 @@ test('explains when an authenticated account has no visible menu', async ({ page
   expect(pageErrors()).toEqual([])
 })
 
-test('all migrated routes keep their menu permission and survive a refresh', async ({ page }) => {
+test('all configured routes keep their menu permission and survive a refresh', async ({ page }) => {
   // Validate every route plus a hard refresh. Keep the suite-level timeout
   // short for ordinary cases, but allow this deliberate full matrix to finish
   // on a cold Vite server.
@@ -1238,9 +1087,7 @@ test('all migrated routes keep their menu permission and survive a refresh', asy
     '/exception/log',
     '/quartz',
     '/quartz/log/85',
-    '/albums',
-    '/albums/5',
-    '/photos/delete',
+    '/media',
     '/talk-list',
     '/talks/7',
     '/menus',
