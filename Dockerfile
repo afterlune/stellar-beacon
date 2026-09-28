@@ -26,7 +26,8 @@ COPY ./resources /app/resources
 COPY ./deploy/config /app/config
 COPY ./docs /app/docs
 
-RUN apk add --no-cache curl tzdata \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache curl tzdata \
     && addgroup -S -g 10001 app \
     && adduser -S -u 10001 -G app app \
     && mkdir -p /app/resources/log /var/lib/stellar-beacon/keys \

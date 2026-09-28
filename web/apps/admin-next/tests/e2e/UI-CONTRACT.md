@@ -1,24 +1,26 @@
 # admin-next Playwright UI Contract (restyle-safe)
 
-Scope: the six spec/config files below, all under `web/apps/admin-next`.
-Every assertion below is quoted from those files with line numbers. Findings marked **[verified]** were
-checked against the live app (Arco Design Vue 2.58.0, Chromium) during this analysis; the app was not modified.
+Scope: the six spec files and Playwright config below, all under `web/apps/admin-next`.
+This document summarizes their current selectors and behaviors. Findings marked **[verified]** were checked against
+the live app (Arco Design Vue 2.58.0, Chromium).
 
 Sources:
 
-| File | Lines |
+| File | Purpose |
 | --- | --- |
-| `tests/e2e/admin-shell.spec.ts` | 939 |
-| `tests/e2e/integration-crud.spec.ts` | 255 |
-| `tests/e2e/integration-full-crud.spec.ts` | 506 |
-| `tests/e2e/integration-readonly.spec.ts` | 243 |
-| `tests/e2e/integration.spec.ts` | 60 |
-| `playwright.config.ts` | 34 |
+| `tests/e2e/admin-shell.spec.ts` | baseline, mocked API |
+| `tests/e2e/integration-article-admin.spec.ts` | gated article/admin integration |
+| `tests/e2e/integration-crud.spec.ts` | gated integration |
+| `tests/e2e/integration-full-crud.spec.ts` | gated integration |
+| `tests/e2e/integration-readonly.spec.ts` | gated integration |
+| `tests/e2e/integration.spec.ts` | gated integration |
+| `playwright.config.ts` | Playwright configuration |
 
-Two suites are always-on (baseline, mocked API via `page.route('**/*')`, admin-shell.spec.ts) and four are
+The `admin-shell.spec.ts` baseline uses a mocked API via `page.route('**/*')`. Five integration specs are
 gated behind env vars (`E2E_REAL_INTEGRATION=1` plus `E2E_ADMIN_ALLOW_LOGIN`/`E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD`
 or `E2E_ADMIN_TOKEN`) and self-skip otherwise (integration-crud.spec.ts:9-12, integration-full-crud.spec.ts:11-14,
-integration-readonly.spec.ts:41-44 and 130-133, integration.spec.ts:8-11). A redesign must satisfy all of them,
+integration-readonly.spec.ts:41-44 and 130-133, integration.spec.ts:8-11, integration-article-admin.spec.ts:8-11).
+A redesign must satisfy all of them,
 including the gated ones, because they encode the same DOM contract.
 
 Legend: **[FRAGILE]** = depends on exact ordinal position or on being the only/first match.
@@ -34,22 +36,21 @@ These are asserted repeatedly and are the backbone of the contract.
 | Shell root | `page.locator('.admin-shell')` visible | admin-shell.spec.ts:899, 905; integration-crud.spec.ts:64; integration-full-crud.spec.ts:66; integration.spec.ts:28; integration-readonly.spec.ts:217 |
 | Content root | `page.locator('.admin-content')` visible | admin-shell.spec.ts:900, 906; integration.spec.ts:51, 54; integration-readonly.spec.ts:218 |
 | Content root must have a rendered child | `.admin-content` then `content.locator(':scope > *').first()` visible | integration-readonly.spec.ts:220 |
-| Content root must not show error/placeholder copy | `.admin-content` `not.toContainText('页面不存在')` | admin-shell.spec.ts:901, 907; integration-crud.spec.ts (implicit), integration.spec.ts:52, 55; integration-readonly.spec.ts:222 |
+| Content root must not show not-found copy on supported routes | `.admin-content` `not.toContainText('页面不存在')` | admin-shell.spec.ts; integration suites |
 | | `.admin-content` `not.toContainText('无权访问')` | integration-readonly.spec.ts:223 |
-| | `.admin-content` `not.toContainText('模块迁移中')` | integration-readonly.spec.ts:224 |
+| | Integration routes expected to be implemented must not contain `模块迁移中`; the baseline's `/links` and `/about` fixtures intentionally map unregistered components to PlaceholderView | integration-readonly.spec.ts |
 | `main` landmark must exist | `page.getByRole('main')` used as the scope for almost every page assertion | admin-shell.spec.ts:617, 622, 625, 628, 632, 639, 651, 652, 672, 700, 717, 724, 727, 734, 749, 752, 773, 779, 792, 805, 824-826; integration-full-crud.ts:275, 291, 307, 360, 384; integration.spec.ts:29 |
 | Sidebar root | `page.locator('.admin-sider')` visible + used as click scope for menu items | admin-shell.spec.ts:618, 620, 623, 864 |
 | Sidebar must be an Arco sider | `page.locator('.arco-layout-sider').first()` used as menu scope | integration-readonly.spec.ts:97, 105 |
 | Menu item must be `.arco-menu-item` | `sidebar.locator('.arco-menu-item').filter({ hasText: name })` must have count 1 | integration-readonly.spec.ts:105-106 |
 | Table root | `page.locator('.arco-table')` visible | admin-shell.spec.ts:746; integration-crud.spec.ts:69, 94; integration-full-crud.spec.ts:113, 141, 181, 209, 240, 262, 334, 350, 386, 389; integration-readonly.spec.ts:112 |
 | Rows are accessible rows | `page.getByRole('row')` (+ `.filter({ hasText })`) | admin-shell.spec.ts:719, 754; integration-crud.spec.ts:156; integration-full-crud.spec.ts:337, 393, 480 |
-| Cells are accessible cells | `row.getByRole('cell').nth(1)` | integration-full-crud.spec.ts:339 |
 | Table body class (used only for `.count()`, not for interaction) | `.arco-table-tbody .arco-table-tr` | integration-full-crud.spec.ts:241, 263 |
 | Modal root | `page.locator('.arco-modal:visible')` | see per-view tables |
 | Popconfirm root | `page.locator('.arco-popconfirm:visible')` | admin-shell.spec.ts:675, 703, 775; integration-crud.spec.ts:163, 203, 224, 244; integration-full-crud.spec.ts:355, 443, 451, 467 |
 | Search input | `.arco-input-search` wrapper containing `getByRole('textbox')` | integration-crud.spec.ts:168; integration-full-crud.spec.ts:427 |
 | Search trigger icon | `.arco-input-search .arco-icon-hover:not(.arco-input-clear-btn)` — exactly 1 match **[verified: count = 1]** | integration-crud.spec.ts:178; integration-full-crud.spec.ts:433 |
-| URL shape | `toHaveURL` exact path regexes per route, incl. `/\/articles$/`, `/\/articles\/42$/`, `/\/tags$/`, `/\/quartz\/log\/\d+$/`, `/\/albums\/5$/`, `/\/talks\/7$/`, `/\/photos\/delete$/`, `/\/online\/users$/`, `/\/website$/`, `/\/setting$/` | admin-shell.spec.ts:616, 621, 624, 627, 631, 638, 650, 654, 658, 664, 671, 689, 696, 699, 706, 716, 726, 730, 733, 736, 745, 748, 751, 772, 778, 791, 804, 823 |
+| URL shape | `toHaveURL` exact path regexes per supported route, including `/\/media$/` and `/\/talks\/7$/` | admin-shell.spec.ts |
 | Route render check | `expect(page).toHaveURL((url) => url.pathname === expectedPath)` | integration-readonly.spec.ts:216 |
 | HTTP 200 on navigation and refresh | `expect(response?.status()).toBe(200)` for every route and every `page.reload()` | admin-shell.spec.ts:898, 904, 914-915; integration-readonly.spec.ts:83, 173, 215; integration.spec.ts:50 |
 
@@ -58,17 +59,13 @@ inside `<section class="admin-shell">` (Arco `a-layout` renders `SECTION`), and 
 `getByRole('main')` resolves to exactly 1 node only because the tag stays `<main>`. Replacing it with a `<div>`
 (keeping the class) silently breaks ~30 assertions with "resolved to 0 elements".
 
-**Why `getByRole('row')` matters** **[verified]**: Arco's `tr`/`td` carry no explicit `role` attribute, but they
-are native `tr`/`td` inside a native `table`, so Playwright infers `row`, `cell`, `table`. A card/div/grid-based
-table redesign breaks every `getByRole('row')` and `row.getByRole('cell')` assertion even if the visual result is
-identical.
+**Why `getByRole('row')` matters** **[verified]**: Arco's table renders native rows, so Playwright exposes them with
+the `row` role. Replacing a tested table with a card/grid layout breaks the row-scoped selectors even if the visual
+result is similar. MediaView is intentionally a card grid and has its own asset selectors.
 
-**Checkbox select pattern** **[FRAGILE]**: admin-shell.spec.ts:719 is
-`page.getByRole('row', { name: /首页截图/ }).getByRole('checkbox').locator('..').click()` — it clicks the *parent*
-of the checkbox, not the checkbox. This requires (a) the row to contain exactly one accessible checkbox, and
-(b) that checkbox's parent element to be a clickable label/wrapper. Arco's row-selection cell is
-`.arco-table-checkbox` wrapping an `<input type="checkbox">`; wrapping the checkbox in extra elements or adding a
-second checkbox (e.g. a per-row toggle) changes `locator('..')` semantics.
+**Media selection**: the baseline addresses the asset checkbox by accessible name
+(`getByRole('checkbox', { name: '选择 首页截图' }).check()`). The checkbox belongs to a `.media-card`; deletion is
+confirmed separately and sends the selected asset key to the media API.
 
 ---
 
@@ -207,7 +204,7 @@ and `取消审核` (admin-shell.spec.ts:656 requires `通过审核` to be visibl
 Two page-level locators here are the most fragile in the baseline suite:
 
 * 660 `page.getByRole('button', { name: '编辑' })` — non-exact, page-wide. Any additional button whose accessible
-  name *contains* 编辑 (e.g. `编辑权限`, `编辑友链`, a toolbar `编辑`) resolves to multiple elements and the click
+  name *contains* 编辑 (e.g. `编辑权限` or a toolbar `编辑`) resolves to multiple elements and the click
   throws. Today the users table has exactly one data row with one such button.
 * 662 `page.getByRole('button', { name: '确定' })` — page-wide, not scoped to `.arco-modal`. It works only because
   exactly one visible dialog (and no other 确定 button) exists at that moment. A redesign that keeps a second 确定
@@ -292,63 +289,21 @@ hidden** afterwards, since `toHaveCount(0)` on `.arco-modal:visible` (694) and `
 (401) are both asserted. A redesign with `mask-closable={false}` + a persistent (non-visible) modal node is fine
 because the selector filters `:visible`, but a design where Escape does not close the modal fails.
 
-### 1.12 `/albums` — AlbumsView
+### 1.12 `/media` — MediaView
 
-| Kind | Exact locked value | Lines |
-| --- | --- | --- |
-| Sider click / URL | `page.getByText('相册管理')`, `/albums$` | 705-706 |
-| Unscoped text | `page.getByText('项目截图')` visible | 707 |
-| Create button | `page.getByRole('button', { name: '新增' })` | 708 |
-| Dialog | `page.locator('.arco-modal:visible')` | 709 |
-| Ordinals **[FRAGILE]** | `albumTextInputs = albumDialog.locator('input[type="text"]')`; `nth(0)` = 相册名称, then `albumDialog.locator('textarea')` = 相册描述, then `nth(1)` = 封面 URL | 710-713 |
-| Confirm | `albumDialog.getByRole('button', { name: '确定' })` | 714 |
-| Recycle-bin button | `page.getByRole('button', { name: '回收站' })` | 715 |
-| Table | `.arco-table` visible | integration-full-crud.spec.ts:113 |
-| Row-scoped edit | `rowWithText(page, name).getByRole('button', { name: '编辑', exact: true })` | integration-full-crud.spec.ts:124 |
-| Edit dialog ordinal | `modal.locator('input[type="text"]').nth(0)` = album name | integration-full-crud.spec.ts:126 |
-| Row-scoped delete | `row.getByRole('button', { name: '删除', exact: true })` + popconfirm (endpoint `/api/v1/admin/albums/:id`) | integration-full-crud.spec.ts:133, 463-477 |
+The supported image-management page is `/media` (Chinese menu label `媒体库`, page title `图片资源`, component
+`MediaView.vue`). It renders a
+grid of media cards rather than an album table. The baseline E2E mocks `GET /api/v1/admin/media`, selects the
+`首页截图` asset, confirms `删除选中`, and verifies that `DELETE /api/v1/admin/media` receives the asset key.
+Album creation, album details, photo trash, restoration, and moving photos between albums are not part of the
+current admin-next UI.
 
-Why `input[type="text"]` here and bare `input` elsewhere: AlbumsView has a hidden `<input type="file">`
-(AlbumsView.vue:57) inside the dialog, so the text inputs must be addressed by attribute. **A redesign that removes
-the hidden file input is safe; one that adds a second text-ish input (e.g. a number field rendered as
-`type="text"`) shifts `nth(1)` from cover URL to that field.**
+### 1.13 Retired album and photo-trash routes
 
-### 1.13 `/albums/5` and `/albums/11` — PhotoView
+`/albums/5` is checked as an unknown route and displays `页面不存在`. `/albums` and `/photos/delete` are also not
+registered admin-next routes. Do not treat the former album/photo CRUD assertions as current UI contracts.
 
-| Kind | Exact locked value | Lines |
-| --- | --- | --- |
-| URL | `/albums/5$`, `page.goto('/albums/5')` | 725-726 |
-| Main text | `getByRole('main').getByText('项目截图 · 照片')` visible (title = `${albumName} · 照片`) | 727 |
-| Unscoped text | `page.getByText('首页截图')` visible | 728 |
-| Marker | `main` contains `照片管理` (fallback title exists in source; the read-only route table uses `照片管理` for `/albums/5`) | integration-readonly.spec.ts:184 |
-| Content selector | `.arco-table` visible on `/albums/5` | integration-readonly.spec.ts:184, 195 |
-| Full-CRUD flow | `page.locator('.arco-table')` visible; `page.getByRole('row').filter({ has: page.getByRole('button', { name: '编辑', exact: true }) }).first()`; `row.getByRole('cell').nth(1)` = photo name | integration-full-crud.spec.ts:334-339 |
-| Edit dialog | `modal.locator('input[type="text"]').first()` = photo name | integration-full-crud.spec.ts:345 |
-| Remove button | `editedRow.getByRole('button', { name: '移除', exact: true })` + popconfirm → `PUT /api/v1/admin/photos/trash` | integration-full-crud.spec.ts:354-356 |
-| Restore button | `deletedRow.getByRole('button', { name: '恢复', exact: true })` → `PUT /api/v1/admin/photos/trash` | integration-full-crud.spec.ts:363 |
-
-> ⚠️ **Pre-existing contract conflict, worth knowing before you touch this view.** `PhotoView.vue` renders a
-> masonry of `<article class="photo-tile">` elements and contains **no** `a-table` and **no** `row`/`cell` markup
-> (verified: no `a-table` occurrence in the file). Yet the read-only suite requires `.arco-table` on `/albums/5`
-> (integration-readonly.spec.ts:184, 195) and the full-CRUD suite drives `/albums/11` entirely through
-> `.arco-table`, `getByRole('row')` and `row.getByRole('cell').nth(1)`
-> (integration-full-crud.spec.ts:334-373). Those two gated suites cannot pass against the current PhotoView as
-> written; if you are redesigning this view, a table-shaped contract for photo rows is what the tests encode.
-
-### 1.14 `/photos/delete` — PhotoTrashView
-
-| Kind | Exact locked value | Lines |
-| --- | --- | --- |
-| Main text | `getByRole('main').getByText('照片回收站')` visible (also after reload) | 717, 724; integration-full-crud.spec.ts:360 |
-| Unscoped text | `page.getByText('首页截图')` visible | 718 |
-| Checkbox click **[FRAGILE]** | `page.getByRole('row', { name: /首页截图/ }).getByRole('checkbox').locator('..').click()` | 719 |
-| Batch restore | `page.getByRole('button', { name: '批量恢复' })` `toBeEnabled()` then clicked → `PUT /api/v1/admin/photos/trash` with `isDelete: 0` | 720-722 (assert 519-520) |
-| Table | `.arco-table` visible | integration-readonly.spec.ts:185 |
-
-The `批量恢复` button must start **disabled** and become enabled only after row selection (`:disabled` bound to
-`selectedIds.length === 0`, PhotoTrashView.vue:6) — `toBeEnabled()` at 720 is a real state assertion.
-
-### 1.15 `/talk-list` — TalksView and `/talks`, `/talks/7` — TalkEditorView
+### 1.14 `/talk-list` — TalksView and `/talks`, `/talks/7` — TalkEditorView
 
 | Kind | Exact locked value | Lines |
 | --- | --- | --- |
@@ -364,7 +319,7 @@ The `批量恢复` button must start **disabled** and become enabled only after 
 | Row-scoped edit/delete | `tableRow(...).getByRole('button', { name: '编辑'|'删除', exact: true })` | integration-crud.spec.ts:133, 243 |
 | Marker | `main` contains `发布说说` for `/talks` | integration-readonly.spec.ts:29 |
 
-### 1.16 `/menus` and `/resources` — PermissionTreeView (MenuView / ResourceView wrappers)
+### 1.15 `/menus` and `/resources` — PermissionTreeView (MenuView / ResourceView wrappers)
 
 | Kind | Exact locked value | Lines |
 | --- | --- | --- |
@@ -382,39 +337,28 @@ The `批量恢复` button must start **disabled** and become enabled only after 
 element whose exact text is `文章列表`, and it must be the only exact match inside the table. **[verified]** Arco's
 `.arco-table` wrapper exposes the `table` role; the node with the exact text is the cell `<span>`.
 
-### 1.17 `/links` — FriendLinksView
+### 1.16 `/links` — PlaceholderView
 
 | Kind | Exact locked value | Lines |
 | --- | --- | --- |
-| Sider click / URL | `page.getByText('友链管理')`, `/links$` (also after reload) | 750-751, 772 |
-| Main text | `getByRole('main').getByText('友链管理')` visible | 752, 773 |
-| Unscoped exact text | `page.getByText('项目友链', { exact: true })` visible | 753 |
-| Row scoping | `page.getByRole('row', { name: /项目友链/ })` — the regex row-name form, used for both edit and delete | 754, 774 |
-| Row edit | `friendLinkRow.getByRole('button', { name: '编辑' }).click()` | 755 |
-| Edit dialog | `page.locator('.arco-modal:visible')`; `toContainText('编辑友链')` | 756-757 |
-| Input ordinal **[FRAGILE]** | `friendLinkEditDialog.locator('input').nth(0)` must have value `项目友链` | 758 |
-| Confirm | `friendLinkEditDialog.getByRole('button', { name: '确定' })` | 759 |
-| Create button | `page.getByRole('button', { name: '新增', exact: true })` (note: `exact` here, unlike 633/645) | 762 |
-| Create dialog ordinals **[FRAGILE]** | `input.nth(0)` = 友链名称, `nth(1)` = 头像地址, `nth(2)` = 链接地址; then `locator('textarea')` = 友链介绍 | 764-768 |
-| Row delete | `friendLinkRow.getByRole('button', { name: '删除' })` + `.arco-popconfirm:visible` 确定 | 774-775 |
-| Table | `.arco-table` visible | integration-crud.spec.ts:94 |
-| Row-scoped edit | `tableRow(page, created).getByRole('button', { name: '编辑', exact: true })` | integration-crud.spec.ts:102 |
-| Row-scoped delete | `/删除|移除/` exact + popconfirm | integration-crud.spec.ts:162, 223 |
+| Menu route | Clicking `友链管理` opens `/links` | admin-shell.spec.ts |
+| Component path | The fixture supplies `/friendLink/FriendLink.vue`, which is not registered in `router/menu.ts` | admin-shell.spec.ts; `src/router/menu.ts` |
+| Current page | `main` displays the unregistered-component placeholder and the supplied component path | admin-shell.spec.ts |
 
-The row-name form at 754/774 means the row's **accessible name must contain `项目友链`**: that depends on the row
-containing real text content (Arco cells), and is another reason a non-`tr` table breaks.
+This route currently has no friend-link CRUD screen in admin-next. Do not use old `项目友链` table or dialog
+assertions as the contract until the component is registered and the UI is implemented.
 
-### 1.18 `/about` — AboutView
+### 1.17 `/about` — PlaceholderView
 
 | Kind | Exact locked value | Lines |
 | --- | --- | --- |
-| Sider click / URL | `page.getByText('关于我')`, `/about$` | 777-778 |
-| Main text | `aboutMain.getByText('关于我')` visible (also marker `关于我` in read-only) | 780; integration-readonly.spec.ts:33 |
-| Textarea **[FRAGILE]** | `aboutMain.locator('textarea')` — must be a singleton scoped to `main`; `toHaveValue(defaultAboutContent)`; then filled; value re-asserted after reload | 781-783, 788 |
-| Save button | `aboutMain.getByRole('button', { name: '保存', exact: true })` | 784 |
-| Full-CRUD variant | `main.locator('textarea')` singleton; `main.getByRole('button', { name: '保存', exact: true })` → `PUT /api/v1/admin/about` | integration-full-crud.spec.ts:292-300 |
+| Menu route | Clicking `关于我` opens `/about` | admin-shell.spec.ts |
+| Component path | The fixture supplies `/about/About.vue`, which is not registered in `router/menu.ts` | admin-shell.spec.ts; `src/router/menu.ts` |
+| Current page | `main` displays the unregistered-component placeholder and the supplied component path | admin-shell.spec.ts |
 
-### 1.19 `/website` — WebsiteView
+This route currently has no AboutView in admin-next. Do not expect the former about-content editor or its save API.
+
+### 1.18 `/website` — WebsiteView
 
 | Kind | Exact locked value | Lines |
 | --- | --- | --- |
@@ -429,7 +373,7 @@ containing real text content (Arco cells), and is another reason a non-`tr` tabl
 grid and no input (search, switch rendered as input, file) precedes it. `textarea` singletons in `main` forbid a
 second textarea anywhere on these pages.
 
-### 1.20 `/setting` — SettingView
+### 1.19 `/setting` — SettingView
 
 | Kind | Exact locked value | Lines |
 | --- | --- | --- |
@@ -448,7 +392,7 @@ input is `hidden` but still an `input` in DOM order **before** nickname? It is r
 hidden file input either does not come first in DOM order or is absent at that moment — **[FRAGILE]**, treat the
 first two non-file inputs and the singleton textarea as the locked contract, and do not add inputs above them.
 
-### 1.21 `/unknown-page` — NotFoundView, and the no-menu state
+### 1.20 `/unknown-page` — NotFoundView, and the no-menu state
 
 | Kind | Exact locked value | Lines |
 | --- | --- | --- |
@@ -465,16 +409,14 @@ first two non-file inputs and the singleton textarea as the locked contract, and
 The no-menu sentence must match **exactly** (847 is an exact-string `getByText`), and the 404 page must contain
 `页面不存在` while valid pages must never contain it — including as a substring.
 
-### 1.22 Routes that must render (matrix)
+### 1.21 Routes that must render (matrix)
 
-`/`, `/article-list`, `/articles`, `/articles/42`, `/categories`, `/tags`, `/comments`, `/users`, `/roles`,
-`/operation/log`, `/exception/log`, `/quartz`, `/quartz/log/85`, `/albums`, `/albums/5`, `/photos/delete`,
+`/`, `/article-list`, `/content-performance`, `/articles`, `/articles/42`, `/categories`, `/tags`, `/comments`,
+`/users`, `/roles`, `/operation/log`, `/exception/log`, `/quartz`, `/quartz/log/85`, `/media`,
 `/talk-list`, `/talks/7`, `/menus`, `/resources`, `/links`, `/about`, `/website`, `/online/users`, `/setting`
-(admin-shell.spec.ts:868-894), each asserted with `.admin-shell` + `.admin-content` visible, no `页面不存在`,
-URL unchanged, and HTTP 200 before and after reload (899-907). The read-only suite re-walks 21 of these with an
-additional content marker and optional `.arco-table` / content-selector check (integration-readonly.spec.ts:14-36,
-102-120), plus `/articles/42`, `/quartz/log/85`, `/albums/5`, `/photos/delete`, `/talks/7` (181-187), each with
-`content.locator(':scope > *').first()` visible (220).
+are visited by the baseline route smoke test with `.admin-shell` and `.admin-content` visible before and after
+refresh. `/links` and `/about` render PlaceholderView because the fixture's component paths are not registered. The
+read-only integration separately walks its backend menu contract and checks rendered content markers.
 
 ---
 
@@ -491,7 +433,7 @@ tolerance), otherwise the assertion is a substring/text-content match.
 - `内容管理` (exact, in `.admin-sider`) — 618, 864
 - `文章列表` (exact, sider click) — 620
 - `发布文章` (exact, sider click) — 623
-- `分类管理`, `标签管理`, `评论管理`, `用户管理`, `角色管理`, `操作日志`, `异常日志`, `定时任务`, `相册管理`, `说说管理`, `菜单管理`, `资源管理`, `在线用户`, `友链管理`, `关于我`, `网站管理`, `个人中心` (sider clicks / URLs) — 630, 637, 653, 657, 663, 670, 688, 695, 705, 729, 735, 744, 747, 750, 777, 790, 803
+- `分类管理`, `标签管理`, `评论管理`, `用户管理`, `角色管理`, `操作日志`, `异常日志`, `定时任务`, `媒体库`, `说说管理`, `菜单管理`, `资源管理`, `在线用户`, `友链管理`, `关于我`, `网站管理`, `个人中心` (sider clicks / URLs) — see admin-shell.spec.ts
 - Hidden menu labels that must be absent: `无可见菜单` (exact, count 0), `隐藏页面` (exact, count 0), `仅用于权限测试` (exact, count 0) — 619, 865, 866; plus all `hidden: true` labels from the API (read-only: 98-100)
 - No-menu state (exact): `当前账号没有可见菜单，请联系管理员分配权限。` — 847
 
@@ -565,22 +507,14 @@ tolerance), otherwise the assertion is a substring/text-content match.
 - `异常日志` — integration-full-crud.spec.ts:378, integration-readonly.spec.ts:25
 - `模拟异常` — 697
 
-### `/albums`
-- `相册管理` — 707, integration-readonly.spec.ts:27
-- `项目截图` — 707
-- `新增`, `确定`, `回收站` — 708, 714, 715
-- `编辑相册` / `新增相册` (dialog titles, source; not asserted by name)
+### `/media`
+- `媒体库` — Chinese menu label
+- `图片资源` — page title
+- `首页截图` — mocked media asset
+- `删除选中` — selected-asset action; confirmation sends the asset key to `DELETE /api/v1/admin/media`
 
-### `/albums/5` + `/albums/11`
-- `项目截图 · 照片` (title, `albumName + ' · 照片'`) — 727
-- `首页截图` — 728
-- `照片管理` (fallback title; read-only marker for `/albums/5`) — integration-readonly.spec.ts:184
-- `编辑`, `移除`, `确定`, `恢复` (buttons) — integration-full-crud.spec.ts:337, 354, 356, 363
-
-### `/photos/delete`
-- `照片回收站` — 717, 724, integration-full-crud.spec.ts:360
-- `首页截图` — 718
-- `批量恢复` (button) — 720-721
+### Retired album routes
+- `/albums/5` displays `页面不存在`; album and photo-trash labels/actions are not part of the current interface.
 
 ### `/talk-list`, `/talks`, `/talks/7`
 - `说说管理` — 731, integration-readonly.spec.ts:28
@@ -597,14 +531,12 @@ tolerance), otherwise the assertion is a substring/text-content match.
 - `新增`, `确定` — 738, 743
 
 ### `/links`
-- `友链管理` — 752, 773, integration-readonly.spec.ts:32
-- `项目友链` (exact) — 753
-- `编辑友链` (dialog, via `toContainText`) — 757
-- `新增` (exact), `编辑`, `删除`, `确定` — 762, 755, 774, 759/775
+- `友链管理` — menu label
+- `这个菜单指向的视图还没有在前端注册` and `/friendLink/FriendLink.vue` — placeholder copy
 
 ### `/about`
-- `关于我` — 780, integration-readonly.spec.ts:33
-- `保存` (exact) — 784, integration-full-crud.spec.ts:296, 300
+- `关于我` — menu label
+- `这个菜单指向的视图还没有在前端注册` and `/about/About.vue` — placeholder copy
 
 ### `/website`
 - `网站配置` — 793, integration-full-crud.spec.ts:276
@@ -620,7 +552,7 @@ tolerance), otherwise the assertion is a substring/text-content match.
 - `模块迁移中` (must never appear on valid routes) — integration-readonly.spec.ts:224
 
 ### Filter/search query values (asserted via network, not DOM text)
-`keywords` param must equal the typed value on `/categories`, `/tags`, `/links`, `/albums`, `/roles`, `/menus`,
+`keywords` param must equal the typed value on `/categories`, `/tags`, `/roles`, `/menus`,
 `/resources`, `/users`, `/articles`, `/talks` (integration-crud.spec.ts:169-174; integration-full-crud.spec.ts:428-431);
 `jobName` param on `/quartz` (integration-full-crud.spec.ts:150, 159, 169); `jobId` param on `/quartz/log/:id`
 (admin-shell.spec.ts:429, 701).
@@ -663,14 +595,11 @@ at 643.
 | Test line | Dialog | Ordinal meaning that must hold |
 | --- | --- | --- |
 | 679-683 | `/quartz` create | label-scoped 任务名称, 任务分组 and Cron; target select option `userArea.refresh` |
-| 710-713 | `/albums` create | nth 0=相册名称, then the **only** textarea=相册描述, then nth 1=封面 URL |
 | 740-742 | `/menus` create | nth 0=菜单名称, 1=路径, 2=组件路径 |
 | 668 | `/roles` create | `input[type="text"]` first=角色名 |
 | integration-full-crud.spec.ts:167-176 | `/quartz` create | same label-scoped fields and target select |
-| integration-full-crud.spec.ts:116-119 | `/albums` create | same 3 ordinals as 710-713 |
 | integration-full-crud.spec.ts:212-219 | `/menus`/`/resources` create | menus: 0=name,1=path,2=component; resources: 0=name,1=url |
 | integration-full-crud.spec.ts:126, 184, 191, 227, 345, 369 | edit dialogs | `input[type="text"]`.first() = the entity name |
-| 758, 764-767 | `/links` edit/create | `input` nth 0=name, 1=avatar, 2=address |
 | integration-full-crud.spec.ts:246, 255 | `/users` edit | `input`.first() = nickname |
 | 806-813 | `/setting` | `input:not([type="file"])` nth 0=nickname, nth 1=website |
 | 794, 796, 801; integration-full-crud.spec.ts:277 | `/website` | `input` first = site name |
@@ -678,9 +607,8 @@ at 643.
 | integration-full-crud.spec.ts:77-80 | `/articles` | `.article-form input` nth 0=title, 1=category, 2=tag |
 
 Breaks if any input is added/removed/reordered before or between these fields, if a field's element stops emitting
-`type="text"`, or if a select/number/switch control renders an extra `input` in between. Reordering fields, moving
-the cover/file input earlier, or splitting the form into tabs (which may unmount/remount fields) all move the
-ordinals.
+`type="text"`, or if a select/number/switch control renders an extra `input` in between. Reordering fields or
+splitting the form into tabs (which may unmount/remount fields) can move the ordinals.
 
 **F6 — Textarea singletons.**
 `locator('textarea')` with no index is used at admin-shell.spec.ts:712, 768, 781, 795, 809, 825;
@@ -695,32 +623,25 @@ on `/quartz` **and must be enabled** (`toBeEnabled()` at 673) while the mocked `
 if the disabled variant is the only one rendered, if a second enabled/disabled 执行一次 appears, or if the button
 becomes a link with a different role.
 
-**F8 — `getByRole('button', { name: '通过审核' })` (656) and `getByRole('button', { name: '回收站' })` (715),
-`批量恢复` (720-721), `清空任务日志` (702), `保存资料` (814), `保存` (784, 797 + all CRUD save sites).**
+**F8 — page-wide action buttons `通过审核`, `清空任务日志`, `保存资料`, and `保存`.**
 All page-wide and (except where noted) non-exact; each must be the single match by accessible name. The `保存` family
-is guarded by `exact: true` in the form views (784, 797, integration-full-crud.spec.ts:83, 95, 129, 137, 280, 284,
-296, 300, 316, 322) which means the label cannot become `保存并发布` / `保存草稿` without breaking those, even though
-a substring match would still find it.
+is guarded by exact-name form assertions, so the label cannot become `保存并发布` / `保存草稿` without breaking
+those, even though a substring match would still find it.
 
-**F9 — Row-scoped action buttons (`getByRole('button', { name: '编辑'|'删除'|'编辑权限'|'移除'|'恢复', exact: true })`
+**F9 — Row-scoped action buttons (`getByRole('button', { name: '编辑'|'删除'|'编辑权限'|'移除', exact: true })`
 inside `getByRole('row')`).**
-Used at admin-shell.spec.ts:755, 774; integration-crud.spec.ts:77, 102, 133, 162, 202, 223, 243;
-integration-full-crud.spec.ts:124, 153, 189, 225, 244, 253, 337, 343, 354, 363, 367, 442, 450, 466.
-These are the *safest* action contracts (row-scoped + exact), and the redesign should preserve that shape: the row
-must remain an accessible `row` whose text contains the entity name, and each action must remain an exact-named
-button inside it. `deleteTableRow` additionally allows `/删除|移除/` (integration-full-crud.spec.ts:442), so both
-labels are accepted there — but integration-crud's variant requires exactly `删除` (162).
+The CRUD helpers locate a row by its entity text, then click exact-named edit/delete actions. Preserve the accessible
+row and keep its actions scoped to that row. The full CRUD helper accepts either `删除` or `移除`; the simpler CRUD
+helper expects `删除`.
 
 **F10 — "first button in the row" is a review toggle (integration-full-crud.spec.ts:266-270).**
 The comment step clicks `row.getByRole('button').first()`, records its text, then expects a second click to restore
 that text, with `PUT /api/v1/admin/comments/review` between. Breaks if any other control precedes the review toggle
 in the actions cell, or if the toggle is not a `button` (e.g. an `a-switch`, which has role `switch`).
 
-**F11 — Checkbox parent click (admin-shell.spec.ts:719).**
-`getByRole('row', { name: /首页截图/ }).getByRole('checkbox').locator('..').click()` requires the checkbox to be the
-only checkbox in the row and its parent to be the clickable selection wrapper. Breaks if the checkbox is wrapped in
-an extra element, if the row renders a second checkbox (per-row toggle), or if select-on-row-click removes the
-checkbox input.
+**F11 — Media checkbox accessible name.**
+The baseline selects `选择 首页截图` by role and accessible name. Keep each media asset's checkbox associated with
+its asset name so selection remains unambiguous.
 
 **F12 — Modal uniqueness / `:visible` filtering.**
 `page.locator('.arco-modal:visible')` is used bare (no `.first()`) at 634, 641, 646, 661, 667, 678, 686, 687, 692,
@@ -783,8 +704,8 @@ arrives, virtualization moving inputs) breaks the post-reload assertions.
    by class.
 3. Keep the sidebar an Arco sider with Arco menu items: `.arco-layout-sider`, `.arco-menu-item`, label text present
    as text inside the item.
-4. Arco `a-modal` for every dialog (root class `.arco-modal`), `a-popconfirm` for every confirm
-   (`.arco-popconfirm`), `a-table` for every list (`.arco-table` + native table semantics).
+4. Arco `a-modal` for dialogs (root class `.arco-modal`), `a-popconfirm` for confirms
+   (`.arco-popconfirm`), and `.arco-table` with native table semantics on views whose contract asserts a table.
 5. Everything Arco-based that the tests touch at the DOM level: `a-input` must emit a real `<input>` (with
    `type="text"` for ordinary text fields), `a-textarea` a real `<textarea>`, `a-input-search` the
    `.arco-input-wrapper.arco-input-search` structure with one non-clear `.arco-icon-hover`, `a-switch` the
@@ -793,19 +714,19 @@ arrives, virtualization moving inputs) breaks the post-reload assertions.
    `token` + `stellar-beacon.admin.user` (with `nickname`).
 7. Field order and count inside every dialog and form (see F5/F6). Do not add, remove, or reorder inputs/textareas
    before the fields the tests fill, and do not introduce a second textarea into a scope that has one.
-8. Exact button labels: `新增`, `编辑`, `删除`, `移除`, `恢复`, `确定`, `保存`, `保存资料`, `通过审核`,
-   `执行一次`, `详情`, `批量恢复`, `回收站`, `清空任务日志`, `编辑权限`, `发布文章`, `发布说说`, `返回列表`
+8. Exact button labels: `新增`, `编辑`, `删除`, `移除`, `确定`, `保存`, `保存资料`, `通过审核`,
+   `执行一次`, `详情`, `清空任务日志`, `编辑权限`, `发布文章`, `发布说说`, `返回列表`, `删除选中`
    (where asserted). `确定` must stay the confirm label (not `确认`/`好的`).
-9. Dialog titles containing the asserted substrings: `编辑` (taxonomy), `修改用户`, `编辑任务`, `编辑友链`,
-   `日志详情`, plus page markers `网站配置`, `照片回收站`, `编辑说说`, `修改文章`, `发布文章`.
+9. Dialog titles containing the asserted substrings: `编辑` (taxonomy), `修改用户`, `编辑任务`,
+   `日志详情`, plus page markers `网站配置`, `图片资源`, `编辑说说`, `修改文章`, `发布文章`.
 10. Page markers that must remain visible inside `main`: `分类管理`, `标签管理`, `评论管理`, `用户管理`,
-    `角色管理`, `操作日志`, `异常日志`, `定时任务`, `相册管理`, `说说管理`, `菜单管理`, `接口资源管理`,
-    `在线用户`, `友链管理`, `关于我`, `网站配置`, `个人中心`, `照片回收站`, `任务日志`, `文章列表`,
-    `发布说说`, `编辑说说`, `修改文章`, `发布文章`, `照片管理`.
-11. The strings `页面不存在`, `无权访问`, `模块迁移中` must appear only on their own pages, never inside
-    `.admin-content` on a valid route.
+    `角色管理`, `操作日志`, `异常日志`, `定时任务`, `图片资源`, `说说管理`, `菜单管理`, `接口资源管理`,
+    `在线用户`, `友链管理`, `关于我`, `网站配置`, `个人中心`, `任务日志`, `文章列表`, `发布说说`,
+    `编辑说说`, `修改文章`, `发布文章`.
+11. `页面不存在` and `无权访问` must stay on their corresponding states. `/links` and `/about` intentionally show
+    the unregistered-component placeholder because their mocked backend component paths are not registered.
 12. The exact empty-state sentence `当前账号没有可见菜单，请联系管理员分配权限。`
-13. The route table and URL shapes (§1.22) plus HTTP 200 on load and reload.
+13. The route table and URL shapes (§1.21) plus HTTP 200 on load and reload.
 14. Visible menu labels and hidden-menu suppression (hidden items must not render in the sider).
 15. Escape closes the log-detail modal and it becomes hidden afterwards.
 16. Arco class names on the views' roots and forms that the tests select: `.article-form`, `.talk-form`,
@@ -822,8 +743,7 @@ arrives, virtualization moving inputs) breaks the post-reload assertions.
 - Adding wrapper `div`s/`span`s, layout containers, `a-space`/`a-grid` scaffolding, CSS classes, `data-*`
   attributes that are not `data-testid` values listed above.
 - Adding new non-asserted text (descriptions, hints, captions, column titles, empty-state copy that is not one of the
-  asserted strings), extra table columns (appended **after** the existing ones; inserting a column changes
-  `row.getByRole('cell').nth(1)` at integration-full-crud.spec.ts:339, which is the photo-name column on `/albums/:id`).
+  asserted strings), or extra table columns where no tested ordinal depends on them.
 - Adding tooltips, icons, badges, avatars, tags (as long as they do not add a button whose accessible name contains
   `新增`/`编辑`, do not add a second `确定`, and do not add text that breaks the exact-text matches).
 - Adding rows to a table is safe **only** when the test uses row-scoped locators; the mocked baseline data has one
@@ -844,11 +764,9 @@ arrives, virtualization moving inputs) breaks the post-reload assertions.
   toolbar or actions column can break them. Prefer keeping the toolbar action set unchanged.
 - The form ordinals (F5) — highest probability of accidental breakage while "just moving fields around".
 - `page.locator('input').first()` at 629 (page-wide first input).
-- The singleton textarea assertions in `/about`, `/website`, `/setting`.
+- The singleton textarea assertions in `/website` and `/setting`.
 - The comments "first button in the row" toggle.
-- The photo table contract (see the ⚠️ note in §1.13): the gated suites already expect an `.arco-table` with rows and
-  cells on `/albums/:id`, which `PhotoView.vue` does not currently render. If you restyle this view, decide
-  consciously whether to add that table shape (which would satisfy the tests) or treat the conflict as out of scope.
+- MediaView's card grid and its selected-key deletion behavior (see §1.12); it has no album-detail table flow.
 
 ---
 
@@ -877,16 +795,17 @@ It collects (a) every uncaught page error (`pageerror`: uncaught exceptions and 
 | baseline, full mocked flow | admin-shell.spec.ts:827 | after the entire 200-line flow, including all reloads |
 | unknown route / 404 page | 835 | after `page.goto('/unknown-page')` |
 | empty-menu login | 848 | after login with `data: []` menus |
-| all-routes + refresh matrix | 910 | after visiting and reloading all 25 routes |
+| all-routes + refresh matrix | admin-shell.spec.ts | after visiting and reloading every configured route |
 | integration-crud | integration-crud.spec.ts:52 | after the whole CRUD + cleanup flow |
 | integration-full-crud | integration-full-crud.spec.ts:50 | after all 13 steps |
 | integration-readonly (nav) | integration-readonly.spec.ts:125 | after walking all visible menus |
 | integration-readonly (routes) | integration-readonly.spec.ts:210 | after the dynamic-route walk |
 | integration.spec.ts | 58 | after login + 11 routes with reloads |
 
-Three of these are **always-on** (827, 835, 848, 910) and cover every route, so in practice the console must be
-error-free on `/login`, `/`, and all 25 routes, on initial load, after client-side navigation, and after a hard
-reload. Note the exactness: a single `console.error` anywhere in that window fails the whole test, even if the UI is
+The baseline checks console errors during the full mocked flow, unknown-route and empty-menu states, route matrix,
+and feature-navigation flows. In practice the console must be error-free on `/login`, `/`, and every baseline route
+under test, on initial load, after client-side navigation, and after a hard reload. A single `console.error` in that
+window fails the corresponding test, even if the UI is
 visually correct.
 
 ### What triggers a failure
@@ -975,11 +894,8 @@ budget applies to admin views.
     `<input>` (`type=text` id `admin-username`; `type=password` id `admin-password`);
     `[data-testid="login-submit"]` is a `BUTTON.arco-btn`.
 
-No file in the repository was modified by this analysis: the temporary probe spec and probe directory were created
-outside the delivered artifacts and then deleted. Note that `web/apps/admin-next/src/styles.css` was already modified
-in the working tree (2188 insertions / 811 deletions) before this analysis began — that pre-existing change is not
-mine and was left untouched; the suite contract above is unaffected by it because it only asserts the class names and
-roles listed in §1 and §2.
+The live-DOM probe used a temporary spec outside the delivered files and removed it after use. The contract records
+current selectors and behavior; it does not treat historical working-tree state as part of the application UI.
 
 ---
 
@@ -1002,19 +918,16 @@ future change to them must respect.
 
 1. **Batch labels must avoid `新增`, `编辑`, `确定`, `通过审核`, `取消审核`, `执行一次`.** `admin-shell.spec.ts` clicks
    page-wide, non-exact `getByRole('button', { name: '新增' | '编辑' })` on `/categories`, `/tags`, `/users`, `/quartz`,
-   `/talk-list`, `/albums`, `/menus`, `/resources` and a page-wide `确定` on `/users` (662). Any additional matching
+   `/talk-list`, `/menus`, `/resources` and a page-wide `确定` on `/users`. Any additional matching
    button turns those clicks into strict-mode violations. `批量审核` / `批量删除` / `取消选择` / `导出 Markdown` /
-   `移动到相册` were chosen to satisfy this.
-2. **Batch bars only exist while something is selected.** This is what keeps rule 1 satisfiable for the many buttons
-   whose names would otherwise collide, and it is why `CommentsView`'s `通过审核` and `PhotoTrashView`'s `批量恢复`
-   assertions still resolve to exactly one element.
-3. **`PhotoTrashView` keeps exactly one checkbox per row** and `批量恢复` must stay `disabled` until a row is selected
-   (719-722). The same `v-model:selected-keys` + `onlyCurrent` pattern was applied to the other list views, so a row
-   checkbox now exists on `/article-list`, `/comments`, `/talk-list`, `/quartz`, `/roles`, `/tags`, `/categories`,
-   `/links`, `/albums/5` and all three log routes. No assertion counts checkboxes on those pages.
+   `删除选中` are conditional batch actions.
+2. **Batch bars only exist while something is selected.** This keeps conditional actions out of unrelated page-wide
+   interactions; CommentsView moderation and MediaView deletion are covered by separate assertions.
+3. **Media selection is asset-scoped.** MediaView renders a checkbox per asset card; deleting selected assets sends
+   their keys to the media endpoint. There is no photo-trash selection or restoration flow.
 4. **URL sync never writes a default value.** `composables/useQueryFilters.ts` drops any filter equal to its initial
-   value, so the default URL stays `/article-list`, `/categories`, `/tags`, `/albums`, `/users`, `/roles`,
-   `/online/users`, `/links`, `/media`. The `toHaveURL(/…$/)` anchors in §0 depend on this — do not "normalise" the
+   value, so the default URL stays `/article-list`, `/categories`, `/tags`, `/users`, `/roles`,
+   `/online/users`, `/media`. The `toHaveURL(/…$/)` anchors in §0 depend on this — do not "normalise" the
    query by always writing the full filter set.
 5. **`/quartz/log/:quartzId`'s `jobId` must keep flowing.** It is derived from the route param (not the query) inside
    the `useAsyncList` fetcher (`LogListView.vue`), and `admin-shell.spec.ts:701` asserts the request carries `jobId=85`.
@@ -1025,14 +938,10 @@ future change to them must respect.
 7. **The editors' dirty baseline is set after load and after save** (`markClean()`), which is why `/articles/42` and
    `/talks/7` can be opened and left in the read-only test paths without a confirmation dialog appearing.
 
-### Facts corrected by this round
+### Current media and route facts
 
-- The note in §1.13 claiming `PhotoView.vue` renders a `photo-tile` masonry with **no** `a-table` is stale:
-  `/albums/:id` now renders a real `a-table` with `tr`/`td`, so the `.arco-table` / `getByRole('row')` /
-  `row.getByRole('cell').nth(1)` expectations of the gated suites are satisfiable as written.
-- `admin-shell.spec.ts` now contains **6** baseline tests (the 6th is
-  `imports and exports articles, moves photos, and keeps filters in the URL`), so a run reports
-  `6 passed / 5 skipped`. It is still 5 skipped: the `@integration` suites remain env-gated and are not run by CI.
+- `/media` is the current image-management route. The admin-next client has no album-list, album-detail, or photo-trash page.
+- The baseline checks `/albums/5` as an explicit 404 and tests listing and deleting a selected media asset on `/media`.
 
 ### Reader-interaction counters (article list)
 
