@@ -9,9 +9,6 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - integration-postgres-data:/var/lib/postgresql/data
-      - ../db/init/001-stellar-beacon.sql:/docker-entrypoint-initdb.d/001-stellar-beacon.sql:ro
-      - ../db/integration/002-repair-sequences.sql:/docker-entrypoint-initdb.d/002-repair-sequences.sql:ro
-      - ../db/integration/003-admin-next.sql:/docker-entrypoint-initdb.d/003-admin-next.sql:ro
     ports:
       - "15432:5432"
     healthcheck:
@@ -76,6 +73,7 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+    command: ["/bin/sh", "-ec", "/app/stellar-beacon migrate && exec /app/stellar-beacon"]
     environment:
       STELLAR_BEACON_ENV: integration
       JWT_ALLOW_EPHEMERAL: "true"
@@ -114,18 +112,13 @@ services:
         condition: service_started
 
 volumes:
-  # Keep V17 data in place; old project containers remain available for rollback.
   integration-postgres-data:
-    external: true
-    name: stellar-beacon-integration-v17_integration-postgres-data
+    name: stellar-beacon-integration-v18-postgres
   integration-redis-data:
-    external: true
-    name: stellar-beacon-integration-v17_integration-redis-data
+    name: stellar-beacon-integration-v18-redis
   integration-meili-data:
-    external: true
-    name: stellar-beacon-integration-v17_integration-meili-data
+    name: stellar-beacon-integration-v18-meilisearch
   integration-minio-data:
-    external: true
-    name: stellar-beacon-integration-v17_integration-minio-data
+    name: stellar-beacon-integration-v18-minio
   integration-mailpit-data:
-    name: stellar-beacon-integration-v17_integration-mailpit-data
+    name: stellar-beacon-integration-v18-mailpit

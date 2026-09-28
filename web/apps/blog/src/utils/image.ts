@@ -1,14 +1,11 @@
 import placeholder from '@/assets/avatar-placeholder.svg'
 
 const legacyTalkImagePatterns = [
-  /^https?:\/\/i\.demo-user\.com\/talks\//i,
-  /^https?:\/\/benetnasch\.oss-cn-shanghai\.aliyuncs\.com\/?talks\//i,
-  /^https?:\/\/benetnasch\.oss-cn-shanghai\.aliyuncs\.comtalks\//i
+  /^https?:\/\/[^/]+\.aliyuncs\.com\/?talks\//i
 ]
 
 const legacyPhotoImagePatterns = [
-  /^https?:\/\/example-bucket\.oss-cn-shanghai\.aliyuncs\.com\/photos\//i,
-  /^https?:\/\/benetnasch\.oss-cn-shanghai\.aliyuncs\.com\/photos\//i
+  /^https?:\/\/[^/]+\.aliyuncs\.com\/photos\//i
 ]
 
 export function safeTalkImageUrl(url: any): string {

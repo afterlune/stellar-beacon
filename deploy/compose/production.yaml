@@ -1,12 +1,12 @@
 services:
   stellar-beacon:
     image: stellar-beacon:latest
-    container_name: demo-user
+    container_name: stellar-beacon
     ports:
       - '7777:7777'
     volumes:
-      - ./stellar-beacon/resources:/app/resources
-      - ./stellar-beacon/deploy/config:/app/config
+      - ../../resources:/app/resources
+      - ../config:/app/config
     environment:
       - TZ=Asia/Shanghai
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}

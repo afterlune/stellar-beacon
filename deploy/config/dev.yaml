@@ -18,12 +18,12 @@ redis:
   db: 1
 # email smtp 163
 emailSmtp:
-  smtp: "smtp.163.com"
+  smtp: "127.0.0.1"
   email: "dev@example.test"
   password: "${SMTP_PASSWORD}"
-  port: 465
-  tls: true
-  auth: true
+  port: 1025
+  tls: false
+  auth: false
 # database postgres
 database:
   driverName: "postgres"
@@ -37,7 +37,7 @@ oss:
   provider: "aliyun"
   endPoint: "https://oss-cn-shanghai.aliyuncs.com"
   region: "cn-shanghai"
-  publicUrl: "http://i.example.invalid/"
+  publicUrl: "https://example-bucket.oss-cn-shanghai.aliyuncs.com/"
   publicRead: false
   accessKeyID: "${ALIYUN_OSS_ACCESS_KEY_ID}"
   accessKeySecret: "${ALIYUN_OSS_ACCESS_KEY_SECRET}"

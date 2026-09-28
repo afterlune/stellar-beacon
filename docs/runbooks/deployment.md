@@ -64,6 +64,8 @@ docker compose --env-file .env.production -f deploy/compose/production-standalon
 
 隔离联调使用 `deploy/compose/integration.yaml` 和 `scripts/integration/`。博客、管理端和 API 地址分别是 `http://127.0.0.1:18080`、`http://127.0.0.1:18008` 和 `http://127.0.0.1:17777`。该栈使用专用 Compose 项目，不连接生产容器。
 
+联调栈启动时会从空白数据库执行版本化迁移；`deploy.ps1` 随后创建专用的合成账号和文章夹具，不导入真实站点数据库或生产记录。
+
 ```powershell
 Copy-Item .env.integration.example .env.integration
 pwsh ./scripts/integration/deploy.ps1

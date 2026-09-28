@@ -3,7 +3,6 @@ package service
 import "time"
 
 const (
-	FileURL            = "http://i.example.invalid/"
 	One                = 1
 	Zero               = 0
 	False              = 0

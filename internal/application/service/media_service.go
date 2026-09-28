@@ -134,7 +134,7 @@ func (m *MyMediaService) Proxy(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	target := normalizeLegacyMediaURL(parsed)
+	target := parsed
 	request, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, target.String(), nil)
 	if err != nil {
 		c.Status(http.StatusBadRequest)
@@ -178,17 +178,7 @@ func isAllowedMediaProxyHost(value *url.URL) bool {
 		return false
 	}
 	host := strings.ToLower(strings.TrimSuffix(value.Hostname(), "."))
-	return host == "i.example.invalid" || host == "aliyuncs.com" || strings.HasSuffix(host, ".aliyuncs.com")
-}
-
-func normalizeLegacyMediaURL(value *url.URL) *url.URL {
-	copyValue := *value
-	host := strings.ToLower(strings.TrimSuffix(copyValue.Hostname(), "."))
-	if host == "i.example.invalid" || host == "benetnasch.oss-cn-shanghai.aliyuncs.com" {
-		copyValue.Scheme = "http"
-		copyValue.Host = "example-bucket.oss-cn-shanghai.aliyuncs.com"
-	}
-	return &copyValue
+	return host == "aliyuncs.com" || strings.HasSuffix(host, ".aliyuncs.com")
 }
 
 func isHTTPURL(raw string) bool {

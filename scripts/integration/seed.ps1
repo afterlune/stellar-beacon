@@ -4,8 +4,8 @@ Import-IntegrationEnv
 Wait-IntegrationHttp -Uri 'http://127.0.0.1:17700/health'
 Invoke-IntegrationCompose -Arguments @('exec', '-T', 'postgresql', 'pg_isready', '-U', 'postgres', '-d', 'stellar_beacon')
 
-# The dump contains historical identity sequence values.  Keep reseeding
-# idempotent when the integration volume already exists, too.
+# Keep repeated integration runs idempotent when the named volume already
+# contains data from an earlier run.
 & (Join-Path $PSScriptRoot 'repair-sequences.ps1')
 if ($LASTEXITCODE -ne 0) {
     throw "integration sequence repair failed with exit code $LASTEXITCODE"
