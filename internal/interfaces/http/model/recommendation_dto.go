@@ -1,6 +1,6 @@
 package model
 
-import "github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+import "github.com/afterlune/stellar-beacon/internal/domain/port"
 
 type RecommendationQueryVO struct {
 	Cursor         string `json:"cursor" form:"cursor"`

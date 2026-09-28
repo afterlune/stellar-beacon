@@ -3,7 +3,7 @@ package api
 import (
 	"strconv"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 )
 

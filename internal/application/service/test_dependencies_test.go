@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"io"
 	"net/http"
 	"testing"

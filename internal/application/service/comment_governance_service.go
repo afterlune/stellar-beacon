@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 )
 
 // notifyModeration raises one in-app moderation notice. Delivery is best-effort:

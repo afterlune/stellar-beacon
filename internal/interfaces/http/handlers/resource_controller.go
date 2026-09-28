@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 )
 

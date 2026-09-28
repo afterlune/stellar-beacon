@@ -3,8 +3,8 @@ package repository
 import (
 	"fmt"
 
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 	"xorm.io/xorm"
 )
 

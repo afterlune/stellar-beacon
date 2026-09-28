@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
 )
 
 // Series is the application-facing read model for one ordered collection.

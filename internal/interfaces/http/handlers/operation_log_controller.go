@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 )
 

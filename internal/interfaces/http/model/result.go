@@ -2,7 +2,7 @@ package model
 
 import (
 	"encoding/json"
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
 	"log/slog"
 	"strconv"
 )

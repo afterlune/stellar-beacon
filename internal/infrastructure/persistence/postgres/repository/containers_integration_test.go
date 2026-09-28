@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"

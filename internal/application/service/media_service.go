@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"io"
 	"mime"
 	"net/http"

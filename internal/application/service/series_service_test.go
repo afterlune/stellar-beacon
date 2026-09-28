@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 )
 
 type fakeSeriesRepository struct {

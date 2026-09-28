@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
 	"github.com/goccy/go-json"
 	jwt2 "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

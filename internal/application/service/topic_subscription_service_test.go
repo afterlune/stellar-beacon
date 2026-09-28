@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 )
 
 type fakeTopicSubscriptionRepository struct {

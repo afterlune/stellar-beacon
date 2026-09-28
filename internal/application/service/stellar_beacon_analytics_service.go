@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 
 	"github.com/goccy/go-json"
 )

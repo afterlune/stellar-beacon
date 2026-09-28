@@ -1,7 +1,7 @@
 package ormInit
 
 import (
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/config"
 	_ "github.com/lib/pq"
 	"log/slog"
 	"strings"

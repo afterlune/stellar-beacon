@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/application/service"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 )
 

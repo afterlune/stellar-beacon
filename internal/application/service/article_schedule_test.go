@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
 )
 
 func TestNormalizeScheduledAtRequiresFutureTimeForScheduledArticles(t *testing.T) {

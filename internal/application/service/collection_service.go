@@ -7,9 +7,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"github.com/gin-gonic/gin"
 )
 

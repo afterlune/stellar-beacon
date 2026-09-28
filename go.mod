@@ -1,4 +1,4 @@
-module github.com/eternallyzzz/stellar-beacon
+module github.com/afterlune/stellar-beacon
 
 go 1.27
 

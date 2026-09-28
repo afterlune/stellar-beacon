@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/casbin/xorm-adapter/v2"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
 	"github.com/robfig/cron/v3"
 	"xorm.io/xorm"
 )

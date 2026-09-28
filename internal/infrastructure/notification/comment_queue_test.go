@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 )
 
 func TestCommentQueueRetriesAndDrainsOnStop(t *testing.T) {

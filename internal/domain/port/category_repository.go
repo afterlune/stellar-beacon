@@ -2,7 +2,7 @@ package port
 
 import (
 	"context"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
 )
 
 type CategoryRepository interface {

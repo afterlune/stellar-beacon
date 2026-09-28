@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
+	"github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/config"
 )
 
 func TestMeiliSearcherSearchRequiresConfiguredClient(t *testing.T) {

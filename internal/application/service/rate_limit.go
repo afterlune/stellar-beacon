@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 )
 
 // allowRateLimit hashes request-derived identifiers before they reach the

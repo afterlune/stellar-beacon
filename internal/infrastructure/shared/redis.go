@@ -3,7 +3,7 @@ package shared
 import (
 	"context"
 	"errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/config"
 	"log/slog"
 	"time"
 

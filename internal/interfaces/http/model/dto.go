@@ -3,8 +3,8 @@ package model
 import (
 	"container/list"
 	"encoding/json"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 	"time"
 )
 

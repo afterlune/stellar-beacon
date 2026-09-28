@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/persistence/postgres/query"
 	"xorm.io/xorm"
 )
 

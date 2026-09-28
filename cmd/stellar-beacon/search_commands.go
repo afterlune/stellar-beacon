@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/search/meilisearch"
+	"github.com/afterlune/stellar-beacon/internal/application/service"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/config"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/persistence/postgres/repository"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/search/meilisearch"
 	"github.com/spf13/cobra"
 )
 

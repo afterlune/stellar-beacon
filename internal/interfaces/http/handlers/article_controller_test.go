@@ -3,14 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/application/service"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/application/service"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 	"github.com/gin-gonic/gin"
 )
 

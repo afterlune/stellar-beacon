@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 )
 
 func (s *MyContentAnalyticsService) contentTrend(ctx context.Context, window contentAnalyticsRange, byDate map[string]port.ContentDailyMetric, prefix string) []model.ContentAnalyticsTrendDTO {

@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 )
 
 type AboutVO struct {

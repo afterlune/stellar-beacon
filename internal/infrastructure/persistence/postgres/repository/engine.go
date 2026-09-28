@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	apperrors "github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
+	apperrors "github.com/afterlune/stellar-beacon/internal/domain/errors"
 
 	"xorm.io/xorm"
 )

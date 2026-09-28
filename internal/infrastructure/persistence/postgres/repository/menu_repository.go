@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/entity"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/persistence/postgres/query"
+	"github.com/afterlune/stellar-beacon/internal/domain/entity"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/persistence/postgres/orm"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/persistence/postgres/query"
 	"log/slog"
 )
 

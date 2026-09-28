@@ -1,10 +1,10 @@
 package httpapi
 
 import (
-	api "github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/handlers"
+	api "github.com/afterlune/stellar-beacon/internal/interfaces/http/handlers"
 	"net/http"
 
-	appruntime "github.com/eternallyzzz/stellar-beacon/internal/infrastructure/runtime"
+	appruntime "github.com/afterlune/stellar-beacon/internal/infrastructure/runtime"
 	"github.com/gin-gonic/gin"
 )
 

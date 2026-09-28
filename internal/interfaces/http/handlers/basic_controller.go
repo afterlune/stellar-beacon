@@ -1,6 +1,6 @@
 package api
 
-import "github.com/eternallyzzz/stellar-beacon/internal/application/service"
+import "github.com/afterlune/stellar-beacon/internal/application/service"
 
 var (
 	articleAdminUseCases      service.ArticleAdminUseCases          = new(service.MyArticleService)

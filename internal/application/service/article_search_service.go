@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 )
 
 // ArticleSearchMaintainer is the application-facing seam used by article,

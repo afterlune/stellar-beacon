@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 )
 
 func TestTokenRoundTripAndRefreshTokenStorage(t *testing.T) {

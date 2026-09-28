@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/errors"
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
+	"github.com/afterlune/stellar-beacon/internal/domain/errors"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/config"
 	"github.com/meilisearch/meilisearch-go"
 )
 

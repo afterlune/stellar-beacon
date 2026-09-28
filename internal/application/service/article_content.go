@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 	"github.com/microcosm-cc/bluemonday"
 )
 

@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/config"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/config"
 )
 
 func TestSMTPMailerCheckPlaintextEndpoint(t *testing.T) {

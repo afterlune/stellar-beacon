@@ -3,8 +3,8 @@ package service
 import (
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
-	"github.com/eternallyzzz/stellar-beacon/internal/interfaces/http/model"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/interfaces/http/model"
 )
 
 func dashboardGrowthDTO(stats port.NewsletterStats, events []port.GrowthTrend, deliveries []port.NewsletterDeliveryTrend, activation port.StudioActivationFunnel, start, now time.Time, unit string) model.DashboardGrowthDTO {

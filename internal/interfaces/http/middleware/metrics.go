@@ -3,7 +3,7 @@ package middlewares
 import (
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/infrastructure/monitoring"
+	"github.com/afterlune/stellar-beacon/internal/infrastructure/monitoring"
 	"github.com/gin-gonic/gin"
 )
 

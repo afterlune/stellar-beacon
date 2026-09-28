@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eternallyzzz/stellar-beacon/internal/domain/port"
+	"github.com/afterlune/stellar-beacon/internal/domain/port"
 )
 
 var latencyBucketUpperMs = [...]float64{50, 100, 250, 500, 1000, 3000}
